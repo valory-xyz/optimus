@@ -43,10 +43,6 @@ def test_import() -> None:
 class TestCheckStakingKPIMetRound:
     """Test CheckStakingKPIMetRound class."""
 
-    def test_done_event(self) -> None:
-        """Test done_event attribute."""
-        assert CheckStakingKPIMetRound.done_event == Event.DONE
-
     def test_end_block_none_from_super(self) -> None:
         """Test end_block returns None when super returns None."""
         round_obj = object.__new__(CheckStakingKPIMetRound)

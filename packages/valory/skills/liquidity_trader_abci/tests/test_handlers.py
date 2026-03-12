@@ -21,73 +21,19 @@
 
 # pylint: skip-file
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage
-from packages.valory.skills.abstract_round_abci.handlers import (
-    ABCIRoundHandler as BaseABCIRoundHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    ContractApiHandler as BaseContractApiHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    HttpHandler as BaseHttpHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    LedgerApiHandler as BaseLedgerApiHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    SigningHandler as BaseSigningHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    TendermintHandler as BaseTendermintHandler,
-)
 from packages.valory.skills.liquidity_trader_abci.handlers import (
-    ABCIHandler,
-    ContractApiHandler,
-    HttpHandler,
     IpfsHandler,
     KvStoreHandler,
-    LedgerApiHandler,
-    SigningHandler,
-    TendermintHandler,
 )
 
 
 def test_import() -> None:
     """Test that the handlers module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.handlers  # noqa
-
-
-def test_abci_handler_alias() -> None:
-    """Test ABCIHandler is an alias."""
-    assert ABCIHandler is BaseABCIRoundHandler
-
-
-def test_http_handler_alias() -> None:
-    """Test HttpHandler is an alias."""
-    assert HttpHandler is BaseHttpHandler
-
-
-def test_signing_handler_alias() -> None:
-    """Test SigningHandler is an alias."""
-    assert SigningHandler is BaseSigningHandler
-
-
-def test_ledger_api_handler_alias() -> None:
-    """Test LedgerApiHandler is an alias."""
-    assert LedgerApiHandler is BaseLedgerApiHandler
-
-
-def test_contract_api_handler_alias() -> None:
-    """Test ContractApiHandler is an alias."""
-    assert ContractApiHandler is BaseContractApiHandler
-
-
-def test_tendermint_handler_alias() -> None:
-    """Test TendermintHandler is an alias."""
-    assert TendermintHandler is BaseTendermintHandler
 
 
 class TestIpfsHandler:
@@ -106,7 +52,10 @@ class TestIpfsHandler:
 
     def test_allowed_response_performatives(self) -> None:
         """Test allowed_response_performatives attribute."""
-        assert IpfsMessage.Performative.IPFS_HASH in IpfsHandler.allowed_response_performatives
+        assert (
+            IpfsMessage.Performative.IPFS_HASH
+            in IpfsHandler.allowed_response_performatives
+        )
 
     def test_custom_support_performative(self) -> None:
         """Test custom_support_performative attribute."""
@@ -124,9 +73,7 @@ class TestIpfsHandler:
         message = MagicMock(spec=IpfsMessage)
         message.performative = IpfsMessage.Performative.IPFS_HASH
 
-        with patch.object(
-            IpfsHandler.__bases__[0], "handle"
-        ) as mock_super_handle:
+        with patch.object(IpfsHandler.__bases__[0], "handle") as mock_super_handle:
             handler.handle(message)
 
         assert handler.context.state.in_flight_req is False
@@ -217,9 +164,7 @@ class TestKvStoreHandler:
         message = MagicMock(spec=KvStoreMessage)
         message.performative = KvStoreMessage.Performative.READ_RESPONSE
 
-        with patch.object(
-            KvStoreHandler.__bases__[0], "handle"
-        ) as mock_super_handle:
+        with patch.object(KvStoreHandler.__bases__[0], "handle") as mock_super_handle:
             handler.handle(message)
 
         mock_super_handle.assert_called_once_with(message)

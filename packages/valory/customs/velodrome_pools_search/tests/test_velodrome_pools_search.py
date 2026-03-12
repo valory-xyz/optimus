@@ -104,9 +104,6 @@ def reset_state():
     invalidate_cache()
 
 
-# ---------------------------------------------------------------------------
-# TestGetErrors
-# ---------------------------------------------------------------------------
 class TestGetErrors:
     """Tests for get_errors function."""
 
@@ -122,9 +119,6 @@ class TestGetErrors:
         assert get_errors() == ["err1"]
 
 
-# ---------------------------------------------------------------------------
-# TestCaching
-# ---------------------------------------------------------------------------
 class TestCaching:
     """Tests for caching functions."""
 
@@ -191,9 +185,6 @@ class TestCaching:
         log_cache_metrics()
 
 
-# ---------------------------------------------------------------------------
-# TestCheckMissingFields
-# ---------------------------------------------------------------------------
 class TestCheckMissingFields:
     """Tests for check_missing_fields function."""
 
@@ -207,9 +198,6 @@ class TestCheckMissingFields:
         assert len(check_missing_fields({})) == len(REQUIRED_FIELDS)
 
 
-# ---------------------------------------------------------------------------
-# TestGetWeb3Connection
-# ---------------------------------------------------------------------------
 class TestGetWeb3Connection:
     """Tests for get_web3_connection function."""
 
@@ -224,9 +212,6 @@ class TestGetWeb3Connection:
         assert result == mock_instance
 
 
-# ---------------------------------------------------------------------------
-# TestFetchTokenNameFromContract
-# ---------------------------------------------------------------------------
 class TestFetchTokenNameFromContract:
     """Tests for fetch_token_name_from_contract function."""
 
@@ -236,7 +221,9 @@ class TestFetchTokenNameFromContract:
         result = fetch_token_name_from_contract("unknown_chain", "0x1234")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_no_web3(self, mock_conn):
         """Test returns None when web3 connection is falsy."""
         mock_conn.return_value = None
@@ -244,7 +231,9 @@ class TestFetchTokenNameFromContract:
         result = fetch_token_name_from_contract("optimism", "0x1234")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_successful(self, mock_conn):
         """Test successful token name fetch."""
         mock_web3 = MagicMock()
@@ -253,10 +242,14 @@ class TestFetchTokenNameFromContract:
         mock_web3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_web3
         vel_mod.fetch_token_name_from_contract.cache_clear()
-        result = fetch_token_name_from_contract("optimism", "0x1234567890abcdef1234567890abcdef12345678")
+        result = fetch_token_name_from_contract(
+            "optimism", "0x1234567890abcdef1234567890abcdef12345678"
+        )
         assert result == "TestToken"
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_contract_exception(self, mock_conn):
         """Test returns None on contract call exception."""
         mock_web3 = MagicMock()
@@ -265,10 +258,14 @@ class TestFetchTokenNameFromContract:
         mock_web3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_web3
         vel_mod.fetch_token_name_from_contract.cache_clear()
-        result = fetch_token_name_from_contract("optimism", "0x1234567890abcdef1234567890abcdef12345678")
+        result = fetch_token_name_from_contract(
+            "optimism", "0x1234567890abcdef1234567890abcdef12345678"
+        )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_no_rpc_url(self, mock_conn):
         """Test with valid chain but missing RPC URL."""
         # Temporarily remove the RPC URL
@@ -282,28 +279,27 @@ class TestFetchTokenNameFromContract:
             RPC_ENDPOINTS[OPTIMISM_CHAIN_ID] = original
 
 
-# ---------------------------------------------------------------------------
-# TestGetCoinIdFromSymbol
-# ---------------------------------------------------------------------------
 class TestGetCoinIdFromSymbol:
     """Tests for get_coin_id_from_symbol function."""
 
     def test_found(self):
         """Test found coin ID."""
-        assert get_coin_id_from_symbol({"optimism": {"weth": "id"}}, "WETH", "optimism") == "id"
+        assert (
+            get_coin_id_from_symbol({"optimism": {"weth": "id"}}, "WETH", "optimism")
+            == "id"
+        )
 
     def test_not_found(self):
         """Test not found."""
         assert get_coin_id_from_symbol({}, "weth", "optimism") is None
 
 
-# ---------------------------------------------------------------------------
-# TestIsProApiKey
-# ---------------------------------------------------------------------------
 class TestIsProApiKey:
     """Tests for is_pro_api_key function."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_pro(self, mock_cg):
         """Test pro key returns True."""
         inst = MagicMock()
@@ -311,7 +307,9 @@ class TestIsProApiKey:
         mock_cg.return_value = inst
         assert is_pro_api_key("key") is True
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_not_pro(self, mock_cg):
         """Test non-pro key returns False."""
         inst = MagicMock()
@@ -319,7 +317,9 @@ class TestIsProApiKey:
         mock_cg.return_value = inst
         assert is_pro_api_key("key") is False
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_empty_response(self, mock_cg):
         """Test empty response returns False."""
         inst = MagicMock()
@@ -328,9 +328,6 @@ class TestIsProApiKey:
         assert is_pro_api_key("key") is False
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateIlImpactMulti
-# ---------------------------------------------------------------------------
 class TestCalculateIlImpactMulti:
     """Tests for calculate_il_impact_multi function."""
 
@@ -356,9 +353,6 @@ class TestCalculateIlImpactMulti:
         assert calculate_il_impact_multi([1.0, 1.0], [2.0, 0.5], weights=[0.5]) == 0
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateVelodromeIlRiskScoreMulti
-# ---------------------------------------------------------------------------
 class TestCalculateVelodromeIlRiskScoreMulti:
     """Tests for calculate_velodrome_il_risk_score_multi function."""
 
@@ -370,9 +364,15 @@ class TestCalculateVelodromeIlRiskScoreMulti:
         """Test with all None token IDs."""
         assert calculate_velodrome_il_risk_score_multi([None, None], "key") is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_successful(self, mock_cg, mock_pro, mock_sleep):
         """Test successful IL risk calculation."""
         mock_pro.return_value = False
@@ -385,9 +385,15 @@ class TestCalculateVelodromeIlRiskScoreMulti:
         result = calculate_velodrome_il_risk_score_multi(["t0", "t1"], "key")
         assert isinstance(result, float)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_pro_key(self, mock_cg, mock_pro, mock_sleep):
         """Test with pro API key."""
         mock_pro.return_value = True
@@ -400,8 +406,12 @@ class TestCalculateVelodromeIlRiskScoreMulti:
         result = calculate_velodrome_il_risk_score_multi(["t0", "t1"], "key")
         assert isinstance(result, float)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_with_x402(self, mock_cg, mock_sleep):
         """Test with x402 session."""
         inst = MagicMock()
@@ -420,8 +430,12 @@ class TestCalculateVelodromeIlRiskScoreMulti:
         result = calculate_velodrome_il_risk_score_multi(["t0", "t1"], "")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_api_exception(self, mock_cg, mock_sleep):
         """Test API exception."""
         inst = MagicMock()
@@ -432,9 +446,15 @@ class TestCalculateVelodromeIlRiskScoreMulti:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_insufficient_data(self, mock_cg, mock_pro, mock_sleep):
         """Test with insufficient price data."""
         mock_pro.return_value = False
@@ -447,9 +467,15 @@ class TestCalculateVelodromeIlRiskScoreMulti:
         result = calculate_velodrome_il_risk_score_multi(["t0", "t1"], "key")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
     def test_outer_exception(self, mock_cg, mock_pro, mock_sleep):
         """Test outer exception handling."""
         mock_pro.return_value = False
@@ -459,15 +485,14 @@ class TestCalculateVelodromeIlRiskScoreMulti:
             {"prices": [[i, 200 + i] for i in range(50)]},
         ]
         mock_cg.return_value = inst
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.corrcoef",
-                   side_effect=Exception("corrcoef fail")):
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.corrcoef",
+            side_effect=Exception("corrcoef fail"),
+        ):
             result = calculate_velodrome_il_risk_score_multi(["t0", "t1"], "key")
             assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetEpochsByAddress
-# ---------------------------------------------------------------------------
 class TestGetEpochsByAddress:
     """Tests for get_epochs_by_address function."""
 
@@ -476,7 +501,9 @@ class TestGetEpochsByAddress:
         result = get_epochs_by_address("0xpool", "UNKNOWN_CHAIN")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_not_connected(self, mock_conn):
         """Test when web3 is not connected."""
         mock_w3 = MagicMock()
@@ -485,7 +512,9 @@ class TestGetEpochsByAddress:
         result = get_epochs_by_address("0xpool", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_successful(self, mock_conn):
         """Test successful epoch fetch."""
         mock_w3 = MagicMock()
@@ -506,7 +535,9 @@ class TestGetEpochsByAddress:
         result = get_epochs_by_address("0xpool", "OPTIMISM")
         assert result is not None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_no_epochs(self, mock_conn):
         """Test when no epochs data found."""
         mock_w3 = MagicMock()
@@ -519,46 +550,60 @@ class TestGetEpochsByAddress:
         result = get_epochs_by_address("0xpool", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_attribute_error(self, mock_conn):
         """Test AttributeError when function not found."""
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
         mock_w3.to_checksum_address.return_value = "0xPool"
         mock_contract = MagicMock()
-        mock_contract.functions.epochsByAddress = property(lambda s: (_ for _ in ()).throw(AttributeError("no such func")))
+        mock_contract.functions.epochsByAddress = property(
+            lambda s: (_ for _ in ()).throw(AttributeError("no such func"))
+        )
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
         result = get_epochs_by_address("0xpool", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_execution_reverted(self, mock_conn):
         """Test execution reverted error."""
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
         mock_w3.to_checksum_address.return_value = "0xPool"
         mock_contract = MagicMock()
-        mock_contract.functions.epochsByAddress.side_effect = Exception("execution reverted")
+        mock_contract.functions.epochsByAddress.side_effect = Exception(
+            "execution reverted"
+        )
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
         result = get_epochs_by_address("0xpool", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_abi_not_found_error(self, mock_conn):
         """Test ABI not found error."""
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
         mock_w3.to_checksum_address.return_value = "0xPool"
         mock_contract = MagicMock()
-        mock_contract.functions.epochsByAddress.side_effect = Exception("not found in this contract's abi")
+        mock_contract.functions.epochsByAddress.side_effect = Exception(
+            "not found in this contract's abi"
+        )
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
         result = get_epochs_by_address("0xpool", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_outer_exception(self, mock_conn):
         """Test outer exception."""
         mock_conn.side_effect = Exception("connection fail")
@@ -566,20 +611,21 @@ class TestGetEpochsByAddress:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetVelodromePoolSharpeRatio
-# ---------------------------------------------------------------------------
 class TestGetVelodromePoolSharpeRatio:
     """Tests for get_velodrome_pool_sharpe_ratio function."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_no_epochs(self, mock_epochs):
         """Test with no epochs data."""
         mock_epochs.return_value = None
         result = get_velodrome_pool_sharpe_ratio("pool1", "OPTIMISM", 100)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_successful(self, mock_epochs):
         """Test successful Sharpe ratio calculation."""
         mock_epochs.return_value = [
@@ -589,7 +635,9 @@ class TestGetVelodromePoolSharpeRatio:
         result = get_velodrome_pool_sharpe_ratio("pool1", "OPTIMISM", 100)
         assert result is not None or result is None  # May be 0 or None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_insufficient_data(self, mock_epochs):
         """Test with only 1 epoch (not enough for pct_change)."""
         mock_epochs.return_value = [
@@ -598,33 +646,42 @@ class TestGetVelodromePoolSharpeRatio:
         result = get_velodrome_pool_sharpe_ratio("pool1", "OPTIMISM", 100)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_zero_std(self, mock_epochs):
         """Test with zero standard deviation (constant returns)."""
         mock_epochs.return_value = [
-            (1700000000 + i * 604800, 100000, 5000)
-            for i in range(10)
+            (1700000000 + i * 604800, 100000, 5000) for i in range(10)
         ]
         result = get_velodrome_pool_sharpe_ratio("pool1", "OPTIMISM", 100)
         assert result == 0  # Zero std returns 0
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_nan_in_returns(self, mock_epochs):
         """Test with NaN values in returns."""
-        epochs = [(1700000000 + i * 604800, 0 if i == 2 else 100000 + i * 1000, 5000)
-                  for i in range(10)]
+        epochs = [
+            (1700000000 + i * 604800, 0 if i == 2 else 100000 + i * 1000, 5000)
+            for i in range(10)
+        ]
         mock_epochs.return_value = epochs
         result = get_velodrome_pool_sharpe_ratio("pool1", "OPTIMISM", 100)
         assert result is not None or result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_outer_exception(self, mock_epochs):
         """Test outer exception."""
         mock_epochs.side_effect = Exception("fail")
         result = get_velodrome_pool_sharpe_ratio("pool1", "OPTIMISM", 100)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_no_common_indices(self, mock_epochs):
         """Test the no-common-indices branch."""
         # This is hard to trigger naturally since timestamps always match.
@@ -637,31 +694,33 @@ class TestGetVelodromePoolSharpeRatio:
         assert isinstance(result, (int, float)) or result is None
 
 
-# ---------------------------------------------------------------------------
-# TestAnalyzeVelodromePoolLiquidity
-# ---------------------------------------------------------------------------
 class TestAnalyzeVelodromePoolLiquidity:
     """Tests for analyze_velodrome_pool_liquidity function."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_no_epochs(self, mock_epochs):
         """Test with no epochs data."""
         mock_epochs.return_value = None
         result = analyze_velodrome_pool_liquidity("pool1", "OPTIMISM")
         assert result == (None, None)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_successful(self, mock_epochs):
         """Test successful calculation."""
         mock_epochs.return_value = [
-            (1700000000 + i * 604800, 100000, 5000)
-            for i in range(10)
+            (1700000000 + i * 604800, 100000, 5000) for i in range(10)
         ]
         depth, max_pos = analyze_velodrome_pool_liquidity("pool1", "OPTIMISM")
         assert isinstance(depth, float)
         assert isinstance(max_pos, float)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_zero_tvl(self, mock_epochs):
         """Test with zero TVL."""
         mock_epochs.return_value = [
@@ -670,14 +729,20 @@ class TestAnalyzeVelodromePoolLiquidity:
         depth, max_pos = analyze_velodrome_pool_liquidity("pool1", "OPTIMISM")
         assert depth == 0
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_small_price_impact(self, mock_epochs):
         """Test with very small price impact."""
         mock_epochs.return_value = [(1700000000, 100000, 5000)]
-        depth, max_pos = analyze_velodrome_pool_liquidity("pool1", "OPTIMISM", price_impact=0.0001)
+        depth, max_pos = analyze_velodrome_pool_liquidity(
+            "pool1", "OPTIMISM", price_impact=0.0001
+        )
         assert isinstance(depth, float)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_exception(self, mock_epochs):
         """Test exception handling."""
         mock_epochs.side_effect = Exception("fail")
@@ -685,13 +750,12 @@ class TestAnalyzeVelodromePoolLiquidity:
         assert np.isnan(depth)
 
 
-# ---------------------------------------------------------------------------
-# TestGetVelodromePools
-# ---------------------------------------------------------------------------
 class TestGetVelodromePools:
     """Tests for get_velodrome_pools function."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools_via_sugar")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools_via_sugar"
+    )
     def test_supported_chain(self, mock_sugar):
         """Test with supported chain ID."""
         mock_sugar.return_value = [{"id": "pool1"}]
@@ -704,9 +768,6 @@ class TestGetVelodromePools:
         assert "error" in result
 
 
-# ---------------------------------------------------------------------------
-# TestGetVelodromePoolsViaSugar
-# ---------------------------------------------------------------------------
 class TestGetVelodromePoolsViaSugar:
     """Tests for get_velodrome_pools_via_sugar function."""
 
@@ -717,7 +778,9 @@ class TestGetVelodromePoolsViaSugar:
         result = get_velodrome_pools_via_sugar("0xaddr", chain_id=MODE_CHAIN_ID)
         assert result == [{"id": "cached"}]
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_not_connected(self, mock_conn):
         """Test when web3 is not connected."""
         mock_w3 = MagicMock()
@@ -726,8 +789,12 @@ class TestGetVelodromePoolsViaSugar:
         result = get_velodrome_pools_via_sugar("0xaddr", rpc_url="https://rpc.test")
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tvl_from_reserves")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tvl_from_reserves"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_successful(self, mock_conn, mock_tvl):
         """Test successful pool fetch."""
         mock_tvl.return_value = "100000"
@@ -778,7 +845,9 @@ class TestGetVelodromePoolsViaSugar:
         assert isinstance(result, list)
         assert len(result) == 1
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_exception(self, mock_conn):
         """Test exception handling."""
         mock_conn.side_effect = Exception("connection fail")
@@ -786,17 +855,13 @@ class TestGetVelodromePoolsViaSugar:
         assert "error" in result
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateTvlFromReserves
-# ---------------------------------------------------------------------------
 class TestCalculateTvlFromReserves:
     """Tests for calculate_tvl_from_reserves function."""
 
     def test_basic(self):
         """Test basic TVL calculation."""
         result = calculate_tvl_from_reserves(
-            1000000000000000000, 2000000000000000000,
-            "0xtoken0", "0xtoken1"
+            1000000000000000000, 2000000000000000000, "0xtoken0", "0xtoken1"
         )
         assert float(result) > 0
 
@@ -812,15 +877,11 @@ class TestCalculateTvlFromReserves:
         # Known USDC address on Optimism
         usdc_addr = "0x7f5c764cbc14f9669b88837ca1490cca17c31607"
         result = calculate_tvl_from_reserves(
-            1000000, 2000000000000000000,
-            usdc_addr, "0xother"
+            1000000, 2000000000000000000, usdc_addr, "0xother"
         )
         assert float(result) > 0
 
 
-# ---------------------------------------------------------------------------
-# TestCalculatePositionDetailsForVelodrome
-# ---------------------------------------------------------------------------
 class TestCalculatePositionDetailsForVelodrome:
     """Tests for calculate_position_details_for_velodrome function."""
 
@@ -854,7 +915,9 @@ class TestCalculatePositionDetailsForVelodrome:
         result = calculate_position_details_for_velodrome(pool_data, None)
         assert "apr" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome"
+    )
     def test_cl_pool_with_tick_bands(self, mock_ticks):
         """Test CL pool with tick bands."""
         mock_ticks.return_value = [
@@ -876,7 +939,9 @@ class TestCalculatePositionDetailsForVelodrome:
         assert "apr" in result
         assert "tick_bands" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome"
+    )
     def test_cl_pool_no_tick_bands(self, mock_ticks):
         """Test CL pool when tick_bands returns None."""
         mock_ticks.return_value = None
@@ -896,7 +961,9 @@ class TestCalculatePositionDetailsForVelodrome:
         # This means it returns None implicitly
         assert result is None or "apr" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome"
+    )
     def test_cl_pool_zero_effective_width(self, mock_ticks):
         """Test CL pool with zero effective width."""
         mock_ticks.return_value = [
@@ -917,7 +984,9 @@ class TestCalculatePositionDetailsForVelodrome:
         assert result is not None
         assert result["apr"] > 0  # Uses advertised_apr when width <= 0
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_tick_lower_and_upper_velodrome"
+    )
     def test_cl_pool_exception(self, mock_ticks):
         """Test CL pool with exception in tick calculation."""
         mock_ticks.side_effect = Exception("tick fail")
@@ -952,9 +1021,6 @@ class TestCalculatePositionDetailsForVelodrome:
         assert result["apr"] == 0
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateEma
-# ---------------------------------------------------------------------------
 class TestCalculateEma:
     """Tests for calculate_ema function."""
 
@@ -971,9 +1037,6 @@ class TestCalculateEma:
         assert len(result) == 1
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateStdDev
-# ---------------------------------------------------------------------------
 class TestCalculateStdDev:
     """Tests for calculate_std_dev function."""
 
@@ -1003,9 +1066,6 @@ class TestCalculateStdDev:
         assert result[1] >= 0
 
 
-# ---------------------------------------------------------------------------
-# TestEvaluateBandConfiguration
-# ---------------------------------------------------------------------------
 class TestEvaluateBandConfiguration:
     """Tests for evaluate_band_configuration function."""
 
@@ -1024,9 +1084,6 @@ class TestEvaluateBandConfiguration:
         assert "zscore_economic_score" in result
 
 
-# ---------------------------------------------------------------------------
-# TestRunMonteCarloLevel
-# ---------------------------------------------------------------------------
 class TestRunMonteCarloLevel:
     """Tests for run_monte_carlo_level function."""
 
@@ -1044,9 +1101,6 @@ class TestRunMonteCarloLevel:
         assert "all_results" in result
 
 
-# ---------------------------------------------------------------------------
-# TestOptimizeStablecoinBands
-# ---------------------------------------------------------------------------
 class TestOptimizeStablecoinBands:
     """Tests for optimize_stablecoin_bands function."""
 
@@ -1059,14 +1113,12 @@ class TestOptimizeStablecoinBands:
         assert "band_allocations" in result
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateTickRangeFromBandsWrapper
-# ---------------------------------------------------------------------------
 class TestCalculateTickRangeFromBandsWrapper:
     """Tests for calculate_tick_range_from_bands_wrapper function."""
 
     def test_basic(self):
         """Test basic tick range calculation."""
+
         def mock_price_to_tick(price):
             return int(price * 100)
 
@@ -1082,9 +1134,6 @@ class TestCalculateTickRangeFromBandsWrapper:
         assert "band3" in result
 
 
-# ---------------------------------------------------------------------------
-# TestGetFilteredPoolsForVelodrome
-# ---------------------------------------------------------------------------
 class TestGetFilteredPoolsForVelodrome:
     """Tests for get_filtered_pools_for_velodrome function."""
 
@@ -1137,15 +1186,8 @@ class TestGetFilteredPoolsForVelodrome:
         assert len(result) == 0
 
 
-# ---------------------------------------------------------------------------
-# TestStandardizeMetrics
-# ---------------------------------------------------------------------------
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
-
-    def test_empty(self):
-        """Test with empty pools."""
-        assert standardize_metrics([]) == []
 
     def test_single_pool(self):
         """Test with single pool."""
@@ -1166,9 +1208,6 @@ class TestStandardizeMetrics:
         assert "composite_score" in result[0]
 
 
-# ---------------------------------------------------------------------------
-# TestApplyCompositePreFilter
-# ---------------------------------------------------------------------------
 class TestApplyCompositePreFilter:
     """Tests for apply_composite_pre_filter function."""
 
@@ -1195,7 +1234,9 @@ class TestApplyCompositePreFilter:
         pools = [
             {"tvl": 50000, "apr": 10, "cumulativeVolumeUSD": "100"},
         ]
-        result = apply_composite_pre_filter(pools, min_tvl_threshold=1000, min_volume_threshold=1000)
+        result = apply_composite_pre_filter(
+            pools, min_tvl_threshold=1000, min_volume_threshold=1000
+        )
         assert len(result) == 0
 
     def test_cl_filter_true(self):
@@ -1204,7 +1245,9 @@ class TestApplyCompositePreFilter:
             {"tvl": 50000, "apr": 10, "is_cl_pool": True},
             {"tvl": 50000, "apr": 20, "is_cl_pool": False},
         ]
-        result = apply_composite_pre_filter(pools, min_tvl_threshold=1000, cl_filter=True)
+        result = apply_composite_pre_filter(
+            pools, min_tvl_threshold=1000, cl_filter=True
+        )
         assert len(result) == 1
 
     def test_cl_filter_false(self):
@@ -1213,13 +1256,17 @@ class TestApplyCompositePreFilter:
             {"tvl": 50000, "apr": 10, "is_cl_pool": True},
             {"tvl": 50000, "apr": 20, "is_cl_pool": False},
         ]
-        result = apply_composite_pre_filter(pools, min_tvl_threshold=1000, cl_filter=False)
+        result = apply_composite_pre_filter(
+            pools, min_tvl_threshold=1000, cl_filter=False
+        )
         assert len(result) == 1
 
     def test_cl_filter_empty_result(self):
         """Test CL filter with no matching pools."""
         pools = [{"tvl": 50000, "apr": 10, "is_cl_pool": True}]
-        result = apply_composite_pre_filter(pools, min_tvl_threshold=1000, cl_filter=False)
+        result = apply_composite_pre_filter(
+            pools, min_tvl_threshold=1000, cl_filter=False
+        )
         assert result == []
 
     def test_invalid_tvl(self):
@@ -1231,13 +1278,12 @@ class TestApplyCompositePreFilter:
     def test_invalid_volume(self):
         """Test with invalid volume value."""
         pools = [{"tvl": 50000, "apr": 10, "cumulativeVolumeUSD": "invalid"}]
-        result = apply_composite_pre_filter(pools, min_tvl_threshold=1000, min_volume_threshold=100)
+        result = apply_composite_pre_filter(
+            pools, min_tvl_threshold=1000, min_volume_threshold=100
+        )
         assert result == []
 
 
-# ---------------------------------------------------------------------------
-# TestGetTopNPoolsByApr
-# ---------------------------------------------------------------------------
 class TestGetTopNPoolsByApr:
     """Tests for get_top_n_pools_by_apr function."""
 
@@ -1261,16 +1307,21 @@ class TestGetTopNPoolsByApr:
         assert len(result) == 2
 
 
-# ---------------------------------------------------------------------------
-# TestGetOpportunitiesForVelodrome
-# ---------------------------------------------------------------------------
 class TestGetOpportunitiesForVelodrome:
     """Tests for get_opportunities_for_velodrome function."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
     def test_successful(self, mock_pools, mock_filter, mock_composite, mock_format):
         """Test successful opportunity discovery."""
         mock_pools.return_value = [{"id": "p1"}]
@@ -1280,15 +1331,21 @@ class TestGetOpportunitiesForVelodrome:
         result = get_opportunities_for_velodrome([], "key")
         assert isinstance(result, list)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
     def test_pool_error(self, mock_pools):
         """Test pool fetch error."""
         mock_pools.return_value = {"error": "fail"}
         result = get_opportunities_for_velodrome([], "key")
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
     def test_no_filtered_pools(self, mock_pools, mock_filter):
         """Test when no pools pass filtering."""
         mock_pools.return_value = [{"id": "p1"}]
@@ -1296,11 +1353,21 @@ class TestGetOpportunitiesForVelodrome:
         result = get_opportunities_for_velodrome([], "key")
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
-    def test_no_formatted_pools(self, mock_pools, mock_filter, mock_composite, mock_format):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
+    def test_no_formatted_pools(
+        self, mock_pools, mock_filter, mock_composite, mock_format
+    ):
         """Test when no pools remain after formatting."""
         mock_pools.return_value = [{"id": "p1"}]
         mock_filter.return_value = [{"id": "p1"}]
@@ -1309,9 +1376,15 @@ class TestGetOpportunitiesForVelodrome:
         result = get_opportunities_for_velodrome([], "key")
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
     def test_no_composite_pools(self, mock_pools, mock_filter, mock_composite):
         """Test when composite filter returns empty."""
         mock_pools.return_value = [{"id": "p1"}]
@@ -1328,15 +1401,18 @@ class TestGetOpportunitiesForVelodrome:
         assert result == [{"cached": True}]
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateMetrics
-# ---------------------------------------------------------------------------
 class TestCalculateMetrics:
     """Tests for calculate_metrics function."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_velodrome_il_risk_score_multi")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_velodrome_il_risk_score_multi"
+    )
     def test_successful(self, mock_il, mock_sharpe, mock_liq):
         """Test successful metrics calculation."""
         mock_il.return_value = -0.05
@@ -1373,8 +1449,12 @@ class TestCalculateMetrics:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
+    )
     def test_insufficient_token_ids(self, mock_sharpe, mock_liq):
         """Test with insufficient valid token IDs."""
         mock_sharpe.return_value = 1.5
@@ -1397,15 +1477,14 @@ class TestCalculateMetrics:
             "pool_address": "0xpool",
             "chain": "optimism",
         }
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio",
-                   side_effect=Exception("fail")):
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio",
+            side_effect=Exception("fail"),
+        ):
             result = calculate_metrics(position, "key", {})
             assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestRun
-# ---------------------------------------------------------------------------
 class TestRun:
     """Tests for the run function."""
 
@@ -1414,7 +1493,9 @@ class TestRun:
         result = run()
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics"
+    )
     def test_get_metrics_success(self, mock_calc):
         """Test get_metrics mode."""
         mock_calc.return_value = {"il_risk_score": -0.05}
@@ -1429,7 +1510,9 @@ class TestRun:
         )
         assert result == {"il_risk_score": -0.05}
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics"
+    )
     def test_get_metrics_none(self, mock_calc):
         """Test get_metrics returning None."""
         mock_calc.return_value = None
@@ -1476,7 +1559,9 @@ class TestRun:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_rpc_not_connected(self, mock_conn):
         """Test when RPC is not connected."""
         mock_w3 = MagicMock()
@@ -1490,8 +1575,12 @@ class TestRun:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_successful_search(self, mock_conn, mock_opp):
         """Test successful opportunity search."""
         mock_w3 = MagicMock()
@@ -1507,8 +1596,12 @@ class TestRun:
         assert "result" in result
         assert len(result["result"]) == 1
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_search_error(self, mock_conn, mock_opp):
         """Test search returning error."""
         mock_w3 = MagicMock()
@@ -1523,8 +1616,12 @@ class TestRun:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_search_empty(self, mock_conn, mock_opp):
         """Test search returning empty."""
         mock_w3 = MagicMock()
@@ -1551,8 +1648,12 @@ class TestRun:
         )
         assert CACHE["pools"]["data"] == {}
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_unsupported_chain_name(self, mock_conn, mock_opp):
         """Test run with an unsupported chain name that does not map to any chain_id."""
         mock_w3 = MagicMock()
@@ -1566,8 +1667,12 @@ class TestRun:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_opportunities_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_chain_not_in_sugar_addresses(self, mock_conn, mock_opp):
         """Test run with a chain whose ID is not in SUGAR_CONTRACT_ADDRESSES."""
         mock_w3 = MagicMock()
@@ -1587,7 +1692,9 @@ class TestRun:
         finally:
             del CHAIN_NAMES[99999]
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_chain_rpc_not_connected(self, mock_conn):
         """Test run with RPC connection failure for a valid chain."""
         mock_w3 = MagicMock()
@@ -1601,7 +1708,9 @@ class TestRun:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics"
+    )
     def test_get_metrics_mode(self, mock_calc):
         """Test run in get_metrics mode with valid position."""
         mock_calc.return_value = {"il_risk_score": 0.5, "sharpe_ratio": 1.0}
@@ -1616,7 +1725,9 @@ class TestRun:
         )
         assert "il_risk_score" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_metrics"
+    )
     def test_get_metrics_mode_returns_none(self, mock_calc):
         """Test run in get_metrics mode when calculate_metrics returns None."""
         mock_calc.return_value = None
@@ -1643,15 +1754,14 @@ class TestRun:
         assert "error" in result
 
 
-# ---------------------------------------------------------------------------
-# TestGetTickSpacingVelodrome
-# ---------------------------------------------------------------------------
 class TestGetTickSpacingVelodrome:
     """Tests for get_tick_spacing_velodrome."""
 
     _ADDR = "0x0000000000000000000000000000000000000001"
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_success(self, mock_conn):
         """Test successful tick spacing retrieval."""
         mock_w3 = MagicMock()
@@ -1668,7 +1778,9 @@ class TestGetTickSpacingVelodrome:
         result = get_tick_spacing_velodrome(self._ADDR, 99999)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_not_connected(self, mock_conn):
         """Test when web3 is not connected."""
         mock_w3 = MagicMock()
@@ -1677,7 +1789,9 @@ class TestGetTickSpacingVelodrome:
         result = get_tick_spacing_velodrome(self._ADDR, OPTIMISM_CHAIN_ID)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_tick_spacing_zero(self, mock_conn):
         """Test when tick spacing returns 0 (falsy)."""
         mock_w3 = MagicMock()
@@ -1689,7 +1803,9 @@ class TestGetTickSpacingVelodrome:
         result = get_tick_spacing_velodrome(self._ADDR, OPTIMISM_CHAIN_ID)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_exception(self, mock_conn):
         """Test exception handling."""
         mock_conn.side_effect = Exception("RPC error")
@@ -1697,15 +1813,14 @@ class TestGetTickSpacingVelodrome:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetPoolTokens
-# ---------------------------------------------------------------------------
 class TestGetPoolTokens:
     """Tests for get_pool_tokens."""
 
     _ADDR = "0x0000000000000000000000000000000000000001"
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_success(self, mock_conn):
         """Test successful token retrieval."""
         mock_w3 = MagicMock()
@@ -1723,7 +1838,9 @@ class TestGetPoolTokens:
         result = get_pool_tokens(self._ADDR, 99999)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_not_connected(self, mock_conn):
         """Test when web3 is not connected."""
         mock_w3 = MagicMock()
@@ -1732,7 +1849,9 @@ class TestGetPoolTokens:
         result = get_pool_tokens(self._ADDR, OPTIMISM_CHAIN_ID)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_empty_token0(self, mock_conn):
         """Test when token0 is empty/falsy."""
         mock_w3 = MagicMock()
@@ -1745,7 +1864,9 @@ class TestGetPoolTokens:
         result = get_pool_tokens(self._ADDR, OPTIMISM_CHAIN_ID)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_exception(self, mock_conn):
         """Test exception handling."""
         mock_conn.side_effect = Exception("Contract error")
@@ -1753,15 +1874,14 @@ class TestGetPoolTokens:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetCurrentPoolPrice
-# ---------------------------------------------------------------------------
 class TestGetCurrentPoolPrice:
     """Tests for get_current_pool_price."""
 
     _ADDR = "0x0000000000000000000000000000000000000001"
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_success(self, mock_conn):
         """Test successful price retrieval."""
         mock_w3 = MagicMock()
@@ -1780,7 +1900,9 @@ class TestGetCurrentPoolPrice:
         result = get_current_pool_price(self._ADDR, 99999)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_not_connected(self, mock_conn):
         """Test when web3 is not connected."""
         mock_w3 = MagicMock()
@@ -1789,7 +1911,9 @@ class TestGetCurrentPoolPrice:
         result = get_current_pool_price(self._ADDR, OPTIMISM_CHAIN_ID)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_slot0_none(self, mock_conn):
         """Test when slot0 returns None."""
         mock_w3 = MagicMock()
@@ -1801,7 +1925,9 @@ class TestGetCurrentPoolPrice:
         result = get_current_pool_price(self._ADDR, OPTIMISM_CHAIN_ID)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_sqrt_price_zero(self, mock_conn):
         """Test when sqrt_price_x96 is zero."""
         mock_w3 = MagicMock()
@@ -1813,7 +1939,9 @@ class TestGetCurrentPoolPrice:
         result = get_current_pool_price(self._ADDR, OPTIMISM_CHAIN_ID)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_exception(self, mock_conn):
         """Test exception handling."""
         mock_conn.side_effect = Exception("RPC error")
@@ -1821,13 +1949,12 @@ class TestGetCurrentPoolPrice:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetCoinIdFromAddress
-# ---------------------------------------------------------------------------
 class TestGetCoinIdFromAddress:
     """Tests for get_coin_id_from_address."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_stablecoin_mapping(self, mock_sleep):
         """Test stablecoin mapping lookup."""
         result = get_coin_id_from_address(
@@ -1837,7 +1964,9 @@ class TestGetCoinIdFromAddress:
         )
         assert result == "usd-coin"
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_stablecoin_mapping_none_value(self, mock_sleep):
         """Test stablecoin mapping that maps to None."""
         result = get_coin_id_from_address(
@@ -1847,8 +1976,12 @@ class TestGetCoinIdFromAddress:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_x402_session_success(self, mock_sleep, mock_cg_class):
         """Test x402 session API call success."""
         mock_session = MagicMock()
@@ -1857,13 +1990,20 @@ class TestGetCoinIdFromAddress:
         mock_response.json.return_value = {"id": "ethereum"}
         mock_session.get.return_value = mock_response
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            x402_session=mock_session, x402_proxy="https://proxy.example.com"
+            "optimism",
+            "0xunknown",
+            "optimistic-ethereum",
+            x402_session=mock_session,
+            x402_proxy="https://proxy.example.com",
         )
         assert result == "ethereum"
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_x402_session_failure(self, mock_sleep, mock_cg_class):
         """Test x402 session API call failure (non-200)."""
         mock_session = MagicMock()
@@ -1871,35 +2011,52 @@ class TestGetCoinIdFromAddress:
         mock_response.status_code = 404
         mock_session.get.return_value = mock_response
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            x402_session=mock_session, x402_proxy="https://proxy.example.com"
+            "optimism",
+            "0xunknown",
+            "optimistic-ethereum",
+            x402_session=mock_session,
+            x402_proxy="https://proxy.example.com",
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_x402_session_exception(self, mock_sleep, mock_cg_class):
         """Test x402 session API call exception."""
         mock_session = MagicMock()
         mock_session.get.side_effect = Exception("x402 error")
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            x402_session=mock_session, x402_proxy="https://proxy.example.com"
+            "optimism",
+            "0xunknown",
+            "optimistic-ethereum",
+            x402_session=mock_session,
+            x402_proxy="https://proxy.example.com",
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_no_api_key_no_x402(self, mock_sleep):
         """Test fallback with no API key and no x402."""
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            coingecko_api_key=None
+            "optimism", "0xunknown", "optimistic-ethereum", coingecko_api_key=None
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_pro_key(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API with pro key."""
         mock_is_pro.return_value = True
@@ -1907,15 +2064,23 @@ class TestGetCoinIdFromAddress:
         mock_cg.get_coin_info_from_contract_address_by_id.return_value = {"id": "weth"}
         mock_cg_class.return_value = mock_cg
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            coingecko_api_key="CG-pro-key"
+            "optimism",
+            "0xunknown",
+            "optimistic-ethereum",
+            coingecko_api_key="CG-pro-key",
         )
         assert result == "weth"
         mock_cg_class.assert_called_with(api_key="CG-pro-key")
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_demo_key(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API with demo key."""
         mock_is_pro.return_value = False
@@ -1923,15 +2088,20 @@ class TestGetCoinIdFromAddress:
         mock_cg.get_coin_info_from_contract_address_by_id.return_value = {"id": "dai"}
         mock_cg_class.return_value = mock_cg
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            coingecko_api_key="demo-key"
+            "optimism", "0xunknown", "optimistic-ethereum", coingecko_api_key="demo-key"
         )
         assert result == "dai"
         mock_cg_class.assert_called_with(demo_api_key="demo-key")
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_none_response(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API returning None response."""
         mock_is_pro.return_value = False
@@ -1939,35 +2109,42 @@ class TestGetCoinIdFromAddress:
         mock_cg.get_coin_info_from_contract_address_by_id.return_value = None
         mock_cg_class.return_value = mock_cg
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            coingecko_api_key="demo-key"
+            "optimism", "0xunknown", "optimistic-ethereum", coingecko_api_key="demo-key"
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_exception(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API exception."""
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
-        mock_cg.get_coin_info_from_contract_address_by_id.side_effect = Exception("API error")
+        mock_cg.get_coin_info_from_contract_address_by_id.side_effect = Exception(
+            "API error"
+        )
         mock_cg_class.return_value = mock_cg
         result = get_coin_id_from_address(
-            "optimism", "0xunknown", "optimistic-ethereum",
-            coingecko_api_key="demo-key"
+            "optimism", "0xunknown", "optimistic-ethereum", coingecko_api_key="demo-key"
         )
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetHistoricalMarketData
-# ---------------------------------------------------------------------------
 class TestGetHistoricalMarketData:
     """Tests for get_historical_market_data."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_x402_success(self, mock_sleep, mock_cg_class):
         """Test successful x402 market data retrieval."""
         mock_session = MagicMock()
@@ -1977,16 +2154,22 @@ class TestGetHistoricalMarketData:
         }
         mock_cg_class.return_value = mock_cg
         result = get_historical_market_data(
-            "ethereum", 30,
-            x402_session=mock_session, x402_proxy="https://proxy.example.com"
+            "ethereum",
+            30,
+            x402_session=mock_session,
+            x402_proxy="https://proxy.example.com",
         )
         assert result is not None
         assert result["coin_id"] == "ethereum"
         assert len(result["prices"]) == 2
         assert result["timestamps"] == [1000.0, 2000.0]
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_x402_empty_response(self, mock_sleep, mock_cg_class):
         """Test x402 with empty response."""
         mock_session = MagicMock()
@@ -1994,13 +2177,19 @@ class TestGetHistoricalMarketData:
         mock_cg.get_coin_market_chart_by_id.return_value = None
         mock_cg_class.return_value = mock_cg
         result = get_historical_market_data(
-            "ethereum", 30,
-            x402_session=mock_session, x402_proxy="https://proxy.example.com"
+            "ethereum",
+            30,
+            x402_session=mock_session,
+            x402_proxy="https://proxy.example.com",
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_x402_exception(self, mock_sleep, mock_cg_class):
         """Test x402 exception."""
         mock_session = MagicMock()
@@ -2008,20 +2197,30 @@ class TestGetHistoricalMarketData:
         mock_cg.get_coin_market_chart_by_id.side_effect = Exception("x402 error")
         mock_cg_class.return_value = mock_cg
         result = get_historical_market_data(
-            "ethereum", 30,
-            x402_session=mock_session, x402_proxy="https://proxy.example.com"
+            "ethereum",
+            30,
+            x402_session=mock_session,
+            x402_proxy="https://proxy.example.com",
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_no_api_key_no_x402(self, mock_sleep):
         """Test fallback with no API key and no x402."""
         result = get_historical_market_data("ethereum", 30, coingecko_api_key=None)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_pro_key_success(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API with pro key success."""
         mock_is_pro.return_value = True
@@ -2030,59 +2229,84 @@ class TestGetHistoricalMarketData:
             "prices": [[1000000, 2.0], [2000000, 2.5]]
         }
         mock_cg_class.return_value = mock_cg
-        result = get_historical_market_data("ethereum", 30, coingecko_api_key="CG-pro-key")
+        result = get_historical_market_data(
+            "ethereum", 30, coingecko_api_key="CG-pro-key"
+        )
         assert result is not None
         assert result["coin_id"] == "ethereum"
         mock_cg_class.assert_called_with(api_key="CG-pro-key")
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_demo_key_success(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API with demo key success."""
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
-        mock_cg.get_coin_market_chart_by_id.return_value = {
-            "prices": [[1000000, 3.0]]
-        }
+        mock_cg.get_coin_market_chart_by_id.return_value = {"prices": [[1000000, 3.0]]}
         mock_cg_class.return_value = mock_cg
-        result = get_historical_market_data("ethereum", 30, coingecko_api_key="demo-key")
+        result = get_historical_market_data(
+            "ethereum", 30, coingecko_api_key="demo-key"
+        )
         assert result is not None
         mock_cg_class.assert_called_with(demo_api_key="demo-key")
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_empty_response(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API with empty response."""
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_by_id.return_value = None
         mock_cg_class.return_value = mock_cg
-        result = get_historical_market_data("ethereum", 30, coingecko_api_key="demo-key")
+        result = get_historical_market_data(
+            "ethereum", 30, coingecko_api_key="demo-key"
+        )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_regular_api_exception(self, mock_sleep, mock_is_pro, mock_cg_class):
         """Test regular API exception."""
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_by_id.side_effect = Exception("API error")
         mock_cg_class.return_value = mock_cg
-        result = get_historical_market_data("ethereum", 30, coingecko_api_key="demo-key")
+        result = get_historical_market_data(
+            "ethereum", 30, coingecko_api_key="demo-key"
+        )
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetPoolTokenHistory
-# ---------------------------------------------------------------------------
 class TestGetPoolTokenHistory:
     """Tests for get_pool_token_history."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_success(self, mock_coin_id, mock_market_data):
         """Test successful pool token history retrieval."""
         mock_coin_id.side_effect = ["usd-coin", "weth"]
@@ -2097,15 +2321,23 @@ class TestGetPoolTokenHistory:
         assert "ratio_prices" in result
         assert len(result["ratio_prices"]) == 3
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_unsupported_chain(self, mock_coin_id):
         """Test with unsupported chain."""
         result = get_pool_token_history(
-            "unsupported_chain", "0xtoken0", "0xtoken1", days=30, coingecko_api_key="key"
+            "unsupported_chain",
+            "0xtoken0",
+            "0xtoken1",
+            days=30,
+            coingecko_api_key="key",
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_missing_coin_id(self, mock_coin_id):
         """Test when coin ID cannot be resolved."""
         mock_coin_id.side_effect = [None, "weth"]
@@ -2114,8 +2346,12 @@ class TestGetPoolTokenHistory:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_missing_market_data(self, mock_coin_id, mock_market_data):
         """Test when market data is not available."""
         mock_coin_id.side_effect = ["usd-coin", "weth"]
@@ -2125,8 +2361,12 @@ class TestGetPoolTokenHistory:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_empty_prices(self, mock_coin_id, mock_market_data):
         """Test when prices are empty."""
         mock_coin_id.side_effect = ["usd-coin", "weth"]
@@ -2139,8 +2379,12 @@ class TestGetPoolTokenHistory:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_zero_token0_price(self, mock_coin_id, mock_market_data):
         """Test ratio calculation when token0 price is 0 (skipped)."""
         mock_coin_id.side_effect = ["usd-coin", "weth"]
@@ -2155,7 +2399,9 @@ class TestGetPoolTokenHistory:
         # First price is 0, so it should be skipped in ratio_prices
         assert len(result["ratio_prices"]) == 2
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_exception_handling(self, mock_coin_id):
         """Test exception handling."""
         mock_coin_id.side_effect = Exception("lookup failed")
@@ -2164,8 +2410,12 @@ class TestGetPoolTokenHistory:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_historical_market_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address"
+    )
     def test_different_length_prices(self, mock_coin_id, mock_market_data):
         """Test when price arrays have different lengths."""
         mock_coin_id.side_effect = ["usd-coin", "weth"]
@@ -2181,19 +2431,27 @@ class TestGetPoolTokenHistory:
         assert len(result["ratio_prices"]) == 3
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateTickLowerAndUpperVelodrome
-# ---------------------------------------------------------------------------
 class TestCalculateTickLowerAndUpperVelodrome:
     """Tests for calculate_tick_lower_and_upper_velodrome."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
-    def test_success_stable(self, mock_tick_spacing, mock_tokens, mock_price,
-                            mock_history, mock_optimize):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
+    def test_success_stable(
+        self, mock_tick_spacing, mock_tokens, mock_price, mock_history, mock_optimize
+    ):
         """Test successful calculation for stable pool."""
         mock_tick_spacing.return_value = 1
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -2209,9 +2467,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
             "band_allocations": np.array([0.8, 0.15, 0.05]),
             "percent_in_bounds": 98.0,
         }
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is not None
         assert isinstance(result, list)
         assert len(result) >= 1
@@ -2231,91 +2487,132 @@ class TestCalculateTickLowerAndUpperVelodrome:
         )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
     def test_no_tick_spacing(self, mock_tick_spacing):
         """Test when tick spacing cannot be retrieved."""
         mock_tick_spacing.return_value = None
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
     def test_no_pool_tokens(self, mock_tick_spacing, mock_tokens):
         """Test when pool tokens cannot be retrieved."""
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = None
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
     def test_no_current_price(self, mock_tick_spacing, mock_tokens, mock_price):
         """Test when current price cannot be retrieved."""
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
         mock_price.return_value = None
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
-    def test_no_pool_history(self, mock_tick_spacing, mock_tokens, mock_price, mock_history):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
+    def test_no_pool_history(
+        self, mock_tick_spacing, mock_tokens, mock_price, mock_history
+    ):
         """Test when pool token history cannot be retrieved."""
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
         mock_price.return_value = 1.0
         mock_history.return_value = None
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
-    def test_empty_ratio_prices(self, mock_tick_spacing, mock_tokens, mock_price, mock_history):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
+    def test_empty_ratio_prices(
+        self, mock_tick_spacing, mock_tokens, mock_price, mock_history
+    ):
         """Test when ratio_prices is empty."""
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
         mock_price.return_value = 1.0
         mock_history.return_value = {"ratio_prices": [], "current_price": 1.0}
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
-    def test_history_exception(self, mock_tick_spacing, mock_tokens, mock_price, mock_history):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
+    def test_history_exception(
+        self, mock_tick_spacing, mock_tokens, mock_price, mock_history
+    ):
         """Test when get_pool_token_history raises exception."""
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
         mock_price.return_value = 1.0
         mock_history.side_effect = Exception("history error")
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
-    def test_optimize_returns_none(self, mock_tick_spacing, mock_tokens, mock_price,
-                                    mock_history, mock_optimize):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
+    def test_optimize_returns_none(
+        self, mock_tick_spacing, mock_tokens, mock_price, mock_history, mock_optimize
+    ):
         """Test when optimize_stablecoin_bands returns empty result."""
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -2323,18 +2620,27 @@ class TestCalculateTickLowerAndUpperVelodrome:
         prices = [1.0 + 0.001 * i for i in range(200)]
         mock_history.return_value = {"ratio_prices": prices, "current_price": 1.0}
         mock_optimize.return_value = {}
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", True
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
-    def test_equal_ticks_adjusted(self, mock_tick_spacing, mock_tokens, mock_price,
-                                   mock_history, mock_optimize):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
+    def test_equal_ticks_adjusted(
+        self, mock_tick_spacing, mock_tokens, mock_price, mock_history, mock_optimize
+    ):
         """Test that equal tick_lower and tick_upper are adjusted by tick_spacing."""
         mock_tick_spacing.return_value = 10
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -2348,21 +2654,30 @@ class TestCalculateTickLowerAndUpperVelodrome:
             "band_allocations": np.array([0.5, 0.3, 0.2]),
             "percent_in_bounds": 99.0,
         }
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", False
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", False)
         assert result is not None
         # Verify that tick_upper was adjusted when equal to tick_lower
         for pos in result:
             assert pos["tick_upper"] > pos["tick_lower"]
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
-    def test_non_stable_pool(self, mock_tick_spacing, mock_tokens, mock_price,
-                              mock_history, mock_optimize):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.optimize_stablecoin_bands"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_token_history"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_current_pool_price"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
+    def test_non_stable_pool(
+        self, mock_tick_spacing, mock_tokens, mock_price, mock_history, mock_optimize
+    ):
         """Test calculation for non-stable pool (no min_width_pct override)."""
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -2374,15 +2689,10 @@ class TestCalculateTickLowerAndUpperVelodrome:
             "band_allocations": np.array([0.7, 0.2, 0.1]),
             "percent_in_bounds": 95.0,
         }
-        result = calculate_tick_lower_and_upper_velodrome(
-            "optimism", "0xpool", False
-        )
+        result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", False)
         assert result is not None
 
 
-# ---------------------------------------------------------------------------
-# TestFormatVelodromePoolData
-# ---------------------------------------------------------------------------
 class TestFormatVelodromePoolData:
     """Tests for format_velodrome_pool_data."""
 
@@ -2402,7 +2712,9 @@ class TestFormatVelodromePoolData:
             ],
         }
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
     def test_basic_format(self, mock_pos_details):
         """Test basic pool formatting without API key."""
         mock_pos_details.return_value = {"apr": 10.0}
@@ -2415,14 +2727,18 @@ class TestFormatVelodromePoolData:
         assert result[0]["token1"] == "0xtoken1"
         assert result[0]["is_cl_pool"] is True  # sugar_type=1 not in [0, -1]
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
     def test_skip_less_than_two_tokens(self, mock_pos_details):
         """Test that pools with less than 2 tokens are skipped."""
         pool = self._make_pool(token_count=1)
         result = format_velodrome_pool_data([pool], OPTIMISM_CHAIN_ID)
         assert len(result) == 0
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
     def test_non_cl_pool(self, mock_pos_details):
         """Test non-CL pool (sugar_type = 0)."""
         mock_pos_details.return_value = {}
@@ -2431,13 +2747,24 @@ class TestFormatVelodromePoolData:
         assert len(result) == 1
         assert result[0]["is_cl_pool"] is False
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_velodrome_il_risk_score_multi")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
-    def test_with_api_key_full_metrics(self, mock_pos_details, mock_coin_id,
-                                        mock_sharpe, mock_depth, mock_il):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_velodrome_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
+    def test_with_api_key_full_metrics(
+        self, mock_pos_details, mock_coin_id, mock_sharpe, mock_depth, mock_il
+    ):
         """Test formatting with API key, full metrics calculation."""
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.side_effect = ["token0-id", "token1-id"]
@@ -2446,18 +2773,25 @@ class TestFormatVelodromePoolData:
         mock_il.return_value = 0.3
         pool = self._make_pool()
         result = format_velodrome_pool_data(
-            [pool], OPTIMISM_CHAIN_ID,
+            [pool],
+            OPTIMISM_CHAIN_ID,
             coingecko_api_key="key",
-            coin_id_mapping={"TK0": "token0-id", "TK1": "token1-id"}
+            coin_id_mapping={"TK0": "token0-id", "TK1": "token1-id"},
         )
         assert len(result) == 1
         assert result[0]["sharpe_ratio"] == 1.5
         assert result[0]["depth_score"] == 100.0
         assert result[0]["il_risk_score"] == 0.3
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
     def test_sharpe_ratio_exception(self, mock_pos_details, mock_coin_id, mock_sharpe):
         """Test Sharpe ratio exception sets None."""
         mock_pos_details.return_value = {"apr": 10.0}
@@ -2465,17 +2799,25 @@ class TestFormatVelodromePoolData:
         mock_sharpe.side_effect = Exception("Sharpe error")
         pool = self._make_pool()
         result = format_velodrome_pool_data(
-            [pool], OPTIMISM_CHAIN_ID,
-            coingecko_api_key="key",
-            coin_id_mapping={}
+            [pool], OPTIMISM_CHAIN_ID, coingecko_api_key="key", coin_id_mapping={}
         )
         assert result[0]["sharpe_ratio"] is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
-    def test_depth_score_exception(self, mock_pos_details, mock_coin_id, mock_sharpe, mock_depth):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
+    def test_depth_score_exception(
+        self, mock_pos_details, mock_coin_id, mock_sharpe, mock_depth
+    ):
         """Test depth score exception sets None."""
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.return_value = "token-id"
@@ -2483,19 +2825,28 @@ class TestFormatVelodromePoolData:
         mock_depth.side_effect = Exception("Depth error")
         pool = self._make_pool()
         result = format_velodrome_pool_data(
-            [pool], OPTIMISM_CHAIN_ID,
-            coingecko_api_key="key",
-            coin_id_mapping={}
+            [pool], OPTIMISM_CHAIN_ID, coingecko_api_key="key", coin_id_mapping={}
         )
         assert result[0]["depth_score"] is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_velodrome_il_risk_score_multi")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
-    def test_il_risk_exception(self, mock_pos_details, mock_coin_id, mock_sharpe,
-                                mock_depth, mock_il):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_velodrome_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
+    def test_il_risk_exception(
+        self, mock_pos_details, mock_coin_id, mock_sharpe, mock_depth, mock_il
+    ):
         """Test IL risk score exception sets None."""
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.side_effect = ["tid0", "tid1"]
@@ -2504,17 +2855,25 @@ class TestFormatVelodromePoolData:
         mock_il.side_effect = Exception("IL error")
         pool = self._make_pool()
         result = format_velodrome_pool_data(
-            [pool], OPTIMISM_CHAIN_ID,
-            coingecko_api_key="key",
-            coin_id_mapping={}
+            [pool], OPTIMISM_CHAIN_ID, coingecko_api_key="key", coin_id_mapping={}
         )
         assert result[0]["il_risk_score"] is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
-    def test_not_enough_valid_token_ids(self, mock_pos_details, mock_coin_id, mock_sharpe, mock_depth):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_symbol"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
+    def test_not_enough_valid_token_ids(
+        self, mock_pos_details, mock_coin_id, mock_sharpe, mock_depth
+    ):
         """Test when not enough valid token IDs for IL risk score."""
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.side_effect = [None, None]  # No valid token IDs
@@ -2522,13 +2881,13 @@ class TestFormatVelodromePoolData:
         mock_depth.return_value = (100.0, 5000.0)
         pool = self._make_pool()
         result = format_velodrome_pool_data(
-            [pool], OPTIMISM_CHAIN_ID,
-            coingecko_api_key="key",
-            coin_id_mapping={}
+            [pool], OPTIMISM_CHAIN_ID, coingecko_api_key="key", coin_id_mapping={}
         )
         assert result[0]["il_risk_score"] is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
     def test_two_token_pool(self, mock_pos_details):
         """Test pool with two tokens in inputTokens (minimum after filtering)."""
         mock_pos_details.return_value = {}
@@ -2539,13 +2898,12 @@ class TestFormatVelodromePoolData:
         assert "token1" in result[0]
 
 
-# ---------------------------------------------------------------------------
-# TestSharpeRatioBranches
-# ---------------------------------------------------------------------------
 class TestSharpeRatioBranches:
     """Tests for additional branches in get_velodrome_pool_sharpe_ratio."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_exception_combining_returns(self, mock_epochs):
         """Test exception branch when combining price and fee returns (lines 815-817)."""
         # Need to create epochs data that triggers the exception in combining returns
@@ -2560,11 +2918,13 @@ class TestSharpeRatioBranches:
 
         def patched_pct_change(self_series):
             result = original_series.pct_change(self_series)
+
             # Make the loc method raise on the filtered series
             class BrokenSeries(type(result)):
                 @property
                 def index(self):
                     raise Exception("forced error")
+
             return result
 
         # Simpler approach: patch the internal try block
@@ -2579,7 +2939,9 @@ class TestSharpeRatioBranches:
             result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
             # Should still return something (may fallback to price_rets)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_nan_inf_values_in_returns(self, mock_epochs):
         """Test NaN and Inf values handling in returns (lines 832-843)."""
         # Create data that produces NaN/Inf returns
@@ -2594,7 +2956,9 @@ class TestSharpeRatioBranches:
         # Should handle NaN/Inf and still return a value
         assert result is None or isinstance(result, (int, float))
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_zero_std_returns(self, mock_epochs):
         """Test zero standard deviation returns (lines 857-859)."""
         # All identical values -> zero std
@@ -2604,7 +2968,9 @@ class TestSharpeRatioBranches:
         result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
         assert result is not None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_nan_mean_returns(self, mock_epochs):
         """Test NaN mean returns (lines 861-863)."""
         mock_epochs.return_value = [
@@ -2615,7 +2981,9 @@ class TestSharpeRatioBranches:
         result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
         assert result is None or isinstance(result, (int, float))
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_inner_sharpe_calculation_exception(self, mock_epochs):
         """Test inner exception in Sharpe ratio calculation (lines 880-882)."""
         mock_epochs.return_value = [
@@ -2625,13 +2993,17 @@ class TestSharpeRatioBranches:
             (4000, 400.0, 80.0, 16.0, 8.0, []),
         ]
         # Patch np.sqrt to raise on specific call
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.sqrt",
-                    side_effect=Exception("sqrt error")):
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.sqrt",
+            side_effect=Exception("sqrt error"),
+        ):
             result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
             # Outer except should catch and return None
             assert result is None or result == 0
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_nan_sharpe_ratio_result(self, mock_epochs):
         """Test NaN result from sharpe ratio calculation (lines 877-879)."""
         mock_epochs.return_value = [
@@ -2644,14 +3016,18 @@ class TestSharpeRatioBranches:
         # Should return a numeric value or None
         assert result is None or isinstance(result, (int, float))
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_outer_exception(self, mock_epochs):
         """Test outer exception in sharpe ratio (lines 889-891)."""
         mock_epochs.side_effect = Exception("outer error")
         result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_unknown_chain_name_loop_exhaust(self, mock_epochs):
         """Test chain name loop exhausts without finding match (lines 776->784, 777->776)."""
         mock_epochs.return_value = [
@@ -2662,20 +3038,21 @@ class TestSharpeRatioBranches:
         assert result is None or isinstance(result, (int, float))
 
 
-# ---------------------------------------------------------------------------
-# TestGetEpochsByAddressBranches
-# ---------------------------------------------------------------------------
 class TestGetEpochsByAddressBranches:
     """Tests for additional branches in get_epochs_by_address."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_missing_rewards_sugar_or_rpc(self, mock_conn):
         """Test when RewardsSugar address or RPC URL is missing (lines 664-665)."""
         # Use a chain that doesn't have rewards sugar configured
         result = get_epochs_by_address("0xpool", "UNKNOWNCHAIN", limit=10)
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_attribute_error_on_function(self, mock_conn):
         """Test AttributeError when epochsByAddress function not found (lines 695-696)."""
         mock_w3 = MagicMock()
@@ -2691,9 +3068,6 @@ class TestGetEpochsByAddressBranches:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestMonteCarloVerboseBranches
-# ---------------------------------------------------------------------------
 class TestMonteCarloVerboseBranches:
     """Tests for verbose branches in Monte Carlo and optimize functions."""
 
@@ -2704,8 +3078,12 @@ class TestMonteCarloVerboseBranches:
         std_dev = calculate_std_dev(prices, ema, 14)
         z_scores = np.abs(prices - ema) / np.maximum(std_dev, 1e-6)
         result = run_monte_carlo_level(
-            prices, ema, std_dev, z_scores,
-            min_multiplier=0.1, max_multiplier=1.0,
+            prices,
+            ema,
+            std_dev,
+            z_scores,
+            min_multiplier=0.1,
+            max_multiplier=1.0,
             num_simulations=5,
             min_width_pct=0.0001,
             verbose=True,
@@ -2760,6 +3138,7 @@ class TestMonteCarloVerboseBranches:
         # a3 = 1.0 - 0.9999 - 0.0001 = 0.0 < 0.0001 -> triggers branch!
         original_uniform = np.random.uniform
         call_count = [0]
+
         def patched_uniform(low=0.0, high=1.0, size=None):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -2774,11 +3153,21 @@ class TestMonteCarloVerboseBranches:
                 return 0.8  # a2_proportion
             return original_uniform(low, high, size)
 
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.random.uniform", side_effect=patched_uniform):
-            with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.random.random", return_value=0.3):
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.random.uniform",
+            side_effect=patched_uniform,
+        ):
+            with patch(
+                "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.random.random",
+                return_value=0.3,
+            ):
                 result = run_monte_carlo_level(
-                    prices, ema, std_dev, z_scores,
-                    min_multiplier=0.1, max_multiplier=1.0,
+                    prices,
+                    ema,
+                    std_dev,
+                    z_scores,
+                    min_multiplier=0.1,
+                    max_multiplier=1.0,
                     num_simulations=1,
                     min_width_pct=0.0001,
                     verbose=False,
@@ -2786,9 +3175,6 @@ class TestMonteCarloVerboseBranches:
         assert "best_config" in result
 
 
-# ---------------------------------------------------------------------------
-# TestApplyCompositePreFilterBranches
-# ---------------------------------------------------------------------------
 class TestApplyCompositePreFilterBranches:
     """Tests for additional branches in apply_composite_pre_filter."""
 
@@ -2825,73 +3211,105 @@ class TestApplyCompositePreFilterBranches:
         assert result == []
 
 
-# ---------------------------------------------------------------------------
-# TestGetOpportunitiesForVelodromeBranches
-# ---------------------------------------------------------------------------
 class TestGetOpportunitiesForVelodromeBranches:
     """Tests for additional branches in get_opportunities_for_velodrome."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
-    def test_top_n_zero_skips_composite_filter(self, mock_pools, mock_filter,
-                                                mock_composite, mock_format):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
+    def test_top_n_zero_skips_composite_filter(
+        self, mock_pools, mock_filter, mock_composite, mock_format
+    ):
         """Test top_n=0 skips composite pre-filter (line 2880->2896)."""
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1", "token_count": 2}]
         mock_format.return_value = [{"pool_address": "pool1"}]
         result = get_opportunities_for_velodrome(
-            [], "key", OPTIMISM_CHAIN_ID,
-            whitelisted_assets={}, top_n=0,
+            [],
+            "key",
+            OPTIMISM_CHAIN_ID,
+            whitelisted_assets={},
+            top_n=0,
         )
         # composite filter should NOT be called
         mock_composite.assert_not_called()
         assert isinstance(result, list)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
-    def test_composite_filter_returns_empty(self, mock_pools, mock_filter,
-                                             mock_composite, mock_format):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
+    def test_composite_filter_returns_empty(
+        self, mock_pools, mock_filter, mock_composite, mock_format
+    ):
         """Test when composite filter returns empty (line 2890-2892)."""
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1"}]
         mock_composite.return_value = []
         result = get_opportunities_for_velodrome(
-            [], "key", OPTIMISM_CHAIN_ID,
-            whitelisted_assets={}, top_n=10,
+            [],
+            "key",
+            OPTIMISM_CHAIN_ID,
+            whitelisted_assets={},
+            top_n=10,
         )
         assert isinstance(result, dict)
         assert "error" in result
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
-    def test_format_returns_empty(self, mock_pools, mock_filter,
-                                   mock_composite, mock_format):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.apply_composite_pre_filter"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
+    def test_format_returns_empty(
+        self, mock_pools, mock_filter, mock_composite, mock_format
+    ):
         """Test when format_velodrome_pool_data returns empty (line 2907-2909)."""
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1"}]
         mock_composite.return_value = [{"id": "pool1"}]
         mock_format.return_value = []
         result = get_opportunities_for_velodrome(
-            [], "key", OPTIMISM_CHAIN_ID,
-            whitelisted_assets={}, top_n=10,
+            [],
+            "key",
+            OPTIMISM_CHAIN_ID,
+            whitelisted_assets={},
+            top_n=10,
         )
         assert isinstance(result, dict)
         assert "error" in result
 
 
-# ---------------------------------------------------------------------------
-# TestGetVelodromePoolsViaSugarBranches
-# ---------------------------------------------------------------------------
 class TestGetVelodromePoolsViaSugarBranches:
     """Tests for additional branches in get_velodrome_pools_via_sugar."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_default_rpc_url(self, mock_conn):
         """Test default RPC URL is used when none provided (line 1016)."""
         mock_w3 = MagicMock()
@@ -2900,10 +3318,14 @@ class TestGetVelodromePoolsViaSugarBranches:
         mock_contract.functions.all.return_value.call.return_value = []
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
-        result = get_velodrome_pools_via_sugar("0xsugar", chain_id=MODE_CHAIN_ID, rpc_url=None)
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url=None
+        )
         assert isinstance(result, list)
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_empty_raw_pools_break(self, mock_conn):
         """Test break when raw_pools is empty (line 1047)."""
         mock_w3 = MagicMock()
@@ -2912,11 +3334,15 @@ class TestGetVelodromePoolsViaSugarBranches:
         mock_contract.functions.all.return_value.call.return_value = []
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
-        result = get_velodrome_pools_via_sugar("0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com")
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
         assert isinstance(result, list)
         assert len(result) == 0
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_pool_types_and_ticks(self, mock_conn):
         """Test pool type/tick combinations (lines 1088-1093)."""
         mock_w3 = MagicMock()
@@ -2931,41 +3357,87 @@ class TestGetVelodromePoolsViaSugarBranches:
             27=emerging,28=created_at,29=nfpm,30=alm,31=root
             """
             return (
-                lp_addr, "SYM", 18, 1000, pool_type, tick, 1000,
-                token0, 500, 100, token1, 500, 100,
-                "0xgauge", 500, True, 100, "0xbribe", "0xfactory",
-                1000, "0xemtoken", 500, 500, 0, 100, 200,
-                0, 100, 200, "0xnfpm", "0xalm", "0xroot",
+                lp_addr,
+                "SYM",
+                18,
+                1000,
+                pool_type,
+                tick,
+                1000,
+                token0,
+                500,
+                100,
+                token1,
+                500,
+                100,
+                "0xgauge",
+                500,
+                True,
+                100,
+                "0xbribe",
+                "0xfactory",
+                1000,
+                "0xemtoken",
+                500,
+                500,
+                0,
+                100,
+                200,
+                0,
+                100,
+                200,
+                "0xnfpm",
+                "0xalm",
+                "0xroot",
             )
 
         pool_cl = _make_pool_tuple("0xpool_cl", 1, 100, "0xtoken0_cl", "0xtoken1_cl")
-        pool_stable = _make_pool_tuple("0xpool_stable", 0, 0, "0xtoken0_s", "0xtoken1_s")
-        pool_unstable = _make_pool_tuple("0xpool_unstable", -1, 0, "0xtoken0_u", "0xtoken1_u")
-        pool_cl_zero_tick = _make_pool_tuple("0xpool_clzt", 1, 0, "0xtoken0_cz", "0xtoken1_cz")
+        pool_stable = _make_pool_tuple(
+            "0xpool_stable", 0, 0, "0xtoken0_s", "0xtoken1_s"
+        )
+        pool_unstable = _make_pool_tuple(
+            "0xpool_unstable", -1, 0, "0xtoken0_u", "0xtoken1_u"
+        )
+        pool_cl_zero_tick = _make_pool_tuple(
+            "0xpool_clzt", 1, 0, "0xtoken0_cz", "0xtoken1_cz"
+        )
         mock_contract = MagicMock()
         mock_contract.functions.all.return_value.call.return_value = [
-            pool_cl, pool_stable, pool_unstable, pool_cl_zero_tick
+            pool_cl,
+            pool_stable,
+            pool_unstable,
+            pool_cl_zero_tick,
         ]
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
-        result = get_velodrome_pools_via_sugar("0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com")
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
         assert isinstance(result, list)
         assert len(result) == 4
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_batch_exception(self, mock_conn):
         """Test exception during batch fetch (lines 1104-1107)."""
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
         mock_contract = MagicMock()
-        mock_contract.functions.all.return_value.call.side_effect = Exception("batch error")
+        mock_contract.functions.all.return_value.call.side_effect = Exception(
+            "batch error"
+        )
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
-        result = get_velodrome_pools_via_sugar("0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com")
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
         assert isinstance(result, list)
         assert len(result) == 0
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_skip_none_pool(self, mock_conn):
         """Test skipping None pool in the second loop (line 1114)."""
         mock_w3 = MagicMock()
@@ -2973,22 +3445,48 @@ class TestGetVelodromePoolsViaSugarBranches:
         mock_contract = MagicMock()
         # Return one valid pool with 32 elements
         pool_data = (
-            "0xpool1", "SYM", 18, 1000, 1, 100, 1000,
-            "0xtoken0", 500, 100, "0xtoken1", 500, 100,
-            "0xgauge", 500, True, 100, "0xbribe", "0xfactory",
-            1000, "0xemtoken", 500, 500, 0, 100, 200,
-            0, 100, 200, "0xnfpm", "0xalm", "0xroot",
+            "0xpool1",
+            "SYM",
+            18,
+            1000,
+            1,
+            100,
+            1000,
+            "0xtoken0",
+            500,
+            100,
+            "0xtoken1",
+            500,
+            100,
+            "0xgauge",
+            500,
+            True,
+            100,
+            "0xbribe",
+            "0xfactory",
+            1000,
+            "0xemtoken",
+            500,
+            500,
+            0,
+            100,
+            200,
+            0,
+            100,
+            200,
+            "0xnfpm",
+            "0xalm",
+            "0xroot",
         )
         mock_contract.functions.all.return_value.call.return_value = [pool_data]
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
-        result = get_velodrome_pools_via_sugar("0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com")
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
         assert isinstance(result, list)
 
 
-# ---------------------------------------------------------------------------
-# TestInvalidateCacheBranches
-# ---------------------------------------------------------------------------
 class TestInvalidateCacheBranches:
     """Tests for invalidate_cache branches."""
 
@@ -3008,23 +3506,22 @@ class TestInvalidateCacheBranches:
         invalidate_cache(cache_type="pools", key="nonexistent_key")
 
 
-# ---------------------------------------------------------------------------
-# TestGetFilteredPoolsBranches
-# ---------------------------------------------------------------------------
 class TestGetFilteredPoolsBranches:
     """Tests for additional branches in get_filtered_pools_for_velodrome."""
 
     def test_whitelisted_update_symbols(self):
         """Test token symbol update from whitelist (line 2520-2522)."""
-        pools = [{
-            "id": "pool1",
-            "chain": "optimism",
-            "inputTokens": [
-                {"id": "0xtoken0", "symbol": ""},
-                {"id": "0xtoken1", "symbol": ""},
-            ],
-            "totalValueLockedUSD": 1000,
-        }]
+        pools = [
+            {
+                "id": "pool1",
+                "chain": "optimism",
+                "inputTokens": [
+                    {"id": "0xtoken0", "symbol": ""},
+                    {"id": "0xtoken1", "symbol": ""},
+                ],
+                "totalValueLockedUSD": 1000,
+            }
+        ]
         whitelisted = {
             "optimism": {
                 "0xtoken0": "USDC",
@@ -3038,15 +3535,17 @@ class TestGetFilteredPoolsBranches:
 
     def test_token_not_whitelisted(self):
         """Test pool excluded when token not in whitelist."""
-        pools = [{
-            "id": "pool1",
-            "chain": "optimism",
-            "inputTokens": [
-                {"id": "0xtoken0", "symbol": ""},
-                {"id": "0xunknown", "symbol": ""},
-            ],
-            "totalValueLockedUSD": 1000,
-        }]
+        pools = [
+            {
+                "id": "pool1",
+                "chain": "optimism",
+                "inputTokens": [
+                    {"id": "0xtoken0", "symbol": ""},
+                    {"id": "0xunknown", "symbol": ""},
+                ],
+                "totalValueLockedUSD": 1000,
+            }
+        ]
         whitelisted = {
             "optimism": {
                 "0xtoken0": "USDC",
@@ -3057,51 +3556,56 @@ class TestGetFilteredPoolsBranches:
 
     def test_insufficient_tokens(self):
         """Test pool with < 2 tokens excluded."""
-        pools = [{
-            "id": "pool1",
-            "chain": "optimism",
-            "inputTokens": [{"id": "0xtoken0", "symbol": "TK0"}],
-            "totalValueLockedUSD": 1000,
-        }]
+        pools = [
+            {
+                "id": "pool1",
+                "chain": "optimism",
+                "inputTokens": [{"id": "0xtoken0", "symbol": "TK0"}],
+                "totalValueLockedUSD": 1000,
+            }
+        ]
         result = get_filtered_pools_for_velodrome(pools, [], {})
         assert len(result) == 0
 
     def test_current_position_skipped(self):
         """Test pool in current_positions is skipped."""
-        pools = [{
-            "id": "pool1",
-            "chain": "optimism",
-            "inputTokens": [
-                {"id": "0xtoken0", "symbol": "TK0"},
-                {"id": "0xtoken1", "symbol": "TK1"},
-            ],
-            "totalValueLockedUSD": 1000,
-        }]
+        pools = [
+            {
+                "id": "pool1",
+                "chain": "optimism",
+                "inputTokens": [
+                    {"id": "0xtoken0", "symbol": "TK0"},
+                    {"id": "0xtoken1", "symbol": "TK1"},
+                ],
+                "totalValueLockedUSD": 1000,
+            }
+        ]
         result = get_filtered_pools_for_velodrome(pools, ["pool1"], {})
         assert len(result) == 0
 
 
-# ---------------------------------------------------------------------------
-# TestSharpeRatioNaNInfBranches
-# ---------------------------------------------------------------------------
 class TestSharpeRatioNaNInfBranches:
     """Tests targeting specific NaN/Inf branches in get_velodrome_pool_sharpe_ratio."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_inf_values_in_returns_data(self, mock_epochs):
         """Test Inf values in returns data triggers cleanup (lines 832-843)."""
         # Create epochs where one has zero liquidity, causing Inf in pct_change
         mock_epochs.return_value = [
             (1, 100.0, 50.0, 0, 0, []),
             (2, 0.001, 0.0005, 0, 0, []),  # Very low -> big change
-            (3, 100.0, 50.0, 0, 0, []),    # Back up -> big change
+            (3, 100.0, 50.0, 0, 0, []),  # Back up -> big change
             (4, 200.0, 60.0, 0, 0, []),
             (5, 300.0, 70.0, 0, 0, []),
         ]
         result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
         assert result is None or isinstance(result, (int, float))
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_nan_mean_return(self, mock_epochs):
         """Test NaN mean return triggers return 0 (lines 862-863)."""
         mock_epochs.return_value = [
@@ -3110,17 +3614,21 @@ class TestSharpeRatioNaNInfBranches:
         # Patch pd.Series.mean to return NaN at the right time
         original_mean = pd.Series.mean
         mean_call_count = [0]
+
         def patched_mean(self_series, *args, **kwargs):
             mean_call_count[0] += 1
             # The mean at line 853 (returns_mean = total_rets.mean()) - should be NaN
             if mean_call_count[0] >= 1:
-                return float('nan')
+                return float("nan")
             return original_mean(self_series, *args, **kwargs)
+
         with patch.object(pd.Series, "mean", patched_mean):
             result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
         assert result == 0 or result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_nan_sharpe_result_via_patch(self, mock_epochs):
         """Test NaN sharpe result returns 0 (lines 877-879)."""
         mock_epochs.return_value = [
@@ -3132,32 +3640,42 @@ class TestSharpeRatioNaNInfBranches:
         # Another approach: directly patch the division result
         original_std = pd.Series.std
         std_call_count = [0]
+
         def patched_std(self_series, *args, **kwargs):
             std_call_count[0] += 1
             result = original_std(self_series, *args, **kwargs)
             if std_call_count[0] == 1 and result != 0:
-                return float('inf')  # Inf std -> sharpe = 0/inf = 0, not NaN
+                return float("inf")  # Inf std -> sharpe = 0/inf = 0, not NaN
             return result
+
         # Actually, to make sharpe = NaN: 0 / 0 = NaN, or inf / inf = NaN
         # But std=0 is caught earlier. Let me make both mean and std inf.
         original_mean2 = pd.Series.mean
         mean2_call = [0]
+
         def patched_mean2(self_series, *args, **kwargs):
             mean2_call[0] += 1
             return original_mean2(self_series, *args, **kwargs)
 
         # Simpler: patch np.sqrt(52) to return NaN
         original_sqrt2 = np.sqrt
+
         def patched_sqrt2(val):
             if isinstance(val, (int, float)) and val == 52:
-                return float('nan')
+                return float("nan")
             return original_sqrt2(val)
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.sqrt", side_effect=patched_sqrt2):
+
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.np.sqrt",
+            side_effect=patched_sqrt2,
+        ):
             result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
         # NaN result from sharpe calculation -> should return 0 (line 879) or None (outer except)
         assert result == 0 or result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_inner_calculation_exception(self, mock_epochs):
         """Test inner exception in sharpe calculation (lines 880-882)."""
         mock_epochs.return_value = [
@@ -3166,17 +3684,21 @@ class TestSharpeRatioNaNInfBranches:
         # Patch to make the inner try block raise
         original_sqrt = np.sqrt
         with patch.object(np, "sqrt") as mock_sqrt:
+
             def sqrt_side_effect(val):
                 # Raise on certain calls within the inner try block
                 if isinstance(val, (int, float)) and val == 52:
                     raise ValueError("forced sqrt error")
                 return original_sqrt(val)
+
             mock_sqrt.side_effect = sqrt_side_effect
             result = get_velodrome_pool_sharpe_ratio("0xpool", "OPTIMISM", 500)
             # Should trigger inner except (line 880) or outer except (889)
             assert result == 0 or result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_inf_causes_cleanup_to_one_point(self, mock_epochs):
         """Test returns with Inf values that leave <=1 data point after cleanup (lines 841-843)."""
         # share_prices = total_liquidities = [100, 0, 100]
@@ -3213,7 +3735,9 @@ class TestSharpeRatioNaNInfBranches:
         # This triggers the NaN/Inf path (line 825-836) even if we don't hit 841-843
         assert result is None or isinstance(result, (int, float))
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_epochs_by_address"
+    )
     def test_cleanup_leaves_one_datapoint(self, mock_epochs):
         """Force cleanup path to leave <=1 data points via patching (lines 841-843)."""
         mock_epochs.return_value = [
@@ -3237,31 +3761,28 @@ class TestSharpeRatioNaNInfBranches:
         assert result is None or isinstance(result, (int, float))
 
 
-# ---------------------------------------------------------------------------
-# TestGetCoinIdFromAddressOuterException
-# ---------------------------------------------------------------------------
 class TestGetCoinIdFromAddressOuterException:
     """Tests for outer exception in get_coin_id_from_address (lines 2061-2063)."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_outer_exception(self, mock_sleep):
         """Test outer exception handler."""
         # Patch time.sleep to raise, which occurs before any inner try
         mock_sleep.side_effect = Exception("time error")
         result = get_coin_id_from_address(
-            "optimism", "0xunknownaddr", "optimistic-ethereum",
-            coingecko_api_key="key"
+            "optimism", "0xunknownaddr", "optimistic-ethereum", coingecko_api_key="key"
         )
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetHistoricalMarketDataOuterException
-# ---------------------------------------------------------------------------
 class TestGetHistoricalMarketDataOuterException:
     """Tests for outer exception in get_historical_market_data (lines 2151-2153)."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_outer_exception(self, mock_sleep):
         """Test outer exception handler."""
         mock_sleep.side_effect = Exception("sleep error")
@@ -3269,40 +3790,48 @@ class TestGetHistoricalMarketDataOuterException:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateTickLowerVelodromeUnpackError
-# ---------------------------------------------------------------------------
 class TestCalculateTickLowerVelodromeTokenErrors:
     """Tests for token-related errors in calculate_tick_lower_and_upper_velodrome (lines 2275-2276)."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
     def test_pool_tokens_returns_none_unpack_error(self, mock_tick, mock_tokens):
         """Test TypeError when unpacking None from get_pool_tokens."""
         mock_tick.return_value = 60
         mock_tokens.return_value = None
         # When get_pool_tokens returns None, 'token0, token1 = None' will raise TypeError
         # which is caught by the outer except block
-        result = calculate_tick_lower_and_upper_velodrome("optimism", "0x0000000000000000000000000000000000000001", True)
+        result = calculate_tick_lower_and_upper_velodrome(
+            "optimism", "0x0000000000000000000000000000000000000001", True
+        )
         assert result is None
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_pool_tokens"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_tick_spacing_velodrome"
+    )
     def test_pool_tokens_empty_token0(self, mock_tick, mock_tokens):
         """Test when token0 is empty (falsy) triggering lines 2275-2276."""
         mock_tick.return_value = 60
         mock_tokens.return_value = ("", "0xtoken1")  # token0 is falsy
-        result = calculate_tick_lower_and_upper_velodrome("optimism", "0x0000000000000000000000000000000000000001", True)
+        result = calculate_tick_lower_and_upper_velodrome(
+            "optimism", "0x0000000000000000000000000000000000000001", True
+        )
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetVelodromePoolsViaSugarMoreBranches
-# ---------------------------------------------------------------------------
 class TestGetVelodromePoolsViaSugarMoreBranches:
     """Additional tests for get_velodrome_pools_via_sugar branches."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_multiple_batches_and_offset_increment(self, mock_conn):
         """Test multiple batches triggering offset increment (line 1104)."""
         mock_w3 = MagicMock()
@@ -3310,11 +3839,38 @@ class TestGetVelodromePoolsViaSugarMoreBranches:
 
         def _make_pool_tuple(idx):
             return (
-                f"0xpool{idx}", "SYM", 18, 1000, 0, 0, 0,
-                f"0xtoken0_{idx}", 500, 100, f"0xtoken1_{idx}", 500, 100,
-                "0xgauge", 500, True, 100, "0xbribe", "0xfactory",
-                1000, "0xemtoken", 500, 500, 0, 100, 200,
-                0, 100, 200, "0xnfpm", "0xalm", "0xroot",
+                f"0xpool{idx}",
+                "SYM",
+                18,
+                1000,
+                0,
+                0,
+                0,
+                f"0xtoken0_{idx}",
+                500,
+                100,
+                f"0xtoken1_{idx}",
+                500,
+                100,
+                "0xgauge",
+                500,
+                True,
+                100,
+                "0xbribe",
+                "0xfactory",
+                1000,
+                "0xemtoken",
+                500,
+                500,
+                0,
+                100,
+                200,
+                0,
+                100,
+                200,
+                "0xnfpm",
+                "0xalm",
+                "0xroot",
             )
 
         # First batch: 500 pools (full batch), second batch: 10 pools (partial)
@@ -3324,10 +3880,14 @@ class TestGetVelodromePoolsViaSugarMoreBranches:
         mock_contract.functions.all.return_value.call.side_effect = [batch1, batch2]
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
-        result = get_velodrome_pools_via_sugar("0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com")
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
         assert len(result) == 510
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection")
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
     def test_none_pool_in_all_pools_skipped(self, mock_conn):
         """Test that None entries in all_pools are skipped (line 1114)."""
         mock_w3 = MagicMock()
@@ -3340,22 +3900,48 @@ class TestGetVelodromePoolsViaSugarMoreBranches:
         # So line 1114 is for edge cases where all_pools contains None
         # Let's just verify normal flow works - the None check is defensive
         pool_data = (
-            "0xpool1", "SYM", 18, 1000, 1, 100, 1000,
-            "0xtoken0", 500, 100, "0xtoken1", 500, 100,
-            "0xgauge", 500, True, 100, "0xbribe", "0xfactory",
-            1000, "0xemtoken", 500, 500, 0, 100, 200,
-            0, 100, 200, "0xnfpm", "0xalm", "0xroot",
+            "0xpool1",
+            "SYM",
+            18,
+            1000,
+            1,
+            100,
+            1000,
+            "0xtoken0",
+            500,
+            100,
+            "0xtoken1",
+            500,
+            100,
+            "0xgauge",
+            500,
+            True,
+            100,
+            "0xbribe",
+            "0xfactory",
+            1000,
+            "0xemtoken",
+            500,
+            500,
+            0,
+            100,
+            200,
+            0,
+            100,
+            200,
+            "0xnfpm",
+            "0xalm",
+            "0xroot",
         )
         mock_contract.functions.all.return_value.call.return_value = [pool_data]
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
-        result = get_velodrome_pools_via_sugar("0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com")
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
         assert len(result) == 1
 
 
-# ---------------------------------------------------------------------------
-# TestGetEpochsByAddressMissingConfig
-# ---------------------------------------------------------------------------
 class TestGetEpochsByAddressMissingConfig:
     """Tests for missing config in get_epochs_by_address (lines 664-665)."""
 
@@ -3365,6 +3951,7 @@ class TestGetEpochsByAddressMissingConfig:
         # We need a valid chain_id that's NOT in REWARDS_SUGAR_CONTRACT_ADDRESSES
         # Let's temporarily modify the mapping
         import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as mod
+
         original = dict(mod.REWARDS_SUGAR_CONTRACT_ADDRESSES)
         saved_rpc = dict(mod.RPC_ENDPOINTS)
         # Add a fake chain_id to CHAIN_NAMES that maps but has no rewards sugar
@@ -3382,9 +3969,6 @@ class TestGetEpochsByAddressMissingConfig:
                 del mod.RPC_ENDPOINTS[77777]
 
 
-# ---------------------------------------------------------------------------
-# TestOptimizeStablecoinBandsTrigger
-# ---------------------------------------------------------------------------
 class TestOptimizeStablecoinBandsTrigger:
     """Tests for optimize_stablecoin_bands recursion trigger branches."""
 
@@ -3426,12 +4010,22 @@ class TestOptimizeStablecoinBandsTrigger:
             },
             "all_results": {},
         }
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.run_monte_carlo_level") as mock_mc:
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.run_monte_carlo_level"
+        ) as mock_mc:
             # First call: trigger config (high alloc, low multiplier)
             # Second call: non-trigger config (lower score -> won't update best_overall)
-            mock_mc.side_effect = [trigger_config, non_trigger_config, non_trigger_config]
+            mock_mc.side_effect = [
+                trigger_config,
+                non_trigger_config,
+                non_trigger_config,
+            ]
             result = optimize_stablecoin_bands(
-                prices, min_width_pct=0.0001, ema_period=18, std_dev_window=14, verbose=False
+                prices,
+                min_width_pct=0.0001,
+                ema_period=18,
+                std_dev_window=14,
+                verbose=False,
             )
         assert result is not None
 
@@ -3460,10 +4054,20 @@ class TestOptimizeStablecoinBandsTrigger:
             },
             "all_results": {},
         }
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.run_monte_carlo_level") as mock_mc:
-            mock_mc.side_effect = [trigger_config, non_trigger_config, non_trigger_config]
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.run_monte_carlo_level"
+        ) as mock_mc:
+            mock_mc.side_effect = [
+                trigger_config,
+                non_trigger_config,
+                non_trigger_config,
+            ]
             result = optimize_stablecoin_bands(
-                prices, min_width_pct=0.0001, ema_period=18, std_dev_window=14, verbose=True
+                prices,
+                min_width_pct=0.0001,
+                ema_period=18,
+                std_dev_window=14,
+                verbose=True,
             )
         assert result is not None
 
@@ -3506,34 +4110,46 @@ class TestOptimizeStablecoinBandsTrigger:
             },
             "all_results": {},
         }
-        with patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.run_monte_carlo_level") as mock_mc:
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.run_monte_carlo_level"
+        ) as mock_mc:
             mock_mc.side_effect = [trigger_level1, trigger_level2, final_level3]
             result = optimize_stablecoin_bands(
-                prices, min_width_pct=0.0001, ema_period=18, std_dev_window=14, verbose=False
+                prices,
+                min_width_pct=0.0001,
+                ema_period=18,
+                std_dev_window=14,
+                verbose=False,
             )
         assert result is not None
 
 
-# ---------------------------------------------------------------------------
-# TestGetOpportunitiesTopPoolsEmpty
-# ---------------------------------------------------------------------------
 class TestGetOpportunitiesTopPoolsEmpty:
     """Tests for when top_pools is empty in get_opportunities_for_velodrome (lines 2915-2916)."""
 
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome")
-    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools")
-    def test_top_pools_empty_after_format_with_top_n_zero(self, mock_pools, mock_filter, mock_format):
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.format_velodrome_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_filtered_pools_for_velodrome"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pools"
+    )
+    def test_top_pools_empty_after_format_with_top_n_zero(
+        self, mock_pools, mock_filter, mock_format
+    ):
         """Test top_pools empty when top_n <= 0 and formatted_pools is empty after format."""
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1"}]
         # format returns empty but top_n <= 0 so composite_pre_filter is skipped
         mock_format.return_value = []
         result = get_opportunities_for_velodrome(
-            [], "key", OPTIMISM_CHAIN_ID,
-            whitelisted_assets={}, top_n=0,
+            [],
+            "key",
+            OPTIMISM_CHAIN_ID,
+            whitelisted_assets={},
+            top_n=0,
         )
         assert isinstance(result, dict)
         assert "error" in result
-
-

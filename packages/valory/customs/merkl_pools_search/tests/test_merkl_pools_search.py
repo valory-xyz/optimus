@@ -92,25 +92,15 @@ class TestRemoveIrrelevantFields:
         assert result == kwargs
 
 
-class TestDexTypes:
-    """Tests for the DexTypes enum."""
-
-    def test_balancer_value(self):
-        """Test BALANCER enum value."""
-        assert DexTypes.BALANCER.value == "balancerPool"
-
-    def test_uniswap_v3_value(self):
-        """Test UNISWAP_V3 enum value."""
-        assert DexTypes.UNISWAP_V3.value == "UniswapV3"
-
-
 class TestHighestAprOpportunity:
     """Tests for the highest_apr_opportunity function."""
 
     def _base_params(self):
         """Return base parameters for highest_apr_opportunity."""
         return {
-            "balancer_graphql_endpoints": {"optimism": "https://api.example.com/graphql"},
+            "balancer_graphql_endpoints": {
+                "optimism": "https://api.example.com/graphql"
+            },
             "merkl_fetch_campaign_args": {
                 "url": "https://api.merkl.xyz/v4/campaigns",
                 "creator": "test_creator",
@@ -161,7 +151,19 @@ class TestHighestAprOpportunity:
         """Test when no pools match criteria."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = json.dumps({"10": {"campaign1": {"c1": {"type": "SomeOtherType", "apr": 10, "mainParameter": "0xpool"}}}})
+        mock_response.text = json.dumps(
+            {
+                "10": {
+                    "campaign1": {
+                        "c1": {
+                            "type": "SomeOtherType",
+                            "apr": 10,
+                            "mainParameter": "0xpool",
+                        }
+                    }
+                }
+            }
+        )
         mock_get.return_value = mock_response
         params = self._base_params()
         result = highest_apr_opportunity(**params)
@@ -172,9 +174,19 @@ class TestHighestAprOpportunity:
         """Test that pools with zero APR are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = json.dumps({
-            "10": {"campaign1": {"c1": {"type": "balancerPool", "apr": 0, "mainParameter": "0xpool"}}}
-        })
+        mock_response.text = json.dumps(
+            {
+                "10": {
+                    "campaign1": {
+                        "c1": {
+                            "type": "balancerPool",
+                            "apr": 0,
+                            "mainParameter": "0xpool",
+                        }
+                    }
+                }
+            }
+        )
         mock_get.return_value = mock_response
         params = self._base_params()
         result = highest_apr_opportunity(**params)
@@ -185,9 +197,19 @@ class TestHighestAprOpportunity:
         """Test that pools with negative APR are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = json.dumps({
-            "10": {"campaign1": {"c1": {"type": "balancerPool", "apr": -5, "mainParameter": "0xpool"}}}
-        })
+        mock_response.text = json.dumps(
+            {
+                "10": {
+                    "campaign1": {
+                        "c1": {
+                            "type": "balancerPool",
+                            "apr": -5,
+                            "mainParameter": "0xpool",
+                        }
+                    }
+                }
+            }
+        )
         mock_get.return_value = mock_response
         params = self._base_params()
         result = highest_apr_opportunity(**params)
@@ -198,9 +220,19 @@ class TestHighestAprOpportunity:
         """Test that pools below APR threshold are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = json.dumps({
-            "10": {"campaign1": {"c1": {"type": "balancerPool", "apr": 3.0, "mainParameter": "0xpool"}}}
-        })
+        mock_response.text = json.dumps(
+            {
+                "10": {
+                    "campaign1": {
+                        "c1": {
+                            "type": "balancerPool",
+                            "apr": 3.0,
+                            "mainParameter": "0xpool",
+                        }
+                    }
+                }
+            }
+        )
         mock_get.return_value = mock_response
         params = self._base_params()
         result = highest_apr_opportunity(**params)
@@ -211,11 +243,19 @@ class TestHighestAprOpportunity:
         """Test that the current pool is filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = json.dumps({
-            "10": {"campaign1": {"c1": {
-                "type": "balancerPool", "apr": 50.0, "mainParameter": "0xcurrentpool"
-            }}}
-        })
+        mock_response.text = json.dumps(
+            {
+                "10": {
+                    "campaign1": {
+                        "c1": {
+                            "type": "balancerPool",
+                            "apr": 50.0,
+                            "mainParameter": "0xcurrentpool",
+                        }
+                    }
+                }
+            }
+        )
         mock_get.return_value = mock_response
         params = self._base_params()
         result = highest_apr_opportunity(**params)
@@ -226,34 +266,38 @@ class TestHighestAprOpportunity:
         """Test that pools without mainParameter are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = json.dumps({
-            "10": {"campaign1": {"c1": {
-                "type": "balancerPool", "apr": 50.0
-            }}}
-        })
+        mock_response.text = json.dumps(
+            {"10": {"campaign1": {"c1": {"type": "balancerPool", "apr": 50.0}}}}
+        )
         mock_get.return_value = mock_response
         params = self._base_params()
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_balancer_pool_successful(self, mock_get, mock_post):
         """Test successful Balancer pool processing with valid tokensList of length 2."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "ammName": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "ammName": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -263,14 +307,20 @@ class TestHighestAprOpportunity:
         # Mock graphql responses for pool type and tokensList
         mock_pool_type_response = MagicMock()
         mock_pool_type_response.status_code = 200
-        mock_pool_type_response.text = json.dumps({
-            "data": {"pools": [{"id": "0xpoolid", "poolType": "Weighted"}]}
-        })
+        mock_pool_type_response.text = json.dumps(
+            {"data": {"pools": [{"id": "0xpoolid", "poolType": "Weighted"}]}}
+        )
         mock_tokens_list_response = MagicMock()
         mock_tokens_list_response.status_code = 200
-        mock_tokens_list_response.text = json.dumps({
-            "data": {"pools": [{"id": "0xpoolid", "tokensList": ["0xtoken0", "0xtoken1"]}]}
-        })
+        mock_tokens_list_response.text = json.dumps(
+            {
+                "data": {
+                    "pools": [
+                        {"id": "0xpoolid", "tokensList": ["0xtoken0", "0xtoken1"]}
+                    ]
+                }
+            }
+        )
         mock_post.side_effect = [mock_pool_type_response, mock_tokens_list_response]
 
         params = self._base_params()
@@ -280,23 +330,29 @@ class TestHighestAprOpportunity:
         assert result["pool_address"] == "0xpooladdress"
         assert result["apr"] == 50.0
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_balancer_pool_type_none_skips(self, mock_get, mock_post):
         """Test that Balancer pool with None pool_type is skipped."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -306,32 +362,36 @@ class TestHighestAprOpportunity:
         # Return no pools from graphql (so poolType is None)
         mock_graphql_response = MagicMock()
         mock_graphql_response.status_code = 200
-        mock_graphql_response.text = json.dumps({
-            "data": {"pools": []}
-        })
+        mock_graphql_response.text = json.dumps({"data": {"pools": []}})
         mock_post.return_value = mock_graphql_response
 
         params = self._base_params()
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_balancer_pool_wrong_token_count(self, mock_get, mock_post):
         """Test that Balancer pool with != 2 tokens is skipped."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -341,14 +401,20 @@ class TestHighestAprOpportunity:
         # Pool type ok but 3 tokens
         mock_pool_type = MagicMock()
         mock_pool_type.status_code = 200
-        mock_pool_type.text = json.dumps({
-            "data": {"pools": [{"id": "0xpoolid", "poolType": "Weighted"}]}
-        })
+        mock_pool_type.text = json.dumps(
+            {"data": {"pools": [{"id": "0xpoolid", "poolType": "Weighted"}]}}
+        )
         mock_tokens_list = MagicMock()
         mock_tokens_list.status_code = 200
-        mock_tokens_list.text = json.dumps({
-            "data": {"pools": [{"id": "0xpoolid", "tokensList": ["0xt0", "0xt1", "0xt2"]}]}
-        })
+        mock_tokens_list.text = json.dumps(
+            {
+                "data": {
+                    "pools": [
+                        {"id": "0xpoolid", "tokensList": ["0xt0", "0xt1", "0xt2"]}
+                    ]
+                }
+            }
+        )
         mock_post.side_effect = [mock_pool_type, mock_tokens_list]
 
         params = self._base_params()
@@ -359,18 +425,22 @@ class TestHighestAprOpportunity:
     def test_uniswap_v3_pool_successful(self, mock_get):
         """Test successful UniswapV3 pool processing."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "UniswapV3",
-                "apr": 40.0,
-                "mainParameter": "0xunipooladdress",
-                "campaignParameters": {
-                    "token0": "0xtoken0",
-                    "token1": "0xtoken1",
-                    "symbolToken0": "TOKEN0",
-                    "symbolToken1": "TOKEN1",
-                    "poolFee": 3000,
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "UniswapV3",
+                        "apr": 40.0,
+                        "mainParameter": "0xunipooladdress",
+                        "campaignParameters": {
+                            "token0": "0xtoken0",
+                            "token1": "0xtoken1",
+                            "symbolToken0": "TOKEN0",
+                            "symbolToken1": "TOKEN1",
+                            "poolFee": 3000,
+                        },
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -389,12 +459,16 @@ class TestHighestAprOpportunity:
     def test_uniswap_v3_pool_missing_campaign_parameters(self, mock_get):
         """Test UniswapV3 pool with empty campaignParameters."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "UniswapV3",
-                "apr": 40.0,
-                "mainParameter": "0xunipooladdress",
-                "campaignParameters": {},
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "UniswapV3",
+                        "apr": 40.0,
+                        "mainParameter": "0xunipooladdress",
+                        "campaignParameters": {},
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -410,18 +484,22 @@ class TestHighestAprOpportunity:
     def test_uniswap_v3_pool_none_token_values(self, mock_get):
         """Test UniswapV3 pool with None in token values."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "UniswapV3",
-                "apr": 40.0,
-                "mainParameter": "0xunipooladdress",
-                "campaignParameters": {
-                    "token0": None,
-                    "token1": "0xtoken1",
-                    "symbolToken0": "TOKEN0",
-                    "symbolToken1": "TOKEN1",
-                    "poolFee": 3000,
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "UniswapV3",
+                        "apr": 40.0,
+                        "mainParameter": "0xunipooladdress",
+                        "campaignParameters": {
+                            "token0": None,
+                            "token1": "0xtoken1",
+                            "symbolToken0": "TOKEN0",
+                            "symbolToken1": "TOKEN1",
+                            "poolFee": 3000,
+                        },
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -433,22 +511,28 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_balancer_pool_insufficient_tokens(self, mock_get, mock_post):
         """Test Balancer pool with fewer than 2 pool tokens."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -459,23 +543,29 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_balancer_pool_token_missing_symbol(self, mock_get, mock_post):
         """Test Balancer pool where a token is missing its symbol."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": None},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": None},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -486,23 +576,29 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_fetch_balancer_pool_info_no_endpoint(self, mock_get, mock_post):
         """Test fetch_balancer_pool_info when no graphql endpoint exists for chain."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -515,23 +611,29 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_fetch_balancer_pool_info_api_error(self, mock_get, mock_post):
         """Test fetch_balancer_pool_info when GraphQL API returns error status."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -546,23 +648,29 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_fetch_balancer_pool_info_json_decode_error(self, mock_get, mock_post):
         """Test fetch_balancer_pool_info when GraphQL returns invalid JSON."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -578,23 +686,29 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_fetch_balancer_pool_info_null_response(self, mock_get, mock_post):
         """Test fetch_balancer_pool_info when GraphQL returns null."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -610,23 +724,29 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_fetch_balancer_pool_info_no_pools_in_response(self, mock_get, mock_post):
         """Test fetch_balancer_pool_info when GraphQL response has empty pools array."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -642,23 +762,29 @@ class TestHighestAprOpportunity:
         result = highest_apr_opportunity(**params)
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_fetch_balancer_pool_info_tokens_error(self, mock_get, mock_post):
         """Test when tokensList fetch returns an error."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": "balancerPool",
-                "apr": 50.0,
-                "mainParameter": "0xpooladdress",
-                "typeInfo": {
-                    "poolId": "0xpoolid",
-                    "poolTokens": {
-                        "0xtoken0": {"symbol": "TOKEN0"},
-                        "0xtoken1": {"symbol": "TOKEN1"},
-                    },
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
         }
         mock_api_response = MagicMock()
         mock_api_response.status_code = 200
@@ -668,9 +794,9 @@ class TestHighestAprOpportunity:
         # First call pool type ok, second call tokens returns error
         mock_pool_type = MagicMock()
         mock_pool_type.status_code = 200
-        mock_pool_type.text = json.dumps({
-            "data": {"pools": [{"id": "0xpoolid", "poolType": "Weighted"}]}
-        })
+        mock_pool_type.text = json.dumps(
+            {"data": {"pools": [{"id": "0xpoolid", "poolType": "Weighted"}]}}
+        )
         mock_tokens_error = MagicMock()
         mock_tokens_error.status_code = 500
         mock_post.side_effect = [mock_pool_type, mock_tokens_error]
@@ -683,19 +809,23 @@ class TestHighestAprOpportunity:
     def test_dex_type_from_ammname_fallback(self, mock_get):
         """Test that pools use ammName when type field is None."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "type": None,
-                "ammName": "UniswapV3",
-                "apr": 40.0,
-                "mainParameter": "0xunipooladdress",
-                "campaignParameters": {
-                    "token0": "0xtoken0",
-                    "token1": "0xtoken1",
-                    "symbolToken0": "TOKEN0",
-                    "symbolToken1": "TOKEN1",
-                    "poolFee": 3000,
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": None,
+                        "ammName": "UniswapV3",
+                        "apr": 40.0,
+                        "mainParameter": "0xunipooladdress",
+                        "campaignParameters": {
+                            "token0": "0xtoken0",
+                            "token1": "0xtoken1",
+                            "symbolToken0": "TOKEN0",
+                            "symbolToken1": "TOKEN1",
+                            "poolFee": 3000,
+                        },
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -712,18 +842,22 @@ class TestHighestAprOpportunity:
     def test_dex_type_from_ammname_field(self, mock_get):
         """Test that dex_type can come from ammName field when type is missing."""
         campaign_data = {
-            "10": {"campaign_group": {"campaign_1": {
-                "ammName": "UniswapV3",
-                "apr": 40.0,
-                "mainParameter": "0xunipooladdress",
-                "campaignParameters": {
-                    "token0": "0xtoken0",
-                    "token1": "0xtoken1",
-                    "symbolToken0": "TOKEN0",
-                    "symbolToken1": "TOKEN1",
-                    "poolFee": 3000,
-                },
-            }}}
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "ammName": "UniswapV3",
+                        "apr": 40.0,
+                        "mainParameter": "0xunipooladdress",
+                        "campaignParameters": {
+                            "token0": "0xtoken0",
+                            "token1": "0xtoken1",
+                            "symbolToken0": "TOKEN0",
+                            "symbolToken1": "TOKEN1",
+                            "poolFee": 3000,
+                        },
+                    }
+                }
+            }
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -776,7 +910,9 @@ class TestRun:
         result = run(chains=["optimism"])
         assert "error" in result
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity"
+    )
     def test_run_delegates_to_highest_apr(self, mock_func):
         """Test that run properly delegates to highest_apr_opportunity."""
         mock_func.return_value = {"pool_address": "0x123"}
@@ -785,7 +921,9 @@ class TestRun:
         mock_func.assert_called_once()
         assert result == {"pool_address": "0x123"}
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity"
+    )
     def test_run_strips_irrelevant_fields(self, mock_func):
         """Test that run strips extra kwargs before delegating."""
         mock_func.return_value = {}
@@ -795,7 +933,9 @@ class TestRun:
         call_kwargs = mock_func.call_args[1]
         assert "extra" not in call_kwargs
 
-    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity")
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity"
+    )
     def test_run_with_positional_args(self, mock_func):
         """Test that run ignores positional arguments."""
         mock_func.return_value = {}

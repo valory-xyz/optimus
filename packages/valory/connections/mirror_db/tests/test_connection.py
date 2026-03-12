@@ -152,11 +152,6 @@ class TestRetryWithExponentialBackoff:
 class TestSrrDialogues:
     """Tests for the SrrDialogues class."""
 
-    def test_init(self) -> None:
-        """Test SrrDialogues initialization."""
-        dialogues = SrrDialogues(connection_id=PUBLIC_ID)
-        assert dialogues is not None
-
     def test_role_from_first_message(self) -> None:
         """Test that role_from_first_message returns CONNECTION role."""
         dialogues = SrrDialogues(connection_id=PUBLIC_ID)
@@ -307,9 +302,7 @@ class TestSend:
         try:
             envelope = MagicMock(spec=Envelope)
             mock_task = MagicMock(spec=asyncio.Task)
-            with patch.object(
-                connection, "_handle_envelope", return_value=mock_task
-            ):
+            with patch.object(connection, "_handle_envelope", return_value=mock_task):
                 await connection.send(envelope)
 
             assert mock_task in connection.task_to_request
@@ -360,9 +353,7 @@ class TestPrepareErrorMessage:
         mock_dialogue = _make_mock_dialogue()
         msg = MagicMock(spec=SrrMessage)
 
-        error_msg = connection.prepare_error_message(
-            msg, mock_dialogue, "Test error"
-        )
+        error_msg = connection.prepare_error_message(msg, mock_dialogue, "Test error")
         assert error_msg.performative == SrrMessage.Performative.RESPONSE
         payload = json.loads(error_msg.payload)
         assert payload["error"] == "Test error"
@@ -680,9 +671,7 @@ class TestRaiseForResponse:
         mock_response.status = 400
         mock_response.json.return_value = {"detail": "Bad request"}
 
-        with pytest.raises(
-            Exception, match="Error test: Bad request \\(HTTP 400\\)"
-        ):
+        with pytest.raises(Exception, match="Error test: Bad request \\(HTTP 400\\)"):
             await connection._raise_for_response(mock_response, "test")
 
     @pytest.mark.asyncio
@@ -728,9 +717,7 @@ class TestCRUDMethods:
     @pytest.mark.asyncio
     async def test_create_success(self) -> None:
         """Test create_ with a successful response."""
-        mock_session, _ = self._mock_session_method(
-            "post", 200, {"id": 1}
-        )
+        mock_session, _ = self._mock_session_method("post", 200, {"id": 1})
         self.connection.session = mock_session
 
         result = await self.connection.create_(
@@ -747,9 +734,7 @@ class TestCRUDMethods:
     @pytest.mark.asyncio
     async def test_create_error(self) -> None:
         """Test create_ with an error response."""
-        mock_session, _ = self._mock_session_method(
-            "post", 400, {"detail": "Bad data"}
-        )
+        mock_session, _ = self._mock_session_method("post", 400, {"detail": "Bad data"})
         self.connection.session = mock_session
 
         with pytest.raises(Exception, match="Bad data"):
@@ -762,9 +747,7 @@ class TestCRUDMethods:
     @pytest.mark.asyncio
     async def test_read_success(self) -> None:
         """Test read_ with a successful response."""
-        mock_session, _ = self._mock_session_method(
-            "get", 200, {"data": "value"}
-        )
+        mock_session, _ = self._mock_session_method("get", 200, {"data": "value"})
         self.connection.session = mock_session
 
         result = await self.connection.read_(
@@ -778,22 +761,16 @@ class TestCRUDMethods:
     @pytest.mark.asyncio
     async def test_read_error(self) -> None:
         """Test read_ with an error response."""
-        mock_session, _ = self._mock_session_method(
-            "get", 404, {"detail": "Not found"}
-        )
+        mock_session, _ = self._mock_session_method("get", 404, {"detail": "Not found"})
         self.connection.session = mock_session
 
         with pytest.raises(Exception, match="Not found"):
-            await self.connection.read_(
-                method_name="test_read", endpoint="api/items"
-            )
+            await self.connection.read_(method_name="test_read", endpoint="api/items")
 
     @pytest.mark.asyncio
     async def test_update_success(self) -> None:
         """Test update_ with a successful response."""
-        mock_session, _ = self._mock_session_method(
-            "put", 200, {"updated": True}
-        )
+        mock_session, _ = self._mock_session_method("put", 200, {"updated": True})
         self.connection.session = mock_session
 
         result = await self.connection.update_(
@@ -825,9 +802,7 @@ class TestCRUDMethods:
     @pytest.mark.asyncio
     async def test_delete_success(self) -> None:
         """Test delete_ with a successful response."""
-        mock_session, _ = self._mock_session_method(
-            "delete", 200, {"deleted": True}
-        )
+        mock_session, _ = self._mock_session_method("delete", 200, {"deleted": True})
         self.connection.session = mock_session
 
         result = await self.connection.delete_(

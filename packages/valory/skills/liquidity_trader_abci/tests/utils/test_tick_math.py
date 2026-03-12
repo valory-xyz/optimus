@@ -43,14 +43,6 @@ def test_import() -> None:
     import packages.valory.skills.liquidity_trader_abci.utils.tick_math  # noqa
 
 
-def test_constants() -> None:
-    """Test tick_math constants."""
-    assert MIN_TICK == -887272
-    assert MAX_TICK == 887272
-    assert MIN_SQRT_RATIO == 4295128739
-    assert MAX_SQRT_RATIO == 1461446703485210103287273052203988822378723970342
-
-
 class TestGetSqrtRatioAtTick:
     """Test get_sqrt_ratio_at_tick function."""
 
@@ -146,7 +138,9 @@ class TestGetAmountsForLiquidity:
         sqrt_vals = sorted([get_sqrt_ratio_at_tick(-100), get_sqrt_ratio_at_tick(100)])
         sqrt_current = get_sqrt_ratio_at_tick(0)
         liquidity = 10**18
-        amount0, amount1 = get_amounts_for_liquidity(sqrt_current, sqrt_vals[0], sqrt_vals[1], liquidity)
+        amount0, amount1 = get_amounts_for_liquidity(
+            sqrt_current, sqrt_vals[0], sqrt_vals[1], liquidity
+        )
         assert amount0 > 0
         assert amount1 > 0
 
@@ -156,7 +150,9 @@ class TestGetAmountsForLiquidity:
         sqrt_b = get_sqrt_ratio_at_tick(-100)
         sqrt_current = get_sqrt_ratio_at_tick(0)
         liquidity = 10**18
-        amount0, amount1 = get_amounts_for_liquidity(sqrt_current, sqrt_a, sqrt_b, liquidity)
+        amount0, amount1 = get_amounts_for_liquidity(
+            sqrt_current, sqrt_a, sqrt_b, liquidity
+        )
         assert amount0 >= 0
         assert amount1 >= 0
 

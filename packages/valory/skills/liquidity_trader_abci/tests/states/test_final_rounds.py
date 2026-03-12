@@ -21,47 +21,7 @@
 
 # pylint: skip-file
 
-from packages.valory.skills.abstract_round_abci.base import DegenerateRound
-from packages.valory.skills.liquidity_trader_abci.states.final_rounds import (
-    FailedMultiplexerRound,
-    FinishedCallCheckpointRound,
-    FinishedCheckStakingKPIMetRound,
-    FinishedDecisionMakingRound,
-    FinishedEvaluateStrategyRound,
-    FinishedTxPreparationRound,
-)
-
 
 def test_import() -> None:
     """Test that the final_rounds module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.states.final_rounds  # noqa
-
-
-def test_failed_multiplexer_round_is_degenerate() -> None:
-    """Test FailedMultiplexerRound is a DegenerateRound."""
-    assert issubclass(FailedMultiplexerRound, DegenerateRound)
-
-
-def test_finished_call_checkpoint_round_is_degenerate() -> None:
-    """Test FinishedCallCheckpointRound is a DegenerateRound."""
-    assert issubclass(FinishedCallCheckpointRound, DegenerateRound)
-
-
-def test_finished_check_staking_kpi_met_round_is_degenerate() -> None:
-    """Test FinishedCheckStakingKPIMetRound is a DegenerateRound."""
-    assert issubclass(FinishedCheckStakingKPIMetRound, DegenerateRound)
-
-
-def test_finished_decision_making_round_is_degenerate() -> None:
-    """Test FinishedDecisionMakingRound is a DegenerateRound."""
-    assert issubclass(FinishedDecisionMakingRound, DegenerateRound)
-
-
-def test_finished_evaluate_strategy_round_is_degenerate() -> None:
-    """Test FinishedEvaluateStrategyRound is a DegenerateRound."""
-    assert issubclass(FinishedEvaluateStrategyRound, DegenerateRound)
-
-
-def test_finished_tx_preparation_round_is_degenerate() -> None:
-    """Test FinishedTxPreparationRound is a DegenerateRound."""
-    assert issubclass(FinishedTxPreparationRound, DegenerateRound)

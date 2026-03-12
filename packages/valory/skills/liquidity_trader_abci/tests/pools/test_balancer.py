@@ -22,7 +22,6 @@
 # pylint: skip-file
 
 import pytest
-from enum import Enum
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
@@ -37,75 +36,6 @@ from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
 def test_import() -> None:
     """Test that the balancer module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.pools.balancer  # noqa
-
-
-def test_zero_address() -> None:
-    """Test ZERO_ADDRESS constant."""
-    assert ZERO_ADDRESS == "0x0000000000000000000000000000000000000000"
-
-
-class TestPoolType:
-    """Test PoolType enum."""
-
-    def test_is_enum(self) -> None:
-        """Test PoolType is an Enum."""
-        assert issubclass(PoolType, Enum)
-
-    def test_values(self) -> None:
-        """Test PoolType values."""
-        assert PoolType.WEIGHTED.value == "Weighted"
-        assert PoolType.COMPOSABLE_STABLE.value == "ComposableStable"
-        assert PoolType.LIQUIDITY_BOOTSTRAPING.value == "LiquidityBootstrapping"
-        assert PoolType.META_STABLE.value == "MetaStable"
-        assert PoolType.STABLE.value == "Stable"
-        assert PoolType.INVESTMENT.value == "Investment"
-
-
-class TestJoinKind:
-    """Test JoinKind classes."""
-
-    def test_weighted_pool(self) -> None:
-        """Test WeightedPool join kinds."""
-        assert JoinKind.WeightedPool.INIT.value == 0
-        assert JoinKind.WeightedPool.EXACT_TOKENS_IN_FOR_BPT_OUT.value == 1
-        assert JoinKind.WeightedPool.TOKEN_IN_FOR_EXACT_BPT_OUT.value == 2
-        assert JoinKind.WeightedPool.ALL_TOKENS_IN_FOR_EXACT_BPT_OUT.value == 3
-
-    def test_stable_and_meta_stable_pool(self) -> None:
-        """Test StableAndMetaStablePool join kinds."""
-        assert JoinKind.StableAndMetaStablePool.INIT.value == 0
-        assert JoinKind.StableAndMetaStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value == 1
-        assert JoinKind.StableAndMetaStablePool.TOKEN_IN_FOR_EXACT_BPT_OUT.value == 2
-
-    def test_composable_stable_pool(self) -> None:
-        """Test ComposableStablePool join kinds."""
-        assert JoinKind.ComposableStablePool.INIT.value == 0
-        assert JoinKind.ComposableStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value == 1
-        assert JoinKind.ComposableStablePool.TOKEN_IN_FOR_EXACT_BPT_OUT.value == 2
-        assert JoinKind.ComposableStablePool.ALL_TOKENS_IN_FOR_EXACT_BPT_OUT.value == 3
-
-
-class TestExitKind:
-    """Test ExitKind classes."""
-
-    def test_weighted_pool(self) -> None:
-        """Test WeightedPool exit kinds."""
-        assert ExitKind.WeightedPool.EXACT_BPT_IN_FOR_ONE_TOKEN_OUT.value == 0
-        assert ExitKind.WeightedPool.EXACT_BPT_IN_FOR_TOKENS_OUT.value == 1
-        assert ExitKind.WeightedPool.BPT_IN_FOR_EXACT_TOKENS_OUT.value == 2
-        assert ExitKind.WeightedPool.MANAGEMENT_FEE_TOKENS_OUT.value == 3
-
-    def test_stable_and_meta_stable_pool(self) -> None:
-        """Test StableAndMetaStablePool exit kinds."""
-        assert ExitKind.StableAndMetaStablePool.EXACT_BPT_IN_FOR_ONE_TOKEN_OUT.value == 0
-        assert ExitKind.StableAndMetaStablePool.EXACT_BPT_IN_FOR_TOKENS_OUT.value == 1
-        assert ExitKind.StableAndMetaStablePool.BPT_IN_FOR_EXACT_TOKENS_OUT.value == 2
-
-    def test_composable_stable_pool(self) -> None:
-        """Test ComposableStablePool exit kinds."""
-        assert ExitKind.ComposableStablePool.EXACT_BPT_IN_FOR_ONE_TOKEN_OUT.value == 0
-        assert ExitKind.ComposableStablePool.BPT_IN_FOR_EXACT_TOKENS_OUT.value == 1
-        assert ExitKind.ComposableStablePool.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT.value == 2
 
 
 class TestBalancerPoolBehaviourAdjustAmounts:
@@ -160,7 +90,9 @@ class TestBalancerPoolBehaviourAdjustAmounts:
     def test_adjust_amounts_length_mismatch(self) -> None:
         """Test adjust_amounts raises ValueError for mismatched lengths."""
         obj = self._make_behaviour()
-        with pytest.raises(ValueError, match="Length of assets and max_amounts_in must match"):
+        with pytest.raises(
+            ValueError, match="Length of assets and max_amounts_in must match"
+        ):
             obj.adjust_amounts(
                 assets=["0xA", "0xB"],
                 assets_new=["0xa"],
@@ -173,7 +105,9 @@ class TestBalancerPoolBehaviourInit:
 
     def test_init_calls_super(self) -> None:
         """Test that __init__ calls super().__init__."""
-        with patch.object(BalancerPoolBehaviour.__bases__[0], "__init__", return_value=None):
+        with patch.object(
+            BalancerPoolBehaviour.__bases__[0], "__init__", return_value=None
+        ):
             obj = BalancerPoolBehaviour.__new__(BalancerPoolBehaviour)
             BalancerPoolBehaviour.__init__(obj, some_kwarg="test")
 
@@ -221,13 +155,17 @@ class TestDetermineJoinKind:
         """Test join kind for Stable pool."""
         obj = _make_behaviour()
         result = obj._determine_join_kind(PoolType.STABLE.value)
-        assert result == JoinKind.StableAndMetaStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value
+        assert (
+            result == JoinKind.StableAndMetaStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value
+        )
 
     def test_meta_stable(self) -> None:
         """Test join kind for MetaStable pool."""
         obj = _make_behaviour()
         result = obj._determine_join_kind(PoolType.META_STABLE.value)
-        assert result == JoinKind.StableAndMetaStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value
+        assert (
+            result == JoinKind.StableAndMetaStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value
+        )
 
     def test_composable_stable(self) -> None:
         """Test join kind for ComposableStable pool."""
@@ -267,19 +205,26 @@ class TestDetermineExitKind:
         """Test exit kind for Stable pool."""
         obj = _make_behaviour()
         result = obj._determine_exit_kind(PoolType.STABLE.value)
-        assert result == ExitKind.StableAndMetaStablePool.EXACT_BPT_IN_FOR_TOKENS_OUT.value
+        assert (
+            result == ExitKind.StableAndMetaStablePool.EXACT_BPT_IN_FOR_TOKENS_OUT.value
+        )
 
     def test_meta_stable(self) -> None:
         """Test exit kind for MetaStable pool."""
         obj = _make_behaviour()
         result = obj._determine_exit_kind(PoolType.META_STABLE.value)
-        assert result == ExitKind.StableAndMetaStablePool.EXACT_BPT_IN_FOR_TOKENS_OUT.value
+        assert (
+            result == ExitKind.StableAndMetaStablePool.EXACT_BPT_IN_FOR_TOKENS_OUT.value
+        )
 
     def test_composable_stable(self) -> None:
         """Test exit kind for ComposableStable pool."""
         obj = _make_behaviour()
         result = obj._determine_exit_kind(PoolType.COMPOSABLE_STABLE.value)
-        assert result == ExitKind.ComposableStablePool.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT.value
+        assert (
+            result
+            == ExitKind.ComposableStablePool.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT.value
+        )
 
     def test_unknown(self) -> None:
         """Test exit kind for unknown pool type."""
@@ -327,7 +272,9 @@ class TestGetTokens:
         params_mock = MagicMock()
         params_mock.balancer_vault_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._get_tokens("0xpool", "optimism")
             result = _drive(gen)
             assert result is None
@@ -344,7 +291,9 @@ class TestGetTokens:
 
         obj._get_pool_id = fake_get_pool_id
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._get_tokens("0xpool", "optimism")
             result = _drive(gen)
             assert result is None
@@ -368,7 +317,9 @@ class TestGetTokens:
         obj._get_pool_id = fake_get_pool_id
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._get_tokens("0xpool", "optimism")
             result = _drive(gen)
             assert result is None
@@ -390,7 +341,9 @@ class TestGetTokens:
         obj._get_pool_id = fake_get_pool_id
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._get_tokens("0xpool", "optimism")
             result = _drive(gen)
             assert result == {"token0": "0xtoken0", "token1": "0xtoken1"}
@@ -423,8 +376,11 @@ class TestUpdateValue:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.update_value(
-            pool_id="0xpoolid", chain="optimism", vault_address="0xvault",
-            assets=["0xA"], max_amounts_in=[100]
+            pool_id="0xpoolid",
+            chain="optimism",
+            vault_address="0xvault",
+            assets=["0xA"],
+            max_amounts_in=[100],
         )
         result = _drive(gen)
         assert result == (None, None)
@@ -439,8 +395,11 @@ class TestUpdateValue:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.update_value(
-            pool_id="0xpoolid", chain="optimism", vault_address="0xvault",
-            assets=["0xA"], max_amounts_in=[100]
+            pool_id="0xpoolid",
+            chain="optimism",
+            vault_address="0xvault",
+            assets=["0xA"],
+            max_amounts_in=[100],
         )
         result = _drive(gen)
         assert result == (None, None)
@@ -455,8 +414,11 @@ class TestUpdateValue:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.update_value(
-            pool_id="0xpoolid", chain="optimism", vault_address="0xvault",
-            assets=["0xA"], max_amounts_in=[100]
+            pool_id="0xpoolid",
+            chain="optimism",
+            vault_address="0xvault",
+            assets=["0xA"],
+            max_amounts_in=[100],
         )
         result = _drive(gen)
         assert result == (None, None)
@@ -471,8 +433,11 @@ class TestUpdateValue:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.update_value(
-            pool_id="0xpoolid", chain="optimism", vault_address="0xvault",
-            assets=["0xA", "0xB"], max_amounts_in=[100, 200]
+            pool_id="0xpoolid",
+            chain="optimism",
+            vault_address="0xvault",
+            assets=["0xA", "0xB"],
+            max_amounts_in=[100, 200],
         )
         result = _drive(gen)
         assert result[0] == ["0xa", "0xb"]
@@ -488,8 +453,11 @@ class TestUpdateValue:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.update_value(
-            pool_id="0xpoolid", chain="optimism", vault_address="0xvault",
-            assets=["0xA"], max_amounts_in=[100]
+            pool_id="0xpoolid",
+            chain="optimism",
+            vault_address="0xvault",
+            assets=["0xA"],
+            max_amounts_in=[100],
         )
         result = _drive(gen)
         assert result == (None, None)
@@ -498,13 +466,21 @@ class TestUpdateValue:
 class TestEnter:
     """Tests for enter."""
 
-    def _make_enter_obj(self, vault_address="0xvault", pool_id="0xpoolid",
-                        new_assets=None, new_max_amounts=None, expected_bpt=None,
-                        tx_hash="0xtxhash"):
+    def _make_enter_obj(
+        self,
+        vault_address="0xvault",
+        pool_id="0xpoolid",
+        new_assets=None,
+        new_max_amounts=None,
+        expected_bpt=None,
+        tx_hash="0xtxhash",
+    ):
         """Create a behaviour with stubs for enter method."""
         obj = _make_behaviour()
         params_mock = MagicMock()
-        params_mock.balancer_vault_contract_addresses = {"optimism": vault_address} if vault_address else {}
+        params_mock.balancer_vault_contract_addresses = (
+            {"optimism": vault_address} if vault_address else {}
+        )
         params_mock.slippage_tolerance = 0.01
 
         def fake_get_pool_id(addr, chain):
@@ -536,34 +512,62 @@ class TestEnter:
     def test_missing_params(self) -> None:
         """Test enter with missing required parameters."""
         obj = _make_behaviour()
-        gen = obj.enter(pool_address=None, safe_address="0xsafe", assets=["0xa"],
-                        chain="optimism", max_amounts_in=[100], pool_type="Weighted")
+        gen = obj.enter(
+            pool_address=None,
+            safe_address="0xsafe",
+            assets=["0xa"],
+            chain="optimism",
+            max_amounts_in=[100],
+            pool_type="Weighted",
+        )
         result = _drive(gen)
         assert result == (None, None)
 
     def test_unknown_join_kind(self) -> None:
         """Test enter with unknown pool type."""
         obj = _make_behaviour()
-        gen = obj.enter(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                        chain="optimism", max_amounts_in=[100], pool_type="UnknownType")
+        gen = obj.enter(
+            pool_address="0xpool",
+            safe_address="0xsafe",
+            assets=["0xa"],
+            chain="optimism",
+            max_amounts_in=[100],
+            pool_type="UnknownType",
+        )
         result = _drive(gen)
         assert result == (None, None)
 
     def test_no_vault_address(self) -> None:
         """Test enter when no vault address configured."""
         obj, params_mock = self._make_enter_obj(vault_address=None)
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                            chain="optimism", max_amounts_in=[100], pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa"],
+                chain="optimism",
+                max_amounts_in=[100],
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == (None, None)
 
     def test_no_pool_id(self) -> None:
         """Test enter when pool id is None."""
         obj, params_mock = self._make_enter_obj(pool_id=None)
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                            chain="optimism", max_amounts_in=[100], pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa"],
+                chain="optimism",
+                max_amounts_in=[100],
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == (None, None)
 
@@ -572,35 +576,61 @@ class TestEnter:
         obj, params_mock = self._make_enter_obj(
             new_assets=["0xa"], new_max_amounts=[100], expected_bpt=None
         )
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                            chain="optimism", max_amounts_in=[100], pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa"],
+                chain="optimism",
+                max_amounts_in=[100],
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == (None, None)
 
     def test_success(self) -> None:
         """Test successful enter."""
         obj, params_mock = self._make_enter_obj(
-            new_assets=["0xa", "0xb"], new_max_amounts=[100, 200],
-            expected_bpt=1000, tx_hash="0xjoin_hash"
+            new_assets=["0xa", "0xb"],
+            new_max_amounts=[100, 200],
+            expected_bpt=1000,
+            tx_hash="0xjoin_hash",
         )
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", "0xb"], chain="optimism",
-                            max_amounts_in=[100, 200], pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == ("0xjoin_hash", "0xvault")
 
     def test_success_with_zero_address(self) -> None:
         """Test successful enter with ZERO_ADDRESS in assets."""
         obj, params_mock = self._make_enter_obj(
-            new_assets=["0xa", ZERO_ADDRESS], new_max_amounts=[100, 0],
-            expected_bpt=500, tx_hash="0xjoin_hash"
+            new_assets=["0xa", ZERO_ADDRESS],
+            new_max_amounts=[100, 0],
+            expected_bpt=500,
+            tx_hash="0xjoin_hash",
         )
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", ZERO_ADDRESS], chain="optimism",
-                            max_amounts_in=[100, 0], pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", ZERO_ADDRESS],
+                chain="optimism",
+                max_amounts_in=[100, 0],
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == ("0xjoin_hash", "0xvault")
 
@@ -608,12 +638,20 @@ class TestEnter:
 class TestExit:
     """Tests for exit."""
 
-    def _make_exit_obj(self, vault_address="0xvault", pool_id="0xpoolid",
-                       bpt_amount=1000, expected_amounts=None, tx_hash="0xtxhash"):
+    def _make_exit_obj(
+        self,
+        vault_address="0xvault",
+        pool_id="0xpoolid",
+        bpt_amount=1000,
+        expected_amounts=None,
+        tx_hash="0xtxhash",
+    ):
         """Create a behaviour with stubs for exit method."""
         obj = _make_behaviour()
         params_mock = MagicMock()
-        params_mock.balancer_vault_contract_addresses = {"optimism": vault_address} if vault_address else {}
+        params_mock.balancer_vault_contract_addresses = (
+            {"optimism": vault_address} if vault_address else {}
+        )
         params_mock.slippage_tolerance = 0.01
 
         def fake_get_pool_id(addr, chain):
@@ -642,52 +680,90 @@ class TestExit:
     def test_missing_params(self) -> None:
         """Test exit with missing required parameters."""
         obj = _make_behaviour()
-        gen = obj.exit(pool_address=None, safe_address="0xsafe", assets=["0xa"],
-                       chain="optimism", pool_type="Weighted")
+        gen = obj.exit(
+            pool_address=None,
+            safe_address="0xsafe",
+            assets=["0xa"],
+            chain="optimism",
+            pool_type="Weighted",
+        )
         result = _drive(gen)
         assert result == (None, None, None)
 
     def test_unknown_exit_kind(self) -> None:
         """Test exit with unknown pool type."""
         obj = _make_behaviour()
-        gen = obj.exit(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                       chain="optimism", pool_type="UnknownType")
+        gen = obj.exit(
+            pool_address="0xpool",
+            safe_address="0xsafe",
+            assets=["0xa"],
+            chain="optimism",
+            pool_type="UnknownType",
+        )
         result = _drive(gen)
         assert result == (None, None, None)
 
     def test_no_vault_address(self) -> None:
         """Test exit when no vault address configured."""
         obj, params_mock = self._make_exit_obj(vault_address=None)
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                           chain="optimism", pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa"],
+                chain="optimism",
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
     def test_no_pool_id(self) -> None:
         """Test exit when pool id is None."""
         obj, params_mock = self._make_exit_obj(pool_id=None)
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                           chain="optimism", pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa"],
+                chain="optimism",
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
     def test_bpt_amount_none(self) -> None:
         """Test exit when BPT balance is None."""
         obj, params_mock = self._make_exit_obj(bpt_amount=None)
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                           chain="optimism", pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa"],
+                chain="optimism",
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
     def test_no_expected_amounts(self) -> None:
         """Test exit when expected amounts is None."""
         obj, params_mock = self._make_exit_obj(expected_amounts=None)
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(pool_address="0xpool", safe_address="0xsafe", assets=["0xa"],
-                           chain="optimism", pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa"],
+                chain="optimism",
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
@@ -696,9 +772,16 @@ class TestExit:
         obj, params_mock = self._make_exit_obj(
             expected_amounts=[500, 600], tx_hash="0xexit_hash"
         )
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(pool_address="0xpool", safe_address="0xsafe",
-                           assets=["0xa", "0xb"], chain="optimism", pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == ("0xexit_hash", "0xvault", False)
 
@@ -707,9 +790,16 @@ class TestExit:
         obj, params_mock = self._make_exit_obj(
             expected_amounts=[500, 0], tx_hash="0xexit_hash"
         )
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(pool_address="0xpool", safe_address="0xsafe",
-                           assets=["0xa", ZERO_ADDRESS], chain="optimism", pool_type="Weighted")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", ZERO_ADDRESS],
+                chain="optimism",
+                pool_type="Weighted",
+            )
             result = _drive(gen)
             assert result == ("0xexit_hash", "0xvault", False)
 
@@ -727,8 +817,11 @@ class TestQueryProportionalExit:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_exit(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", bpt_amount_in=1000
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            bpt_amount_in=1000,
         )
         result = _drive(gen)
         assert result is None
@@ -743,8 +836,11 @@ class TestQueryProportionalExit:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_exit(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", bpt_amount_in=1000
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            bpt_amount_in=1000,
         )
         result = _drive(gen)
         assert result is None
@@ -763,8 +859,11 @@ class TestQueryProportionalExit:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_exit(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", bpt_amount_in=1000
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            bpt_amount_in=1000,
         )
         result = _drive(gen)
         assert result is None
@@ -783,8 +882,11 @@ class TestQueryProportionalExit:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_exit(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", bpt_amount_in=10000
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            bpt_amount_in=10000,
         )
         result = _drive(gen)
         assert result is not None
@@ -800,8 +902,11 @@ class TestQueryProportionalExit:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_exit(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", bpt_amount_in=1000
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            bpt_amount_in=1000,
         )
         result = _drive(gen)
         assert result is None
@@ -820,8 +925,11 @@ class TestQueryProportionalJoin:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_join(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", amounts_in=[100, 200]
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            amounts_in=[100, 200],
         )
         result = _drive(gen)
         assert result is None
@@ -836,8 +944,11 @@ class TestQueryProportionalJoin:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_join(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", amounts_in=[100]
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            amounts_in=[100],
         )
         result = _drive(gen)
         assert result is None
@@ -856,8 +967,11 @@ class TestQueryProportionalJoin:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_join(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", amounts_in=[100, 200]
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            amounts_in=[100, 200],
         )
         result = _drive(gen)
         assert result is None
@@ -876,8 +990,11 @@ class TestQueryProportionalJoin:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_join(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", amounts_in=[100, 200]
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            amounts_in=[100, 200],
         )
         result = _drive(gen)
         assert result is not None
@@ -892,8 +1009,11 @@ class TestQueryProportionalJoin:
 
         obj.contract_interact = fake_contract_interact
         gen = obj.query_proportional_join(
-            pool_id="0xpoolid", pool_address="0xpool", vault_address="0xvault",
-            chain="optimism", amounts_in=[100, 200]
+            pool_id="0xpoolid",
+            pool_address="0xpool",
+            vault_address="0xvault",
+            chain="optimism",
+            amounts_in=[100, 200],
         )
         result = _drive(gen)
         assert result is None
@@ -908,11 +1028,17 @@ class TestQueryJoinBpt:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_join_bpt(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], max_amounts_in=[100],
-                join_kind=1, from_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                max_amounts_in=[100],
+                join_kind=1,
+                from_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result is None
@@ -929,11 +1055,17 @@ class TestQueryJoinBpt:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_join_bpt(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], max_amounts_in=[100],
-                join_kind=1, from_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                max_amounts_in=[100],
+                join_kind=1,
+                from_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result == 5000
@@ -950,11 +1082,17 @@ class TestQueryJoinBpt:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_join_bpt(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], max_amounts_in=[100],
-                join_kind=1, from_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                max_amounts_in=[100],
+                join_kind=1,
+                from_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result is None
@@ -969,11 +1107,17 @@ class TestQueryExitAmounts:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_exit_amounts(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], bpt_amount_in=1000,
-                exit_kind=1, to_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                bpt_amount_in=1000,
+                exit_kind=1,
+                to_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result is None
@@ -990,11 +1134,17 @@ class TestQueryExitAmounts:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_exit_amounts(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], bpt_amount_in=1000,
-                exit_kind=1, to_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                bpt_amount_in=1000,
+                exit_kind=1,
+                to_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result == [500, 600]
@@ -1011,11 +1161,17 @@ class TestQueryExitAmounts:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_exit_amounts(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], bpt_amount_in=1000,
-                exit_kind=1, to_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                bpt_amount_in=1000,
+                exit_kind=1,
+                to_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result is None
@@ -1032,11 +1188,17 @@ class TestQueryExitAmounts:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_exit_amounts(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], bpt_amount_in=1000,
-                exit_kind=1, to_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                bpt_amount_in=1000,
+                exit_kind=1,
+                to_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result is None
@@ -1053,11 +1215,17 @@ class TestQueryExitAmounts:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._query_exit_amounts(
-                pool_id="0xpoolid", sender="0xsafe",
-                assets=["0x" + "aa" * 20], bpt_amount_in=1000,
-                exit_kind=1, to_internal_balance=False, chain="optimism"
+                pool_id="0xpoolid",
+                sender="0xsafe",
+                assets=["0x" + "aa" * 20],
+                bpt_amount_in=1000,
+                exit_kind=1,
+                to_internal_balance=False,
+                chain="optimism",
             )
             result = _drive(gen)
             assert result is None

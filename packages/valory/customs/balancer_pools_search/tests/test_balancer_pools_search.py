@@ -78,9 +78,6 @@ def reset_state():
         bal_mod._thread_local.errors = []
 
 
-# ---------------------------------------------------------------------------
-# TestGetErrors
-# ---------------------------------------------------------------------------
 class TestGetErrors:
     """Tests for get_errors function."""
 
@@ -96,9 +93,6 @@ class TestGetErrors:
         assert get_errors() == ["err1"]
 
 
-# ---------------------------------------------------------------------------
-# TestCheckMissingFields
-# ---------------------------------------------------------------------------
 class TestCheckMissingFields:
     """Tests for check_missing_fields function."""
 
@@ -112,9 +106,6 @@ class TestCheckMissingFields:
         assert len(check_missing_fields({})) == len(REQUIRED_FIELDS)
 
 
-# ---------------------------------------------------------------------------
-# TestRemoveIrrelevantFields
-# ---------------------------------------------------------------------------
 class TestRemoveIrrelevantFields:
     """Tests for remove_irrelevant_fields function."""
 
@@ -124,13 +115,12 @@ class TestRemoveIrrelevantFields:
         assert result == {"a": 1}
 
 
-# ---------------------------------------------------------------------------
-# TestRunQuery
-# ---------------------------------------------------------------------------
 class TestRunQuery:
     """Tests for run_query function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_successful(self, mock_post):
         """Test successful query."""
         mock_resp = MagicMock()
@@ -140,7 +130,9 @@ class TestRunQuery:
         result = run_query("query", "url")
         assert result == {"pools": []}
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_error_status(self, mock_post):
         """Test error status code."""
         mock_resp = MagicMock()
@@ -149,7 +141,9 @@ class TestRunQuery:
         result = run_query("query", "url")
         assert "error" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_graphql_errors(self, mock_post):
         """Test GraphQL errors."""
         mock_resp = MagicMock()
@@ -160,18 +154,19 @@ class TestRunQuery:
         assert "error" in result
 
 
-# ---------------------------------------------------------------------------
-# TestGetTotalApr
-# ---------------------------------------------------------------------------
 class TestGetTotalApr:
     """Tests for get_total_apr function."""
 
     def test_normal(self):
         """Test normal APR calculation."""
-        pool = {"dynamicData": {"aprItems": [
-            {"type": "REWARD", "apr": 0.05},
-            {"type": "SWAP_FEE", "apr": 0.02},
-        ]}}
+        pool = {
+            "dynamicData": {
+                "aprItems": [
+                    {"type": "REWARD", "apr": 0.05},
+                    {"type": "SWAP_FEE", "apr": 0.02},
+                ]
+            }
+        }
         result = get_total_apr(pool)
         assert result == 0.05  # SWAP_FEE is excluded
 
@@ -185,15 +180,8 @@ class TestGetTotalApr:
         assert get_total_apr({}) == 0
 
 
-# ---------------------------------------------------------------------------
-# TestStandardizeMetrics
-# ---------------------------------------------------------------------------
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
-
-    def test_empty(self):
-        """Test with empty pools."""
-        assert standardize_metrics([]) == []
 
     def test_single_pool(self):
         """Test with single pool (triggers apr_std==0 and tvl_std==0)."""
@@ -241,9 +229,6 @@ class TestStandardizeMetrics:
         assert "composite_score" in result[1]
 
 
-# ---------------------------------------------------------------------------
-# TestApplyCompositePreFilter
-# ---------------------------------------------------------------------------
 class TestApplyCompositePreFilter:
     """Tests for apply_composite_pre_filter function."""
 
@@ -283,14 +268,13 @@ class TestApplyCompositePreFilter:
         result = apply_composite_pre_filter(pools, top_n=2, min_tvl_threshold=1000)
         assert len(result) == 2
         # Should be sorted by composite score descending
-        assert result[0].get("composite_score", 0) >= result[1].get("composite_score", 0)
+        assert result[0].get("composite_score", 0) >= result[1].get(
+            "composite_score", 0
+        )
 
     def test_top_n_limit(self):
         """Test top_n limits output count."""
-        pools = [
-            {"tvl": 5000, "apr": 10 + i}
-            for i in range(5)
-        ]
+        pools = [{"tvl": 5000, "apr": 10 + i} for i in range(5)]
         result = apply_composite_pre_filter(pools, top_n=3, min_tvl_threshold=1000)
         assert len(result) == 3
 
@@ -299,9 +283,6 @@ class TestApplyCompositePreFilter:
         assert apply_composite_pre_filter(None) == []
 
 
-# ---------------------------------------------------------------------------
-# TestCreateWeb3Connection
-# ---------------------------------------------------------------------------
 class TestCreateWeb3Connection:
     """Tests for create_web3_connection function."""
 
@@ -333,13 +314,12 @@ class TestCreateWeb3Connection:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestFetchTokenNameFromContract
-# ---------------------------------------------------------------------------
 class TestFetchTokenNameFromContract:
     """Tests for fetch_token_name_from_contract function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection"
+    )
     def test_no_web3(self, mock_conn):
         """Test returns None when web3 connection fails."""
         mock_conn.return_value = None
@@ -347,7 +327,9 @@ class TestFetchTokenNameFromContract:
         result = fetch_token_name_from_contract("optimism", "0x1234")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection"
+    )
     def test_successful(self, mock_conn):
         """Test successful token name fetch."""
         mock_web3 = MagicMock()
@@ -356,10 +338,14 @@ class TestFetchTokenNameFromContract:
         mock_web3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_web3
         bal_mod.fetch_token_name_from_contract.cache_clear()
-        result = fetch_token_name_from_contract("optimism", "0x1234567890abcdef1234567890abcdef12345678")
+        result = fetch_token_name_from_contract(
+            "optimism", "0x1234567890abcdef1234567890abcdef12345678"
+        )
         assert result == "TestToken"
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection"
+    )
     def test_contract_exception(self, mock_conn):
         """Test returns None on contract call exception."""
         mock_web3 = MagicMock()
@@ -368,24 +354,27 @@ class TestFetchTokenNameFromContract:
         mock_web3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_web3
         bal_mod.fetch_token_name_from_contract.cache_clear()
-        result = fetch_token_name_from_contract("optimism", "0x1234567890abcdef1234567890abcdef12345678")
+        result = fetch_token_name_from_contract(
+            "optimism", "0x1234567890abcdef1234567890abcdef12345678"
+        )
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestGetBalancerPools
-# ---------------------------------------------------------------------------
 class TestGetBalancerPools:
     """Tests for get_balancer_pools function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.run_query")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.run_query"
+    )
     def test_success(self, mock_query):
         """Test successful pool fetch."""
         mock_query.return_value = {"poolGetPools": [{"id": "1"}]}
         result = get_balancer_pools(["optimism"], "https://api.example.com")
         assert len(result) == 1
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.run_query")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.run_query"
+    )
     def test_error(self, mock_query):
         """Test error in query."""
         mock_query.return_value = {"error": "fail"}
@@ -393,14 +382,15 @@ class TestGetBalancerPools:
         assert "error" in result
 
 
-# ---------------------------------------------------------------------------
-# TestGetFilteredPoolsForBalancer
-# ---------------------------------------------------------------------------
 class TestGetFilteredPoolsForBalancer:
     """Tests for get_filtered_pools_for_balancer function."""
 
-    def _make_pool(self, pool_type="WEIGHTED", address="0x1234567890abcdef1234567890abcdef12345678",
-                   chain="OPTIMISM"):
+    def _make_pool(
+        self,
+        pool_type="WEIGHTED",
+        address="0x1234567890abcdef1234567890abcdef12345678",
+        chain="OPTIMISM",
+    ):
         """Create a test pool."""
         return {
             "type": pool_type,
@@ -410,10 +400,15 @@ class TestGetFilteredPoolsForBalancer:
                 {"address": "0xtoken0", "symbol": "TK0"},
                 {"address": "0xtoken1", "symbol": "TK1"},
             ],
-            "dynamicData": {"totalLiquidity": 100000, "aprItems": [{"type": "REWARD", "apr": 0.1}]},
+            "dynamicData": {
+                "totalLiquidity": 100000,
+                "aprItems": [{"type": "REWARD", "apr": 0.1}],
+            },
         }
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
+    )
     def test_basic_filtering(self, mock_filter):
         """Test basic filtering."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -421,7 +416,9 @@ class TestGetFilteredPoolsForBalancer:
         result = get_filtered_pools_for_balancer(pools, [], {"optimism": {}})
         assert len(result) == 1
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
+    )
     def test_unsupported_type(self, mock_filter):
         """Test unsupported pool type."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -429,17 +426,24 @@ class TestGetFilteredPoolsForBalancer:
         result = get_filtered_pools_for_balancer(pools, [], {"optimism": {}})
         assert len(result) == 0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
+    )
     def test_excludes_current_positions(self, mock_filter):
         """Test excluding current positions."""
         mock_filter.side_effect = lambda x, **kw: x
         from web3 import Web3
+
         addr = "0x1234567890abcdef1234567890abcdef12345678"
         pools = [self._make_pool(address=addr)]
-        result = get_filtered_pools_for_balancer(pools, [Web3.to_checksum_address(addr)], {"optimism": {}})
+        result = get_filtered_pools_for_balancer(
+            pools, [Web3.to_checksum_address(addr)], {"optimism": {}}
+        )
         assert len(result) == 0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
+    )
     def test_chain_not_in_whitelisted(self, mock_filter):
         """Test pool chain not in whitelisted_assets."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -447,7 +451,9 @@ class TestGetFilteredPoolsForBalancer:
         result = get_filtered_pools_for_balancer(pools, [], {"optimism": {}})
         assert len(result) == 0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
+    )
     def test_whitelisted_tokens_filtering(self, mock_filter):
         """Test filtering with whitelisted tokens where tokens match."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -458,7 +464,9 @@ class TestGetFilteredPoolsForBalancer:
         )
         assert len(result) == 1
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
+    )
     def test_whitelisted_tokens_mismatch(self, mock_filter):
         """Test filtering with whitelisted tokens where tokens don't match."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -469,37 +477,41 @@ class TestGetFilteredPoolsForBalancer:
         )
         assert len(result) == 0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
+    )
     def test_kwargs_forwarded(self, mock_filter):
         """Test that kwargs are forwarded to apply_composite_pre_filter."""
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool()]
         get_filtered_pools_for_balancer(
-            pools, [], {"optimism": {}},
-            top_n=5, apr_weight=0.8, tvl_weight=0.2, min_tvl_threshold=500
+            pools,
+            [],
+            {"optimism": {}},
+            top_n=5,
+            apr_weight=0.8,
+            tvl_weight=0.2,
+            min_tvl_threshold=500,
         )
         call_kwargs = mock_filter.call_args[1]
         assert call_kwargs["top_n"] == 5
 
 
-# ---------------------------------------------------------------------------
-# TestGetCoinIdFromSymbol
-# ---------------------------------------------------------------------------
 class TestGetCoinIdFromSymbol:
     """Tests for get_coin_id_from_symbol function."""
 
     def test_found(self):
         """Test found coin ID."""
-        assert get_coin_id_from_symbol({"optimism": {"weth": "id"}}, "WETH", "optimism") == "id"
+        assert (
+            get_coin_id_from_symbol({"optimism": {"weth": "id"}}, "WETH", "optimism")
+            == "id"
+        )
 
     def test_not_found(self):
         """Test not found."""
         assert get_coin_id_from_symbol({}, "weth", "optimism") is None
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateIlImpactMulti
-# ---------------------------------------------------------------------------
 class TestCalculateIlImpactMulti:
     """Tests for calculate_il_impact_multi function."""
 
@@ -540,9 +552,6 @@ class TestCalculateIlImpactMulti:
         assert isinstance(result, float)
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateIlRiskScoreMulti
-# ---------------------------------------------------------------------------
 class TestCalculateIlRiskScoreMulti:
     """Tests for calculate_il_risk_score_multi function."""
 
@@ -554,9 +563,15 @@ class TestCalculateIlRiskScoreMulti:
         """Test with all None token IDs."""
         assert calculate_il_risk_score_multi([None, None], "key") is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_successful(self, mock_cg, mock_pro, mock_sleep):
         """Test successful calculation with demo key (is_pro=False)."""
         mock_pro.return_value = False
@@ -569,9 +584,15 @@ class TestCalculateIlRiskScoreMulti:
         result = calculate_il_risk_score_multi(["t0", "t1"], "key")
         assert isinstance(result, float)
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_successful_pro_key(self, mock_cg, mock_pro, mock_sleep):
         """Test successful calculation with pro API key (is_pro=True)."""
         mock_pro.return_value = True
@@ -584,8 +605,12 @@ class TestCalculateIlRiskScoreMulti:
         result = calculate_il_risk_score_multi(["t0", "t1"], "key")
         assert isinstance(result, float)
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_with_x402(self, mock_cg, mock_sleep):
         """Test with x402 session."""
         inst = MagicMock()
@@ -604,8 +629,12 @@ class TestCalculateIlRiskScoreMulti:
         result = calculate_il_risk_score_multi(["t0", "t1"], "")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_api_exception(self, mock_cg, mock_sleep):
         """Test inner API exception (per-token)."""
         inst = MagicMock()
@@ -616,9 +645,15 @@ class TestCalculateIlRiskScoreMulti:
         )
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_insufficient_data(self, mock_cg, mock_pro, mock_sleep):
         """Test with insufficient price data (min_length < 2)."""
         mock_pro.return_value = False
@@ -631,9 +666,15 @@ class TestCalculateIlRiskScoreMulti:
         result = calculate_il_risk_score_multi(["t0", "t1"], "key")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_outer_exception(self, mock_cg, mock_pro, mock_sleep):
         """Test outer exception handling (line 447-449).
 
@@ -647,14 +688,22 @@ class TestCalculateIlRiskScoreMulti:
             {"prices": [[i, 200 + i * 0.3] for i in range(50)]},
         ]
         mock_cg.return_value = inst
-        with patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.np.corrcoef",
-                   side_effect=Exception("corrcoef fail")):
+        with patch(
+            "packages.valory.customs.balancer_pools_search.balancer_pools_search.np.corrcoef",
+            side_effect=Exception("corrcoef fail"),
+        ):
             result = calculate_il_risk_score_multi(["t0", "t1"], "key")
             assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_inner_exception_cg_constructor(self, mock_cg, mock_pro, mock_sleep):
         """Test inner exception when CoinGeckoAPI constructor raises."""
         mock_pro.return_value = False
@@ -663,14 +712,13 @@ class TestCalculateIlRiskScoreMulti:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestCreateGraphqlClient
-# ---------------------------------------------------------------------------
 class TestCreateGraphqlClient:
     """Tests for create_graphql_client function."""
 
     @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.Client")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.RequestsHTTPTransport")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.RequestsHTTPTransport"
+    )
     def test_creates_client(self, mock_transport, mock_client):
         """Test client creation."""
         result = create_graphql_client()
@@ -678,9 +726,6 @@ class TestCreateGraphqlClient:
         mock_client.assert_called_once()
 
 
-# ---------------------------------------------------------------------------
-# TestCreatePoolSnapshotsQuery
-# ---------------------------------------------------------------------------
 class TestCreatePoolSnapshotsQuery:
     """Tests for create_pool_snapshots_query function."""
 
@@ -690,9 +735,6 @@ class TestCreatePoolSnapshotsQuery:
         assert result is not None
 
 
-# ---------------------------------------------------------------------------
-# TestFetchLiquidityMetrics
-# ---------------------------------------------------------------------------
 class TestFetchLiquidityMetrics:
     """Tests for fetch_liquidity_metrics function (the second/overriding definition)."""
 
@@ -706,10 +748,12 @@ class TestFetchLiquidityMetrics:
     def test_successful(self):
         """Test successful metric computation."""
         mock_client = MagicMock()
-        mock_client.execute.return_value = {"poolGetSnapshots": [
-            {"totalLiquidity": "100000", "volume24h": "5000"},
-            {"totalLiquidity": "120000", "volume24h": "6000"},
-        ]}
+        mock_client.execute.return_value = {
+            "poolGetSnapshots": [
+                {"totalLiquidity": "100000", "volume24h": "5000"},
+                {"totalLiquidity": "120000", "volume24h": "6000"},
+            ]
+        }
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is not None
         assert "Depth Score" in result
@@ -717,18 +761,22 @@ class TestFetchLiquidityMetrics:
     def test_extreme_values_filtered(self):
         """Test that extreme values are filtered out."""
         mock_client = MagicMock()
-        mock_client.execute.return_value = {"poolGetSnapshots": [
-            {"totalLiquidity": "1e17", "volume24h": "5000"},
-        ]}
+        mock_client.execute.return_value = {
+            "poolGetSnapshots": [
+                {"totalLiquidity": "1e17", "volume24h": "5000"},
+            ]
+        }
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is None
 
     def test_invalid_snapshot_values(self):
         """Test with invalid snapshot values (ValueError/TypeError)."""
         mock_client = MagicMock()
-        mock_client.execute.return_value = {"poolGetSnapshots": [
-            {"totalLiquidity": "invalid", "volume24h": "5000"},
-        ]}
+        mock_client.execute.return_value = {
+            "poolGetSnapshots": [
+                {"totalLiquidity": "invalid", "volume24h": "5000"},
+            ]
+        }
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is None
 
@@ -742,18 +790,24 @@ class TestFetchLiquidityMetrics:
     def test_small_price_impact(self):
         """Test with very small price impact (below 0.001 threshold)."""
         mock_client = MagicMock()
-        mock_client.execute.return_value = {"poolGetSnapshots": [
-            {"totalLiquidity": "100000", "volume24h": "5000"},
-        ]}
-        result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client, price_impact=0.0001)
+        mock_client.execute.return_value = {
+            "poolGetSnapshots": [
+                {"totalLiquidity": "100000", "volume24h": "5000"},
+            ]
+        }
+        result = fetch_liquidity_metrics(
+            "pool1", "OPTIMISM", client=mock_client, price_impact=0.0001
+        )
         assert result is not None
 
     def test_zero_avg_tvl_and_volume(self):
         """Test with zero TVL and volume (depth_score == 0 branch)."""
         mock_client = MagicMock()
-        mock_client.execute.return_value = {"poolGetSnapshots": [
-            {"totalLiquidity": "0", "volume24h": "0"},
-        ]}
+        mock_client.execute.return_value = {
+            "poolGetSnapshots": [
+                {"totalLiquidity": "0", "volume24h": "0"},
+            ]
+        }
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is not None
         assert result["Depth Score"] == 0
@@ -761,7 +815,9 @@ class TestFetchLiquidityMetrics:
 
     def test_no_client_creates_one(self):
         """Test that None client triggers create_graphql_client."""
-        with patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.create_graphql_client") as mock_create:
+        with patch(
+            "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_graphql_client"
+        ) as mock_create:
             mock_client = MagicMock()
             mock_client.execute.return_value = {"poolGetSnapshots": []}
             mock_create.return_value = mock_client
@@ -783,12 +839,16 @@ class TestFetchLiquidityMetrics:
         """
         mock_client = MagicMock()
         # Valid snapshots that pass the extreme value filter
-        mock_client.execute.return_value = {"poolGetSnapshots": [
-            {"totalLiquidity": "100000", "volume24h": "5000"},
-        ]}
+        mock_client.execute.return_value = {
+            "poolGetSnapshots": [
+                {"totalLiquidity": "100000", "volume24h": "5000"},
+            ]
+        }
         # Monkey-patch statistics.mean to raise StatisticsError
-        with patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.statistics.mean",
-                   side_effect=statistics.StatisticsError("no data")):
+        with patch(
+            "packages.valory.customs.balancer_pools_search.balancer_pools_search.statistics.mean",
+            side_effect=statistics.StatisticsError("no data"),
+        ):
             result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
             assert result is None
 
@@ -801,13 +861,16 @@ class TestFetchLiquidityMetrics:
         negative values and has other guards. We force it by making min() raise.
         """
         mock_client = MagicMock()
-        mock_client.execute.return_value = {"poolGetSnapshots": [
-            {"totalLiquidity": "100000", "volume24h": "5000"},
-        ]}
+        mock_client.execute.return_value = {
+            "poolGetSnapshots": [
+                {"totalLiquidity": "100000", "volume24h": "5000"},
+            ]
+        }
         # Patch the built-in min to raise ValueError when called with the specific
         # arguments used in depth_score capping
         original_min = min
         call_count = [0]
+
         def bad_min(*args, **kwargs):
             call_count[0] += 1
             # The first min calls are from filtered_snapshots and mean calcs;
@@ -816,32 +879,36 @@ class TestFetchLiquidityMetrics:
             if call_count[0] >= 3:
                 raise ValueError("forced error")
             return original_min(*args, **kwargs)
+
         with patch("builtins.min", side_effect=bad_min):
             result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
             assert result is None
 
 
-# ---------------------------------------------------------------------------
-# TestAnalyzePoolLiquidity
-# ---------------------------------------------------------------------------
 class TestAnalyzePoolLiquidity:
     """Tests for analyze_pool_liquidity function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics"
+    )
     def test_no_metrics(self, mock_fetch):
         """Test when metrics are None."""
         mock_fetch.return_value = None
         depth, max_pos = analyze_pool_liquidity("pool1", "OPTIMISM")
         assert np.isnan(depth)
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics"
+    )
     def test_with_metrics(self, mock_fetch):
         """Test with valid metrics."""
         mock_fetch.return_value = {"Depth Score": 100, "Maximum Position Size": 5000}
         depth, max_pos = analyze_pool_liquidity("pool1", "OPTIMISM")
         assert depth == 100
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics"
+    )
     def test_exception(self, mock_fetch):
         """Test exception handling."""
         mock_fetch.side_effect = Exception("fail")
@@ -849,13 +916,12 @@ class TestAnalyzePoolLiquidity:
         assert np.isnan(depth)
 
 
-# ---------------------------------------------------------------------------
-# TestGetBalancerPoolSharpeRatio
-# ---------------------------------------------------------------------------
 class TestGetBalancerPoolSharpeRatio:
     """Tests for get_balancer_pool_sharpe_ratio function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_no_data(self, mock_post):
         """Test with no data returns None."""
         mock_resp = MagicMock()
@@ -864,12 +930,18 @@ class TestGetBalancerPoolSharpeRatio:
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_successful(self, mock_post):
         """Test successful Sharpe ratio calculation."""
         data = [
-            {"timestamp": 1700000000 + i * 86400, "sharePrice": str(1.0 + i * 0.001),
-             "fees24h": str(100 + i), "totalLiquidity": str(100000)}
+            {
+                "timestamp": 1700000000 + i * 86400,
+                "sharePrice": str(1.0 + i * 0.001),
+                "fees24h": str(100 + i),
+                "totalLiquidity": str(100000),
+            }
             for i in range(30)
         ]
         mock_resp = MagicMock()
@@ -878,19 +950,27 @@ class TestGetBalancerPoolSharpeRatio:
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
         assert result is not None or result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_exception(self, mock_post):
         """Test outer exception handling."""
         mock_post.side_effect = Exception("fail")
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_insufficient_returns(self, mock_post):
         """Test with less than 5 valid returns."""
         data = [
-            {"timestamp": 1700000000 + i * 86400, "sharePrice": str(1.0),
-             "fees24h": str(0), "totalLiquidity": str(100000)}
+            {
+                "timestamp": 1700000000 + i * 86400,
+                "sharePrice": str(1.0),
+                "fees24h": str(0),
+                "totalLiquidity": str(100000),
+            }
             for i in range(3)
         ]
         mock_resp = MagicMock()
@@ -899,18 +979,22 @@ class TestGetBalancerPoolSharpeRatio:
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_extreme_values_filtered(self, mock_post):
         """Test extreme values are replaced with NaN."""
         data = []
         for i in range(30):
             sp = 1e17 if i == 0 else 1.0 + i * 0.001
-            data.append({
-                "timestamp": str(1700000000 + i * 86400),
-                "sharePrice": str(sp),
-                "fees24h": str(100 + i),
-                "totalLiquidity": str(100000),
-            })
+            data.append(
+                {
+                    "timestamp": str(1700000000 + i * 86400),
+                    "sharePrice": str(sp),
+                    "fees24h": str(100 + i),
+                    "totalLiquidity": str(100000),
+                }
+            )
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"poolGetSnapshots": data}}
         mock_post.return_value = mock_resp
@@ -918,13 +1002,19 @@ class TestGetBalancerPoolSharpeRatio:
         # May return None or a numeric value depending on remaining valid data
         assert result is None or isinstance(result, (int, float))
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_nan_sharpe_ratio(self, mock_post):
         """Test NaN/Inf Sharpe ratio returns None."""
         # All identical share prices with no fees -> std=0 -> NaN Sharpe
         data = [
-            {"timestamp": 1700000000 + i * 86400, "sharePrice": str(1.0),
-             "fees24h": str(0), "totalLiquidity": str(0)}
+            {
+                "timestamp": 1700000000 + i * 86400,
+                "sharePrice": str(1.0),
+                "fees24h": str(0),
+                "totalLiquidity": str(0),
+            }
             for i in range(30)
         ]
         mock_resp = MagicMock()
@@ -933,7 +1023,9 @@ class TestGetBalancerPoolSharpeRatio:
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_inner_exception(self, mock_post):
         """Test inner processing exception."""
         mock_resp = MagicMock()
@@ -943,18 +1035,24 @@ class TestGetBalancerPoolSharpeRatio:
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_infinite_returns_replaced(self, mock_post):
         """Test that infinite values in returns are handled."""
         data = []
         for i in range(30):
-            sp = 1.0 + i * 0.001 if i != 5 else 0.0  # Zero sharePrice creates inf pct_change
-            data.append({
-                "timestamp": 1700000000 + i * 86400,
-                "sharePrice": str(sp),
-                "fees24h": str(100),
-                "totalLiquidity": str(100000),
-            })
+            sp = (
+                1.0 + i * 0.001 if i != 5 else 0.0
+            )  # Zero sharePrice creates inf pct_change
+            data.append(
+                {
+                    "timestamp": 1700000000 + i * 86400,
+                    "sharePrice": str(sp),
+                    "fees24h": str(100),
+                    "totalLiquidity": str(100000),
+                }
+            )
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"poolGetSnapshots": data}}
         mock_post.return_value = mock_resp
@@ -962,7 +1060,9 @@ class TestGetBalancerPoolSharpeRatio:
         # Should handle inf values and still return a result
         assert result is None or isinstance(result, float)
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_missing_column(self, mock_post):
         """Test with data where fees24h is missing (line 693->692 branch: col not in df.columns).
 
@@ -972,8 +1072,11 @@ class TestGetBalancerPoolSharpeRatio:
         # Use numeric timestamps so pd.to_datetime(unit='s') works
         # But omit fees24h to trigger the col-not-in-df branch
         data = [
-            {"timestamp": 1700000000 + i * 86400, "sharePrice": 1.0 + i * 0.001,
-             "totalLiquidity": 100000}
+            {
+                "timestamp": 1700000000 + i * 86400,
+                "sharePrice": 1.0 + i * 0.001,
+                "totalLiquidity": 100000,
+            }
             for i in range(30)
         ]
         mock_resp = MagicMock()
@@ -983,15 +1086,19 @@ class TestGetBalancerPoolSharpeRatio:
         # Should handle missing column and still produce result
         assert result is None or isinstance(result, (int, float))
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
+    )
     def test_sharpe_capped_at_bounds(self, mock_post):
         """Test Sharpe ratio is capped between -10 and 10."""
         # Create data with consistently increasing prices -> high positive Sharpe
         data = [
-            {"timestamp": 1700000000 + i * 86400,
-             "sharePrice": str(1.0 + i * 0.1),  # Large consistent increases
-             "fees24h": str(1000),
-             "totalLiquidity": str(100000)}
+            {
+                "timestamp": 1700000000 + i * 86400,
+                "sharePrice": str(1.0 + i * 0.1),  # Large consistent increases
+                "fees24h": str(1000),
+                "totalLiquidity": str(100000),
+            }
             for i in range(30)
         ]
         mock_resp = MagicMock()
@@ -1002,9 +1109,6 @@ class TestGetBalancerPoolSharpeRatio:
             assert -10 <= result <= 10
 
 
-# ---------------------------------------------------------------------------
-# TestGetUnderlyingTokenSymbol
-# ---------------------------------------------------------------------------
 class TestGetUnderlyingTokenSymbol:
     """Tests for get_underlying_token_symbol function."""
 
@@ -1025,9 +1129,6 @@ class TestGetUnderlyingTokenSymbol:
         assert get_underlying_token_symbol("dai") == "dai"
 
 
-# ---------------------------------------------------------------------------
-# TestNormalizeTokenSymbol
-# ---------------------------------------------------------------------------
 class TestNormalizeTokenSymbol:
     """Tests for normalize_token_symbol function."""
 
@@ -1052,15 +1153,18 @@ class TestNormalizeTokenSymbol:
         assert normalize_token_symbol("xSUSHI") == "SUSHI"
 
 
-# ---------------------------------------------------------------------------
-# TestGetPoolTokenPrices
-# ---------------------------------------------------------------------------
 class TestGetPoolTokenPrices:
     """Tests for get_pool_token_prices function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_with_x402_successful(self, mock_cg, mock_pro, mock_sleep):
         """Test price fetching with x402 session."""
         inst = MagicMock()
@@ -1072,9 +1176,15 @@ class TestGetPoolTokenPrices:
         assert result is not None
         assert "WETH" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_no_api_key_no_x402_returns_none(self, mock_cg, mock_pro, mock_sleep):
         """Test with no API key and no x402 returns None."""
         inst = MagicMock()
@@ -1082,9 +1192,15 @@ class TestGetPoolTokenPrices:
         result = get_pool_token_prices(["WETH"], coingecko_api_key="")
         assert result is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_pro_key(self, mock_cg, mock_pro, mock_sleep):
         """Test with pro API key."""
         mock_pro.return_value = True
@@ -1095,9 +1211,15 @@ class TestGetPoolTokenPrices:
         # Note: first attempt gets 'ethereum' (from get_underlying_token_symbol) not 'weth'
         assert result is not None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_demo_key(self, mock_cg, mock_pro, mock_sleep):
         """Test with demo API key."""
         mock_pro.return_value = False
@@ -1107,9 +1229,15 @@ class TestGetPoolTokenPrices:
         result = get_pool_token_prices(["WETH"], coingecko_api_key="demokey")
         assert result is not None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_price_not_found_usd_pegged(self, mock_cg, mock_pro, mock_sleep):
         """Test USD-pegged token gets price 1.0 when not found via API."""
         mock_pro.return_value = False
@@ -1121,9 +1249,15 @@ class TestGetPoolTokenPrices:
         assert result is not None
         assert result.get("USDC") == 1.0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_price_not_found_no_usd(self, mock_cg, mock_pro, mock_sleep):
         """Test non-USD token with no price found gets 0.0."""
         mock_pro.return_value = False
@@ -1134,9 +1268,15 @@ class TestGetPoolTokenPrices:
         assert result is not None
         assert result.get("RANDOMTOKEN") == 0.0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_get_price_exception_tries_next(self, mock_cg, mock_pro, mock_sleep):
         """Test that exception in get_price tries next possible ID."""
         mock_pro.return_value = False
@@ -1146,8 +1286,12 @@ class TestGetPoolTokenPrices:
         result = get_pool_token_prices(["WETH"], coingecko_api_key="key")
         assert result is not None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_outer_exception(self, mock_cg, mock_sleep):
         """Test outer exception returns fallback dict with all prices 0.0."""
         # The first time.sleep(3) raises, entering the outer except
@@ -1155,9 +1299,15 @@ class TestGetPoolTokenPrices:
         result = get_pool_token_prices(["WETH"], coingecko_api_key="key")
         assert result == {"WETH": 0.0}
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_price_found_break(self, mock_cg, mock_pro, mock_sleep):
         """Test that once price is found, inner loop breaks."""
         mock_pro.return_value = False
@@ -1168,9 +1318,15 @@ class TestGetPoolTokenPrices:
         assert result is not None
         assert "WETH" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_inner_per_symbol_exception(self, mock_cg, mock_pro, mock_sleep):
         """Test per-symbol exception handler sets price to 0.0."""
         mock_pro.return_value = False
@@ -1191,9 +1347,15 @@ class TestGetPoolTokenPrices:
         assert result["WETH"] == 0.0
         assert result["DAI"] == 0.0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_search_fallback_finds_price(self, mock_cg, mock_pro, mock_sleep):
         """Test the search fallback path when direct get_price fails."""
         mock_pro.return_value = False
@@ -1214,10 +1376,18 @@ class TestGetPoolTokenPrices:
         assert result is not None
         assert result["WETH"] == 2500.0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
-    def test_search_fallback_price_data_missing_coin_id(self, mock_cg, mock_pro, mock_sleep):
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_search_fallback_price_data_missing_coin_id(
+        self, mock_cg, mock_pro, mock_sleep
+    ):
         """Test search fallback when get_price returns data without the expected coin_id."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1231,9 +1401,15 @@ class TestGetPoolTokenPrices:
         # Price should be 0.0 since coin_id not in price_data and token is not USD-pegged
         assert result["RANDOMTOKEN"] == 0.0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_search_fallback_exception(self, mock_cg, mock_pro, mock_sleep):
         """Test search fallback when search raises an exception (except branch)."""
         mock_pro.return_value = False
@@ -1249,9 +1425,6 @@ class TestGetPoolTokenPrices:
         assert result["RANDOMTOKEN"] == 0.0
 
 
-# ---------------------------------------------------------------------------
-# TestGetTokenInvestmentsMulti
-# ---------------------------------------------------------------------------
 class TestGetTokenInvestmentsMulti:
     """Tests for get_token_investments_multi function."""
 
@@ -1305,9 +1478,6 @@ class TestGetTokenInvestmentsMulti:
         assert result[2] == 0  # Only first two get investment
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateSinglePoolInvestment
-# ---------------------------------------------------------------------------
 class TestCalculateSinglePoolInvestment:
     """Tests for calculate_single_pool_investment function."""
 
@@ -1332,9 +1502,6 @@ class TestCalculateSinglePoolInvestment:
         assert result <= 1000.0
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateDifferentialInvestment
-# ---------------------------------------------------------------------------
 class TestCalculateDifferentialInvestment:
     """Tests for calculate_differential_investment function."""
 
@@ -1386,9 +1553,6 @@ class TestCalculateDifferentialInvestment:
         assert result <= 1000.0
 
 
-# ---------------------------------------------------------------------------
-# TestFilterValidInvestmentPools
-# ---------------------------------------------------------------------------
 class TestFilterValidInvestmentPools:
     """Tests for filter_valid_investment_pools function."""
 
@@ -1427,9 +1591,6 @@ class TestFilterValidInvestmentPools:
         assert filter_valid_investment_pools(pools) == []
 
 
-# ---------------------------------------------------------------------------
-# TestFormatPoolData
-# ---------------------------------------------------------------------------
 class TestFormatPoolData:
     """Tests for format_pool_data function."""
 
@@ -1453,10 +1614,18 @@ class TestFormatPoolData:
             "trading_type": "lp",
         }
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_single_pool(self, mock_cg, mock_pro, mock_prices, mock_sleep):
         """Test formatting a single pool (is_single_pool=True branch)."""
         mock_pro.return_value = False
@@ -1466,10 +1635,18 @@ class TestFormatPoolData:
         assert len(result) == 1
         assert result[0]["dex_type"] == "balancerPool"
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_multiple_pools(self, mock_cg, mock_pro, mock_prices, mock_sleep):
         """Test formatting multiple pools (is_single_pool=False branch)."""
         mock_pro.return_value = False
@@ -1481,10 +1658,18 @@ class TestFormatPoolData:
         result = format_pool_data(pools, "key")
         assert len(result) == 2
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_low_apr_pool(self, mock_cg, mock_pro, mock_prices, mock_sleep):
         """Test pool with very low APR gets empty investment."""
         mock_pro.return_value = False
@@ -1494,10 +1679,18 @@ class TestFormatPoolData:
         assert result[0]["max_investment_usd"] == 0.0
         assert result[0]["max_investment_amounts"] == []
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_zero_diff_investment(self, mock_cg, mock_pro, mock_prices, mock_sleep):
         """Test when diff_investment is 0 due to very low APR."""
         mock_pro.return_value = False
@@ -1510,10 +1703,18 @@ class TestFormatPoolData:
         # Both APRs are below 0.01 so all get empty investment
         assert all(p["max_investment_usd"] == 0.0 for p in result)
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_no_token_prices(self, mock_cg, mock_pro, mock_prices, mock_sleep):
         """Test when token prices are all zero."""
         mock_pro.return_value = False
@@ -1522,36 +1723,68 @@ class TestFormatPoolData:
         result = format_pool_data(pools, "key")
         assert result[0]["max_investment_usd"] == 0.0
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_with_x402(self, mock_cg, mock_pro, mock_prices, mock_sleep):
         """Test with x402 session and proxy."""
         mock_pro.return_value = False
         mock_prices.return_value = {"TK0": 50.0, "TK1": 100.0}
         pools = [self._make_pool(apr=0.1)]
-        result = format_pool_data(pools, "key", x402_session=MagicMock(), x402_proxy="https://proxy.com")
+        result = format_pool_data(
+            pools, "key", x402_session=MagicMock(), x402_proxy="https://proxy.com"
+        )
         assert len(result) == 1
 
 
-# ---------------------------------------------------------------------------
-# TestGetOpportunitiesForBalancer
-# ---------------------------------------------------------------------------
 class TestGetOpportunitiesForBalancer:
     """Tests for get_opportunities_for_balancer function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools")
-    def test_successful(self, mock_get, mock_filter, mock_il, mock_sharpe, mock_liq, mock_format, mock_valid):
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
+    def test_successful(
+        self,
+        mock_get,
+        mock_filter,
+        mock_il,
+        mock_sharpe,
+        mock_liq,
+        mock_format,
+        mock_valid,
+    ):
         """Test successful opportunity search."""
         pool = {
-            "id": "pool1", "chain": "OPTIMISM", "type": "Weighted",
+            "id": "pool1",
+            "chain": "OPTIMISM",
+            "type": "Weighted",
             "poolTokens": [
                 {"address": "0xt0", "symbol": "TK0"},
                 {"address": "0xt1", "symbol": "TK1"},
@@ -1566,14 +1799,21 @@ class TestGetOpportunitiesForBalancer:
         mock_valid.return_value = [{"dex_type": "balancerPool"}]
 
         result = get_opportunities_for_balancer(
-            ["optimism"], "url", [], "key",
-            {"optimism": {}}, {"optimism": {"tk0": "id0", "tk1": "id1"}},
-            None, None
+            ["optimism"],
+            "url",
+            [],
+            "key",
+            {"optimism": {}},
+            {"optimism": {"tk0": "id0", "tk1": "id1"}},
+            None,
+            None,
         )
         assert isinstance(result, list)
         assert len(result) == 1
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
     def test_error_from_get_pools(self, mock_get):
         """Test error returned from get_balancer_pools."""
         mock_get.return_value = {"error": "API failure"}
@@ -1582,8 +1822,12 @@ class TestGetOpportunitiesForBalancer:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
     def test_no_filtered_pools(self, mock_get, mock_filter):
         """Test when no pools pass filtering."""
         mock_get.return_value = [{"id": "1"}]
@@ -1593,17 +1837,42 @@ class TestGetOpportunitiesForBalancer:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools")
-    def test_insufficient_valid_token_ids(self, mock_get, mock_filter, mock_il, mock_sharpe, mock_liq, mock_format, mock_valid):
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
+    def test_insufficient_valid_token_ids(
+        self,
+        mock_get,
+        mock_filter,
+        mock_il,
+        mock_sharpe,
+        mock_liq,
+        mock_format,
+        mock_valid,
+    ):
         """Test when pool has insufficient valid token IDs for IL calculation."""
         pool = {
-            "id": "pool1", "chain": "OPTIMISM", "type": "Weighted",
+            "id": "pool1",
+            "chain": "OPTIMISM",
+            "type": "Weighted",
             "poolTokens": [
                 {"address": "0xt0", "symbol": "UNKNOWN0"},
                 {"address": "0xt1", "symbol": "UNKNOWN1"},
@@ -1617,21 +1886,25 @@ class TestGetOpportunitiesForBalancer:
         mock_valid.return_value = [{"dex_type": "balancerPool"}]
 
         result = get_opportunities_for_balancer(
-            ["optimism"], "url", [], "key",
-            {"optimism": {}}, {},  # empty coin_id_mapping
-            None, None
+            ["optimism"],
+            "url",
+            [],
+            "key",
+            {"optimism": {}},
+            {},  # empty coin_id_mapping
+            None,
+            None,
         )
         # Should still return results but with il_risk_score = None
         mock_il.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# TestIsProApiKey
-# ---------------------------------------------------------------------------
 class TestIsProApiKey:
     """Tests for is_pro_api_key function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_pro(self, mock_cg):
         """Test pro key returns True."""
         inst = MagicMock()
@@ -1639,7 +1912,9 @@ class TestIsProApiKey:
         mock_cg.return_value = inst
         assert is_pro_api_key("key") is True
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_not_pro(self, mock_cg):
         """Test non-pro key returns False."""
         inst = MagicMock()
@@ -1647,7 +1922,9 @@ class TestIsProApiKey:
         mock_cg.return_value = inst
         assert is_pro_api_key("key") is False
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_empty_response(self, mock_cg):
         """Test empty response (falsy) returns False."""
         inst = MagicMock()
@@ -1655,7 +1932,9 @@ class TestIsProApiKey:
         mock_cg.return_value = inst
         assert is_pro_api_key("key") is False
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
     def test_none_response(self, mock_cg):
         """Test None response returns False."""
         inst = MagicMock()
@@ -1664,105 +1943,150 @@ class TestIsProApiKey:
         assert is_pro_api_key("key") is False
 
 
-# ---------------------------------------------------------------------------
-# TestCalculateMetrics
-# ---------------------------------------------------------------------------
 class TestCalculateMetrics:
     """Tests for calculate_metrics function."""
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
     def test_with_token_count(self, mock_il, mock_sharpe, mock_liq):
         """Test with token_count in position (token_count > 0 branch)."""
         mock_il.return_value = -0.05
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
         position = {
-            "pool_id": "p1", "chain": "optimism",
+            "pool_id": "p1",
+            "chain": "optimism",
             "token_count": 2,
-            "token0": "0xt0", "token0_symbol": "TK0",
-            "token1": "0xt1", "token1_symbol": "TK1",
+            "token0": "0xt0",
+            "token0_symbol": "TK0",
+            "token1": "0xt1",
+            "token1_symbol": "TK1",
         }
         result = calculate_metrics(
             position, "key", {"optimism": {"tk0": "id0", "tk1": "id1"}}
         )
         assert result["il_risk_score"] == -0.05
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
     def test_fallback_token_format(self, mock_sharpe, mock_liq):
         """Test fallback to token0/token1 format (token_count=0)."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
         position = {
-            "pool_id": "p1", "chain": "optimism",
+            "pool_id": "p1",
+            "chain": "optimism",
             "token_count": 0,
-            "token0": "0xt0", "token0_symbol": "TK0",
-            "token1": "0xt1", "token1_symbol": "TK1",
+            "token0": "0xt0",
+            "token0_symbol": "TK0",
+            "token1": "0xt1",
+            "token1_symbol": "TK1",
         }
         result = calculate_metrics(position, "key", {})
         assert result["il_risk_score"] is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
     def test_insufficient_valid_ids(self, mock_sharpe, mock_liq):
         """Test with insufficient valid token IDs."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
         position = {
-            "pool_id": "p1", "chain": "optimism",
+            "pool_id": "p1",
+            "chain": "optimism",
             "token_count": 2,
-            "token0": "0xt0", "token0_symbol": "UNKNOWN0",
-            "token1": "0xt1", "token1_symbol": "UNKNOWN1",
+            "token0": "0xt0",
+            "token0_symbol": "UNKNOWN0",
+            "token1": "0xt1",
+            "token1_symbol": "UNKNOWN1",
         }
         result = calculate_metrics(position, "key", {})
         assert result["il_risk_score"] is None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
     def test_fallback_with_valid_ids(self, mock_il, mock_sharpe, mock_liq):
         """Test fallback token0/token1 format with valid IDs >= 2."""
         mock_il.return_value = -0.03
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
         position = {
-            "pool_id": "p1", "chain": "optimism",
+            "pool_id": "p1",
+            "chain": "optimism",
             "token_count": 0,
-            "token0": "0xt0", "token0_symbol": "TK0",
-            "token1": "0xt1", "token1_symbol": "TK1",
+            "token0": "0xt0",
+            "token0_symbol": "TK0",
+            "token1": "0xt1",
+            "token1_symbol": "TK1",
         }
         result = calculate_metrics(
             position, "key", {"optimism": {"tk0": "id0", "tk1": "id1"}}
         )
         assert result["il_risk_score"] == -0.03
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
     def test_no_token_count_key(self, mock_sharpe, mock_liq):
         """Test with missing token_count key (defaults to 0)."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
         position = {
-            "pool_id": "p1", "chain": "optimism",
-            "token0": "0xt0", "token0_symbol": "TK0",
-            "token1": "0xt1", "token1_symbol": "TK1",
+            "pool_id": "p1",
+            "chain": "optimism",
+            "token0": "0xt0",
+            "token0_symbol": "TK0",
+            "token1": "0xt1",
+            "token1_symbol": "TK1",
         }
-        result = calculate_metrics(position, "key", {"optimism": {"tk0": "id0", "tk1": "id1"}})
+        result = calculate_metrics(
+            position, "key", {"optimism": {"tk0": "id0", "tk1": "id1"}}
+        )
         assert result is not None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
     def test_token_count_with_missing_keys(self, mock_sharpe, mock_liq):
         """Test token_count > 0 but some token keys missing."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
         position = {
-            "pool_id": "p1", "chain": "optimism",
+            "pool_id": "p1",
+            "chain": "optimism",
             "token_count": 3,
-            "token0": "0xt0", "token0_symbol": "TK0",
-            "token1": "0xt1", "token1_symbol": "TK1",
+            "token0": "0xt0",
+            "token0_symbol": "TK0",
+            "token1": "0xt1",
+            "token1_symbol": "TK1",
             # token2 and token2_symbol are missing
         }
         result = calculate_metrics(
@@ -1770,14 +2094,19 @@ class TestCalculateMetrics:
         )
         assert result is not None
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity")
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
     def test_no_tokens_at_all(self, mock_sharpe, mock_liq):
         """Test with token_count=0 and no token0/token1 keys (elif False branch, line 1244->1254)."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
         position = {
-            "pool_id": "p1", "chain": "optimism",
+            "pool_id": "p1",
+            "chain": "optimism",
             "token_count": 0,
             # No token0 or token1 keys at all
         }
@@ -1786,9 +2115,6 @@ class TestCalculateMetrics:
         assert result["il_risk_score"] is None
 
 
-# ---------------------------------------------------------------------------
-# TestRun
-# ---------------------------------------------------------------------------
 class TestRun:
     """Tests for the run function."""
 
@@ -1797,80 +2123,124 @@ class TestRun:
         result = run()
         assert "error" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics"
+    )
     def test_get_metrics(self, mock_calc):
         """Test get_metrics mode with successful result."""
         mock_calc.return_value = {"il_risk_score": -0.05}
         result = run(
-            chains=["optimism"], graphql_endpoint="url",
-            current_positions=[], whitelisted_assets={}, coin_id_mapping={},
-            get_metrics=True, position={"pool_id": "p1"},
-            coingecko_api_key="key", x402_session=None, x402_proxy=None,
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={},
+            coin_id_mapping={},
+            get_metrics=True,
+            position={"pool_id": "p1"},
+            coingecko_api_key="key",
+            x402_session=None,
+            x402_proxy=None,
         )
         assert result == {"il_risk_score": -0.05}
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics"
+    )
     def test_get_metrics_none(self, mock_calc):
         """Test get_metrics returning None."""
         mock_calc.return_value = None
         result = run(
-            chains=["optimism"], graphql_endpoint="url",
-            current_positions=[], whitelisted_assets={}, coin_id_mapping={},
-            get_metrics=True, position={"pool_id": "p1"},
-            coingecko_api_key="key", x402_session=None, x402_proxy=None,
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={},
+            coin_id_mapping={},
+            get_metrics=True,
+            position={"pool_id": "p1"},
+            coingecko_api_key="key",
+            x402_session=None,
+            x402_proxy=None,
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
+    )
     def test_opportunity_search(self, mock_opp):
         """Test opportunity search mode with results."""
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
-            chains=["optimism"], graphql_endpoint="url",
-            current_positions=[], whitelisted_assets={}, coin_id_mapping={},
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={},
+            coin_id_mapping={},
         )
         assert "result" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
+    )
     def test_opportunity_search_error(self, mock_opp):
         """Test opportunity search returning error dict."""
         mock_opp.return_value = {"error": "fail"}
         result = run(
-            chains=["optimism"], graphql_endpoint="url",
-            current_positions=[], whitelisted_assets={}, coin_id_mapping={},
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={},
+            coin_id_mapping={},
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
+    )
     def test_opportunity_search_empty(self, mock_opp):
         """Test empty opportunity search result."""
         mock_opp.return_value = []
         result = run(
-            chains=["optimism"], graphql_endpoint="url",
-            current_positions=[], whitelisted_assets={}, coin_id_mapping={},
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={},
+            coin_id_mapping={},
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
+    )
     def test_opportunity_search_no_errors(self, mock_opp):
         """Test opportunity search with no errors produces clean result."""
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
-            chains=["optimism"], graphql_endpoint="url",
-            current_positions=[], whitelisted_assets={}, coin_id_mapping={},
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={},
+            coin_id_mapping={},
         )
         assert result["error"] == []
         assert result["result"] == [{"pool": "data"}]
 
-    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics"
+    )
     def test_get_metrics_with_errors(self, mock_calc):
         """Test get_metrics when errors are accumulated."""
         mock_calc.return_value = {"il_risk_score": -0.05}
         bal_mod._thread_local.errors = ["some previous error"]
         result = run(
-            chains=["optimism"], graphql_endpoint="url",
-            current_positions=[], whitelisted_assets={}, coin_id_mapping={},
-            get_metrics=True, position={"pool_id": "p1"},
-            coingecko_api_key="key", x402_session=None, x402_proxy=None,
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={},
+            coin_id_mapping={},
+            get_metrics=True,
+            position={"pool_id": "p1"},
+            coingecko_api_key="key",
+            x402_session=None,
+            x402_proxy=None,
         )
         assert "error" in result

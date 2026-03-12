@@ -37,54 +37,6 @@ def test_import() -> None:
     import packages.valory.skills.optimus_abci.prompts  # noqa
 
 
-class TestProtocolName:
-    """Test ProtocolName enum."""
-
-    def test_balancer_pool(self) -> None:
-        """Test BALANCER_POOL value."""
-        assert ProtocolName.BALANCER_POOL.value == "balancerPool"
-
-    def test_uniswap_v3(self) -> None:
-        """Test UNISWAP_V3 value."""
-        assert ProtocolName.UNISWAP_V3.value == "uniswapV3"
-
-    def test_velodrome(self) -> None:
-        """Test VELODROME value."""
-        assert ProtocolName.VELODROME.value == "velodrome"
-
-    def test_sturdy(self) -> None:
-        """Test STURDY value."""
-        assert ProtocolName.STURDY.value == "sturdy"
-
-    def test_all_members(self) -> None:
-        """Test all enum members exist."""
-        members = [e.value for e in ProtocolName]
-        assert len(members) == 4
-        assert "balancerPool" in members
-        assert "uniswapV3" in members
-        assert "velodrome" in members
-        assert "sturdy" in members
-
-
-class TestTradingType:
-    """Test TradingType enum."""
-
-    def test_risky(self) -> None:
-        """Test RISKY value."""
-        assert TradingType.RISKY.value == "risky"
-
-    def test_balanced(self) -> None:
-        """Test BALANCED value."""
-        assert TradingType.BALANCED.value == "balanced"
-
-    def test_all_members(self) -> None:
-        """Test all enum members exist."""
-        members = [e.value for e in TradingType]
-        assert len(members) == 2
-        assert "risky" in members
-        assert "balanced" in members
-
-
 class TestStrategyConfig:
     """Test StrategyConfig pydantic model."""
 

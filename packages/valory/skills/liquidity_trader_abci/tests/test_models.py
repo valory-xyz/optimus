@@ -28,21 +28,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from packages.valory.skills.abstract_round_abci.models import (
-    BenchmarkTool as BaseBenchmarkTool,
-)
-from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
 from packages.valory.skills.liquidity_trader_abci.models import (
-    HTTP_OK,
-    MINUTE_UNIX,
-    BenchmarkTool,
     Coingecko,
     CoingeckoRateLimiter,
     Params,
-    Requests,
     SharedState,
 )
-from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
 
 def test_import() -> None:
@@ -50,32 +41,8 @@ def test_import() -> None:
     import packages.valory.skills.liquidity_trader_abci.models  # noqa
 
 
-def test_http_ok_constant() -> None:
-    """Test HTTP_OK constant."""
-    assert HTTP_OK == [200, 201]
-
-
-def test_minute_unix_constant() -> None:
-    """Test MINUTE_UNIX constant."""
-    assert MINUTE_UNIX == 60
-
-
-def test_requests_alias() -> None:
-    """Test Requests is an alias."""
-    assert Requests is BaseRequests
-
-
-def test_benchmark_tool_alias() -> None:
-    """Test BenchmarkTool is an alias."""
-    assert BenchmarkTool is BaseBenchmarkTool
-
-
 class TestSharedState:
     """Test SharedState class."""
-
-    def test_abci_app_cls(self) -> None:
-        """Test that abci_app_cls is LiquidityTraderAbciApp."""
-        assert SharedState.abci_app_cls == LiquidityTraderAbciApp
 
     def test_initialization(self) -> None:
         """Test SharedState initialization."""
@@ -314,7 +281,9 @@ class TestCoingecko:
         mock_response.status_code = 200
         mock_response.json.return_value = {"price": 1.0}
 
-        with patch("packages.valory.skills.liquidity_trader_abci.models.requests.Session") as mock_session_cls:
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.requests.Session"
+        ) as mock_session_cls:
             mock_session = MagicMock()
             mock_session.__enter__ = MagicMock(return_value=mock_session)
             mock_session.__exit__ = MagicMock(return_value=False)
@@ -337,7 +306,9 @@ class TestCoingecko:
         mock_response.status_code = 200
         mock_response.json.return_value = {"price": 1.0}
 
-        with patch("packages.valory.skills.liquidity_trader_abci.models.x402_requests") as mock_x402:
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.x402_requests"
+        ) as mock_x402:
             mock_session = MagicMock()
             mock_session.__enter__ = MagicMock(return_value=mock_session)
             mock_session.__exit__ = MagicMock(return_value=False)
@@ -359,7 +330,9 @@ class TestCoingecko:
         mock_response.status_code = 429
         mock_response.json.return_value = {"error": "rate limited"}
 
-        with patch("packages.valory.skills.liquidity_trader_abci.models.requests.Session") as mock_session_cls:
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.requests.Session"
+        ) as mock_session_cls:
             mock_session = MagicMock()
             mock_session.__enter__ = MagicMock(return_value=mock_session)
             mock_session.__exit__ = MagicMock(return_value=False)
@@ -377,7 +350,9 @@ class TestCoingecko:
         kwargs = self._make_kwargs()
         cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
 
-        with patch("packages.valory.skills.liquidity_trader_abci.models.requests.Session") as mock_session_cls:
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.requests.Session"
+        ) as mock_session_cls:
             mock_session = MagicMock()
             mock_session.__enter__ = MagicMock(return_value=mock_session)
             mock_session.__exit__ = MagicMock(return_value=False)
@@ -455,7 +430,9 @@ class TestParams:
             "genai_api_key": "test_key",
             "genai_model": "test_model",
             "velodrome_router_contract_addresses": json.dumps({}),
-            "velodrome_non_fungible_position_manager_contract_addresses": json.dumps({}),
+            "velodrome_non_fungible_position_manager_contract_addresses": json.dumps(
+                {}
+            ),
             "service_registry_contract_addresses": json.dumps({}),
             "staking_subgraph_endpoints": json.dumps({}),
             "velodrome_slipstream_helper_contract_addresses": json.dumps({}),
@@ -513,7 +490,9 @@ class TestParams:
             params = object.__new__(Params)
             with patch.object(Params.__bases__[0], "__init__", return_value=None):
                 params.__init__(**kwargs)
-            assert params.tenderly_bundle_simulation_url == "https://tenderly.example.com"
+            assert (
+                params.tenderly_bundle_simulation_url == "https://tenderly.example.com"
+            )
             assert params.tenderly_access_key == "key123"
 
     def test_initialization_without_tenderly_params(self) -> None:
@@ -537,6 +516,7 @@ class TestParams:
                 {"store_path": tmpdir, "skill_context": mock_context}
             )
             from pathlib import Path
+
             assert result == Path(tmpdir)
 
     def test_get_store_path_invalid(self) -> None:

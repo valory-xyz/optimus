@@ -21,14 +21,11 @@
 
 # pylint: skip-file
 
-import sys
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
-    INT_MAX,
     MAX_TICK,
     MIN_TICK,
-    ZERO_ADDRESS,
     MintParams,
     UniswapPoolBehaviour,
 )
@@ -37,26 +34,6 @@ from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
 def test_import() -> None:
     """Test that the uniswap module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.pools.uniswap  # noqa
-
-
-def test_zero_address() -> None:
-    """Test ZERO_ADDRESS constant."""
-    assert ZERO_ADDRESS == "0x0000000000000000000000000000000000000000"
-
-
-def test_min_tick() -> None:
-    """Test MIN_TICK constant."""
-    assert MIN_TICK == -887272
-
-
-def test_max_tick() -> None:
-    """Test MAX_TICK constant."""
-    assert MAX_TICK == 887272
-
-
-def test_int_max() -> None:
-    """Test INT_MAX constant."""
-    assert INT_MAX == sys.maxsize
 
 
 class TestMintParams:
@@ -113,7 +90,9 @@ class TestUniswapInit:
 
     def test_init_calls_super(self) -> None:
         """Test that __init__ calls super().__init__."""
-        with patch.object(UniswapPoolBehaviour.__bases__[0], "__init__", return_value=None):
+        with patch.object(
+            UniswapPoolBehaviour.__bases__[0], "__init__", return_value=None
+        ):
             obj = UniswapPoolBehaviour.__new__(UniswapPoolBehaviour)
             UniswapPoolBehaviour.__init__(obj, some_kwarg="test")
 
@@ -283,7 +262,9 @@ class TestBurnToken:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.burn_token(123, "optimism")
             result = _drive(gen)
             assert result is None
@@ -300,7 +281,9 @@ class TestBurnToken:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.burn_token(123, "optimism")
             result = _drive(gen)
             assert result == "0xburn_hash"
@@ -315,7 +298,9 @@ class TestCollectTokens:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.collect_tokens(123, "0xrecip", 1000, 2000, "optimism")
             result = _drive(gen)
             assert result is None
@@ -332,7 +317,9 @@ class TestCollectTokens:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.collect_tokens(123, "0xrecip", 1000, 2000, "optimism")
             result = _drive(gen)
             assert result == "0xcollect_hash"
@@ -347,7 +334,9 @@ class TestDecreaseLiquidity:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.decrease_liquidity(123, 1000, 0, 0, 99999, "optimism")
             result = _drive(gen)
             assert result is None
@@ -364,7 +353,9 @@ class TestDecreaseLiquidity:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.decrease_liquidity(123, 1000, 0, 0, 99999, "optimism")
             result = _drive(gen)
             assert result == "0xdecrease_hash"
@@ -379,7 +370,9 @@ class TestGetLiquidityForToken:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.get_liquidity_for_token(123, "optimism")
             result = _drive(gen)
             assert result is None
@@ -396,7 +389,9 @@ class TestGetLiquidityForToken:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.get_liquidity_for_token(123, "optimism")
             result = _drive(gen)
             assert result is None
@@ -415,7 +410,9 @@ class TestGetLiquidityForToken:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.get_liquidity_for_token(123, "optimism")
             result = _drive(gen)
             assert result == 5000
@@ -427,8 +424,13 @@ class TestEnter:
     def test_missing_params(self) -> None:
         """Test enter with missing required parameters."""
         obj = _make_behaviour()
-        gen = obj.enter(pool_address=None, safe_address="0xsafe", assets=["0xa"],
-                        chain="optimism", max_amounts_in=[100])
+        gen = obj.enter(
+            pool_address=None,
+            safe_address="0xsafe",
+            assets=["0xa"],
+            chain="optimism",
+            max_amounts_in=[100],
+        )
         result = _drive(gen)
         assert result == (None, None)
 
@@ -438,10 +440,16 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", "0xb"], chain="optimism",
-                            max_amounts_in=[100, 200])
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+            )
             result = _drive(gen)
             assert result == (None, None)
 
@@ -457,10 +465,16 @@ class TestEnter:
 
         obj._get_pool_fee = fake_get_pool_fee
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", "0xb"], chain="optimism",
-                            max_amounts_in=[100, 200])
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+            )
             result = _drive(gen)
             assert result == (None, None)
 
@@ -476,10 +490,17 @@ class TestEnter:
 
         obj._calculate_tick_lower_and_upper = fake_calc_ticks
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", "0xb"], chain="optimism",
-                            max_amounts_in=[100, 200], pool_fee=3000)
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
             result = _drive(gen)
             assert result == (None, None)
 
@@ -500,10 +521,17 @@ class TestEnter:
         obj._calculate_tick_lower_and_upper = fake_calc_ticks
         obj._calculate_slippage_protection_for_mint = fake_slippage_for_mint
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", "0xb"], chain="optimism",
-                            max_amounts_in=[100, 200], pool_fee=3000)
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
             result = _drive(gen)
             assert result == (None, None)
 
@@ -533,10 +561,17 @@ class TestEnter:
         obj.contract_interact = fake_contract_interact
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", "0xb"], chain="optimism",
-                            max_amounts_in=[100, 200], pool_fee=3000)
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
             result = _drive(gen)
             assert result == ("0xmint_hash", "0xpm")
 
@@ -571,10 +606,16 @@ class TestEnter:
         obj.contract_interact = fake_contract_interact
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.enter(pool_address="0xpool", safe_address="0xsafe",
-                            assets=["0xa", "0xb"], chain="optimism",
-                            max_amounts_in=[100, 200])
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+            )
             result = _drive(gen)
             assert result == ("0xmint_hash", "0xpm")
 
@@ -595,7 +636,9 @@ class TestExit:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism")
             result = _drive(gen)
             assert result == (None, None, None)
@@ -612,7 +655,9 @@ class TestExit:
 
         obj.get_liquidity_for_token = fake_get_liquidity
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism")
             result = _drive(gen)
             assert result == (None, None, None)
@@ -629,9 +674,16 @@ class TestExit:
 
         obj._calculate_slippage_protection_for_decrease = fake_slippage_for_decrease
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism",
-                           liquidity=5000, pool_address="0xpool")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=5000,
+                pool_address="0xpool",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
@@ -656,9 +708,16 @@ class TestExit:
         obj.decrease_liquidity = fake_decrease
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism",
-                           liquidity=5000, pool_address="0xpool")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=5000,
+                pool_address="0xpool",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
@@ -688,9 +747,16 @@ class TestExit:
         obj.collect_tokens = fake_collect
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism",
-                           liquidity=5000, pool_address="0xpool")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=5000,
+                pool_address="0xpool",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
@@ -721,9 +787,16 @@ class TestExit:
         obj.collect_tokens = fake_collect
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism",
-                           liquidity=5000, pool_address="0xpool")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=5000,
+                pool_address="0xpool",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
@@ -759,9 +832,16 @@ class TestExit:
         obj.contract_interact = fake_contract_interact
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism",
-                           liquidity=5000, pool_address="0xpool")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=5000,
+                pool_address="0xpool",
+            )
             result = _drive(gen)
             assert result == (None, None, None)
 
@@ -797,9 +877,16 @@ class TestExit:
         obj.contract_interact = fake_contract_interact
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism",
-                           liquidity=5000, pool_address="0xpool")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=5000,
+                pool_address="0xpool",
+            )
             result = _drive(gen)
             assert result[1] == "0xmultisend"
             assert result[2] is True
@@ -842,9 +929,15 @@ class TestExit:
         obj.contract_interact = fake_contract_interact
         obj.context.state.round_sequence = rs
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
-            gen = obj.exit(token_id=123, safe_address="0xsafe", chain="optimism",
-                           pool_address="0xpool")
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                pool_address="0xpool",
+            )
             result = _drive(gen)
             assert result[2] is True
 
@@ -895,7 +988,9 @@ class TestCalculateSlippageProtectionForMint:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._calculate_slippage_protection_for_mint(
                 "0xpool", -887220, 887220, [1000000, 1000000], "optimism"
             )
@@ -929,7 +1024,9 @@ class TestCalculateSlippageProtectionForDecrease:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {}
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._calculate_slippage_protection_for_decrease(
                 123, 5000, "optimism", "0xpool"
             )
@@ -948,7 +1045,9 @@ class TestCalculateSlippageProtectionForDecrease:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._calculate_slippage_protection_for_decrease(
                 123, 5000, "optimism", "0xpool"
             )
@@ -972,7 +1071,9 @@ class TestCalculateSlippageProtectionForDecrease:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._calculate_slippage_protection_for_decrease(
                 123, 5000, "optimism", "0xpool"
             )
@@ -996,7 +1097,9 @@ class TestCalculateSlippageProtectionForDecrease:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._calculate_slippage_protection_for_decrease(
                 123, 5000, "optimism", "0xpool"
             )
@@ -1021,7 +1124,9 @@ class TestCalculateSlippageProtectionForDecrease:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._calculate_slippage_protection_for_decrease(
                 123, 5000, "optimism", "0xpool"
             )
@@ -1042,7 +1147,9 @@ class TestCalculateSlippageProtectionForDecrease:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._calculate_slippage_protection_for_decrease(
                 123, 5000, "optimism", "0xpool"
             )

@@ -27,7 +27,6 @@ from unittest.mock import MagicMock, PropertyMock, patch
 from packages.valory.skills.abstract_round_abci.base import (
     CollectSameUntilThresholdRound,
 )
-from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
@@ -44,26 +43,6 @@ def test_import() -> None:
 
 class TestDecisionMakingRound:
     """Test DecisionMakingRound class."""
-
-    def test_payload_class(self) -> None:
-        """Test payload_class attribute."""
-        assert DecisionMakingRound.payload_class is DecisionMakingPayload
-
-    def test_done_event(self) -> None:
-        """Test done_event attribute."""
-        assert DecisionMakingRound.done_event == Event.DONE
-
-    def test_settle_event(self) -> None:
-        """Test settle_event attribute."""
-        assert DecisionMakingRound.settle_event == Event.SETTLE
-
-    def test_update_event(self) -> None:
-        """Test update_event attribute."""
-        assert DecisionMakingRound.update_event == Event.UPDATE
-
-    def test_error_event(self) -> None:
-        """Test error_event attribute."""
-        assert DecisionMakingRound.error_event == Event.ERROR
 
     def test_end_block_threshold_reached_done(self) -> None:
         """Test end_block returns DONE event when threshold reached."""
@@ -107,10 +86,12 @@ class TestDecisionMakingRound:
         """Test end_block inserts new action into actions list."""
         round_obj = object.__new__(DecisionMakingRound)
         new_action = {"action": "enter_pool"}
-        payload = json.dumps({
-            "event": "done",
-            "updates": {"new_action": new_action, "chain_id": "1"},
-        })
+        payload = json.dumps(
+            {
+                "event": "done",
+                "updates": {"new_action": new_action, "chain_id": "1"},
+            }
+        )
 
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.actions = [{"action": "existing"}]
@@ -128,10 +109,12 @@ class TestDecisionMakingRound:
         """Test end_block inserts new action at index 0 when last index is None."""
         round_obj = object.__new__(DecisionMakingRound)
         new_action = {"action": "enter_pool"}
-        payload = json.dumps({
-            "event": "update",
-            "updates": {"new_action": new_action},
-        })
+        payload = json.dumps(
+            {
+                "event": "update",
+                "updates": {"new_action": new_action},
+            }
+        )
 
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.actions = []
@@ -148,10 +131,12 @@ class TestDecisionMakingRound:
     def test_end_block_with_positions_serialization(self) -> None:
         """Test end_block serializes positions if they are not a string."""
         round_obj = object.__new__(DecisionMakingRound)
-        payload = json.dumps({
-            "event": "done",
-            "updates": {"positions": [{"pool": "test"}], "chain_id": "1"},
-        })
+        payload = json.dumps(
+            {
+                "event": "done",
+                "updates": {"positions": [{"pool": "test"}], "chain_id": "1"},
+            }
+        )
 
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.actions = []

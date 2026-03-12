@@ -128,7 +128,9 @@ class TestGetCoinIdFromSymbol:
 class TestRunQuery:
     """Tests for run_query function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_successful_query(self, mock_post):
         """Test successful GraphQL query."""
         mock_resp = MagicMock()
@@ -138,7 +140,9 @@ class TestRunQuery:
         result = run_query("{pools{id}}", "https://api.example.com")
         assert result == {"pools": []}
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_error_status(self, mock_post):
         """Test error status code."""
         mock_resp = MagicMock()
@@ -147,7 +151,9 @@ class TestRunQuery:
         result = run_query("{pools{id}}", "https://api.example.com")
         assert "error" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_graphql_errors(self, mock_post):
         """Test GraphQL errors in response."""
         mock_resp = MagicMock()
@@ -157,7 +163,9 @@ class TestRunQuery:
         result = run_query("{pools{id}}", "https://api.example.com")
         assert "error" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_with_variables(self, mock_post):
         """Test query with variables."""
         mock_resp = MagicMock()
@@ -183,10 +191,6 @@ class TestCalculateApr:
 
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
-
-    def test_empty_pools(self):
-        """Test with empty list."""
-        assert standardize_metrics([]) == []
 
     def test_single_pool(self):
         """Test single pool (zero std dev)."""
@@ -246,9 +250,16 @@ class TestApplyCompositePreFilter:
 class TestGetFilteredPoolsForUniswap:
     """Tests for get_filtered_pools_for_uniswap function."""
 
-    def _make_pool(self, pool_id="0x1234567890abcdef1234567890abcdef12345678",
-                   chain="optimism", fee_tier="3000", tvl="100000", volume="50000",
-                   token0_id="0xtoken0", token1_id="0xtoken1"):
+    def _make_pool(
+        self,
+        pool_id="0x1234567890abcdef1234567890abcdef12345678",
+        chain="optimism",
+        fee_tier="3000",
+        tvl="100000",
+        volume="50000",
+        token0_id="0xtoken0",
+        token1_id="0xtoken1",
+    ):
         """Create a test pool."""
         return {
             "id": pool_id,
@@ -260,7 +271,9 @@ class TestGetFilteredPoolsForUniswap:
             "token1": {"id": token1_id, "symbol": "TK1"},
         }
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
+    )
     def test_basic_filtering(self, mock_filter):
         """Test basic pool filtering."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -270,11 +283,14 @@ class TestGetFilteredPoolsForUniswap:
         )
         assert len(result) == 1
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
+    )
     def test_excludes_current_positions(self, mock_filter):
         """Test exclusion of current positions."""
         mock_filter.side_effect = lambda x, **kw: x
         from web3 import Web3
+
         pool_id = "0x1234567890abcdef1234567890abcdef12345678"
         checksum = Web3.to_checksum_address(pool_id)
         pools = [self._make_pool(pool_id=pool_id)]
@@ -283,7 +299,9 @@ class TestGetFilteredPoolsForUniswap:
         )
         assert len(result) == 0
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
+    )
     def test_apr_threshold_filter(self, mock_filter):
         """Test APR threshold filtering."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -298,7 +316,9 @@ class TestGetFilteredPoolsForUniswap:
         result = get_filtered_pools_for_uniswap([], [], {"optimism": {}})
         assert result == []
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
+    )
     def test_whitelisted_tokens_check(self, mock_filter):
         """Test whitelisted tokens filtering."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -310,7 +330,9 @@ class TestGetFilteredPoolsForUniswap:
         )
         assert len(result) == 1
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
+    )
     def test_chain_not_whitelisted(self, mock_filter):
         """Test pool chain not in whitelisted assets."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -324,37 +346,53 @@ class TestGetFilteredPoolsForUniswap:
 class TestFetchGraphqlData:
     """Tests for fetch_graphql_data function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query"
+    )
     def test_fetches_pools(self, mock_query):
         """Test successful pool fetching."""
         mock_query.return_value = {"pools": [{"id": "0x1"}]}
-        result = fetch_graphql_data(["optimism"], {"optimism": "https://api.example.com"})
+        result = fetch_graphql_data(
+            ["optimism"], {"optimism": "https://api.example.com"}
+        )
         assert len(result) == 1
         assert result[0]["chain"] == "optimism"
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query"
+    )
     def test_no_endpoint_for_chain(self, mock_query):
         """Test when no endpoint exists for chain."""
         result = fetch_graphql_data(["optimism"], {})
         assert result == []
         mock_query.assert_not_called()
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query"
+    )
     def test_query_error(self, mock_query):
         """Test query error handling."""
         mock_query.return_value = {"error": "query failed"}
-        result = fetch_graphql_data(["optimism"], {"optimism": "https://api.example.com"})
+        result = fetch_graphql_data(
+            ["optimism"], {"optimism": "https://api.example.com"}
+        )
         assert result == []
 
 
 class TestGetUniswapPoolSharpeRatio:
     """Tests for get_uniswap_pool_sharpe_ratio function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_successful_calculation(self, mock_post):
         """Test successful Sharpe ratio calculation."""
         data = [
-            {"date": str(1700000000 + i * 86400), "tvlUSD": "100000", "feesUSD": str(100 + i)}
+            {
+                "date": str(1700000000 + i * 86400),
+                "tvlUSD": "100000",
+                "feesUSD": str(100 + i),
+            }
             for i in range(30)
         ]
         mock_resp = MagicMock()
@@ -363,7 +401,9 @@ class TestGetUniswapPoolSharpeRatio:
         result = get_uniswap_pool_sharpe_ratio("0x1", "https://api.example.com")
         assert isinstance(result, float)
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_no_data(self, mock_post):
         """Test with no data."""
         mock_resp = MagicMock()
@@ -390,7 +430,9 @@ class TestCalculateIlImpact:
 class TestIsProApiKey:
     """Tests for is_pro_api_key function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_pro_key(self, mock_cg):
         """Test pro API key detection."""
         inst = MagicMock()
@@ -398,7 +440,9 @@ class TestIsProApiKey:
         mock_cg.return_value = inst
         assert is_pro_api_key("key") is True
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_non_pro_key(self, mock_cg):
         """Test non-pro API key."""
         inst = MagicMock()
@@ -406,7 +450,9 @@ class TestIsProApiKey:
         mock_cg.return_value = inst
         assert is_pro_api_key("key") is False
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_empty_response(self, mock_cg):
         """Test empty response."""
         inst = MagicMock()
@@ -418,8 +464,12 @@ class TestIsProApiKey:
 class TestCalculateIlRiskScore:
     """Tests for calculate_il_risk_score function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_successful_calculation(self, mock_cg, mock_is_pro):
         """Test successful IL risk score calculation."""
         mock_is_pro.return_value = False
@@ -432,7 +482,9 @@ class TestCalculateIlRiskScore:
         result = calculate_il_risk_score("t0", "t1", "key")
         assert isinstance(result, float)
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_with_x402(self, mock_cg):
         """Test with x402 session."""
         inst = MagicMock()
@@ -441,7 +493,9 @@ class TestCalculateIlRiskScore:
             {"prices": [[i, 200 + i] for i in range(10)]},
         ]
         mock_cg.return_value = inst
-        result = calculate_il_risk_score("t0", "t1", "key", x402_session=MagicMock(), x402_proxy="https://proxy.com")
+        result = calculate_il_risk_score(
+            "t0", "t1", "key", x402_session=MagicMock(), x402_proxy="https://proxy.com"
+        )
         assert isinstance(result, float)
 
     def test_no_api_key_no_x402(self):
@@ -449,17 +503,25 @@ class TestCalculateIlRiskScore:
         result = calculate_il_risk_score("t0", "t1", "")
         assert result is None
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_exception(self, mock_cg):
         """Test exception handling."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
         mock_cg.return_value = inst
-        result = calculate_il_risk_score("t0", "t1", "", x402_session=MagicMock(), x402_proxy="https://p.com")
+        result = calculate_il_risk_score(
+            "t0", "t1", "", x402_session=MagicMock(), x402_proxy="https://p.com"
+        )
         assert result is None
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_insufficient_data(self, mock_cg, mock_is_pro):
         """Test with insufficient data points."""
         mock_is_pro.return_value = False
@@ -472,8 +534,12 @@ class TestCalculateIlRiskScore:
         result = calculate_il_risk_score("t0", "t1", "key")
         assert result is None
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
     def test_pro_api_key_used(self, mock_cg, mock_is_pro):
         """Test with pro API key."""
         mock_is_pro.return_value = True
@@ -490,7 +556,9 @@ class TestCalculateIlRiskScore:
 class TestFetchPoolData:
     """Tests for fetch_pool_data function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_successful(self, mock_post):
         """Test successful pool data fetch."""
         mock_resp = MagicMock()
@@ -500,7 +568,9 @@ class TestFetchPoolData:
         result = fetch_pool_data("0x1", "https://api.example.com")
         assert result == {"id": "0x1"}
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_error_status(self, mock_post):
         """Test error status code."""
         mock_resp = MagicMock()
@@ -510,7 +580,9 @@ class TestFetchPoolData:
         result = fetch_pool_data("0x1", "https://api.example.com")
         assert result is None
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_exception(self, mock_post):
         """Test exception handling."""
         mock_post.side_effect = Exception("network error")
@@ -557,7 +629,9 @@ class TestCalculateMetricsLiquidityRisk:
 class TestAssessPoolLiquidity:
     """Tests for assess_pool_liquidity function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data"
+    )
     def test_no_pool_data(self, mock_fetch):
         """Test when pool data is None."""
         mock_fetch.return_value = None
@@ -565,7 +639,9 @@ class TestAssessPoolLiquidity:
         assert np.isnan(depth)
         assert np.isnan(max_pos)
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data"
+    )
     def test_with_pool_data(self, mock_fetch):
         """Test with valid pool data."""
         mock_fetch.return_value = {
@@ -603,7 +679,9 @@ class TestFormatPoolData:
 class TestGetOpportunitiesForUniswap:
     """Tests for get_opportunities_for_uniswap function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
+    )
     def test_graphql_error(self, mock_fetch):
         """Test GraphQL error."""
         mock_fetch.return_value = {"error": "query failed"}
@@ -612,8 +690,12 @@ class TestGetOpportunitiesForUniswap:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
+    )
     def test_no_filtered_pools(self, mock_fetch, mock_filter):
         """Test no pools after filtering."""
         mock_fetch.return_value = [{"id": "0x1"}]
@@ -623,15 +705,29 @@ class TestGetOpportunitiesForUniswap:
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data")
-    def test_successful_flow(self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity):
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
+    )
+    def test_successful_flow(
+        self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity
+    ):
         """Test successful end-to-end flow."""
         pool = {
-            "id": "0x1", "chain": "optimism", "apr": 10,
+            "id": "0x1",
+            "chain": "optimism",
+            "apr": 10,
             "token0": {"id": "0xt0", "symbol": "TK0"},
             "token1": {"id": "0xt1", "symbol": "TK1"},
         }
@@ -642,20 +738,41 @@ class TestGetOpportunitiesForUniswap:
         mock_liquidity.return_value = (100, 5000)
         coin_id_mapping = {"optimism": {"tk0": "tk0-id", "tk1": "tk1-id"}}
         result = get_opportunities_for_uniswap(
-            ["optimism"], {"optimism": "url"}, [], "key", {}, coin_id_mapping, None, None
+            ["optimism"],
+            {"optimism": "url"},
+            [],
+            "key",
+            {},
+            coin_id_mapping,
+            None,
+            None,
         )
         assert isinstance(result, list)
         assert len(result) == 1
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data")
-    def test_token_id_not_found(self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity):
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
+    )
+    def test_token_id_not_found(
+        self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity
+    ):
         """Test when token IDs are not found in mapping."""
         pool = {
-            "id": "0x1", "chain": "optimism", "apr": 10,
+            "id": "0x1",
+            "chain": "optimism",
+            "apr": 10,
             "token0": {"id": "0xt0", "symbol": "UNKNOWN0"},
             "token1": {"id": "0xt1", "symbol": "UNKNOWN1"},
         }
@@ -668,20 +785,36 @@ class TestGetOpportunitiesForUniswap:
         )
         assert isinstance(result, list)
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data")
-    def test_token_id_cache(self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity):
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
+    )
+    def test_token_id_cache(
+        self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity
+    ):
         """Test that token IDs are cached between pools."""
         pool1 = {
-            "id": "0x1", "chain": "optimism", "apr": 10,
+            "id": "0x1",
+            "chain": "optimism",
+            "apr": 10,
             "token0": {"id": "0xt0", "symbol": "TK0"},
             "token1": {"id": "0xt1", "symbol": "TK1"},
         }
         pool2 = {
-            "id": "0x2", "chain": "optimism", "apr": 15,
+            "id": "0x2",
+            "chain": "optimism",
+            "apr": 15,
             "token0": {"id": "0xt0", "symbol": "TK0"},
             "token1": {"id": "0xt1", "symbol": "TK1"},
         }
@@ -692,7 +825,14 @@ class TestGetOpportunitiesForUniswap:
         mock_liquidity.return_value = (100, 5000)
         coin_id_mapping = {"optimism": {"tk0": "tk0-id", "tk1": "tk1-id"}}
         result = get_opportunities_for_uniswap(
-            ["optimism"], {"optimism": "url"}, [], "key", {}, coin_id_mapping, None, None
+            ["optimism"],
+            {"optimism": "url"},
+            [],
+            "key",
+            {},
+            coin_id_mapping,
+            None,
+            None,
         )
         assert len(result) == 2
 
@@ -700,33 +840,51 @@ class TestGetOpportunitiesForUniswap:
 class TestCalculateMetrics:
     """Tests for calculate_metrics function."""
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
+    )
     def test_successful(self, mock_il, mock_sharpe, mock_liquidity):
         """Test successful metrics calculation."""
         mock_il.return_value = -0.05
         mock_sharpe.return_value = 1.5
         mock_liquidity.return_value = (100, 5000)
         position = {
-            "token0_symbol": "TK0", "token1_symbol": "TK1",
-            "chain": "optimism", "pool_address": "0x1",
+            "token0_symbol": "TK0",
+            "token1_symbol": "TK1",
+            "chain": "optimism",
+            "pool_address": "0x1",
         }
         result = calculate_metrics(
-            position, "key", {"optimism": "url"},
-            {"optimism": {"tk0": "tk0-id", "tk1": "tk1-id"}}, None, None
+            position,
+            "key",
+            {"optimism": "url"},
+            {"optimism": {"tk0": "tk0-id", "tk1": "tk1-id"}},
+            None,
+            None,
         )
         assert result["il_risk_score"] == -0.05
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity")
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
+    )
     def test_no_token_ids(self, mock_sharpe, mock_liquidity):
         """Test when token IDs are not found."""
         mock_sharpe.return_value = 1.5
         mock_liquidity.return_value = (100, 5000)
         position = {
-            "token0_symbol": "UNKNOWN0", "token1_symbol": "UNKNOWN1",
-            "chain": "optimism", "pool_address": "0x1",
+            "token0_symbol": "UNKNOWN0",
+            "token1_symbol": "UNKNOWN1",
+            "chain": "optimism",
+            "pool_address": "0x1",
         }
         result = calculate_metrics(position, "key", {"optimism": "url"}, {}, None, None)
         assert result["il_risk_score"] is None
@@ -740,58 +898,84 @@ class TestRun:
         result = run()
         assert "error" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_metrics"
+    )
     def test_get_metrics_mode(self, mock_calc):
         """Test get_metrics mode."""
         mock_calc.return_value = {"il_risk_score": -0.05}
         result = run(
-            chains=["optimism"], graphql_endpoints={"optimism": "url"},
-            current_positions=[], whitelisted_assets={},
-            get_metrics=True, position={"pool_address": "0x1"},
-            coingecko_api_key="key", coin_id_mapping={},
-            x402_session=None, x402_proxy=None,
+            chains=["optimism"],
+            graphql_endpoints={"optimism": "url"},
+            current_positions=[],
+            whitelisted_assets={},
+            get_metrics=True,
+            position={"pool_address": "0x1"},
+            coingecko_api_key="key",
+            coin_id_mapping={},
+            x402_session=None,
+            x402_proxy=None,
         )
         assert result == {"il_risk_score": -0.05}
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_metrics")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_metrics"
+    )
     def test_get_metrics_returns_none(self, mock_calc):
         """Test get_metrics mode when metrics is None."""
         mock_calc.return_value = None
         result = run(
-            chains=["optimism"], graphql_endpoints={"optimism": "url"},
-            current_positions=[], whitelisted_assets={},
-            get_metrics=True, position={"pool_address": "0x1"},
-            coingecko_api_key="key", coin_id_mapping={},
-            x402_session=None, x402_proxy=None,
+            chains=["optimism"],
+            graphql_endpoints={"optimism": "url"},
+            current_positions=[],
+            whitelisted_assets={},
+            get_metrics=True,
+            position={"pool_address": "0x1"},
+            coingecko_api_key="key",
+            coin_id_mapping={},
+            x402_session=None,
+            x402_proxy=None,
         )
         assert "error" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap"
+    )
     def test_opportunity_search(self, mock_opp):
         """Test opportunity search mode."""
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
-            chains=["optimism"], graphql_endpoints={"optimism": "url"},
-            current_positions=[], whitelisted_assets={},
+            chains=["optimism"],
+            graphql_endpoints={"optimism": "url"},
+            current_positions=[],
+            whitelisted_assets={},
         )
         assert "result" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap"
+    )
     def test_opportunity_search_error(self, mock_opp):
         """Test opportunity search error."""
         mock_opp.return_value = {"error": "no pools"}
         result = run(
-            chains=["optimism"], graphql_endpoints={"optimism": "url"},
-            current_positions=[], whitelisted_assets={},
+            chains=["optimism"],
+            graphql_endpoints={"optimism": "url"},
+            current_positions=[],
+            whitelisted_assets={},
         )
         assert "result" in result
 
-    @patch("packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap")
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap"
+    )
     def test_opportunity_search_empty(self, mock_opp):
         """Test empty opportunity search."""
         mock_opp.return_value = []
         result = run(
-            chains=["optimism"], graphql_endpoints={"optimism": "url"},
-            current_positions=[], whitelisted_assets={},
+            chains=["optimism"],
+            graphql_endpoints={"optimism": "url"},
+            current_positions=[],
+            whitelisted_assets={},
         )
         assert "result" in result

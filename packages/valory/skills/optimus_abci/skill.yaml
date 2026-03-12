@@ -105,12 +105,12 @@ fingerprint:
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   prompts.py: bafybeicdudfobq4tdxu2pyyxsheu2p5kmmxsz3bi2nsfev5klfz2gy6j5u
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
-  tests/test_behaviours.py: bafybeie4j2tnfbu5zoybk7cc444vzkk5rcgn2xsp63r4s6b2y5jkrx6kfi
-  tests/test_composition.py: bafybeig4g7t6mzzl6uesz724s6rq6sko254ucqcqfx7cg2e627g5e25b2u
-  tests/test_dialogues.py: bafybeigqgtk3n2wo64lfjkk4u3c4zjb3u5n4lsjkyjflkaj3bf64f4ec4u
-  tests/test_handlers.py: bafybeiayojoflvlfbgvbb7iofavfqnbnvqvruiwcmgb7ib3lqqtiurpsim
-  tests/test_models.py: bafybeicurnqgr3kaj5g5dg5z6wj764pttdtofhpehsvph5gzrwepwd73fq
-  tests/test_prompts.py: bafybeidkucgsoulfojxdsfu4febuvir4gsxjan6srsp4ckinbl62lr6luy
+  tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
+  tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
+  tests/test_dialogues.py: bafybeicyjhlszreuscgjtdrrzhla6cda7m4snh6je7nyljypab77vy6ema
+  tests/test_handlers.py: bafybeih5wfk22nlt65zrp3i7buvn3u4ev3acbhmgix7tm6v3ee2qxhql5m
+  tests/test_models.py: bafybeibvucxsxsuyuyjt33nj36mbipuyatmmrpyc72umxb46dcmjugqa6i
+  tests/test_prompts.py: bafybeicxqx6uu5teat5lycyszwn4zbk6smyruok5bnpr6ft73wfa5ipdvi
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
-- valory/liquidity_trader_abci:0.1.0:bafybeifv7lzxozgjsu6iamthkzeu7sti5mndch7eqyqytatu77doajmfca
+- valory/liquidity_trader_abci:0.1.0:bafybeihryxktvtr35ee2zjpiw4schbpe5hpal5ypmiayni3342hprlunpu
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 - valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
 behaviours:

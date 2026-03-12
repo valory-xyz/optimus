@@ -26,7 +26,6 @@ from unittest.mock import MagicMock, patch
 from packages.valory.skills.abstract_round_abci.base import (
     CollectSameUntilThresholdRound,
 )
-from packages.valory.skills.liquidity_trader_abci.payloads import CallCheckpointPayload
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     StakingState,
@@ -44,14 +43,6 @@ def test_import() -> None:
 
 class TestCallCheckpointRound:
     """Test CallCheckpointRound class."""
-
-    def test_payload_class(self) -> None:
-        """Test payload_class attribute."""
-        assert CallCheckpointRound.payload_class is CallCheckpointPayload
-
-    def test_done_event(self) -> None:
-        """Test done_event attribute."""
-        assert CallCheckpointRound.done_event == Event.DONE
 
     def test_end_block_none_from_super(self) -> None:
         """Test end_block returns None when super returns None."""

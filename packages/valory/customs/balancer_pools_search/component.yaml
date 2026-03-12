@@ -10,7 +10,7 @@ fingerprint:
   __init__.py: bafybeievwo2yoa6vekod333ttto66vpc27lm6wepspnhwyrqxtjx7djzw4
   balancer_pools_search.py: bafybeihtgiruxkmcfjsrewptra4rjlsmzngnye4mlnetwaevjgqevot23i
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_balancer_pools_search.py: bafybeia7mn6nsofix2ocw6bsbnzfvhpawwx6mtidw5iqcdkp4x6ttve4n4
+  tests/test_balancer_pools_search.py: bafybeiaf7xepqoai3tpyz66bngx4jxfn3eyjhxopzwa2cu26dpbq5ejs5e
 fingerprint_ignore_patterns: []
 entry_point: balancer_pools_search.py
 callable: run

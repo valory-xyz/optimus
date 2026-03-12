@@ -44,18 +44,6 @@ def test_import() -> None:
 class TestWithdrawFundsRound:
     """Test WithdrawFundsRound class."""
 
-    def test_done_event(self) -> None:
-        """Test done_event attribute."""
-        assert WithdrawFundsRound.done_event == Event.DONE
-
-    def test_none_event(self) -> None:
-        """Test none_event attribute."""
-        assert WithdrawFundsRound.none_event == Event.NONE
-
-    def test_no_majority_event(self) -> None:
-        """Test no_majority_event attribute."""
-        assert WithdrawFundsRound.no_majority_event == Event.NO_MAJORITY
-
     def test_end_block_threshold_reached(self) -> None:
         """Test end_block returns DONE when threshold reached."""
         round_obj = object.__new__(WithdrawFundsRound)

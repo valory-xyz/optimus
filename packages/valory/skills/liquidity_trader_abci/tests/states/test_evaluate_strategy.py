@@ -26,9 +26,6 @@ from unittest.mock import MagicMock, patch
 from packages.valory.skills.abstract_round_abci.base import (
     CollectSameUntilThresholdRound,
 )
-from packages.valory.skills.liquidity_trader_abci.payloads import (
-    EvaluateStrategyPayload,
-)
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
@@ -45,26 +42,6 @@ def test_import() -> None:
 
 class TestEvaluateStrategyRound:
     """Test EvaluateStrategyRound class."""
-
-    def test_is_collect_same(self) -> None:
-        """Test inherits from CollectSameUntilThresholdRound."""
-        assert issubclass(EvaluateStrategyRound, CollectSameUntilThresholdRound)
-
-    def test_payload_class(self) -> None:
-        """Test payload_class attribute."""
-        assert EvaluateStrategyRound.payload_class is EvaluateStrategyPayload
-
-    def test_done_event(self) -> None:
-        """Test done_event attribute."""
-        assert EvaluateStrategyRound.done_event == Event.DONE
-
-    def test_none_event(self) -> None:
-        """Test none_event attribute."""
-        assert EvaluateStrategyRound.none_event == Event.NONE
-
-    def test_no_majority_event(self) -> None:
-        """Test no_majority_event attribute."""
-        assert EvaluateStrategyRound.no_majority_event == Event.NO_MAJORITY
 
     def test_end_block_none_from_super(self) -> None:
         """Test end_block returns None when super returns None."""

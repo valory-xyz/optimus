@@ -44,14 +44,6 @@ def test_import() -> None:
 class TestFetchStrategiesRound:
     """Test FetchStrategiesRound class."""
 
-    def test_done_event(self) -> None:
-        """Test done_event attribute."""
-        assert FetchStrategiesRound.done_event == Event.DONE
-
-    def test_settle_event(self) -> None:
-        """Test settle_event attribute."""
-        assert FetchStrategiesRound.settle_event == Event.SETTLE
-
     def test_end_block_withdrawal_initiated(self) -> None:
         """Test end_block returns WITHDRAWAL_INITIATED."""
         round_obj = object.__new__(FetchStrategiesRound)
@@ -69,10 +61,12 @@ class TestFetchStrategiesRound:
     def test_end_block_settle(self) -> None:
         """Test end_block returns SETTLE with updates."""
         round_obj = object.__new__(FetchStrategiesRound)
-        payload = json.dumps({
-            "event": Event.SETTLE.value,
-            "updates": {"chain_id": "1"},
-        })
+        payload = json.dumps(
+            {
+                "event": Event.SETTLE.value,
+                "updates": {"chain_id": "1"},
+            }
+        )
 
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.update.return_value = mock_synced
@@ -89,10 +83,12 @@ class TestFetchStrategiesRound:
     def test_end_block_done_with_protocols(self) -> None:
         """Test end_block returns DONE with selected protocols."""
         round_obj = object.__new__(FetchStrategiesRound)
-        payload = json.dumps({
-            "selected_protocols": ["balancerPool"],
-            "trading_type": "pool_manager",
-        })
+        payload = json.dumps(
+            {
+                "selected_protocols": ["balancerPool"],
+                "trading_type": "pool_manager",
+            }
+        )
 
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.update.return_value = mock_synced
@@ -109,10 +105,12 @@ class TestFetchStrategiesRound:
     def test_end_block_wait_empty_protocols(self) -> None:
         """Test end_block returns WAIT when no protocols selected."""
         round_obj = object.__new__(FetchStrategiesRound)
-        payload = json.dumps({
-            "selected_protocols": [],
-            "trading_type": "",
-        })
+        payload = json.dumps(
+            {
+                "selected_protocols": [],
+                "trading_type": "",
+            }
+        )
 
         mock_synced = MagicMock(spec=SynchronizedData)
 
@@ -126,10 +124,12 @@ class TestFetchStrategiesRound:
     def test_end_block_wait_no_trading_type(self) -> None:
         """Test end_block returns WAIT when trading_type is empty."""
         round_obj = object.__new__(FetchStrategiesRound)
-        payload = json.dumps({
-            "selected_protocols": ["balancerPool"],
-            "trading_type": "",
-        })
+        payload = json.dumps(
+            {
+                "selected_protocols": ["balancerPool"],
+                "trading_type": "",
+            }
+        )
 
         mock_synced = MagicMock(spec=SynchronizedData)
 

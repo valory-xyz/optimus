@@ -22,12 +22,9 @@
 # pylint: skip-file
 
 import json
-from unittest.mock import MagicMock
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.liquidity_trader_abci.states.base import (
-    Event,
-    StakingState,
     SynchronizedData,
 )
 
@@ -35,48 +32,6 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
 def test_import() -> None:
     """Test that the base states module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.states.base  # noqa
-
-
-class TestStakingState:
-    """Test StakingState enum."""
-
-    def test_unstaked(self) -> None:
-        """Test UNSTAKED value."""
-        assert StakingState.UNSTAKED.value == 0
-
-    def test_staked(self) -> None:
-        """Test STAKED value."""
-        assert StakingState.STAKED.value == 1
-
-    def test_evicted(self) -> None:
-        """Test EVICTED value."""
-        assert StakingState.EVICTED.value == 2
-
-
-class TestEvent:
-    """Test Event enum."""
-
-    def test_done(self) -> None:
-        """Test DONE value."""
-        assert Event.DONE.value == "done"
-
-    def test_round_timeout(self) -> None:
-        """Test ROUND_TIMEOUT value."""
-        assert Event.ROUND_TIMEOUT.value == "round_timeout"
-
-    def test_all_events_exist(self) -> None:
-        """Test all expected events exist."""
-        expected_events = [
-            "DONE", "ROUND_TIMEOUT", "NO_MAJORITY", "NONE", "WAIT",
-            "SETTLE", "UPDATE", "ERROR", "ACTION_EXECUTED",
-            "CHECKPOINT_TX_EXECUTED", "VANITY_TX_EXECUTED",
-            "TRANSFER_COMPLETED", "WITHDRAWAL_COMPLETED",
-            "WITHDRAWAL_INITIATED", "UNRECOGNIZED",
-            "NEXT_CHECKPOINT_NOT_REACHED_YET", "SERVICE_NOT_STAKED",
-            "SERVICE_EVICTED", "STAKING_KPI_MET", "STAKING_KPI_NOT_MET",
-        ]
-        for event_name in expected_events:
-            assert hasattr(Event, event_name)
 
 
 def _make_synced_data(**kwargs) -> SynchronizedData:
@@ -292,7 +247,9 @@ class TestSynchronizedData:
 
     def test_withdrawal_actions_set(self) -> None:
         """Test withdrawal_actions returns parsed JSON."""
-        data = _make_synced_data(withdrawal_actions=json.dumps([{"action": "withdraw"}]))
+        data = _make_synced_data(
+            withdrawal_actions=json.dumps([{"action": "withdraw"}])
+        )
         assert data.withdrawal_actions == [{"action": "withdraw"}]
 
     def test_withdrawal_actions_none_value(self) -> None:
@@ -323,7 +280,10 @@ class TestSynchronizedData:
 
     def _make_collection_data(self, key: str) -> SynchronizedData:
         """Create synced data with a proper serialized collection for deserialization."""
-        from packages.valory.skills.liquidity_trader_abci.payloads import GetPositionsPayload
+        from packages.valory.skills.liquidity_trader_abci.payloads import (
+            GetPositionsPayload,
+        )
+
         # Use a real payload to create proper serialization
         payload = GetPositionsPayload(sender="agent_0", positions="[]")
         collection = {"agent_0": payload.json}

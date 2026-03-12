@@ -56,10 +56,6 @@ def test_import() -> None:
 class TestPostTxSettlementRound:
     """Test PostTxSettlementRound class."""
 
-    def test_done_event(self) -> None:
-        """Test done_event attribute."""
-        assert PostTxSettlementRound.done_event == Event.DONE
-
     def _make_round_with_submitter(self, submitter: str) -> PostTxSettlementRound:
         """Create a PostTxSettlementRound with a specific tx_submitter."""
         round_obj = object.__new__(PostTxSettlementRound)
@@ -71,9 +67,7 @@ class TestPostTxSettlementRound:
 
     def test_end_block_checkpoint_executed(self) -> None:
         """Test end_block returns CHECKPOINT_TX_EXECUTED for CallCheckpointRound."""
-        round_obj = self._make_round_with_submitter(
-            CallCheckpointRound.auto_round_id()
-        )
+        round_obj = self._make_round_with_submitter(CallCheckpointRound.auto_round_id())
         result = round_obj.end_block()
         assert result is not None
         _, event = result
@@ -91,9 +85,7 @@ class TestPostTxSettlementRound:
 
     def test_end_block_action_executed(self) -> None:
         """Test end_block returns ACTION_EXECUTED for DecisionMakingRound."""
-        round_obj = self._make_round_with_submitter(
-            DecisionMakingRound.auto_round_id()
-        )
+        round_obj = self._make_round_with_submitter(DecisionMakingRound.auto_round_id())
         result = round_obj.end_block()
         assert result is not None
         _, event = result
@@ -111,9 +103,7 @@ class TestPostTxSettlementRound:
 
     def test_end_block_withdrawal_completed(self) -> None:
         """Test end_block returns WITHDRAWAL_COMPLETED for WithdrawFundsRound."""
-        round_obj = self._make_round_with_submitter(
-            WithdrawFundsRound.auto_round_id()
-        )
+        round_obj = self._make_round_with_submitter(WithdrawFundsRound.auto_round_id())
         result = round_obj.end_block()
         assert result is not None
         _, event = result

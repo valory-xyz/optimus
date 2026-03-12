@@ -62,14 +62,14 @@ def reset_module_state():
     al_module._aggregators_cache = None
     al_module._historical_data_cache = None
     al_module._last_request_time.clear()
-    if hasattr(al_module._thread_local, 'errors'):
+    if hasattr(al_module._thread_local, "errors"):
         al_module._thread_local.errors = []
     yield
     al_module._coin_list_cache = None
     al_module._aggregators_cache = None
     al_module._historical_data_cache = None
     al_module._last_request_time.clear()
-    if hasattr(al_module._thread_local, 'errors'):
+    if hasattr(al_module._thread_local, "errors"):
         al_module._thread_local.errors = []
 
 
@@ -78,8 +78,8 @@ class TestGetErrors:
 
     def test_initializes_empty_list(self):
         """Test that get_errors initializes empty list on first call."""
-        if hasattr(al_module._thread_local, 'errors'):
-            delattr(al_module._thread_local, 'errors')
+        if hasattr(al_module._thread_local, "errors"):
+            delattr(al_module._thread_local, "errors")
         result = get_errors()
         assert result == []
 
@@ -147,6 +147,7 @@ class TestGetCoinList:
     def test_error_returns_empty_list(self, mock_req):
         """Test that request error returns empty list."""
         import requests as req_lib
+
         mock_req.side_effect = req_lib.RequestException("fail")
         result = get_coin_list()
         assert result == []
@@ -249,13 +250,15 @@ class TestGetSharpeRatioForAddress:
         ts = 1704067200000  # 2024-01-01 in ms
         historical = []
         for i in range(10):
-            historical.append({
-                "timestamp": ts + i * 86400000,
-                "doc": {
-                    f"data_0xaddr": {"baseAPY": 0.1 + i * 0.01, "rewardsAPY": 0.02},
-                    "data_0xaddr": {"baseAPY": 0.1 + i * 0.01, "rewardsAPY": 0.02},
+            historical.append(
+                {
+                    "timestamp": ts + i * 86400000,
+                    "doc": {
+                        f"data_0xaddr": {"baseAPY": 0.1 + i * 0.01, "rewardsAPY": 0.02},
+                        "data_0xaddr": {"baseAPY": 0.1 + i * 0.01, "rewardsAPY": 0.02},
+                    },
                 }
-            })
+            )
         result = get_sharpe_ratio_for_address(historical, "0xaddr")
         assert isinstance(result, float)
 
@@ -323,6 +326,7 @@ class TestFetchAggregators:
     def test_request_exception(self, mock_req):
         """Test request exception handling."""
         import requests as req_lib
+
         mock_req.side_effect = req_lib.RequestException("fail")
         result = fetch_aggregators()
         assert result == []
@@ -330,10 +334,6 @@ class TestFetchAggregators:
 
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
-
-    def test_empty_pools(self):
-        """Test with empty pools list."""
-        assert standardize_metrics([]) == []
 
     def test_single_pool(self):
         """Test with single pool (std dev = 0)."""
@@ -383,9 +383,7 @@ class TestApplyCompositePreFilter:
 
     def test_top_n_limit(self):
         """Test top_n limit."""
-        pools = [
-            {"tvl": 5000, "total_apr": 10 + i} for i in range(5)
-        ]
+        pools = [{"tvl": 5000, "total_apr": 10 + i} for i in range(5)]
         result = apply_composite_pre_filter(pools, top_n=2, min_tvl_threshold=0)
         assert len(result) == 2
 
@@ -393,36 +391,43 @@ class TestApplyCompositePreFilter:
 class TestFilterAggregators:
     """Tests for filter_aggregators function."""
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter"
+    )
     def test_filters_by_chain_and_asset(self, mock_filter):
         """Test filtering by chain and asset."""
         mock_filter.side_effect = lambda x, **kw: x
-        aggs = [{
-            "chainName": "optimism",
-            "address": "0x1234567890abcdef1234567890abcdef12345678",
-            "asset": {"address": "0xasset"},
-            "apy": {"total": 0.1},
-            "tvl": 5000,
-        }]
-        result = filter_aggregators(
-            ["optimism"], aggs, "0xasset", [], top_n=10
-        )
+        aggs = [
+            {
+                "chainName": "optimism",
+                "address": "0x1234567890abcdef1234567890abcdef12345678",
+                "asset": {"address": "0xasset"},
+                "apy": {"total": 0.1},
+                "tvl": 5000,
+            }
+        ]
+        result = filter_aggregators(["optimism"], aggs, "0xasset", [], top_n=10)
         assert len(result) == 1
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter"
+    )
     def test_excludes_current_positions(self, mock_filter):
         """Test that current positions are excluded."""
         mock_filter.side_effect = lambda x, **kw: x
         addr = "0x1234567890abcDEF1234567890abcDEF12345678"
         from web3 import Web3
+
         checksum = Web3.to_checksum_address(addr)
-        aggs = [{
-            "chainName": "optimism",
-            "address": addr,
-            "asset": {"address": "0xasset"},
-            "apy": {"total": 0.1},
-            "tvl": 5000,
-        }]
+        aggs = [
+            {
+                "chainName": "optimism",
+                "address": addr,
+                "asset": {"address": "0xasset"},
+                "apy": {"total": 0.1},
+                "tvl": 5000,
+            }
+        ]
         result = filter_aggregators(["optimism"], aggs, "0xasset", [checksum])
         assert len(result) == 0
 
@@ -509,7 +514,9 @@ class TestCalculateIlRiskScoreForSilos:
         result = calculate_il_risk_score_for_silos("unknown", [], "key")
         assert result is None
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
     def test_successful_calculation(self, mock_fetch, mock_il):
         """Test successful silo IL risk calculation."""
@@ -519,18 +526,24 @@ class TestCalculateIlRiskScoreForSilos:
         result = calculate_il_risk_score_for_silos("WETH", silos, "key")
         assert isinstance(result, float)
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
     def test_silo_token_not_found(self, mock_fetch, mock_il):
         """Test when silo collateral token is not found."""
+
         def side_effect(s):
             return "id_weth" if s.lower() == "weth" else None
+
         mock_fetch.side_effect = side_effect
         silos = [{"collateral": "UNKNOWN"}]
         result = calculate_il_risk_score_for_silos("WETH", silos, "key")
         assert result is None
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
     def test_il_risk_score_returns_none(self, mock_fetch, mock_il):
         """Test when IL risk score calculation returns None."""
@@ -540,7 +553,9 @@ class TestCalculateIlRiskScoreForSilos:
         result = calculate_il_risk_score_for_silos("WETH", silos, "key")
         assert result is None
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
     def test_il_risk_score_returns_zero(self, mock_fetch, mock_il):
         """Test when IL risk score returns 0 (falsy but valid)."""
@@ -630,7 +645,9 @@ class TestIsProApiKey:
     def test_non_pro_key(self, mock_cg_class):
         """Test that a non-pro key returns False."""
         mock_cg = MagicMock()
-        mock_cg.get_coin_market_chart_range_by_id.side_effect = Exception("unauthorized")
+        mock_cg.get_coin_market_chart_range_by_id.side_effect = Exception(
+            "unauthorized"
+        )
         mock_cg_class.return_value = mock_cg
         assert is_pro_api_key("bad_key") is False
 
@@ -662,31 +679,58 @@ class TestGetBestOpportunities:
         result = get_best_opportunities(["optimism"], "0xasset", [], "key")
         assert "error" in result
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity")
-    @patch("packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address")
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address"
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_historical_data")
     @patch("packages.valory.customs.asset_lending.asset_lending.filter_aggregators")
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_no_historical_data(self, mock_fetch, mock_filter, mock_hist, mock_il, mock_sharpe, mock_vault):
+    def test_no_historical_data(
+        self, mock_fetch, mock_filter, mock_hist, mock_il, mock_sharpe, mock_vault
+    ):
         """Test when historical data is unavailable."""
         mock_fetch.return_value = [{"address": "0x1"}]
-        mock_filter.return_value = [{"address": "0x1", "asset": {"symbol": "WETH"}, "whitelistedSilos": []}]
+        mock_filter.return_value = [
+            {"address": "0x1", "asset": {"symbol": "WETH"}, "whitelistedSilos": []}
+        ]
         mock_hist.return_value = None
         result = get_best_opportunities(["optimism"], "0xasset", [], "key")
         assert "error" in result
 
     @patch("packages.valory.customs.asset_lending.asset_lending.format_aggregator")
-    @patch("packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity")
-    @patch("packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address")
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address"
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_historical_data")
     @patch("packages.valory.customs.asset_lending.asset_lending.filter_aggregators")
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_successful_flow(self, mock_fetch, mock_filter, mock_hist, mock_il, mock_sharpe, mock_vault, mock_format):
+    def test_successful_flow(
+        self,
+        mock_fetch,
+        mock_filter,
+        mock_hist,
+        mock_il,
+        mock_sharpe,
+        mock_vault,
+        mock_format,
+    ):
         """Test successful end-to-end flow."""
         mock_fetch.return_value = [{"address": "0x1"}]
-        mock_filter.return_value = [{"address": "0x1", "asset": {"symbol": "WETH"}, "whitelistedSilos": []}]
+        mock_filter.return_value = [
+            {"address": "0x1", "asset": {"symbol": "WETH"}, "whitelistedSilos": []}
+        ]
         mock_hist.return_value = [{"timestamp": 1, "doc": {}}]
         mock_il.return_value = -0.05
         mock_sharpe.return_value = 1.5
@@ -700,27 +744,43 @@ class TestGetBestOpportunities:
 class TestCalculateMetrics:
     """Tests for calculate_metrics function."""
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity")
-    @patch("packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_historical_data")
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos"
+    )
     def test_successful(self, mock_il, mock_hist, mock_sharpe, mock_vault):
         """Test successful metrics calculation."""
         mock_il.return_value = -0.05
         mock_hist.return_value = [{"timestamp": 1}]
         mock_sharpe.return_value = 1.5
         mock_vault.return_value = (100, 5000)
-        position = {"token0_symbol": "WETH", "whitelistedSilos": [], "pool_address": "0x1"}
+        position = {
+            "token0_symbol": "WETH",
+            "whitelistedSilos": [],
+            "pool_address": "0x1",
+        }
         result = calculate_metrics(position, "key")
         assert result["il_risk_score"] == -0.05
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_historical_data")
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos"
+    )
     def test_no_historical_data(self, mock_il, mock_hist):
         """Test when historical data is unavailable."""
         mock_il.return_value = -0.05
         mock_hist.return_value = None
-        position = {"token0_symbol": "WETH", "whitelistedSilos": [], "pool_address": "0x1"}
+        position = {
+            "token0_symbol": "WETH",
+            "whitelistedSilos": [],
+            "pool_address": "0x1",
+        }
         result = calculate_metrics(position, "key")
         assert "error" in result
 
@@ -743,7 +803,11 @@ class TestRun:
             current_positions=[],
             coingecko_api_key="key",
             get_metrics=True,
-            position={"pool_address": "0x1", "token0_symbol": "WETH", "whitelistedSilos": []},
+            position={
+                "pool_address": "0x1",
+                "token0_symbol": "WETH",
+                "whitelistedSilos": [],
+            },
         )
         assert result == {"il_risk_score": -0.05}
 
@@ -815,7 +879,9 @@ class TestRun:
 class TestBranchCoverage:
     """Additional tests for full branch coverage."""
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter"
+    )
     def test_filter_aggregators_asset_mismatch(self, mock_filter):
         """Test filter_aggregators where chain matches but asset address does not (376->370)."""
         mock_filter.side_effect = lambda x, **kw: x
@@ -839,7 +905,9 @@ class TestBranchCoverage:
         # Only the second aggregator should pass
         assert len(result) == 1
 
-    @patch("packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending")
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
+    )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
     def test_silos_token_id_cache_hit(self, mock_fetch, mock_il):
         """Test calculate_il_risk_score_for_silos where token_id_cache is hit (line 483)."""

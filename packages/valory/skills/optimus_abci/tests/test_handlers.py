@@ -26,48 +26,16 @@ import math
 from typing import Dict
 from unittest.mock import MagicMock, PropertyMock, patch
 
-from packages.valory.skills.abstract_round_abci.handlers import (
-    ABCIRoundHandler as BaseABCIRoundHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    ContractApiHandler as BaseContractApiHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    LedgerApiHandler as BaseLedgerApiHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    SigningHandler as BaseSigningHandler,
-)
-from packages.valory.skills.abstract_round_abci.handlers import (
-    TendermintHandler as BaseTendermintHandler,
-)
-from packages.valory.skills.liquidity_trader_abci.handlers import (
-    IpfsHandler as BaseIpfsHandler,
-)
 from packages.valory.skills.optimus_abci.handlers import (
-    ABCIHandler,
-    AVERAGE_PERIOD_SECONDS,
-    BAD_REQUEST_CODE,
-    BaseHandler,
-    ContractApiHandler,
     ESTIMATED_GAS_PER_TX,
+    BaseHandler,
     HttpCode,
     HttpHandler,
-    HttpMethod,
-    IpfsHandler,
     KvStoreHandler,
-    LedgerApiHandler,
     MODIUS_AGENT_PROFILE_PATH,
-    NOT_FOUND_CODE,
     OK_CODE,
     OPTIMUS_AGENT_PROFILE_PATH,
-    PROTOCOL_DEFINITIONS,
-    PROTOCOL_TO_STRATEGY,
-    STRATEGY_TO_PROTOCOL,
-    SigningHandler,
     SrrHandler,
-    TendermintHandler,
-    USDC_ADDRESSES,
     camel_to_snake,
     load_fsm_spec,
 )
@@ -76,111 +44,6 @@ from packages.valory.skills.optimus_abci.handlers import (
 def test_import() -> None:
     """Test that the handlers module can be imported."""
     import packages.valory.skills.optimus_abci.handlers  # noqa
-
-
-# --- Handler alias tests ---
-
-
-def test_abci_handler_alias() -> None:
-    """Test ABCIHandler is an alias."""
-    assert ABCIHandler is BaseABCIRoundHandler
-
-
-def test_signing_handler_alias() -> None:
-    """Test SigningHandler is an alias."""
-    assert SigningHandler is BaseSigningHandler
-
-
-def test_ledger_api_handler_alias() -> None:
-    """Test LedgerApiHandler is an alias."""
-    assert LedgerApiHandler is BaseLedgerApiHandler
-
-
-def test_contract_api_handler_alias() -> None:
-    """Test ContractApiHandler is an alias."""
-    assert ContractApiHandler is BaseContractApiHandler
-
-
-def test_tendermint_handler_alias() -> None:
-    """Test TendermintHandler is an alias."""
-    assert TendermintHandler is BaseTendermintHandler
-
-
-def test_ipfs_handler_alias() -> None:
-    """Test IpfsHandler is an alias."""
-    assert IpfsHandler is BaseIpfsHandler
-
-
-# --- Constants tests ---
-
-
-def test_ok_code() -> None:
-    """Test OK_CODE constant."""
-    assert OK_CODE == 200
-
-
-def test_not_found_code() -> None:
-    """Test NOT_FOUND_CODE constant."""
-    assert NOT_FOUND_CODE == 404
-
-
-def test_bad_request_code() -> None:
-    """Test BAD_REQUEST_CODE constant."""
-    assert BAD_REQUEST_CODE == 400
-
-
-def test_average_period_seconds() -> None:
-    """Test AVERAGE_PERIOD_SECONDS constant."""
-    assert AVERAGE_PERIOD_SECONDS == 10
-
-
-def test_estimated_gas_per_tx() -> None:
-    """Test ESTIMATED_GAS_PER_TX constant."""
-    assert ESTIMATED_GAS_PER_TX == 1000000000000
-
-
-def test_usdc_addresses() -> None:
-    """Test USDC_ADDRESSES dict."""
-    assert "optimism" in USDC_ADDRESSES
-    assert USDC_ADDRESSES["optimism"] == "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
-
-
-def test_modius_agent_profile_path() -> None:
-    """Test MODIUS_AGENT_PROFILE_PATH constant."""
-    assert MODIUS_AGENT_PROFILE_PATH == "modius-ui-build"
-
-
-def test_optimus_agent_profile_path() -> None:
-    """Test OPTIMUS_AGENT_PROFILE_PATH constant."""
-    assert OPTIMUS_AGENT_PROFILE_PATH == "optimus-ui-build"
-
-
-# --- Mapping tests ---
-
-
-def test_strategy_to_protocol() -> None:
-    """Test STRATEGY_TO_PROTOCOL mapping."""
-    assert STRATEGY_TO_PROTOCOL == {
-        "balancer_pools_search": "balancerPool",
-        "asset_lending": "sturdy",
-        "uniswap_pools_search": "uniswapV3",
-        "velodrome_pools_search": "velodrome",
-    }
-
-
-def test_protocol_to_strategy() -> None:
-    """Test PROTOCOL_TO_STRATEGY is the reverse mapping."""
-    for strategy, protocol in STRATEGY_TO_PROTOCOL.items():
-        assert PROTOCOL_TO_STRATEGY[protocol] == strategy
-
-
-def test_protocol_definitions() -> None:
-    """Test PROTOCOL_DEFINITIONS has entries for all protocols."""
-    for protocol in STRATEGY_TO_PROTOCOL.values():
-        assert protocol in PROTOCOL_DEFINITIONS
-
-
-# --- Utility function tests ---
 
 
 def test_camel_to_snake_simple() -> None:
@@ -214,48 +77,6 @@ def test_load_fsm_spec() -> None:
     assert isinstance(spec, dict)
     assert "transition_func" in spec
     assert "alphabet_in" in spec
-
-
-# --- Enum tests ---
-
-
-class TestHttpCode:
-    """Test HttpCode enum."""
-
-    def test_ok_code(self) -> None:
-        """Test OK_CODE value."""
-        assert HttpCode.OK_CODE.value == 200
-
-    def test_not_found_code(self) -> None:
-        """Test NOT_FOUND_CODE value."""
-        assert HttpCode.NOT_FOUND_CODE.value == 404
-
-    def test_bad_request_code(self) -> None:
-        """Test BAD_REQUEST_CODE value."""
-        assert HttpCode.BAD_REQUEST_CODE.value == 400
-
-    def test_not_ready(self) -> None:
-        """Test NOT_READY value."""
-        assert HttpCode.NOT_READY.value == 503
-
-
-class TestHttpMethod:
-    """Test HttpMethod enum."""
-
-    def test_get(self) -> None:
-        """Test GET value."""
-        assert HttpMethod.GET.value == "get"
-
-    def test_head(self) -> None:
-        """Test HEAD value."""
-        assert HttpMethod.HEAD.value == "head"
-
-    def test_post(self) -> None:
-        """Test POST value."""
-        assert HttpMethod.POST.value == "post"
-
-
-# --- BaseHandler tests ---
 
 
 def _make_concrete_base_handler():
@@ -342,9 +163,6 @@ class TestBaseHandler:
         # cleanup_dialogues is not called because 99 % 100 != 0
 
 
-# --- KvStoreHandler tests ---
-
-
 class TestKvStoreHandler:
     """Test KvStoreHandler class."""
 
@@ -414,9 +232,7 @@ class TestKvStoreHandler:
         msg.performative = KvStoreMessage.Performative.SUCCESS
         msg.dialogue_reference = ("nonce_missing", "")
 
-        with patch.object(
-            KvStoreHandler.__bases__[0], "handle"
-        ) as mock_super_handle:
+        with patch.object(KvStoreHandler.__bases__[0], "handle") as mock_super_handle:
             handler.handle(msg)
             mock_super_handle.assert_called_once()
 
@@ -451,14 +267,9 @@ class TestKvStoreHandler:
         msg = MagicMock()
         msg.performative = KvStoreMessage.Performative.ERROR
 
-        with patch.object(
-            KvStoreHandler.__bases__[0], "handle"
-        ) as mock_super_handle:
+        with patch.object(KvStoreHandler.__bases__[0], "handle") as mock_super_handle:
             handler.handle(msg)
             mock_super_handle.assert_called_once()
-
-
-# --- SrrHandler tests ---
 
 
 class TestSrrHandler:
@@ -528,14 +339,9 @@ class TestSrrHandler:
         msg.performative = SrrMessage.Performative.RESPONSE
         msg.dialogue_reference = ("no_such_nonce", "")
 
-        with patch.object(
-            SrrHandler.__bases__[0], "handle"
-        ) as mock_super_handle:
+        with patch.object(SrrHandler.__bases__[0], "handle") as mock_super_handle:
             handler.handle(msg)
             mock_super_handle.assert_called_once()
-
-
-# --- HttpHandler method tests ---
 
 
 def _make_http_handler():
@@ -945,7 +751,10 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.db.get.return_value = json.dumps(actions)
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             result = handler._get_withdrawal_actions()
         assert result == actions
@@ -956,7 +765,10 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.db.get.return_value = "[]"
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             result = handler._get_withdrawal_actions()
         assert result == []
@@ -967,7 +779,10 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.db.get.side_effect = Exception("DB error")
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             result = handler._get_withdrawal_actions()
         assert result == []
@@ -978,7 +793,10 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.db.get.return_value = None
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             result = handler._get_withdrawal_actions()
         assert result == []
@@ -1222,9 +1040,7 @@ class TestHttpHandlerMethods:
         mock_msg.headers = "Host: localhost"
         mock_dialogue = MagicMock()
 
-        handler._send_ok_response(
-            mock_msg, mock_dialogue, b"\x89PNG", "image/png"
-        )
+        handler._send_ok_response(mock_msg, mock_dialogue, b"\x89PNG", "image/png")
 
         mock_dialogue.reply.assert_called_once()
         call_kwargs = mock_dialogue.reply.call_args[1]
@@ -1253,9 +1069,7 @@ class TestHttpHandlerMethods:
         mock_msg.headers = "Host: localhost"
         mock_dialogue = MagicMock()
 
-        handler._send_ok_response(
-            mock_msg, mock_dialogue, "<html></html>", "text/html"
-        )
+        handler._send_ok_response(mock_msg, mock_dialogue, "<html></html>", "text/html")
 
         mock_dialogue.reply.assert_called_once()
         call_kwargs = mock_dialogue.reply.call_args[1]
@@ -1357,6 +1171,7 @@ class TestHttpHandlerMethods:
         from packages.valory.skills.funds_manager.behaviours import (
             GET_FUNDS_STATUS_METHOD_NAME,
         )
+
         mock_fn = MagicMock()
         ctx.shared_state = {GET_FUNDS_STATUS_METHOD_NAME: mock_fn}
         result = handler.funds_status
@@ -1481,9 +1296,7 @@ class TestHttpHandlerMethods:
     def test_get_nonce_and_gas_web3_exception(self) -> None:
         """Test _get_nonce_and_gas_web3 returns None, None on exception."""
         handler, ctx = _make_http_handler()
-        handler._get_web3_instance = MagicMock(
-            side_effect=Exception("Nonce error")
-        )
+        handler._get_web3_instance = MagicMock(side_effect=Exception("Nonce error"))
         nonce, gas = handler._get_nonce_and_gas_web3("0xaddr", "optimism")
         assert nonce is None
         assert gas is None
@@ -1498,9 +1311,7 @@ class TestHttpHandlerMethods:
     def test_sign_and_submit_tx_web3_exception(self) -> None:
         """Test _sign_and_submit_tx_web3 returns None on exception."""
         handler, ctx = _make_http_handler()
-        handler._get_web3_instance = MagicMock(
-            side_effect=Exception("Submit error")
-        )
+        handler._get_web3_instance = MagicMock(side_effect=Exception("Submit error"))
         result = handler._sign_and_submit_tx_web3({}, "optimism", MagicMock())
         assert result is None
 
@@ -1536,9 +1347,7 @@ class TestHttpHandlerMethods:
     def test_check_transaction_status_exception(self) -> None:
         """Test _check_transaction_status returns False on exception."""
         handler, ctx = _make_http_handler()
-        handler._get_web3_instance = MagicMock(
-            side_effect=Exception("Timeout")
-        )
+        handler._get_web3_instance = MagicMock(side_effect=Exception("Timeout"))
         result = handler._check_transaction_status("0xhash", "optimism")
         assert result is False
 
@@ -1546,7 +1355,9 @@ class TestHttpHandlerMethods:
         """Test _estimate_gas returns False when no web3."""
         handler, ctx = _make_http_handler()
         handler._get_web3_instance = MagicMock(return_value=None)
-        result = handler._estimate_gas({"value": "0x0", "to": "0x0", "data": "0x"}, "0xaddr", "optimism")
+        result = handler._estimate_gas(
+            {"value": "0x0", "to": "0x0", "data": "0x"}, "0xaddr", "optimism"
+        )
         assert result is False
 
     def test_estimate_gas_exception_return_amount(self) -> None:
@@ -1671,7 +1482,9 @@ class TestHttpHandlerMethods:
             "packages.valory.skills.optimus_abci.handlers.requests.get",
             return_value=mock_response,
         ):
-            result = handler._get_lifi_quote_sync("0xaddr", "optimism", "0xusdc", "1000")
+            result = handler._get_lifi_quote_sync(
+                "0xaddr", "optimism", "0xusdc", "1000"
+            )
         assert result == {"quote": "data"}
 
     def test_get_lifi_quote_sync_non_200(self) -> None:
@@ -1686,7 +1499,9 @@ class TestHttpHandlerMethods:
             "packages.valory.skills.optimus_abci.handlers.requests.get",
             return_value=mock_response,
         ):
-            result = handler._get_lifi_quote_sync("0xaddr", "optimism", "0xusdc", "1000")
+            result = handler._get_lifi_quote_sync(
+                "0xaddr", "optimism", "0xusdc", "1000"
+            )
         assert result is None
 
     def test_get_lifi_quote_sync_exception(self) -> None:
@@ -1699,7 +1514,9 @@ class TestHttpHandlerMethods:
             "packages.valory.skills.optimus_abci.handlers.requests.get",
             side_effect=Exception("Network error"),
         ):
-            result = handler._get_lifi_quote_sync("0xaddr", "optimism", "0xusdc", "1000")
+            result = handler._get_lifi_quote_sync(
+                "0xaddr", "optimism", "0xusdc", "1000"
+            )
         assert result is None
 
     def test_check_usdc_balance_success(self) -> None:
@@ -1710,7 +1527,9 @@ class TestHttpHandlerMethods:
         mock_contract.functions.balanceOf.return_value.call.return_value = 1000000
         mock_w3.eth.contract.return_value = mock_contract
         handler._get_web3_instance = MagicMock(return_value=mock_w3)
-        with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3_cls:
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.Web3"
+        ) as mock_web3_cls:
             mock_web3_cls.to_checksum_address = lambda x: x
             result = handler._check_usdc_balance("0xaddr", "optimism", "0xusdc")
         assert result == 1000000
@@ -1722,7 +1541,9 @@ class TestHttpHandlerMethods:
         mock_w3.eth.get_transaction_count.return_value = 42
         mock_w3.eth.gas_price = 1000000000
         handler._get_web3_instance = MagicMock(return_value=mock_w3)
-        with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3_cls:
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.Web3"
+        ) as mock_web3_cls:
             mock_web3_cls.to_checksum_address = lambda x: x
             nonce, gas = handler._get_nonce_and_gas_web3("0xaddr", "optimism")
         assert nonce == 42
@@ -1739,7 +1560,9 @@ class TestHttpHandlerMethods:
         mock_account = MagicMock()
         mock_signed = MagicMock()
         mock_account.sign_transaction.return_value = mock_signed
-        result = handler._sign_and_submit_tx_web3({"data": "0x"}, "optimism", mock_account)
+        result = handler._sign_and_submit_tx_web3(
+            {"data": "0x"}, "optimism", mock_account
+        )
         assert result == "0xdeadbeef"
 
     def test_get_eoa_account_with_password_success(self) -> None:
@@ -1764,6 +1587,7 @@ class TestHttpHandlerMethods:
     def test_handle_main_not_request(self) -> None:
         """Test handle when message is not a REQUEST."""
         from packages.valory.protocols.http.message import HttpMessage
+
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)
         msg.performative = HttpMessage.Performative.RESPONSE
@@ -1774,6 +1598,7 @@ class TestHttpHandlerMethods:
     def test_handle_main_wrong_sender(self) -> None:
         """Test handle when sender is not http_server."""
         from packages.valory.protocols.http.message import HttpMessage
+
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)
         msg.performative = HttpMessage.Performative.REQUEST
@@ -1785,7 +1610,10 @@ class TestHttpHandlerMethods:
     def test_handle_main_no_handler_found(self) -> None:
         """Test handle when no handler is found for URL."""
         from packages.valory.protocols.http.message import HttpMessage
-        from packages.valory.connections.http_server.connection import PUBLIC_ID as HTTP_SERVER_PUBLIC_ID
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)
         msg.performative = HttpMessage.Performative.REQUEST
@@ -1800,7 +1628,10 @@ class TestHttpHandlerMethods:
     def test_handle_main_invalid_dialogue(self) -> None:
         """Test handle when dialogue update returns None."""
         from packages.valory.protocols.http.message import HttpMessage
-        from packages.valory.connections.http_server.connection import PUBLIC_ID as HTTP_SERVER_PUBLIC_ID
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)
         msg.performative = HttpMessage.Performative.REQUEST
@@ -1814,7 +1645,10 @@ class TestHttpHandlerMethods:
     def test_handle_main_valid_route(self) -> None:
         """Test handle calls the route handler for valid request."""
         from packages.valory.protocols.http.message import HttpMessage
-        from packages.valory.connections.http_server.connection import PUBLIC_ID as HTTP_SERVER_PUBLIC_ID
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)
         msg.performative = HttpMessage.Performative.REQUEST
@@ -1823,7 +1657,9 @@ class TestHttpHandlerMethods:
         msg.method = "get"
         msg.body = b""
         mock_route_handler = MagicMock()
-        handler._get_handler = MagicMock(return_value=(mock_route_handler, {"key": "val"}))
+        handler._get_handler = MagicMock(
+            return_value=(mock_route_handler, {"key": "val"})
+        )
         mock_dialogue = MagicMock()
         ctx.http_dialogues.update.return_value = mock_dialogue
         handler.handle(msg)
@@ -1834,7 +1670,9 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         ctx.state.selected_protocols = json.dumps(["balancer_pools_search"])
         ctx.state.trading_type = "balanced"
@@ -1849,7 +1687,9 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         ctx.state.selected_protocols = None
         ctx.state.trading_type = None
@@ -1862,7 +1702,9 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         ctx.state.selected_protocols = ["velodrome_pools_search"]
         ctx.state.trading_type = ""
@@ -1877,7 +1719,9 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         ctx.state.selected_protocols = None
         ctx.state.trading_type = "balanced"
@@ -1889,6 +1733,7 @@ class TestHttpHandlerMethods:
     def test_handle_get_health(self) -> None:
         """Test _handle_get_health returns health data."""
         from datetime import datetime
+
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         mock_round_seq = MagicMock()
@@ -1904,7 +1749,10 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.period_count = 5
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             handler._handle_get_health(MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
@@ -1921,7 +1769,10 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.period_count = 0
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             handler._handle_get_health(MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
@@ -1939,14 +1790,21 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.period_count = 0
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             handler._handle_get_health(MagicMock(), MagicMock())
-        assert handler.rounds_info["evaluate_strategy_round"]["description"] == "New strategy reasoning"
+        assert (
+            handler.rounds_info["evaluate_strategy_round"]["description"]
+            == "New strategy reasoning"
+        )
 
     def test_handle_get_health_slow_transition(self) -> None:
         """Test _handle_get_health when transition is slow."""
         from datetime import datetime
+
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         mock_round_seq = MagicMock()
@@ -1960,13 +1818,17 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.period_count = 0
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             handler._handle_get_health(MagicMock(), MagicMock())
 
     def test_handle_get_health_tm_unhealthy(self) -> None:
         """Test _handle_get_health when TM is unhealthy."""
         from datetime import datetime
+
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         mock_round_seq = MagicMock()
@@ -1979,7 +1841,10 @@ class TestHttpHandlerMethods:
         mock_synced = MagicMock()
         mock_synced.period_count = 0
         with patch.object(
-            type(handler), "synchronized_data", new_callable=PropertyMock, return_value=mock_synced
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
         ):
             handler._handle_get_health(MagicMock(), MagicMock())
 
@@ -1994,9 +1859,13 @@ class TestHttpHandlerMethods:
         mock_path.exists.return_value = True
         mock_path.is_file.return_value = True
         mock_path.suffix = ".css"
-        with patch("packages.valory.skills.optimus_abci.handlers.Path", return_value=mock_path), \
-             patch("packages.valory.skills.optimus_abci.handlers.urlparse") as mock_urlparse, \
-             patch("builtins.open", MagicMock()):
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.Path", return_value=mock_path
+        ), patch(
+            "packages.valory.skills.optimus_abci.handlers.urlparse"
+        ) as mock_urlparse, patch(
+            "builtins.open", MagicMock()
+        ):
             mock_urlparse.return_value.path = "/style.css"
             handler._handle_get_static_file(mock_msg, mock_dialogue)
         handler._send_ok_response.assert_called_once()
@@ -2008,8 +1877,11 @@ class TestHttpHandlerMethods:
         mock_msg = MagicMock()
         mock_msg.url = "http://localhost:8000/nonexistent"
         mock_dialogue = MagicMock()
-        with patch("packages.valory.skills.optimus_abci.handlers.urlparse") as mock_urlparse, \
-             patch("packages.valory.skills.optimus_abci.handlers.Path") as mock_path_cls:
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.urlparse"
+        ) as mock_urlparse, patch(
+            "packages.valory.skills.optimus_abci.handlers.Path"
+        ) as mock_path_cls:
             mock_urlparse.return_value.path = "/nonexistent"
             mock_path_instance = MagicMock()
             mock_path_instance.exists.return_value = False
@@ -2026,9 +1898,13 @@ class TestHttpHandlerMethods:
         mock_msg = MagicMock()
         mock_msg.url = "http://localhost:8000/"
         mock_dialogue = MagicMock()
-        with patch("packages.valory.skills.optimus_abci.handlers.urlparse") as mock_urlparse, \
-             patch("packages.valory.skills.optimus_abci.handlers.Path") as mock_path_cls, \
-             patch("builtins.open", MagicMock()):
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.urlparse"
+        ) as mock_urlparse, patch(
+            "packages.valory.skills.optimus_abci.handlers.Path"
+        ) as mock_path_cls, patch(
+            "builtins.open", MagicMock()
+        ):
             mock_urlparse.return_value.path = "/"
             mock_path_instance = MagicMock()
             mock_path_instance.exists.return_value = True
@@ -2044,9 +1920,14 @@ class TestHttpHandlerMethods:
         handler._handle_not_found = MagicMock()
         mock_msg = MagicMock()
         mock_msg.url = "http://localhost:8000/missing.txt"
-        with patch("packages.valory.skills.optimus_abci.handlers.urlparse") as mock_urlparse:
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.urlparse"
+        ) as mock_urlparse:
             mock_urlparse.return_value.path = "/missing.txt"
-            with patch("packages.valory.skills.optimus_abci.handlers.Path", side_effect=FileNotFoundError("not found")):
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.Path",
+                side_effect=FileNotFoundError("not found"),
+            ):
                 handler._handle_get_static_file(mock_msg, MagicMock())
         handler._handle_not_found.assert_called_once()
 
@@ -2056,9 +1937,14 @@ class TestHttpHandlerMethods:
         handler._handle_not_found = MagicMock()
         mock_msg = MagicMock()
         mock_msg.url = "http://localhost:8000/error"
-        with patch("packages.valory.skills.optimus_abci.handlers.urlparse") as mock_urlparse:
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.urlparse"
+        ) as mock_urlparse:
             mock_urlparse.return_value.path = "/error"
-            with patch("packages.valory.skills.optimus_abci.handlers.Path", side_effect=Exception("error")):
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.Path",
+                side_effect=Exception("error"),
+            ):
                 handler._handle_get_static_file(mock_msg, MagicMock())
         handler._handle_not_found.assert_called_once()
 
@@ -2188,12 +2074,8 @@ class TestHttpHandlerMethods:
         with patch(
             "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
             return_value=["balancerPool"],
-        ), patch(
-            "packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"
-        ):
-            handler._handle_llm_response(
-                llm_msg, MagicMock(), MagicMock(), MagicMock()
-            )
+        ), patch("packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"):
+            handler._handle_llm_response(llm_msg, MagicMock(), MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
 
     def test_handle_llm_response_error(self) -> None:
@@ -2204,9 +2086,7 @@ class TestHttpHandlerMethods:
         llm_msg = MagicMock()
         llm_msg.payload = json.dumps({"error": "API rate limit exceeded"})
 
-        handler._handle_llm_response(
-            llm_msg, MagicMock(), MagicMock(), MagicMock()
-        )
+        handler._handle_llm_response(llm_msg, MagicMock(), MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
         call_args = handler._send_ok_response.call_args[0]
         assert "error" in call_args[2]
@@ -2219,9 +2099,7 @@ class TestHttpHandlerMethods:
         llm_msg = MagicMock()
         llm_msg.payload = "not valid json"
 
-        handler._handle_llm_response(
-            llm_msg, MagicMock(), MagicMock(), MagicMock()
-        )
+        handler._handle_llm_response(llm_msg, MagicMock(), MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
 
     def test_handle_llm_response_generic_exception(self) -> None:
@@ -2232,9 +2110,7 @@ class TestHttpHandlerMethods:
         llm_msg = MagicMock()
         llm_msg.payload = json.dumps({"response": "invalid json {"})
 
-        handler._handle_llm_response(
-            llm_msg, MagicMock(), MagicMock(), MagicMock()
-        )
+        handler._handle_llm_response(llm_msg, MagicMock(), MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
 
     def test_handle_llm_response_filtered_protocols(self) -> None:
@@ -2258,12 +2134,8 @@ class TestHttpHandlerMethods:
         with patch(
             "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
             return_value=["balancerPool"],
-        ), patch(
-            "packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"
-        ):
-            handler._handle_llm_response(
-                llm_msg, MagicMock(), MagicMock(), MagicMock()
-            )
+        ), patch("packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"):
+            handler._handle_llm_response(llm_msg, MagicMock(), MagicMock(), MagicMock())
 
     def test_fallback_to_previous_strategy_with_loss(self) -> None:
         """Test _fallback_to_previous_strategy_with_loss."""
@@ -2357,7 +2229,9 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         ctx.params.target_investment_chains = ["optimism"]
         portfolio = {
@@ -2367,7 +2241,9 @@ class TestHttpHandlerMethods:
                 {"asset": "USDC", "balance": 1000.0, "value_usd": 1000.0},
             ]
         }
-        with patch("builtins.open", MagicMock()), patch("json.load", return_value=portfolio):
+        with patch("builtins.open", MagicMock()), patch(
+            "json.load", return_value=portfolio
+        ):
             handler._handle_get_withdrawal_amount(MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
         call_data = handler._send_ok_response.call_args[0][2]
@@ -2379,7 +2255,9 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         with patch("builtins.open", side_effect=FileNotFoundError("not found")):
             handler._handle_get_withdrawal_amount(MagicMock(), MagicMock())
@@ -2395,14 +2273,16 @@ class TestHttpHandlerMethods:
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.safe_contract_addresses = {"optimism": "0xsafe"}
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         portfolio = {"portfolio_value": 1000}
         mock_msg = MagicMock()
         mock_msg.body = json.dumps({"target_address": "0x" + "a" * 40}).encode()
-        with patch("builtins.open", MagicMock()), \
-             patch("json.load", return_value=portfolio), \
-             patch("packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"):
+        with patch("builtins.open", MagicMock()), patch(
+            "json.load", return_value=portfolio
+        ), patch("packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"):
             handler._handle_post_withdrawal_initiate(mock_msg, MagicMock())
         handler._send_ok_response.assert_called_once()
 
@@ -2430,12 +2310,16 @@ class TestHttpHandlerMethods:
         handler._send_ok_response = MagicMock()
         handler._is_valid_ethereum_address = MagicMock(return_value=True)
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         portfolio = {"portfolio_value": 0}
         mock_msg = MagicMock()
         mock_msg.body = json.dumps({"target_address": "0x" + "a" * 40}).encode()
-        with patch("builtins.open", MagicMock()), patch("json.load", return_value=portfolio):
+        with patch("builtins.open", MagicMock()), patch(
+            "json.load", return_value=portfolio
+        ):
             handler._handle_post_withdrawal_initiate(mock_msg, MagicMock())
         call_data = handler._send_ok_response.call_args[0][2]
         assert "error" in call_data
@@ -2446,7 +2330,9 @@ class TestHttpHandlerMethods:
         handler._send_ok_response = MagicMock()
         handler._is_valid_ethereum_address = MagicMock(return_value=True)
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/portfolio.json")
+        ctx.params.store_path.__truediv__ = MagicMock(
+            return_value="/tmp/portfolio.json"
+        )
         ctx.params.portfolio_info_filename = "portfolio.json"
         mock_msg = MagicMock()
         mock_msg.body = json.dumps({"target_address": "0x" + "a" * 40}).encode()
@@ -2469,14 +2355,16 @@ class TestHttpHandlerMethods:
         """Test _handle_get_withdrawal_status when withdrawal found."""
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
-        handler._read_withdrawal_data = MagicMock(return_value={
-            "withdrawal_id": "abc-123",
-            "withdrawal_status": "INITIATED",
-            "withdrawal_message": "Processing",
-            "withdrawal_chain": "optimism",
-            "withdrawal_requested_at": "1234567890",
-            "withdrawal_estimated_value_usd": "1000",
-        })
+        handler._read_withdrawal_data = MagicMock(
+            return_value={
+                "withdrawal_id": "abc-123",
+                "withdrawal_status": "INITIATED",
+                "withdrawal_message": "Processing",
+                "withdrawal_chain": "optimism",
+                "withdrawal_requested_at": "1234567890",
+                "withdrawal_estimated_value_usd": "1000",
+            }
+        )
         handler._handle_get_withdrawal_status(MagicMock(), MagicMock(), "abc-123")
         handler._send_ok_response.assert_called_once()
 
@@ -2484,16 +2372,18 @@ class TestHttpHandlerMethods:
         """Test _handle_get_withdrawal_status when withdrawal is completed."""
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
-        handler._read_withdrawal_data = MagicMock(return_value={
-            "withdrawal_id": "abc-123",
-            "withdrawal_status": "COMPLETED",
-            "withdrawal_message": "Done",
-            "withdrawal_chain": "optimism",
-            "withdrawal_requested_at": "1234567890",
-            "withdrawal_estimated_value_usd": "1000",
-            "withdrawal_completed_at": "1234567891",
-            "withdrawal_transaction_hashes": json.dumps(["0xhash1", "0xhash2"]),
-        })
+        handler._read_withdrawal_data = MagicMock(
+            return_value={
+                "withdrawal_id": "abc-123",
+                "withdrawal_status": "COMPLETED",
+                "withdrawal_message": "Done",
+                "withdrawal_chain": "optimism",
+                "withdrawal_requested_at": "1234567890",
+                "withdrawal_estimated_value_usd": "1000",
+                "withdrawal_completed_at": "1234567891",
+                "withdrawal_transaction_hashes": json.dumps(["0xhash1", "0xhash2"]),
+            }
+        )
         handler._handle_get_withdrawal_status(MagicMock(), MagicMock(), "abc-123")
         call_data = handler._send_ok_response.call_args[0][2]
         assert call_data["status"] == "completed"
@@ -2505,7 +2395,9 @@ class TestHttpHandlerMethods:
         handler._send_ok_response = MagicMock()
         handler._read_withdrawal_data = MagicMock(return_value=None)
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
-            handler._handle_get_withdrawal_status(MagicMock(), MagicMock(), "unknown-id")
+            handler._handle_get_withdrawal_status(
+                MagicMock(), MagicMock(), "unknown-id"
+            )
         call_data = handler._send_ok_response.call_args[0][2]
         assert call_data["status"] == "unknown"
 
@@ -2513,9 +2405,11 @@ class TestHttpHandlerMethods:
         """Test _handle_get_withdrawal_status when withdrawal has wrong id."""
         handler, ctx = _make_http_handler()
         handler._send_ok_response = MagicMock()
-        handler._read_withdrawal_data = MagicMock(return_value={
-            "withdrawal_id": "other-id",
-        })
+        handler._read_withdrawal_data = MagicMock(
+            return_value={
+                "withdrawal_id": "other-id",
+            }
+        )
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._handle_get_withdrawal_status(MagicMock(), MagicMock(), "abc-123")
         call_data = handler._send_ok_response.call_args[0][2]
@@ -2536,10 +2430,15 @@ class TestHttpHandlerMethods:
         ctx.params.store_path = MagicMock()
         ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
         ctx.params.agent_performance_filename = "agent_perf.json"
-        existing_perf = {"timestamp": 123, "metrics": [], "last_activity": None, "agent_behavior": None}
-        with patch("builtins.open", MagicMock()), \
-             patch("json.load", return_value=existing_perf), \
-             patch("json.dump") as mock_dump:
+        existing_perf = {
+            "timestamp": 123,
+            "metrics": [],
+            "last_activity": None,
+            "agent_behavior": None,
+        }
+        with patch("builtins.open", MagicMock()), patch(
+            "json.load", return_value=existing_perf
+        ), patch("json.dump") as mock_dump:
             handler._update_agent_performance_chat("New behavior info")
         mock_dump.assert_called_once()
 
@@ -2554,8 +2453,9 @@ class TestHttpHandlerMethods:
         ctx.params.store_path = MagicMock()
         ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
         ctx.params.agent_performance_filename = "agent_perf.json"
-        with patch("builtins.open", side_effect=[FileNotFoundError("not found"), MagicMock()]), \
-             patch("json.dump"):
+        with patch(
+            "builtins.open", side_effect=[FileNotFoundError("not found"), MagicMock()]
+        ), patch("json.dump"):
             handler._update_agent_performance_chat("New behavior")
 
     def test_update_agent_performance_chat_llm_error(self) -> None:
@@ -2564,9 +2464,15 @@ class TestHttpHandlerMethods:
         ctx.params.store_path = MagicMock()
         ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
         ctx.params.agent_performance_filename = "agent_perf.json"
-        existing_perf = {"timestamp": 123, "metrics": [], "last_activity": None, "agent_behavior": None}
-        with patch("builtins.open", MagicMock()), \
-             patch("json.load", return_value=existing_perf):
+        existing_perf = {
+            "timestamp": 123,
+            "metrics": [],
+            "last_activity": None,
+            "agent_behavior": None,
+        }
+        with patch("builtins.open", MagicMock()), patch(
+            "json.load", return_value=existing_perf
+        ):
             handler._update_agent_performance_chat("LLM Error: something went wrong")
         # Should return early when message starts with "LLM Error:"
 
@@ -2576,10 +2482,15 @@ class TestHttpHandlerMethods:
         ctx.params.store_path = MagicMock()
         ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
         ctx.params.agent_performance_filename = "agent_perf.json"
-        existing_perf = {"timestamp": 123, "metrics": [], "last_activity": None, "agent_behavior": None}
-        with patch("builtins.open", MagicMock()), \
-             patch("json.load", return_value=existing_perf), \
-             patch("json.dump") as mock_dump:
+        existing_perf = {
+            "timestamp": 123,
+            "metrics": [],
+            "last_activity": None,
+            "agent_behavior": None,
+        }
+        with patch("builtins.open", MagicMock()), patch(
+            "json.load", return_value=existing_perf
+        ), patch("json.dump") as mock_dump:
             handler._update_agent_performance_chat("<b>Bold</b>&nbsp;text&lt;")
         mock_dump.assert_called_once()
 
@@ -2587,7 +2498,9 @@ class TestHttpHandlerMethods:
         """Test _update_agent_performance_chat handles outer exception."""
         handler, ctx = _make_http_handler()
         ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(side_effect=Exception("Path error"))
+        ctx.params.store_path.__truediv__ = MagicMock(
+            side_effect=Exception("Path error")
+        )
         ctx.params.agent_performance_filename = "agent_perf.json"
         handler._update_agent_performance_chat("chat msg")
         ctx.logger.error.assert_called()
@@ -2599,9 +2512,9 @@ class TestHttpHandlerMethods:
         ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
         ctx.params.agent_performance_filename = "agent_perf.json"
         # First open succeeds for read but json.load raises a generic Exception
-        with patch("builtins.open", MagicMock()), \
-             patch("json.load", side_effect=[Exception("Generic error"), None]), \
-             patch("json.dump"):
+        with patch("builtins.open", MagicMock()), patch(
+            "json.load", side_effect=[Exception("Generic error"), None]
+        ), patch("json.dump"):
             handler._update_agent_performance_chat("chat msg")
 
     def test_handle_get_funds_status_normal_mode(self) -> None:
@@ -2613,7 +2526,10 @@ class TestHttpHandlerMethods:
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {"optimism": {"deficit": 0}}
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
@@ -2630,7 +2546,10 @@ class TestHttpHandlerMethods:
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {}
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
         call_data = handler._send_ok_response.call_args[0][2]
@@ -2647,7 +2566,10 @@ class TestHttpHandlerMethods:
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {"optimism": {}}
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
         call_data = handler._send_ok_response.call_args[0][2]
@@ -2660,22 +2582,30 @@ class TestHttpHandlerMethods:
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
         handler._has_deficit = MagicMock(return_value=True)
         handler._get_withdrawal_actions = MagicMock(return_value=[{"action": "exit"}])
-        handler._read_withdrawal_data = MagicMock(return_value={"withdrawal_transaction_hashes": "[]"})
-        handler._calculate_withdrawal_funding_deficit = MagicMock(return_value={"deficit": 100})
+        handler._read_withdrawal_data = MagicMock(
+            return_value={"withdrawal_transaction_hashes": "[]"}
+        )
+        handler._calculate_withdrawal_funding_deficit = MagicMock(
+            return_value={"deficit": 100}
+        )
         ctx.params.use_x402 = False
         ctx.params.target_investment_chains = ["optimism"]
         ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {
             "optimism": {
-                "0xagent": {
-                    ZERO_ADDRESS: {"balance": "1000", "deficit": "500"}
-                }
+                "0xagent": {ZERO_ADDRESS: {"balance": "1000", "deficit": "500"}}
             }
         }
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
 
@@ -2686,23 +2616,25 @@ class TestHttpHandlerMethods:
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
         handler._has_deficit = MagicMock(return_value=True)
         handler._get_withdrawal_actions = MagicMock(return_value=[{"action": "exit"}])
-        handler._read_withdrawal_data = MagicMock(return_value={
-            "withdrawal_transaction_hashes": json.dumps(["0xhash1"])
-        })
+        handler._read_withdrawal_data = MagicMock(
+            return_value={"withdrawal_transaction_hashes": json.dumps(["0xhash1"])}
+        )
         ctx.params.use_x402 = False
         ctx.params.target_investment_chains = ["optimism"]
         ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {
-            "optimism": {
-                "0xagent": {
-                    ZERO_ADDRESS: {"balance": "1000"}
-                }
-            }
+            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "1000"}}}
         }
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
         call_data = handler._send_ok_response.call_args[0][2]
@@ -2714,19 +2646,27 @@ class TestHttpHandlerMethods:
         handler._send_ok_response = MagicMock()
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
         handler._has_deficit = MagicMock(return_value=True)
-        handler._get_withdrawal_actions = MagicMock(return_value=[{"action": "exit"}, {"action": "swap"}])
+        handler._get_withdrawal_actions = MagicMock(
+            return_value=[{"action": "exit"}, {"action": "swap"}]
+        )
         handler._read_withdrawal_data = MagicMock(side_effect=Exception("Read error"))
         handler._calculate_withdrawal_funding_deficit = MagicMock(return_value={})
         ctx.params.use_x402 = False
         ctx.params.target_investment_chains = ["optimism"]
         ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {
             "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "1000"}}}
         }
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
 
@@ -2740,7 +2680,10 @@ class TestHttpHandlerMethods:
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {}
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ), patch("packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
 
@@ -2751,18 +2694,26 @@ class TestHttpHandlerMethods:
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
         handler._has_deficit = MagicMock(return_value=True)
         handler._get_withdrawal_actions = MagicMock(return_value=[{"action": "exit"}])
-        handler._read_withdrawal_data = MagicMock(return_value={"withdrawal_transaction_hashes": "[]"})
+        handler._read_withdrawal_data = MagicMock(
+            return_value={"withdrawal_transaction_hashes": "[]"}
+        )
         handler._calculate_withdrawal_funding_deficit = MagicMock(return_value={})
         ctx.params.use_x402 = False
         ctx.params.target_investment_chains = ["optimism"]
         ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {
             "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "not_a_number"}}}
         }
         with patch.object(
-            type(handler), "funds_status", new_callable=PropertyMock, return_value=mock_fund_req
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
 
@@ -2873,7 +2824,9 @@ class TestHttpHandlerMethods:
         handler._get_eoa_account = MagicMock(return_value=mock_account)
         handler._check_usdc_balance = MagicMock(return_value=500)
         handler._get_lifi_quote_sync = MagicMock(
-            return_value={"transactionRequest": {"to": "0x1", "data": "0x", "value": "0x0"}}
+            return_value={
+                "transactionRequest": {"to": "0x1", "data": "0x", "value": "0x0"}
+            }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(None, None))
         with patch.object(
@@ -2894,7 +2847,9 @@ class TestHttpHandlerMethods:
         handler._get_eoa_account = MagicMock(return_value=mock_account)
         handler._check_usdc_balance = MagicMock(return_value=500)
         handler._get_lifi_quote_sync = MagicMock(
-            return_value={"transactionRequest": {"to": "0x1", "data": "0x", "value": "0x0"}}
+            return_value={
+                "transactionRequest": {"to": "0x1", "data": "0x", "value": "0x0"}
+            }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
         handler._estimate_gas = MagicMock(return_value=None)
@@ -2917,7 +2872,9 @@ class TestHttpHandlerMethods:
         handler._get_eoa_account = MagicMock(return_value=mock_account)
         handler._check_usdc_balance = MagicMock(return_value=500)
         handler._get_lifi_quote_sync = MagicMock(
-            return_value={"transactionRequest": {"to": "0x1", "data": "0x", "value": "0x100"}}
+            return_value={
+                "transactionRequest": {"to": "0x1", "data": "0x", "value": "0x100"}
+            }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
         handler._estimate_gas = MagicMock(return_value=21000)
@@ -2927,7 +2884,9 @@ class TestHttpHandlerMethods:
         ) as mock_shared:
             mock_ss = MagicMock()
             mock_shared.return_value = mock_ss
-            with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3:
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.Web3"
+            ) as mock_web3:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
@@ -2943,7 +2902,9 @@ class TestHttpHandlerMethods:
         handler._get_eoa_account = MagicMock(return_value=mock_account)
         handler._check_usdc_balance = MagicMock(return_value=500)
         handler._get_lifi_quote_sync = MagicMock(
-            return_value={"transactionRequest": {"to": "0x1", "data": "0x", "value": 256}}
+            return_value={
+                "transactionRequest": {"to": "0x1", "data": "0x", "value": 256}
+            }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
         handler._estimate_gas = MagicMock(return_value=21000)
@@ -2954,7 +2915,9 @@ class TestHttpHandlerMethods:
         ) as mock_shared:
             mock_ss = MagicMock()
             mock_shared.return_value = mock_ss
-            with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3:
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.Web3"
+            ) as mock_web3:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
@@ -2970,7 +2933,9 @@ class TestHttpHandlerMethods:
         handler._get_eoa_account = MagicMock(return_value=mock_account)
         handler._check_usdc_balance = MagicMock(return_value=500)
         handler._get_lifi_quote_sync = MagicMock(
-            return_value={"transactionRequest": {"to": "0x1", "data": "0x", "value": 256}}
+            return_value={
+                "transactionRequest": {"to": "0x1", "data": "0x", "value": 256}
+            }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
         handler._estimate_gas = MagicMock(return_value=21000)
@@ -2981,7 +2946,9 @@ class TestHttpHandlerMethods:
         ) as mock_shared:
             mock_ss = MagicMock()
             mock_shared.return_value = mock_ss
-            with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3:
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.Web3"
+            ) as mock_web3:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is True
@@ -3149,15 +3116,23 @@ class TestHttpHandlerMethods:
         rounds_info_mock = {
             "test_round": {"transitions": {}},
         }
-        with patch("packages.valory.skills.optimus_abci.handlers.load_fsm_spec") as mock_load, \
-             patch("packages.valory.skills.optimus_abci.handlers.ROUNDS_INFO", {"TestRound": {"transitions": {}}}):
-            mock_load.return_value = {"transition_func": {
-                "(TestRound, DONE)": "OtherRound",
-            }}
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.load_fsm_spec"
+        ) as mock_load, patch(
+            "packages.valory.skills.optimus_abci.handlers.ROUNDS_INFO",
+            {"TestRound": {"transitions": {}}},
+        ):
+            mock_load.return_value = {
+                "transition_func": {
+                    "(TestRound, DONE)": "OtherRound",
+                }
+            }
             handler.setup()
         assert hasattr(handler, "routes")
         assert handler.agent_profile_path == OPTIMUS_AGENT_PROFILE_PATH
-        assert "done" in handler.rounds_info.get("test_round", {}).get("transitions", {})
+        assert "done" in handler.rounds_info.get("test_round", {}).get(
+            "transitions", {}
+        )
 
     def test_setup_http_handler_x402(self) -> None:
         """Test HttpHandler.setup with x402 enabled."""
@@ -3166,10 +3141,15 @@ class TestHttpHandlerMethods:
         ctx.params.service_endpoint_base = "http://localhost:8000"
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.available_strategies = {"optimism": ["balancer_pools_search"]}
-        with patch("packages.valory.skills.optimus_abci.handlers.load_fsm_spec") as mock_load, \
-             patch("packages.valory.skills.optimus_abci.handlers.ROUNDS_INFO", {}), \
-             patch("packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"), \
-             patch.object(type(handler), "shared_state", new_callable=PropertyMock) as mock_shared:
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.load_fsm_spec"
+        ) as mock_load, patch(
+            "packages.valory.skills.optimus_abci.handlers.ROUNDS_INFO", {}
+        ), patch(
+            "packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"
+        ), patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
             mock_ss = MagicMock()
             mock_shared.return_value = mock_ss
             mock_load.return_value = {"transition_func": {}}
@@ -3182,8 +3162,11 @@ class TestHttpHandlerMethods:
         ctx.params.service_endpoint_base = "http://localhost:8000"
         ctx.params.target_investment_chains = ["base"]
         ctx.params.available_strategies = {"base": []}
-        with patch("packages.valory.skills.optimus_abci.handlers.load_fsm_spec") as mock_load, \
-             patch("packages.valory.skills.optimus_abci.handlers.ROUNDS_INFO", {}):
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.load_fsm_spec"
+        ) as mock_load, patch(
+            "packages.valory.skills.optimus_abci.handlers.ROUNDS_INFO", {}
+        ):
             mock_load.return_value = {"transition_func": {}}
             handler.setup()
         assert handler.agent_profile_path == MODIUS_AGENT_PROFILE_PATH
@@ -3215,7 +3198,7 @@ class TestHttpHandlerMethods:
         # Use a dict with the sentinel key to trigger the `in` check,
         # then .split() raises AttributeError since dict doesn't have .split()
         msg = MagicMock()
-        msg.payload = json.dumps({"error": {"message: \"": "some error detail"}})
+        msg.payload = json.dumps({"error": {'message: "': "some error detail"}})
         result = handler._parse_llm_response(msg)
         assert "LLM Error" in result[3]
 
@@ -3261,9 +3244,7 @@ class TestHttpHandlerMethods:
         llm_msg = MagicMock()
         # Valid outer JSON but inner "response" is not valid JSON
         llm_msg.payload = json.dumps({"response": "not json {"})
-        handler._handle_llm_response(
-            llm_msg, MagicMock(), MagicMock(), MagicMock()
-        )
+        handler._handle_llm_response(llm_msg, MagicMock(), MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
         call_args = handler._send_ok_response.call_args[0]
         assert "error" in call_args[2]
@@ -3290,9 +3271,7 @@ class TestHttpHandlerMethods:
         }
         llm_msg.payload = json.dumps({"response": json.dumps(response_data)})
 
-        handler._handle_llm_response(
-            llm_msg, MagicMock(), MagicMock(), MagicMock()
-        )
+        handler._handle_llm_response(llm_msg, MagicMock(), MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
         call_args = handler._send_ok_response.call_args[0]
         assert "error" in call_args[2]

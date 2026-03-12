@@ -40,7 +40,7 @@ from packages.valory.skills.termination_abci.rounds import (
 
 def test_import() -> None:
     """Test that the composition module can be imported."""
-    assert OptimusAbciApp is not None
+    import packages.valory.skills.optimus_abci.composition  # noqa
 
 
 def test_abci_app_transition_mapping_keys() -> None:
@@ -84,9 +84,7 @@ def test_abci_app_transition_mapping_specific_transitions() -> None:
         == ResetAndPauseAbci.ResetAndPauseRound
     )
     assert (
-        abci_app_transition_mapping[
-            TxSettlementAbci.FinishedTransactionSubmissionRound
-        ]
+        abci_app_transition_mapping[TxSettlementAbci.FinishedTransactionSubmissionRound]
         == LiquidityTraderAbci.PostTxSettlementRound
     )
     assert (

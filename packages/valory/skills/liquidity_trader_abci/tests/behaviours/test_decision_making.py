@@ -32,12 +32,12 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     Decision,
     DexType,
+    MAX_RETRIES_FOR_ROUTES,
     MIN_TIME_IN_POSITION,
     PositionStatus,
     SwapStatus,
-    ZERO_ADDRESS,
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
-    MAX_RETRIES_FOR_ROUTES,
+    ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.decision_making import (
     DecisionMakingBehaviour,
@@ -112,6 +112,10 @@ def _exhaust(gen, sends=None):
 
     If *gen* is not actually a generator (e.g. a plain return from a
     generator function that never yields), just return it.
+
+    :param gen: generator to exhaust.
+    :param sends: optional list of values to send into the generator.
+    :return: the generator's return value.
     """
     if not hasattr(gen, "__next__"):
         return gen

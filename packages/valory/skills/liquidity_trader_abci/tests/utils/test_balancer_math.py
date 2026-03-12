@@ -141,7 +141,9 @@ class TestBalancerProportionalMathJoin:
 
     def test_join_all_zero_amounts_raises(self) -> None:
         """Test join with all zero amounts raises."""
-        with pytest.raises(ValueError, match="At least one token amount must be positive"):
+        with pytest.raises(
+            ValueError, match="At least one token amount must be positive"
+        ):
             BalancerProportionalMath.query_proportional_join(
                 token_balances=[1000, 2000],
                 total_bpt_supply=100,

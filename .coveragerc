@@ -7,6 +7,8 @@ omit =
     */__pycache__/*
     */*_pb2.py
     */*_pb2_grpc.py
+    packages/valory/skills/liquidity_trader_abci/__init__.py
+    packages/valory/skills/optimus_abci/__init__.py
 
 [report]
 fail_under = 100

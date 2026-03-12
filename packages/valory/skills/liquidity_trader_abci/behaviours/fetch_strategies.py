@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -2333,7 +2333,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             sorted_outgoing_transfers = []
             for _, transfers in outgoing_erc20_transfers.items():
                 for transfer in transfers:
-                    if isinstance(transfer, dict) and "timestamp" in transfer:  # pragma: no branch
+                    if (
+                        isinstance(transfer, dict) and "timestamp" in transfer
+                    ):  # pragma: no branch
                         sorted_outgoing_transfers.append(transfer)
 
             sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
@@ -2375,7 +2377,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             sorted_outgoing_transfers = []
             for _, transfers in outgoing_erc20_transfers.items():
                 for transfer in transfers:
-                    if isinstance(transfer, dict) and "timestamp" in transfer:  # pragma: no branch
+                    if (
+                        isinstance(transfer, dict) and "timestamp" in transfer
+                    ):  # pragma: no branch
                         sorted_outgoing_transfers.append(transfer)
 
             sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
@@ -3240,7 +3244,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Merge with existing data and save
             for date, transfers in all_transfers_by_date.items():
-                if date not in existing_optimism_data:  # Only store new dates  # pragma: no branch
+                if (
+                    date not in existing_optimism_data
+                ):  # Only store new dates  # pragma: no branch
                     existing_optimism_data[date] = transfers
 
             # Update unified data structure
@@ -3305,7 +3311,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if tx_date and tx_date in existing_data:
                 continue
 
-            if tx_date and tx_date <= end_datetime.strftime("%Y-%m-%d"):  # pragma: no branch
+            if tx_date and tx_date <= end_datetime.strftime(
+                "%Y-%m-%d"
+            ):  # pragma: no branch
                 from_address = tx.get("from", {})
                 if self._should_include_transfer(  # pragma: no branch
                     from_address, tx, is_eth_transfer=False
@@ -4083,7 +4091,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             sorted_incoming_transfers = []
             for _, transfers in all_incoming_transfers.items():
                 for transfer in transfers:
-                    if isinstance(transfer, dict) and "timestamp" in transfer:  # pragma: no branch
+                    if (
+                        isinstance(transfer, dict) and "timestamp" in transfer
+                    ):  # pragma: no branch
                         sorted_incoming_transfers.append(transfer)
 
             sorted_incoming_transfers.sort(key=lambda x: x["timestamp"])
@@ -4091,7 +4101,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             sorted_outgoing_transfers = []
             for _, transfers in all_outgoing_transfers.items():
                 for transfer in transfers:
-                    if isinstance(transfer, dict) and "timestamp" in transfer:  # pragma: no branch
+                    if (
+                        isinstance(transfer, dict) and "timestamp" in transfer
+                    ):  # pragma: no branch
                         sorted_outgoing_transfers.append(transfer)
 
             sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
@@ -4570,13 +4582,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # Categorize transfer based on safe_address position
                     if to_address == safe_address_lower:
                         # Incoming transfer - safe_address is recipient
-                        if timestamp not in all_transfers["incoming"]:  # pragma: no branch
+                        if (
+                            timestamp not in all_transfers["incoming"]
+                        ):  # pragma: no branch
                             all_transfers["incoming"][timestamp] = []
                         all_transfers["incoming"][timestamp].append(transfer_data)
                         processed_count += 1
                     elif from_address == safe_address_lower:  # pragma: no branch
                         # Outgoing transfer - safe_address is sender
-                        if timestamp not in all_transfers["outgoing"]:  # pragma: no branch
+                        if (
+                            timestamp not in all_transfers["outgoing"]
+                        ):  # pragma: no branch
                             all_transfers["outgoing"][timestamp] = []
                         all_transfers["outgoing"][timestamp].append(transfer_data)
                         processed_count += 1
@@ -4695,7 +4711,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                                 == safe_address_lower
                             ):
                                 # Outgoing transfer - safe_address is sender
-                                if tx_date not in all_transfers["outgoing"]:  # pragma: no branch
+                                if (
+                                    tx_date not in all_transfers["outgoing"]
+                                ):  # pragma: no branch
                                     all_transfers["outgoing"][tx_date] = []
                                 all_transfers["outgoing"][tx_date].append(transfer_data)
                                 processed_count += 1
@@ -4982,7 +5000,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             for log in logs:
                 topics = log.get("topics", [])
-                if len(topics) >= 3 and topics[0] == TRANSFER_EVENT_SIGNATURE:  # pragma: no branch
+                if (
+                    len(topics) >= 3 and topics[0] == TRANSFER_EVENT_SIGNATURE
+                ):  # pragma: no branch
                     # Check if this is a mint (from zero address)
                     from_address = topics[1]
                     if from_address == ZERO_ADDRESS_PADDED:  # pragma: no branch

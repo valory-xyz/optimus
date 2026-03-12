@@ -6,9 +6,9 @@ description: A wrapper for Velodrome's Slipstream Helper calls.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeifok6lmgiqjb4d2s3tmxtk46pjvpc3xfwu3bylzr3xtzrhguqnhdq
+  __init__.py: bafybeiaylybespvcwg3k44zndkyz7lkw4gtewijpvfafe676k6ce5oqrze
   build/contract_interface.json: bafybeiejabouynogilagtlora6rxoqwdji4sp246rcjhuzky2ekmejz5sq
-  contract.py: bafybeifu4nfoojradx6mdas6x6vfeo5aq4vvpsadgufkurv7ikl6dyvppe
+  contract.py: bafybeidtt7s6urfpksd3vewyvqogtdsa5uj7hcvgfqksdmyeijnpxbqjoe
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/test_contract.py: bafybeicxlqyibtiruxotzisel54ovh4wp2jb2egagvy6psx4c7medqxep4
 fingerprint_ignore_patterns: []

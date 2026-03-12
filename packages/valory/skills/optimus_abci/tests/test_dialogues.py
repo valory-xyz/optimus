@@ -30,10 +30,7 @@ from packages.dvilela.protocols.kv_store.dialogues import (
     KvStoreDialogues as BaseKvStoreDialogues,
 )
 from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue
-from packages.valory.skills.optimus_abci.dialogues import (
-    KvStoreDialogues,
-    SrrDialogues,
-)
+from packages.valory.skills.optimus_abci.dialogues import KvStoreDialogues, SrrDialogues
 
 
 def test_import() -> None:

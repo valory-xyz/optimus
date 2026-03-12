@@ -21,15 +21,16 @@
 
 # pylint: skip-file
 
-import pytest
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
+
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
-    ZERO_ADDRESS,
     BalancerPoolBehaviour,
     ExitKind,
     JoinKind,
     PoolType,
+    ZERO_ADDRESS,
 )
 
 

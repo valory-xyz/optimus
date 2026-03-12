@@ -24,9 +24,7 @@
 import json
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
-from packages.valory.skills.liquidity_trader_abci.states.base import (
-    SynchronizedData,
-)
+from packages.valory.skills.liquidity_trader_abci.states.base import SynchronizedData
 
 
 def test_import() -> None:

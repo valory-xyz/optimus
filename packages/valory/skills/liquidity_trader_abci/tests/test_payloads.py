@@ -34,7 +34,6 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     WithdrawFundsPayload,
 )
 
-
 SENDER = "sender_address"
 
 

@@ -28,9 +28,7 @@ from unittest.mock import MagicMock, PropertyMock, mock_open, patch
 
 from packages.valory.protocols.contract_api.message import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
-from packages.valory.skills.liquidity_trader_abci.pool_behaviour import (
-    PoolBehaviour,
-)
+from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
 
 
 class ConcretePoolBehaviour(PoolBehaviour):
@@ -81,8 +79,8 @@ class TestPoolBehaviour:
         """Test contract_interaction_error logs info level message."""
         obj = self._make_behaviour()
         response_msg = MagicMock()
-        response_msg.raw_transaction.body.get.side_effect = (
-            lambda k, default=None: "info message" if k == "info" else None
+        response_msg.raw_transaction.body.get.side_effect = lambda k, default=None: (
+            "info message" if k == "info" else None
         )
         obj.contract_interaction_error("contract_id", "callable", response_msg)
         obj.context.logger.info.assert_called_once_with("info message")
@@ -91,8 +89,8 @@ class TestPoolBehaviour:
         """Test contract_interaction_error logs warning level message."""
         obj = self._make_behaviour()
         response_msg = MagicMock()
-        response_msg.raw_transaction.body.get.side_effect = (
-            lambda k, default=None: "warn message" if k == "warning" else None
+        response_msg.raw_transaction.body.get.side_effect = lambda k, default=None: (
+            "warn message" if k == "warning" else None
         )
         obj.contract_interaction_error("contract_id", "callable", response_msg)
         obj.context.logger.warning.assert_called_once_with("warn message")
@@ -101,8 +99,8 @@ class TestPoolBehaviour:
         """Test contract_interaction_error logs error level message."""
         obj = self._make_behaviour()
         response_msg = MagicMock()
-        response_msg.raw_transaction.body.get.side_effect = (
-            lambda k, default=None: "err message" if k == "error" else None
+        response_msg.raw_transaction.body.get.side_effect = lambda k, default=None: (
+            "err message" if k == "error" else None
         )
         obj.contract_interaction_error("contract_id", "callable", response_msg)
         obj.context.logger.error.assert_called_once_with("err message")
@@ -153,9 +151,7 @@ class TestPoolBehaviour:
         fake_key = "0x" + "a" * 64
         with patch.object(
             PoolBehaviour, "_get_password_from_args", return_value=None
-        ), patch.object(
-            Path, "open", mock_open(read_data=fake_key)
-        ), patch(
+        ), patch.object(Path, "open", mock_open(read_data=fake_key)), patch(
             "packages.valory.skills.liquidity_trader_abci.pool_behaviour.Account"
         ) as mock_account:
             mock_account.from_key.return_value = MagicMock()

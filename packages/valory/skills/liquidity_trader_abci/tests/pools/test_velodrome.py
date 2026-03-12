@@ -36,6 +36,7 @@ import pytest
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     API_CACHE_SIZE,
+    AllocationStatus,
     DEFAULT_DAYS,
     INT_MAX,
     MAX_TICK,
@@ -44,10 +45,9 @@ from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     PRICE_CHECK_INTERVAL,
     PRICE_VOLATILITY_THRESHOLD,
     TICK_TO_PERCENTAGE_FACTOR,
+    VelodromePoolBehaviour,
     WAITING_PERIOD,
     ZERO_ADDRESS,
-    AllocationStatus,
-    VelodromePoolBehaviour,
 )
 
 
@@ -78,6 +78,10 @@ def exhaust_generator(gen: Generator, send_values=None):
     *send_values* is an iterator of values that will be sent into the generator
     on each ``yield``.  When the iterator is exhausted ``None`` is sent for all
     remaining yields.
+
+    :param gen: generator to exhaust.
+    :param send_values: optional iterable of values to send.
+    :return: the generator's return value.
     """
     send_iter = iter(send_values) if send_values else iter([])
     result = None
@@ -127,8 +131,11 @@ def _mock_gen(value: Any) -> MagicMock:
 
 
 def make_contract_interact(return_values: List):
-    """Create a fake contract_interact generator that yields once per call
-    and returns successive values from *return_values*."""
+    """Create a fake contract_interact generator that yields once per call.
+
+    :param return_values: list of return values for successive calls.
+    :return: a generator function.
+    """
     call_index = [0]
 
     def _fake(**kwargs):

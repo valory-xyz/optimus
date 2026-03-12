@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -2525,13 +2525,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             adjusted_amounts = max_amounts_in  # pragma: no cover
 
             if option1_feasible and option2_feasible:
-                # Both options are feasible, choose the one that uses more capital
-                # Compare the total USD value of each option
-                option1_value = normalized_amount0  # Using all token0
-                option2_value = (
-                    required_normalized_amount0_for_max_amount1  # Using partial token0
-                )
-
                 # Both feasible: option1 always has >= value (mathematical invariant)
                 adjusted_amounts = [
                     amount0_desired,

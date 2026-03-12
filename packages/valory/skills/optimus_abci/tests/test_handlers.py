@@ -27,8 +27,8 @@ from typing import Dict
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.optimus_abci.handlers import (
-    ESTIMATED_GAS_PER_TX,
     BaseHandler,
+    ESTIMATED_GAS_PER_TX,
     HttpCode,
     HttpHandler,
     KvStoreHandler,
@@ -1609,10 +1609,10 @@ class TestHttpHandlerMethods:
 
     def test_handle_main_no_handler_found(self) -> None:
         """Test handle when no handler is found for URL."""
-        from packages.valory.protocols.http.message import HttpMessage
         from packages.valory.connections.http_server.connection import (
             PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
         )
+        from packages.valory.protocols.http.message import HttpMessage
 
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)
@@ -1627,10 +1627,10 @@ class TestHttpHandlerMethods:
 
     def test_handle_main_invalid_dialogue(self) -> None:
         """Test handle when dialogue update returns None."""
-        from packages.valory.protocols.http.message import HttpMessage
         from packages.valory.connections.http_server.connection import (
             PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
         )
+        from packages.valory.protocols.http.message import HttpMessage
 
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)
@@ -1644,10 +1644,10 @@ class TestHttpHandlerMethods:
 
     def test_handle_main_valid_route(self) -> None:
         """Test handle calls the route handler for valid request."""
-        from packages.valory.protocols.http.message import HttpMessage
         from packages.valory.connections.http_server.connection import (
             PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
         )
+        from packages.valory.protocols.http.message import HttpMessage
 
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=HttpMessage)

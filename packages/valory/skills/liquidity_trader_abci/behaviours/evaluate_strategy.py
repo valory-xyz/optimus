@@ -852,7 +852,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
             # Should not reach here, but return False as fallback
-            return False, "Minimum time met but no exit conditions satisfied"  # pragma: no cover
+            return (
+                False,
+                "Minimum time met but no exit conditions satisfied",
+            )  # pragma: no cover
 
         except Exception as e:
             self.context.logger.error(f"Error checking TiP exit conditions: {e}")
@@ -912,7 +915,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         position, chain, user_address
                     )
                     if velo_rewards > 0:
-                        if hasattr(self, "_get_velo_token_address"):  # pragma: no branch
+                        if hasattr(
+                            self, "_get_velo_token_address"
+                        ):  # pragma: no branch
                             velo_token_address = self._get_velo_token_address(chain)
                             if velo_token_address:
                                 result[velo_token_address] = float(velo_rewards)
@@ -2028,7 +2033,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # no strategies pending to be fetched
             return
 
-        for strategy, file_hash in self.shared_state.strategy_to_filehash.items():  # pragma: no branch
+        for (
+            strategy,
+            file_hash,
+        ) in self.shared_state.strategy_to_filehash.items():  # pragma: no branch
             self.context.logger.info(f"Fetching {strategy} strategy...")
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_strategy_req = strategy

@@ -23,7 +23,9 @@
 
 import pytest
 
-from packages.valory.skills.liquidity_trader_abci.io_.loader import ComponentPackageLoader
+from packages.valory.skills.liquidity_trader_abci.io_.loader import (
+    ComponentPackageLoader,
+)
 
 
 def test_import() -> None:
@@ -62,7 +64,9 @@ class TestComponentPackageLoader:
             "component.yaml": "callable: run",
             "main.py": "def run(): pass",
         }
-        with pytest.raises(ValueError, match="MUST contain the 'entry_point' and 'callable' keys"):
+        with pytest.raises(
+            ValueError, match="MUST contain the 'entry_point' and 'callable' keys"
+        ):
             ComponentPackageLoader.load(serialized_objects)
 
     def test_load_missing_callable_key(self) -> None:
@@ -71,7 +75,9 @@ class TestComponentPackageLoader:
             "component.yaml": "entry_point: main.py",
             "main.py": "def run(): pass",
         }
-        with pytest.raises(ValueError, match="MUST contain the 'entry_point' and 'callable' keys"):
+        with pytest.raises(
+            ValueError, match="MUST contain the 'entry_point' and 'callable' keys"
+        ):
             ComponentPackageLoader.load(serialized_objects)
 
     def test_load_missing_entry_point_file(self) -> None:

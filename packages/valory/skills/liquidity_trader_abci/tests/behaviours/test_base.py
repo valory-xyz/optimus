@@ -32,16 +32,16 @@ import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     AIRDROP_TOTAL_KEY,
+    Action,
     ETH_REMAINING_KEY,
+    GasCostTracker,
+    LiquidityTraderBaseBehaviour,
     MIN_TIME_IN_POSITION,
     OLAS_ADDRESSES,
     PRICE_CACHE_KEY_PREFIX,
     REWARD_UPDATE_INTERVAL,
     REWARD_UPDATE_KEY_PREFIX,
     ZERO_ADDRESS,
-    Action,
-    GasCostTracker,
-    LiquidityTraderBaseBehaviour,
     execute_strategy,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState

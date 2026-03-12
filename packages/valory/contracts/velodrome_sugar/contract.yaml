@@ -6,9 +6,9 @@ description: A wrapper for Velodrome's Sugar calls.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeihqaq6tfjfm5ooeo2lxcxwctx7blqt6ccu2y7srhcoys4snlqoj6m
+  __init__.py: bafybeiehu6pdrluin7izeo6yiboaf2jboyympp77dpfev4sjwp44zxrs3y
   build/contract_interface.json: bafybeialdjftyvkh3zxroxoevuuumjbmqhkzwea57pk2fmqf7qra7gieku
-  contract.py: bafybeiaunb443dwgfvcpwre5pmj44ho4wus5oitf37vvvczsvsfunwbwgq
+  contract.py: bafybeichsdmlex2rnb7bdlg4d2dgag4fiphxzjw3q5tpqo5mu55wgowffe
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/test_contract.py: bafybeig23dltdemnkmsqhlqzda2lsvtyh6buwllcfx4uvni7dnc6p22bku
 fingerprint_ignore_patterns: []

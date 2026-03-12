@@ -6,9 +6,9 @@ description: The contract package for the Velodrome Voter interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeida5z2rs3bfsa4el27clwhno4nc2mgrobfhj6o423rv7baazrdsfm
+  __init__.py: bafybeievlj5xokplf3zyr632dy6w7q6tsc52qsktowtr256zgy4f5qmuqu
   build/contract_interface.json: bafybeibb2l3m53tz7uigyz6wv25rkohvfixvdbtrk4ubirklg6mylp77wq
-  contract.py: bafybeidlbwhhgvo2py2ulhidlrkhgqzlm47znc3y2leykkiqguxuuz2sba
+  contract.py: bafybeid6qqzk5ssowxopqa5eyuyriqjthyehtfzxwobscbxdqyg6rmfvpa
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/test_contract.py: bafybeibq35v5qk4aeokk3an72d3b5cobctwspjbtdlmbdkmh6ecugcplfa
 fingerprint_ignore_patterns: []

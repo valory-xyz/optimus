@@ -59,12 +59,12 @@ skills:
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 customs:
-- valory/merkl_pools_search:0.1.0:bafybeiglanorhl4ifcllfhewy5jacf2msupg7picsmrvkd4et3mgm7akwm
-- valory/max_apr_selection:0.1.0:bafybeie73yueoof5tu2wbxnslmz7jh744jaseuonr6nzbdukuolupdvnhy
-- valory/balancer_pools_search:0.1.0:bafybeidvwya2sribb3pe2w3reusnut5jyzlcgwhtkg5h24xaaagvfncgzy
-- valory/uniswap_pools_search:0.1.0:bafybeiddr4oyknw7qjzc6mlzbi6nw3moyrsb5gmwmxgv7gzch44j4pb3hu
-- valory/asset_lending:0.1.0:bafybeic7ri34kx6a25rgm4lcyutflceyxrpjff5koldsapyaasrrwgrafu
-- valory/velodrome_pools_search:0.1.0:bafybeieifba7oaxzmj6pg6wgbacflrkcwxg6h4gsfxinrbbm7zfnp7bory
+- valory/merkl_pools_search:0.1.0:bafybeiha2kwudpl7p56dwzu67qdrqv4j643qoricmlpci6nde25zf3ajju
+- valory/max_apr_selection:0.1.0:bafybeibktrritn4yv44dz3yxnzhyhfuqvzkjc6yis7idk54egc6q3y4wcm
+- valory/balancer_pools_search:0.1.0:bafybeidvthsqmdyfear3wcf4qpx3yhfllo6c3wozj6zjxbpuyiomigpv2e
+- valory/uniswap_pools_search:0.1.0:bafybeibkvp6nt4p5nvxrtd2mcdewpopeu4coxkpf2i3gxrl656qrk6p7vi
+- valory/asset_lending:0.1.0:bafybeidizrwrfedhnq524znmdlp5s5nhhk2e3lrdfm2depsywcwhzvmxli
+- valory/velodrome_pools_search:0.1.0:bafybeiao3hnmho2tbazyiacanehgpuujgmyiemhllrohlmzggjv4xsj26u
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -319,7 +319,7 @@ models:
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["optimism"]}
       staking_chain: ${str:optimism}
-      file_hash_to_strategies: ${str:{"bafybeie73yueoof5tu2wbxnslmz7jh744jaseuonr6nzbdukuolupdvnhy":"max_apr_selection","bafybeidvwya2sribb3pe2w3reusnut5jyzlcgwhtkg5h24xaaagvfncgzy":"balancer_pools_search","bafybeiddr4oyknw7qjzc6mlzbi6nw3moyrsb5gmwmxgv7gzch44j4pb3hu":"uniswap_pools_search","bafybeic7ri34kx6a25rgm4lcyutflceyxrpjff5koldsapyaasrrwgrafu":"asset_lending","bafybeieifba7oaxzmj6pg6wgbacflrkcwxg6h4gsfxinrbbm7zfnp7bory":"velodrome_pools_search"}}
+      file_hash_to_strategies: ${str:{"bafybeibktrritn4yv44dz3yxnzhyhfuqvzkjc6yis7idk54egc6q3y4wcm":"max_apr_selection","bafybeidvthsqmdyfear3wcf4qpx3yhfllo6c3wozj6zjxbpuyiomigpv2e":"balancer_pools_search","bafybeibkvp6nt4p5nvxrtd2mcdewpopeu4coxkpf2i3gxrl656qrk6p7vi":"uniswap_pools_search","bafybeidizrwrfedhnq524znmdlp5s5nhhk2e3lrdfm2depsywcwhzvmxli":"asset_lending","bafybeiao3hnmho2tbazyiacanehgpuujgmyiemhllrohlmzggjv4xsj26u":"velodrome_pools_search"}}
       strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"velodrome_pools_search":{"graphql_endpoint":"https://gateway.thegraph.com/api/b8e4cf1b314c67d2a0109325046a7464/subgraphs/id/7tA4PY1VmbycJeoVtn2mjQK4NbozgwTuZgrxDTxzEDL1"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       available_protocols: ${list:["VELODROME"]}
       selected_hyper_strategy: ${str:max_apr_selection}

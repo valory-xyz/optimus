@@ -9,10 +9,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiguqxojq5hkgi55jqdl5p3rvz62jwxxw6ygorkym7ol3ps5qhh7rq
   asset_lending.py: bafybeiandhwdkep55azcaxkujndlplwdfggp26w6ysopcbawvo5qtbgh4y
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_asset_lending.py: bafybeig6bpnhvzsobv3a3a3e36wqy3kurxfvvspfc36qbyzficrrexjuh4
-fingerprint_ignore_patterns:
-- tests/
+fingerprint_ignore_patterns: []
 entry_point: asset_lending.py
 callable: run
 dependencies:

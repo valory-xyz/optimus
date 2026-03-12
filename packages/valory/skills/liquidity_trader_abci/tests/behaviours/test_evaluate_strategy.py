@@ -5187,6 +5187,42 @@ class TestFetchAllTradingOpportunitiesInnerBranches:
                 _drive(b.fetch_all_trading_opportunities(), sends=[None] * 20)
 
 
+class TestCurrentPositionsWithInvalidAddress:
+    """Test that invalid pool addresses are filtered from current_positions."""
+
+    def test_invalid_short_pool_address_is_skipped(self):
+        """Positions with short/invalid pool addresses must not crash to_checksum_address."""
+        from concurrent.futures import Future as ConcFuture
+
+        b = _mk()
+        b.download_strategies = _gen_none
+        b.positions_eligible_for_exit = [
+            {"status": "open", "pool_address": "0x123"},
+            {
+                "status": "open",
+                "pool_address": "0x" + "ab" * 20,
+            },
+            {"status": "open", "pool_address": ""},
+            {"status": "closed", "pool_address": "0x" + "cd" * 20},
+        ]
+        synced_mock = MagicMock()
+        synced_mock.selected_protocols = ["strat_a"]
+        b.context.coingecko = MagicMock()
+        b.context.coingecko.use_x402 = False
+        b.shared_state.strategies_executables = {}
+        b._track_opportunities = _gen_none
+        f = ConcFuture()
+        f.set_result([{"result": []}])
+        with patch.object(
+            type(b),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced_mock,
+        ):
+            with patch("asyncio.ensure_future", return_value=f):
+                _drive(b.fetch_all_trading_opportunities(), sends=[None] * 10)
+
+
 class TestPushOpportunityMetricsBranches:
     """Tests for _push_opportunity_metrics_to_mirrordb branches."""
 

@@ -1581,6 +1581,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             for pos in self.positions_eligible_for_exit
                             if pos.get("status") == PositionStatus.OPEN.value
                             and pos.get("pool_address")
+                            and len(pos.get("pool_address", "")) == 42
                         ]
                         if self.positions_eligible_for_exit
                         else []

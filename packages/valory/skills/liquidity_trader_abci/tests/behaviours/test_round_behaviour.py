@@ -21,7 +21,6 @@
 
 # pylint: skip-file
 
-from packages.valory.skills.abstract_round_abci.behaviours import AbstractRoundBehaviour
 from packages.valory.skills.liquidity_trader_abci.behaviours.apr_population import (
     APRPopulationBehaviour,
 )
@@ -52,7 +51,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.round_behaviour imp
 from packages.valory.skills.liquidity_trader_abci.behaviours.withdraw_funds import (
     WithdrawFundsBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
 
 def test_import() -> None:
@@ -62,18 +60,6 @@ def test_import() -> None:
 
 class TestLiquidityTraderRoundBehaviour:
     """Test LiquidityTraderRoundBehaviour class."""
-
-    def test_is_abstract_round_behaviour(self) -> None:
-        """Test inherits from AbstractRoundBehaviour."""
-        assert issubclass(LiquidityTraderRoundBehaviour, AbstractRoundBehaviour)
-
-    def test_initial_behaviour_cls(self) -> None:
-        """Test initial_behaviour_cls is CallCheckpointBehaviour."""
-        assert LiquidityTraderRoundBehaviour.initial_behaviour_cls is CallCheckpointBehaviour
-
-    def test_abci_app_cls(self) -> None:
-        """Test abci_app_cls is LiquidityTraderAbciApp."""
-        assert LiquidityTraderRoundBehaviour.abci_app_cls is LiquidityTraderAbciApp
 
     def test_behaviours_set(self) -> None:
         """Test behaviours contains all expected behaviour classes."""

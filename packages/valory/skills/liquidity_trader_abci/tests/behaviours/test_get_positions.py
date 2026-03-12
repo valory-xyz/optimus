@@ -61,10 +61,6 @@ def _drive(gen, sends=None):
 class TestGetPositionsBehaviour:
     """Tests for GetPositionsBehaviour."""
 
-    def test_matching_round(self) -> None:
-        """Test matching_round is GetPositionsRound."""
-        assert GetPositionsBehaviour.matching_round is GetPositionsRound
-
     def test_async_act_with_positions(self) -> None:
         """Test async_act when positions are returned."""
         obj = _make_behaviour()

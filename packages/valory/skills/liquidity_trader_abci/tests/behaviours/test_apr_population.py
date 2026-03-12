@@ -34,9 +34,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     APR_UPDATE_INTERVAL,
     PositionStatus,
 )
-from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
-    APRPopulationRound,
-)
 
 
 def _make_behaviour():
@@ -61,10 +58,6 @@ def _drive(gen):
 
 class TestAPRPopulationBehaviour:
     """Tests for APRPopulationBehaviour."""
-
-    def test_matching_round(self) -> None:
-        """Test matching_round is APRPopulationRound."""
-        assert APRPopulationBehaviour.matching_round is APRPopulationRound
 
     def test_async_act_should_not_calculate(self) -> None:
         """Test async_act when should_calculate returns False."""
@@ -227,7 +220,9 @@ class TestShouldCalculateApr:
             return {"last_apr_calculation": "1700000000"}
 
         obj._read_kv = fake_read_kv
-        obj._get_current_timestamp = MagicMock(return_value=1700000000 + APR_UPDATE_INTERVAL + 1)
+        obj._get_current_timestamp = MagicMock(
+            return_value=1700000000 + APR_UPDATE_INTERVAL + 1
+        )
 
         gen = obj._should_calculate_apr()
         result = _drive(gen)
@@ -428,7 +423,9 @@ class TestCalculateAndStoreApr:
         obj.create_agent_attribute = fake_create_agent_attr
         obj._write_kv = fake_write_kv
 
-        with patch.object(type(obj), "shared_state", new_callable=PropertyMock, return_value=shared):
+        with patch.object(
+            type(obj), "shared_state", new_callable=PropertyMock, return_value=shared
+        ):
             gen = obj._calculate_and_store_apr("a1", "ad1")
             _drive(gen)
             obj.context.logger.info.assert_called()

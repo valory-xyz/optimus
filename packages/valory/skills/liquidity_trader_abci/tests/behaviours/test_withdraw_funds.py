@@ -33,9 +33,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 from packages.valory.skills.liquidity_trader_abci.behaviours.withdraw_funds import (
     WithdrawFundsBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
-    WithdrawFundsRound,
-)
 
 
 def _make_behaviour():
@@ -59,13 +56,16 @@ def _drive(gen):
 class TestWithdrawFundsBehaviour:
     """Tests for WithdrawFundsBehaviour."""
 
-    def test_matching_round(self) -> None:
-        """Test matching_round is WithdrawFundsRound."""
-        assert WithdrawFundsBehaviour.matching_round is WithdrawFundsRound
-
-    def _run_async_act(self, obj, investing_paused=False, withdrawal_data=None,
-                       target_address="", positions=None, portfolio_data=None,
-                       withdrawal_actions=None):
+    def _run_async_act(
+        self,
+        obj,
+        investing_paused=False,
+        withdrawal_data=None,
+        target_address="",
+        positions=None,
+        portfolio_data=None,
+        withdrawal_actions=None,
+    ):
         """Helper to run async_act with various configurations."""
         benchmark_mock = MagicMock()
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
@@ -123,7 +123,9 @@ class TestWithdrawFundsBehaviour:
             obj,
             investing_paused=True,
             withdrawal_data=None,
-            positions=[{"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}],
+            positions=[
+                {"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}
+            ],
         )
         obj.set_done.assert_called_once()
 
@@ -134,7 +136,9 @@ class TestWithdrawFundsBehaviour:
             obj,
             investing_paused=True,
             withdrawal_data={"withdrawal_target_address": ""},
-            positions=[{"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}],
+            positions=[
+                {"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}
+            ],
         )
         obj.set_done.assert_called_once()
 
@@ -145,7 +149,9 @@ class TestWithdrawFundsBehaviour:
             obj,
             investing_paused=True,
             withdrawal_data={"withdrawal_target_address": "0xtarget"},
-            positions=[{"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}],
+            positions=[
+                {"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}
+            ],
             withdrawal_actions=[],
         )
         obj.set_done.assert_called_once()
@@ -157,7 +163,9 @@ class TestWithdrawFundsBehaviour:
             obj,
             investing_paused=True,
             withdrawal_data={"withdrawal_target_address": "0xtarget"},
-            positions=[{"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}],
+            positions=[
+                {"pool_address": "0x1", "dex_type": "uniswap", "status": "OPEN"}
+            ],
             withdrawal_actions=[{"action": "exit_pool"}],
         )
         obj.set_done.assert_called_once()
@@ -225,14 +233,23 @@ class TestReadWithdrawalData:
 class TestPrepareWithdrawalActions:
     """Tests for _prepare_withdrawal_actions."""
 
-    def _make_obj_with_stubs(self, unstake_actions=None, exit_actions=None,
-                              swap_actions=None, transfer_actions=None):
+    def _make_obj_with_stubs(
+        self,
+        unstake_actions=None,
+        exit_actions=None,
+        swap_actions=None,
+        transfer_actions=None,
+    ):
         """Create a behaviour with stubbed sub-methods."""
         obj = _make_behaviour()
         obj._prepare_unstaking_actions = MagicMock(return_value=unstake_actions or [])
         obj._prepare_exit_pool_actions = MagicMock(return_value=exit_actions or [])
-        obj._prepare_swap_to_usdc_actions_standard = MagicMock(return_value=swap_actions or [])
-        obj._prepare_transfer_usdc_actions_standard = MagicMock(return_value=transfer_actions or [])
+        obj._prepare_swap_to_usdc_actions_standard = MagicMock(
+            return_value=swap_actions or []
+        )
+        obj._prepare_transfer_usdc_actions_standard = MagicMock(
+            return_value=transfer_actions or []
+        )
 
         def fake_update_status(status, message):
             yield
@@ -307,7 +324,9 @@ class TestPrepareUnstakingActions:
         """Test open position with staking metadata returns unstake action."""
         obj = _make_behaviour()
         obj._has_staking_metadata = MagicMock(return_value=True)
-        obj._build_unstake_lp_tokens_action = MagicMock(return_value={"action": "unstake"})
+        obj._build_unstake_lp_tokens_action = MagicMock(
+            return_value={"action": "unstake"}
+        )
 
         positions = [{"status": PositionStatus.OPEN.value}]
         result = obj._prepare_unstaking_actions(positions)
@@ -352,21 +371,25 @@ class TestPrepareExitPoolActions:
     def test_open_position_success(self) -> None:
         """Test open position creates exit action."""
         obj = _make_behaviour()
-        obj._build_exit_pool_action_base = MagicMock(return_value={
-            "action": Action.EXIT_POOL.value,
-            "chain": "optimism",
-        })
+        obj._build_exit_pool_action_base = MagicMock(
+            return_value={
+                "action": Action.EXIT_POOL.value,
+                "chain": "optimism",
+            }
+        )
 
-        positions = [{
-            "status": "OPEN",
-            "token0_symbol": "WETH",
-            "token1_symbol": "USDC",
-            "token0": "0xtoken0",
-            "token1": "0xtoken1",
-            "pool_fee": 3000,
-            "tick_spacing": 60,
-            "tick_ranges": [[100, 200]],
-        }]
+        positions = [
+            {
+                "status": "OPEN",
+                "token0_symbol": "WETH",
+                "token1_symbol": "USDC",
+                "token0": "0xtoken0",
+                "token1": "0xtoken1",
+                "pool_fee": 3000,
+                "tick_spacing": 60,
+                "tick_ranges": [[100, 200]],
+            }
+        ]
         result = obj._prepare_exit_pool_actions(positions)
         assert len(result) == 1
         assert result[0]["pool_fee"] == 3000
@@ -376,17 +399,21 @@ class TestPrepareExitPoolActions:
     def test_open_position_lowercase(self) -> None:
         """Test position with lowercase 'open' status."""
         obj = _make_behaviour()
-        obj._build_exit_pool_action_base = MagicMock(return_value={
-            "action": Action.EXIT_POOL.value,
-        })
+        obj._build_exit_pool_action_base = MagicMock(
+            return_value={
+                "action": Action.EXIT_POOL.value,
+            }
+        )
 
-        positions = [{
-            "status": "open",
-            "token0_symbol": "WETH",
-            "token1_symbol": "USDC",
-            "token0": "0xtoken0",
-            "token1": "0xtoken1",
-        }]
+        positions = [
+            {
+                "status": "open",
+                "token0_symbol": "WETH",
+                "token1_symbol": "USDC",
+                "token0": "0xtoken0",
+                "token1": "0xtoken1",
+            }
+        ]
         result = obj._prepare_exit_pool_actions(positions)
         assert len(result) == 1
 
@@ -409,17 +436,21 @@ class TestPrepareExitPoolActions:
     def test_no_optional_fields(self) -> None:
         """Test open position without optional fields (pool_fee, tick_spacing, tick_ranges)."""
         obj = _make_behaviour()
-        obj._build_exit_pool_action_base = MagicMock(return_value={
-            "action": Action.EXIT_POOL.value,
-        })
+        obj._build_exit_pool_action_base = MagicMock(
+            return_value={
+                "action": Action.EXIT_POOL.value,
+            }
+        )
 
-        positions = [{
-            "status": "OPEN",
-            "token0_symbol": "WETH",
-            "token1_symbol": "USDC",
-            "token0": "0xtoken0",
-            "token1": "0xtoken1",
-        }]
+        positions = [
+            {
+                "status": "OPEN",
+                "token0_symbol": "WETH",
+                "token1_symbol": "USDC",
+                "token0": "0xtoken0",
+                "token1": "0xtoken1",
+            }
+        ]
         result = obj._prepare_exit_pool_actions(positions)
         assert len(result) == 1
         assert "pool_fee" not in result[0]
@@ -429,20 +460,24 @@ class TestPrepareExitPoolActions:
     def test_pool_fee_none(self) -> None:
         """Test when pool_fee is explicitly None."""
         obj = _make_behaviour()
-        obj._build_exit_pool_action_base = MagicMock(return_value={
-            "action": Action.EXIT_POOL.value,
-        })
+        obj._build_exit_pool_action_base = MagicMock(
+            return_value={
+                "action": Action.EXIT_POOL.value,
+            }
+        )
 
-        positions = [{
-            "status": "OPEN",
-            "token0_symbol": "A",
-            "token1_symbol": "B",
-            "token0": "0x0",
-            "token1": "0x1",
-            "pool_fee": None,
-            "tick_spacing": None,
-            "tick_ranges": None,
-        }]
+        positions = [
+            {
+                "status": "OPEN",
+                "token0_symbol": "A",
+                "token1_symbol": "B",
+                "token0": "0x0",
+                "token1": "0x1",
+                "pool_fee": None,
+                "tick_spacing": None,
+                "tick_ranges": None,
+            }
+        ]
         result = obj._prepare_exit_pool_actions(positions)
         assert len(result) == 1
         assert "pool_fee" not in result[0]

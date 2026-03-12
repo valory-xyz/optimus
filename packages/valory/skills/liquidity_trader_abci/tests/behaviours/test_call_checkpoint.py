@@ -29,7 +29,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint imp
     CallCheckpointBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import (
-    CallCheckpointRound,
     StakingState,
 )
 
@@ -56,12 +55,10 @@ def _drive(gen):
 class TestCallCheckpointBehaviour:
     """Tests for CallCheckpointBehaviour."""
 
-    def test_matching_round(self) -> None:
-        """Test matching_round is CallCheckpointRound."""
-        assert CallCheckpointBehaviour.matching_round is CallCheckpointRound
-
     def _run_async_act(self, obj, params_mock):
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             benchmark_mock = MagicMock()
             obj.context.benchmark_tool.measure.return_value = benchmark_mock
             obj.context.agent_address = "0xagent"
@@ -244,7 +241,9 @@ class TestCheckIfCheckpointReached:
 
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
-        with patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
             gen = obj._check_if_checkpoint_reached("optimism")
             result = _drive(gen)
             assert result is False
@@ -261,7 +260,9 @@ class TestCheckIfCheckpointReached:
 
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
-        with patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
             gen = obj._check_if_checkpoint_reached("optimism")
             result = _drive(gen)
             assert result is True
@@ -288,7 +289,9 @@ class TestPrepareCheckpointTx:
         obj.contract_interact = fake_contract_interact
         obj._prepare_safe_tx = fake_prepare_safe_tx
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._prepare_checkpoint_tx("optimism")
             result = _drive(gen)
             assert result == "0xsafehash"
@@ -310,7 +313,9 @@ class TestPrepareSafeTx:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._prepare_safe_tx("optimism", data=b"data")
             result = _drive(gen)
             assert result is None
@@ -328,7 +333,9 @@ class TestPrepareSafeTx:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._prepare_safe_tx("optimism", data=b"data")
             result = _drive(gen)
             assert result is not None

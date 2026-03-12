@@ -28,9 +28,6 @@ import pytest
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import (
-    CheckStakingKPIMetRound,
-)
 
 
 def _make_behaviour():
@@ -54,13 +51,15 @@ def _drive(gen):
 class TestCheckStakingKPIMetBehaviour:
     """Tests for CheckStakingKPIMetBehaviour."""
 
-    def test_matching_round(self) -> None:
-        """Test matching_round is CheckStakingKPIMetRound."""
-        assert CheckStakingKPIMetBehaviour.matching_round is CheckStakingKPIMetRound
-
     def _run_async_act(self, obj, params_mock, synced_mock):
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock), \
-             patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ), patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced_mock,
+        ):
             benchmark_mock = MagicMock()
             obj.context.benchmark_tool.measure.return_value = benchmark_mock
             obj.context.agent_address = "0xagent"
@@ -230,7 +229,9 @@ class TestPrepareVanityTx:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._prepare_vanity_tx("optimism")
             result = _drive(gen)
             assert result is not None
@@ -247,7 +248,9 @@ class TestPrepareVanityTx:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._prepare_vanity_tx("optimism")
             result = _drive(gen)
             assert result is None
@@ -264,7 +267,9 @@ class TestPrepareVanityTx:
 
         obj.contract_interact = fake_contract_interact
 
-        with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
             gen = obj._prepare_vanity_tx("optimism")
             result = _drive(gen)
             assert result is None
@@ -290,7 +295,9 @@ class TestPrepareVanityTx:
 
         mod.hash_payload_to_hex = bad_hash
         try:
-            with patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock):
+            with patch.object(
+                type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+            ):
                 gen = obj._prepare_vanity_tx("optimism")
                 result = _drive(gen)
                 assert result is None

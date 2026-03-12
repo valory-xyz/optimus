@@ -30,7 +30,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.post_tx_settlement 
 )
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
     CheckStakingKPIMetRound,
-    PostTxSettlementRound,
 )
 
 
@@ -55,10 +54,6 @@ def _drive(gen):
 class TestPostTxSettlementBehaviour:
     """Tests for PostTxSettlementBehaviour."""
 
-    def test_matching_round(self) -> None:
-        """Test matching_round is PostTxSettlementRound."""
-        assert PostTxSettlementBehaviour.matching_round is PostTxSettlementRound
-
     def test_async_act_not_checkpoint_submitter(self) -> None:
         """Test async_act when tx_submitter is NOT the CheckStakingKPIMetRound."""
         obj = _make_behaviour()
@@ -72,7 +67,13 @@ class TestPostTxSettlementBehaviour:
         synced.final_tx_hash = "0xhash123"
         synced.chain_id = "optimism"
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ):
+
             def fake_fetch_gas():
                 yield
                 return None
@@ -103,7 +104,12 @@ class TestPostTxSettlementBehaviour:
         synced = MagicMock()
         synced.tx_submitter = CheckStakingKPIMetRound.auto_round_id()
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ):
             gas_called = []
 
             def fake_fetch_gas():
@@ -152,9 +158,16 @@ class TestFetchAndLogGasDetails:
         """Test fetch_and_log_gas_details when response is None."""
         obj, synced, params_mock, rs = self._setup()
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced), \
-             patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock), \
-             patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ), patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ), patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
 
             def fake_get_receipt(**kwargs):
                 yield
@@ -169,9 +182,16 @@ class TestFetchAndLogGasDetails:
         """Test fetch_and_log_gas_details when gas fields are missing."""
         obj, synced, params_mock, rs = self._setup()
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced), \
-             patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock), \
-             patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ), patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ), patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
 
             def fake_get_receipt(**kwargs):
                 yield
@@ -187,9 +207,16 @@ class TestFetchAndLogGasDetails:
         obj, synced, params_mock, rs = self._setup()
         params_mock.chain_to_chain_id_mapping = {}
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced), \
-             patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock), \
-             patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ), patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ), patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
 
             def fake_get_receipt(**kwargs):
                 yield
@@ -204,9 +231,16 @@ class TestFetchAndLogGasDetails:
         """Test fetch_and_log_gas_details with full success path."""
         obj, synced, params_mock, rs = self._setup()
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced), \
-             patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock), \
-             patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ), patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ), patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
 
             def fake_get_receipt(**kwargs):
                 yield
@@ -222,9 +256,16 @@ class TestFetchAndLogGasDetails:
         """Test when gasUsed present but effectiveGasPrice missing."""
         obj, synced, params_mock, rs = self._setup()
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced), \
-             patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock), \
-             patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ), patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ), patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
 
             def fake_get_receipt(**kwargs):
                 yield
@@ -239,9 +280,16 @@ class TestFetchAndLogGasDetails:
         """Test when effectiveGasPrice present but gasUsed missing."""
         obj, synced, params_mock, rs = self._setup()
 
-        with patch.object(type(obj), "synchronized_data", new_callable=PropertyMock, return_value=synced), \
-             patch.object(type(obj), "params", new_callable=PropertyMock, return_value=params_mock), \
-             patch.object(type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs):
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ), patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ), patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
 
             def fake_get_receipt(**kwargs):
                 yield

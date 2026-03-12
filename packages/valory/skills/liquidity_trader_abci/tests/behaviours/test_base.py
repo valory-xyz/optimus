@@ -25,73 +25,26 @@ import json
 import os
 import tempfile
 import time
-from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Tuple
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    AGENT_TYPE,
     AIRDROP_TOTAL_KEY,
-    APR_UPDATE_INTERVAL,
-    ASSETS_FILENAME,
-    CACHE_TTL,
-    CAMPAIGN_TYPES,
-    COIN_ID_MAPPING,
-    DECISION_MAKING_TIMEOUT,
-    ERC20_DECIMALS,
-    ETH_INITIAL_AMOUNT,
     ETH_REMAINING_KEY,
-    ETHER_VALUE,
-    EVALUATE_STRATEGY_TIMEOUT,
-    FETCH_STRATEGIES_TIMEOUT,
-    HTTP_NOT_FOUND,
-    HTTP_OK,
-    INTEGRATOR,
-    LIVENESS_RATIO_SCALE_FACTOR,
-    MAX_RETRIES_FOR_API_CALL,
-    MAX_RETRIES_FOR_ROUTES,
-    MAX_STEP_COST_RATIO,
-    METRICS_NAME,
-    METRICS_TYPE,
-    METRICS_UPDATE_INTERVAL,
     MIN_TIME_IN_POSITION,
     OLAS_ADDRESSES,
-    POOL_FILENAME,
-    PORTFOLIO_UPDATE_INTERVAL,
     PRICE_CACHE_KEY_PREFIX,
-    READ_MODE,
-    REQUIRED_REQUESTS_SAFETY_MARGIN,
-    RETRIES,
-    REWARD_TOKEN_ADDRESSES,
     REWARD_UPDATE_INTERVAL,
     REWARD_UPDATE_KEY_PREFIX,
-    SAFE_TX_GAS,
-    SLEEP_TIME,
-    THRESHOLDS,
-    UTF8,
-    WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
-    WHITELISTED_ASSETS,
-    WRITE_MODE,
     ZERO_ADDRESS,
     Action,
-    Chain,
-    Decision,
-    DexType,
     GasCostTracker,
     LiquidityTraderBaseBehaviour,
-    PositionStatus,
-    SwapStatus,
-    TradingType,
     execute_strategy,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_behaviour(**overrides: Any) -> LiquidityTraderBaseBehaviour:
@@ -134,11 +87,16 @@ def _make_behaviour(**overrides: Any) -> LiquidityTraderBaseBehaviour:
 
     coingecko = MagicMock()
     coingecko.api_key = "test_key"
-    coingecko.chain_to_platform_id_mapping = {"optimism": "optimistic-ethereum", "mode": "mode"}
+    coingecko.chain_to_platform_id_mapping = {
+        "optimism": "optimistic-ethereum",
+        "mode": "mode",
+    }
     coingecko.token_price_endpoint = "simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd"
     coingecko.coin_price_endpoint = "simple/price?ids={coin_id}&vs_currencies=usd"
     coingecko.historical_price_endpoint = "coins/{coin_id}/history?date={date}"
-    coingecko.historical_market_data_endpoint = "coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
+    coingecko.historical_market_data_endpoint = (
+        "coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
+    )
 
     ctx = MagicMock()
     ctx.agent_address = "test_agent"
@@ -197,257 +155,28 @@ def _exhaust(gen, sends=None):
 
 def _make_gen(return_value):
     """Create a generator function that yields once and returns return_value."""
+
     def method(*args, **kwargs):
         yield
         return return_value
+
     return method
 
 
 def _make_gen_none():
     """Generator that returns None."""
+
     def method(*args, **kwargs):
         if False:
             yield
         return None
+
     return method
-
-
-# ---------------------------------------------------------------------------
-# Tests: import
-# ---------------------------------------------------------------------------
 
 
 def test_import() -> None:
     """Test that the behaviours base module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.behaviours.base  # noqa
-
-
-# ---------------------------------------------------------------------------
-# Tests: Enums
-# ---------------------------------------------------------------------------
-
-
-class TestDexType:
-    """Test DexType enum."""
-
-    def test_is_enum(self) -> None:
-        assert issubclass(DexType, Enum)
-
-    def test_values(self) -> None:
-        assert DexType.BALANCER.value == "balancerPool"
-        assert DexType.UNISWAP_V3.value == "UniswapV3"
-        assert DexType.STURDY.value == "Sturdy"
-        assert DexType.VELODROME.value == "velodrome"
-
-    def test_member_count(self) -> None:
-        assert len(DexType) == 4
-
-
-class TestAction:
-    """Test Action enum."""
-
-    def test_is_enum(self) -> None:
-        assert issubclass(Action, Enum)
-
-    def test_key_values(self) -> None:
-        assert Action.CLAIM_REWARDS.value == "ClaimRewards"
-        assert Action.EXIT_POOL.value == "ExitPool"
-        assert Action.ENTER_POOL.value == "EnterPool"
-        assert Action.BRIDGE_SWAP.value == "BridgeAndSwap"
-        assert Action.FIND_BRIDGE_ROUTE.value == "FindBridgeRoute"
-        assert Action.EXECUTE_STEP.value == "execute_step"
-        assert Action.ROUTES_FETCHED.value == "routes_fetched"
-        assert Action.FIND_ROUTE.value == "find_route"
-        assert Action.BRIDGE_SWAP_EXECUTED.value == "bridge_swap_executed"
-        assert Action.STEP_EXECUTED.value == "step_executed"
-        assert Action.SWITCH_ROUTE.value == "switch_route"
-        assert Action.WITHDRAW.value == "withdraw"
-        assert Action.DEPOSIT.value == "deposit"
-        assert Action.STAKE_LP_TOKENS.value == "StakeLpTokens"
-        assert Action.UNSTAKE_LP_TOKENS.value == "UnstakeLpTokens"
-        assert Action.CLAIM_STAKING_REWARDS.value == "ClaimStakingRewards"
-
-    def test_member_count(self) -> None:
-        assert len(Action) == 16
-
-
-class TestSwapStatus:
-    """Test SwapStatus enum."""
-
-    def test_is_enum(self) -> None:
-        assert issubclass(SwapStatus, Enum)
-
-    def test_values(self) -> None:
-        assert SwapStatus.DONE.value == "DONE"
-        assert SwapStatus.PENDING.value == "PENDING"
-        assert SwapStatus.INVALID.value == "INVALID"
-        assert SwapStatus.NOT_FOUND.value == "NOT_FOUND"
-        assert SwapStatus.FAILED.value == "FAILED"
-
-
-class TestDecision:
-    """Test Decision enum."""
-
-    def test_is_enum(self) -> None:
-        assert issubclass(Decision, Enum)
-
-    def test_values(self) -> None:
-        assert Decision.CONTINUE.value == "continue"
-        assert Decision.WAIT.value == "wait"
-        assert Decision.EXIT.value == "exit"
-
-
-class TestPositionStatus:
-    """Test PositionStatus enum."""
-
-    def test_is_enum(self) -> None:
-        assert issubclass(PositionStatus, Enum)
-
-    def test_values(self) -> None:
-        assert PositionStatus.OPEN.value == "open"
-        assert PositionStatus.CLOSED.value == "closed"
-
-
-class TestTradingType:
-    """Test TradingType enum."""
-
-    def test_is_enum(self) -> None:
-        assert issubclass(TradingType, Enum)
-
-    def test_values(self) -> None:
-        assert TradingType.BALANCED.value == "balanced"
-        assert TradingType.RISKY.value == "risky"
-
-
-class TestChain:
-    """Test Chain enum."""
-
-    def test_is_enum(self) -> None:
-        assert issubclass(Chain, Enum)
-
-    def test_values(self) -> None:
-        assert Chain.OPTIMISM.value == "optimism"
-        assert Chain.MODE.value == "mode"
-
-
-# ---------------------------------------------------------------------------
-# Tests: Constants
-# ---------------------------------------------------------------------------
-
-
-class TestConstants:
-    """Test module-level constants."""
-
-    def test_zero_address(self) -> None:
-        assert ZERO_ADDRESS == "0x0000000000000000000000000000000000000000"
-
-    def test_safe_tx_gas(self) -> None:
-        assert SAFE_TX_GAS == 0
-
-    def test_ether_value(self) -> None:
-        assert ETHER_VALUE == 0
-
-    def test_liveness_ratio_scale_factor(self) -> None:
-        assert LIVENESS_RATIO_SCALE_FACTOR == 10**18
-
-    def test_required_requests_safety_margin(self) -> None:
-        assert REQUIRED_REQUESTS_SAFETY_MARGIN == 1
-
-    def test_max_retries(self) -> None:
-        assert MAX_RETRIES_FOR_API_CALL == 3
-        assert MAX_RETRIES_FOR_ROUTES == 3
-
-    def test_http_ok(self) -> None:
-        assert HTTP_OK == [200, 201]
-
-    def test_http_not_found(self) -> None:
-        assert HTTP_NOT_FOUND == [400, 404]
-
-    def test_utf8(self) -> None:
-        assert UTF8 == "utf-8"
-
-    def test_campaign_types(self) -> None:
-        assert CAMPAIGN_TYPES == [1, 2]
-
-    def test_integrator(self) -> None:
-        assert INTEGRATOR == "valory"
-
-    def test_waiting_period(self) -> None:
-        assert WAITING_PERIOD_FOR_BALANCE_TO_REFLECT == 5
-
-    def test_max_step_cost_ratio(self) -> None:
-        assert MAX_STEP_COST_RATIO == 0.5
-
-    def test_erc20_decimals(self) -> None:
-        assert ERC20_DECIMALS == 18
-
-    def test_agent_type(self) -> None:
-        assert "mode" in AGENT_TYPE
-        assert "optimism" in AGENT_TYPE
-
-    def test_metrics_name(self) -> None:
-        assert METRICS_NAME == "APR"
-
-    def test_metrics_type(self) -> None:
-        assert METRICS_TYPE == "json"
-
-    def test_portfolio_update_interval(self) -> None:
-        assert PORTFOLIO_UPDATE_INTERVAL == 3600
-
-    def test_apr_update_interval(self) -> None:
-        assert APR_UPDATE_INTERVAL == 3600 * 24
-
-    def test_metrics_update_interval(self) -> None:
-        assert METRICS_UPDATE_INTERVAL == 21600
-
-    def test_eth_initial_amount(self) -> None:
-        assert ETH_INITIAL_AMOUNT == int(0.005 * 10**18)
-
-    def test_eth_remaining_key(self) -> None:
-        assert ETH_REMAINING_KEY == "eth_remaining_amount"
-
-    def test_sleep_time(self) -> None:
-        assert SLEEP_TIME == 10
-
-    def test_retries(self) -> None:
-        assert RETRIES == 3
-
-    def test_min_time_in_position(self) -> None:
-        assert MIN_TIME_IN_POSITION == 21.0
-
-    def test_filenames(self) -> None:
-        assert ASSETS_FILENAME == "assets.json"
-        assert POOL_FILENAME == "current_pool.json"
-        assert READ_MODE == "r"
-        assert WRITE_MODE == "w"
-
-    def test_thresholds(self) -> None:
-        assert "balanced" in THRESHOLDS
-        assert "risky" in THRESHOLDS
-        assert THRESHOLDS["balanced"] == 0.3374
-        assert THRESHOLDS["risky"] == 0.2892
-
-    def test_whitelisted_assets(self) -> None:
-        assert "mode" in WHITELISTED_ASSETS
-        assert "optimism" in WHITELISTED_ASSETS
-
-    def test_coin_id_mapping(self) -> None:
-        assert "mode" in COIN_ID_MAPPING
-        assert "optimism" in COIN_ID_MAPPING
-
-    def test_reward_token_addresses(self) -> None:
-        assert "mode" in REWARD_TOKEN_ADDRESSES
-        assert "optimism" in REWARD_TOKEN_ADDRESSES
-
-    def test_timeout_constants(self) -> None:
-        assert EVALUATE_STRATEGY_TIMEOUT == 300
-        assert FETCH_STRATEGIES_TIMEOUT == 300
-        assert DECISION_MAKING_TIMEOUT == 180
-
-
-# ---------------------------------------------------------------------------
-# Tests: GasCostTracker
-# ---------------------------------------------------------------------------
 
 
 class TestGasCostTracker:
@@ -457,9 +186,6 @@ class TestGasCostTracker:
         tracker = GasCostTracker(file_path="/tmp/gas_costs.json")
         assert tracker.file_path == "/tmp/gas_costs.json"
         assert tracker.data == {}
-
-    def test_max_records(self) -> None:
-        assert GasCostTracker.MAX_RECORDS == 20
 
     def test_log_gas_usage_new_chain(self) -> None:
         tracker = GasCostTracker(file_path="/tmp/gas_costs.json")
@@ -494,11 +220,6 @@ class TestGasCostTracker:
         assert "1" not in tracker.data
 
 
-# ---------------------------------------------------------------------------
-# Tests: Properties
-# ---------------------------------------------------------------------------
-
-
 class TestProperties:
     """Test synchronized_data, params, shared_state properties."""
 
@@ -513,11 +234,6 @@ class TestProperties:
     def test_shared_state(self) -> None:
         b = _make_behaviour()
         assert b.shared_state is not None
-
-
-# ---------------------------------------------------------------------------
-# Tests: default_error / contract_interaction_error
-# ---------------------------------------------------------------------------
 
 
 class TestErrorMethods:
@@ -557,11 +273,6 @@ class TestErrorMethods:
         b.context.logger.error.assert_called()
 
 
-# ---------------------------------------------------------------------------
-# Tests: _convert_to_token_units
-# ---------------------------------------------------------------------------
-
-
 class TestConvertToTokenUnits:
     """Test _convert_to_token_units."""
 
@@ -586,11 +297,6 @@ class TestConvertToTokenUnits:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_price_cache_key
-# ---------------------------------------------------------------------------
-
-
 class TestGetPriceCacheKey:
     """Test _get_price_cache_key."""
 
@@ -603,11 +309,6 @@ class TestGetPriceCacheKey:
         b = _make_behaviour()
         key = b._get_price_cache_key("0xABC", None)
         assert key == f"{PRICE_CACHE_KEY_PREFIX}0xabc_None"
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_balance
-# ---------------------------------------------------------------------------
 
 
 class TestGetBalance:
@@ -652,11 +353,6 @@ class TestGetBalance:
         assert b._get_balance("optimism", "0xabcd", positions) == 999
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_active_lp_addresses
-# ---------------------------------------------------------------------------
-
-
 class TestGetActiveLpAddresses:
     """Test _get_active_lp_addresses."""
 
@@ -682,11 +378,6 @@ class TestGetActiveLpAddresses:
         assert len(result) == 0
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_reward_token_addresses
-# ---------------------------------------------------------------------------
-
-
 class TestGetRewardTokenAddresses:
     """Test _get_reward_token_addresses."""
 
@@ -699,11 +390,6 @@ class TestGetRewardTokenAddresses:
         b = _make_behaviour()
         result = b._get_reward_token_addresses("unknown_chain")
         assert len(result) == 0
-
-
-# ---------------------------------------------------------------------------
-# Tests: get_coin_id_from_symbol
-# ---------------------------------------------------------------------------
 
 
 class TestGetCoinIdFromSymbol:
@@ -724,11 +410,6 @@ class TestGetCoinIdFromSymbol:
         b = _make_behaviour()
         result = b.get_coin_id_from_symbol("usdc", "nonexistent")
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_usdc_address / _get_olas_address
-# ---------------------------------------------------------------------------
 
 
 class TestChainAddresses:
@@ -765,11 +446,6 @@ class TestChainAddresses:
         assert addr is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _has_staking_metadata
-# ---------------------------------------------------------------------------
-
-
 class TestHasStakingMetadata:
     """Test _has_staking_metadata."""
 
@@ -792,11 +468,6 @@ class TestHasStakingMetadata:
     def test_zero_staked_amount(self) -> None:
         b = _make_behaviour()
         assert b._has_staking_metadata({"staked_amount": 0}) is False
-
-
-# ---------------------------------------------------------------------------
-# Tests: _is_airdrop_transfer
-# ---------------------------------------------------------------------------
 
 
 class TestIsAirdropTransfer:
@@ -835,11 +506,6 @@ class TestIsAirdropTransfer:
         assert b._is_airdrop_transfer({}, None) is False
 
 
-# ---------------------------------------------------------------------------
-# Tests: _calculate_days_since_entry / _check_minimum_time_met
-# ---------------------------------------------------------------------------
-
-
 class TestTimeCalculations:
     """Test time-related methods."""
 
@@ -855,7 +521,10 @@ class TestTimeCalculations:
 
     def test_check_minimum_time_met_zero_days(self) -> None:
         b = _make_behaviour()
-        assert b._check_minimum_time_met({"enter_timestamp": 100, "min_hold_days": 0}) is True
+        assert (
+            b._check_minimum_time_met({"enter_timestamp": 100, "min_hold_days": 0})
+            is True
+        )
 
     def test_check_minimum_time_met_true(self) -> None:
         b = _make_behaviour()
@@ -874,11 +543,6 @@ class TestTimeCalculations:
         assert result is False
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_entry_costs_key
-# ---------------------------------------------------------------------------
-
-
 class TestGetEntryCostsKey:
     """Test _get_entry_costs_key."""
 
@@ -886,11 +550,6 @@ class TestGetEntryCostsKey:
         b = _make_behaviour()
         key = b._get_entry_costs_key("optimism", "pool123")
         assert key == "entry_costs_optimism_pool123"
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_current_timestamp
-# ---------------------------------------------------------------------------
 
 
 class TestGetCurrentTimestamp:
@@ -901,11 +560,6 @@ class TestGetCurrentTimestamp:
         ts = b._get_current_timestamp()
         assert isinstance(ts, int)
         assert ts > 0
-
-
-# ---------------------------------------------------------------------------
-# Tests: generate_phonetic_syllable / generate_phonetic_name / generate_name
-# ---------------------------------------------------------------------------
 
 
 class TestNameGeneration:
@@ -945,11 +599,6 @@ class TestNameGeneration:
         r1 = b.generate_name(address)
         r2 = b.generate_name(address)
         assert r1 == r2
-
-
-# ---------------------------------------------------------------------------
-# Tests: _store_data / _read_data
-# ---------------------------------------------------------------------------
 
 
 class TestStoreReadData:
@@ -1023,11 +672,6 @@ class TestStoreReadData:
         b = _make_behaviour()
         b._store_data({"key": "val"}, "test", "/nonexistent_dir/file.json")
         b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: store/read convenience methods
-# ---------------------------------------------------------------------------
 
 
 class TestStoreReadConvenience:
@@ -1110,11 +754,6 @@ class TestStoreReadConvenience:
             os.unlink(b.gas_cost_tracker.file_path)
 
 
-# ---------------------------------------------------------------------------
-# Tests: initialize_agent_performance / update_agent_performance_timestamp
-# ---------------------------------------------------------------------------
-
-
 class TestAgentPerformance:
     """Test agent performance methods."""
 
@@ -1151,11 +790,6 @@ class TestAgentPerformance:
         assert "timestamp" in b.agent_performance
 
 
-# ---------------------------------------------------------------------------
-# Tests: _calculate_rate_limit_wait_time
-# ---------------------------------------------------------------------------
-
-
 class TestCalculateRateLimitWaitTime:
     """Test _calculate_rate_limit_wait_time."""
 
@@ -1184,17 +818,13 @@ class TestCalculateRateLimitWaitTime:
         assert b._calculate_rate_limit_wait_time() == 0
 
 
-# ---------------------------------------------------------------------------
-# Tests: Generator methods using _exhaust
-# ---------------------------------------------------------------------------
-
-
 class TestContractInteract:
     """Test contract_interact generator."""
 
     def test_success(self) -> None:
         b = _make_behaviour()
         from packages.valory.protocols.contract_api import ContractApiMessage
+
         resp = MagicMock()
         resp.performative = ContractApiMessage.Performative.RAW_TRANSACTION
         resp.raw_transaction.body = {"data": "result_value"}
@@ -1213,6 +843,7 @@ class TestContractInteract:
     def test_wrong_performative(self) -> None:
         b = _make_behaviour()
         from packages.valory.protocols.contract_api import ContractApiMessage
+
         resp = MagicMock()
         resp.performative = ContractApiMessage.Performative.ERROR
         b.get_contract_api_response = _make_gen(resp)
@@ -1230,6 +861,7 @@ class TestContractInteract:
     def test_missing_data_key(self) -> None:
         b = _make_behaviour()
         from packages.valory.protocols.contract_api import ContractApiMessage
+
         resp = MagicMock()
         resp.performative = ContractApiMessage.Performative.RAW_TRANSACTION
         resp.raw_transaction.body = {"other_key": "val"}
@@ -1244,11 +876,6 @@ class TestContractInteract:
             )
         )
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: get_positions
-# ---------------------------------------------------------------------------
 
 
 class TestGetPositions:
@@ -1274,11 +901,6 @@ class TestGetPositions:
         assert result == []
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_optimism_balances_from_safe_api
-# ---------------------------------------------------------------------------
-
-
 class TestGetOptimismBalances:
     """Test _get_optimism_balances_from_safe_api."""
 
@@ -1294,7 +916,11 @@ class TestGetOptimismBalances:
         b._fetch_safe_balances_with_pagination = _make_gen(
             [
                 {"tokenAddress": None, "balance": "1000"},
-                {"tokenAddress": token_addr, "token": {"symbol": "USDC"}, "balance": "500"},
+                {
+                    "tokenAddress": token_addr,
+                    "token": {"symbol": "USDC"},
+                    "balance": "500",
+                },
             ]
         )
         b._fetch_reward_balances = _make_gen([])
@@ -1340,19 +966,10 @@ class TestGetOptimismBalances:
     def test_with_reward_and_ousdt(self) -> None:
         b = _make_behaviour()
         b._fetch_safe_balances_with_pagination = _make_gen([])
-        b._fetch_reward_balances = _make_gen(
-            [{"asset_symbol": "VELO", "balance": 100}]
-        )
-        b._fetch_ousdt_balance = _make_gen(
-            {"asset_symbol": "oUSDT", "balance": 50}
-        )
+        b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 100}])
+        b._fetch_ousdt_balance = _make_gen({"asset_symbol": "oUSDT", "balance": 50})
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_mode_balances_from_explorer_api
-# ---------------------------------------------------------------------------
 
 
 class TestGetModeBalances:
@@ -1380,11 +997,6 @@ class TestGetModeBalances:
         b._fetch_mode_token_balances = _make_gen([])
         result = _exhaust(b._get_mode_balances_from_explorer_api())
         assert len(result) == 0
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_mode_token_balances
-# ---------------------------------------------------------------------------
 
 
 class TestFetchModeTokenBalances:
@@ -1426,7 +1038,12 @@ class TestFetchModeTokenBalances:
         b.current_positions = []
         token_addr = "0x" + "ff" * 20
         b._fetch_mode_tokens_with_pagination = _make_gen(
-            [{"token": {"address": token_addr, "symbol": "TOK"}, "value": "not_a_number"}]
+            [
+                {
+                    "token": {"address": token_addr, "symbol": "TOK"},
+                    "value": "not_a_number",
+                }
+            ]
         )
         result = _exhaust(b._fetch_mode_token_balances("0xSafe"))
         assert len(result) == 0
@@ -1441,11 +1058,6 @@ class TestFetchModeTokenBalances:
         )
         result = _exhaust(b._fetch_mode_token_balances("0xSafe"))
         assert len(result) == 0
-
-
-# ---------------------------------------------------------------------------
-# Tests: _is_staking_kpi_met
-# ---------------------------------------------------------------------------
 
 
 class TestIsStakingKpiMet:
@@ -1482,11 +1094,6 @@ class TestIsStakingKpiMet:
         b._get_multisig_nonces_since_last_cp = _make_gen(None)
         result = _exhaust(b._is_staking_kpi_met())
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_multisig_nonces / _get_multisig_nonces_since_last_cp
-# ---------------------------------------------------------------------------
 
 
 class TestMultisigNonces:
@@ -1537,11 +1144,6 @@ class TestMultisigNonces:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_service_info / _get_service_staking_state
-# ---------------------------------------------------------------------------
-
-
 class TestServiceInfo:
     """Test service info methods."""
 
@@ -1574,11 +1176,6 @@ class TestServiceInfo:
         b.contract_interact = _make_gen(StakingState.STAKED.value)
         _exhaust(b._get_service_staking_state("optimism"))
         assert b.service_staking_state == StakingState.STAKED
-
-
-# ---------------------------------------------------------------------------
-# Tests: _liveness_ratio / _liveness_period
-# ---------------------------------------------------------------------------
 
 
 class TestLiveness:
@@ -1617,11 +1214,6 @@ class TestLiveness:
         b.context.logger.error.assert_called()
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_cached_price / _cache_price
-# ---------------------------------------------------------------------------
-
-
 class TestPriceCache:
     """Test price caching methods."""
 
@@ -1634,9 +1226,7 @@ class TestPriceCache:
     def test_get_cached_price_historical(self) -> None:
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "01-01-2025")
-        b._read_kv = _make_gen(
-            {cache_key: json.dumps({"01-01-2025": 1.5})}
-        )
+        b._read_kv = _make_gen({cache_key: json.dumps({"01-01-2025": 1.5})})
         result = _exhaust(b._get_cached_price("0xToken", "01-01-2025"))
         assert result == 1.5
 
@@ -1657,9 +1247,7 @@ class TestPriceCache:
     def test_cache_price_existing(self) -> None:
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "01-01-2025")
-        b._read_kv = _make_gen(
-            {cache_key: json.dumps({"old_date": 1.0})}
-        )
+        b._read_kv = _make_gen({cache_key: json.dumps({"old_date": 1.0})})
         b._write_kv = _make_gen(True)
         _exhaust(b._cache_price("0xToken", 1.5, "01-01-2025"))
 
@@ -1670,11 +1258,6 @@ class TestPriceCache:
         b._write_kv = _make_gen(True)
         _exhaust(b._cache_price("0xToken", 1.5, "01-01-2025"))
         b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_token_prices
-# ---------------------------------------------------------------------------
 
 
 class TestFetchTokenPrices:
@@ -1706,11 +1289,6 @@ class TestFetchTokenPrices:
         assert result == {}
 
 
-# ---------------------------------------------------------------------------
-# Tests: _build_exit_pool_action_base
-# ---------------------------------------------------------------------------
-
-
 class TestBuildExitPoolAction:
     """Test _build_exit_pool_action_base."""
 
@@ -1723,11 +1301,6 @@ class TestBuildExitPoolAction:
         b = _make_behaviour()
         result = b._build_exit_pool_action_base({})
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _build_unstake_lp_tokens_action
-# ---------------------------------------------------------------------------
 
 
 class TestBuildUnstakeAction:
@@ -1750,11 +1323,6 @@ class TestBuildUnstakeAction:
             {"dex_type": "velodrome", "chain": "optimism", "pool_address": "0xPool"}
         )
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: get_eth_remaining_amount / update / reset
-# ---------------------------------------------------------------------------
 
 
 class TestEthRemainingAmount:
@@ -1811,11 +1379,6 @@ class TestEthRemainingAmount:
         # Should have written 700
 
 
-# ---------------------------------------------------------------------------
-# Tests: should_update_rewards_from_subgraph
-# ---------------------------------------------------------------------------
-
-
 class TestShouldUpdateRewards:
     """Test should_update_rewards_from_subgraph."""
 
@@ -1857,53 +1420,35 @@ class TestShouldUpdateRewards:
         assert result is True
 
 
-# ---------------------------------------------------------------------------
-# Tests: get_accumulated_rewards_for_token
-# ---------------------------------------------------------------------------
-
-
 class TestGetAccumulatedRewards:
     """Test get_accumulated_rewards_for_token."""
 
     def test_no_result(self) -> None:
         b = _make_behaviour()
         b._read_kv = _make_gen(None)
-        result = _exhaust(
-            b.get_accumulated_rewards_for_token("optimism", "0xToken")
-        )
+        result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 0
 
     def test_valid_value(self) -> None:
         b = _make_behaviour()
         key = "accumulated_rewards_optimism_0xtoken"
         b._read_kv = _make_gen({key: "12345"})
-        result = _exhaust(
-            b.get_accumulated_rewards_for_token("optimism", "0xToken")
-        )
+        result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 12345
 
     def test_none_value(self) -> None:
         b = _make_behaviour()
         key = "accumulated_rewards_optimism_0xtoken"
         b._read_kv = _make_gen({key: None})
-        result = _exhaust(
-            b.get_accumulated_rewards_for_token("optimism", "0xToken")
-        )
+        result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 0
 
     def test_invalid_value(self) -> None:
         b = _make_behaviour()
         key = "accumulated_rewards_optimism_0xtoken"
         b._read_kv = _make_gen({key: "not_int"})
-        result = _exhaust(
-            b.get_accumulated_rewards_for_token("optimism", "0xToken")
-        )
+        result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 0
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_all_entry_costs / _store_entry_costs
-# ---------------------------------------------------------------------------
 
 
 class TestEntryCosts:
@@ -1935,11 +1480,6 @@ class TestEntryCosts:
         # This should not raise
         _exhaust(b._store_entry_costs("optimism", "pool1", 5.0))
         b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: _update_airdrop_rewards / _get_total_airdrop_rewards
-# ---------------------------------------------------------------------------
 
 
 class TestAirdropRewards:
@@ -1975,6 +1515,7 @@ class TestAirdropRewards:
         b = _make_behaviour()
         # First read for dedup check returns nothing
         call_count = [0]
+
         def fake_read_kv(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -1982,6 +1523,7 @@ class TestAirdropRewards:
                 return {}  # No processed marker
             yield
             return {}
+
         b._read_kv = fake_read_kv
         b._get_total_airdrop_rewards = _make_gen(0)
         b._write_kv = _make_gen(True)
@@ -1993,11 +1535,6 @@ class TestAirdropRewards:
         b._read_kv = _make_gen({processed_key: "true"})
         _exhaust(b._update_airdrop_rewards(100, "mode", tx_hash="0xabc"))
         # Should return early without updating
-
-
-# ---------------------------------------------------------------------------
-# Tests: sign_message
-# ---------------------------------------------------------------------------
 
 
 class TestSignMessage:
@@ -2014,11 +1551,6 @@ class TestSignMessage:
         b.get_signature = _make_gen(None)
         result = _exhaust(b.sign_message("hello"))
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: calculate_initial_investment
-# ---------------------------------------------------------------------------
 
 
 class TestCalculateInitialInvestment:
@@ -2046,6 +1578,7 @@ class TestCalculateInitialInvestment:
             {"status": "open", "pool_address": "0xP", "tx_hash": "0xH"},
         ]
         call_count = [0]
+
         def fake_calc(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -2053,14 +1586,10 @@ class TestCalculateInitialInvestment:
                 return None
             yield
             return 50.0
+
         b.calculate_initial_investment_value = fake_calc
         result = _exhaust(b.calculate_initial_investment())
         assert result == 50.0
-
-
-# ---------------------------------------------------------------------------
-# Tests: execute_strategy (module-level function)
-# ---------------------------------------------------------------------------
 
 
 class TestExecuteStrategy:
@@ -2071,9 +1600,7 @@ class TestExecuteStrategy:
         assert result is None
 
     def test_no_callable_in_exec(self) -> None:
-        result = execute_strategy(
-            "test", {"test": ("x = 1", "nonexistent_method")}
-        )
+        result = execute_strategy("test", {"test": ("x = 1", "nonexistent_method")})
         assert result is None
 
     def test_valid_strategy(self) -> None:
@@ -2085,11 +1612,6 @@ class TestExecuteStrategy:
         code = "def gen_func(**kwargs):\n    yield 1\n    yield 2"
         result = execute_strategy("strat", {"strat": (code, "gen_func")})
         assert result == [1, 2]
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_reward_balances
-# ---------------------------------------------------------------------------
 
 
 class TestFetchRewardBalances:
@@ -2119,11 +1641,6 @@ class TestFetchRewardBalances:
         assert result == []
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_ousdt_balance
-# ---------------------------------------------------------------------------
-
-
 class TestFetchOusdtBalance:
     """Test _fetch_ousdt_balance generator."""
 
@@ -2149,17 +1666,14 @@ class TestFetchOusdtBalance:
 
     def test_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_gen(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._get_token_balance = bad_gen
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _adjust_current_positions_for_backward_compatibility
-# ---------------------------------------------------------------------------
 
 
 class TestAdjustPositions:
@@ -2210,11 +1724,6 @@ class TestAdjustPositions:
         assert b.current_positions == []
 
 
-# ---------------------------------------------------------------------------
-# Tests: _calculate_min_num_of_safe_tx_required
-# ---------------------------------------------------------------------------
-
-
 class TestCalculateMinSafeTx:
     """Test _calculate_min_num_of_safe_tx_required."""
 
@@ -2250,11 +1759,6 @@ class TestCalculateMinSafeTx:
         assert result > 0
 
 
-# ---------------------------------------------------------------------------
-# Tests: _invalidate_cl_pool_cache
-# ---------------------------------------------------------------------------
-
-
 class TestInvalidateClPoolCache:
     """Test _invalidate_cl_pool_cache."""
 
@@ -2266,17 +1770,14 @@ class TestInvalidateClPoolCache:
 
     def test_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_write(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._write_kv = bad_write
         _exhaust(b._invalidate_cl_pool_cache("optimism"))
         b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: __init__ (via pragma — no direct test, but verify store/read paths)
-# ---------------------------------------------------------------------------
 
 
 class TestStoreReadMethods:
@@ -2385,11 +1886,6 @@ class TestUpdateAgentPerformanceTimestampException:
             mock_dt.now.side_effect = Exception("boom")
             b.update_agent_performance_timestamp()
             b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: contract-interact generator methods
-# ---------------------------------------------------------------------------
 
 
 class TestGetTokenDecimals:
@@ -2505,13 +2001,10 @@ class TestFetchTokenNameFromContract:
     def test_returns_name(self) -> None:
         b = _make_behaviour()
         b.contract_interact = _make_gen("Wrapped Ether")
-        result = _exhaust(b._fetch_token_name_from_contract("optimism", "0x" + "ab" * 20))
+        result = _exhaust(
+            b._fetch_token_name_from_contract("optimism", "0x" + "ab" * 20)
+        )
         assert result == "Wrapped Ether"
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_token_price
-# ---------------------------------------------------------------------------
 
 
 class TestFetchTokenPriceFull:
@@ -2583,11 +2076,6 @@ class TestFetchTokenPriceFull:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_coin_price
-# ---------------------------------------------------------------------------
-
-
 class TestFetchCoinPrice:
     """Test _fetch_coin_price method."""
 
@@ -2610,18 +2098,14 @@ class TestFetchCoinPrice:
     def test_success_no_price(self) -> None:
         b = _make_behaviour()
         b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
-            return_value=(True, {"ethereum": {"usd": 0}})
-        )
+        b.coingecko.request = MagicMock(return_value=(True, {"ethereum": {"usd": 0}}))
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result == 0
 
     def test_success_exception(self) -> None:
         b = _make_behaviour()
         b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
-            return_value=(True, None)
-        )
+        b.coingecko.request = MagicMock(return_value=(True, None))
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result is None
 
@@ -2631,11 +2115,6 @@ class TestFetchCoinPrice:
         b.coingecko.request = MagicMock(return_value=(False, {}))
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_token_prices
-# ---------------------------------------------------------------------------
 
 
 class TestFetchTokenPrices:
@@ -2664,11 +2143,6 @@ class TestFetchTokenPrices:
         assert result[addr] == 2.5
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_cached_price edge cases
-# ---------------------------------------------------------------------------
-
-
 class TestGetCachedPriceEdge:
     """Test _get_cached_price edge cases."""
 
@@ -2694,11 +2168,6 @@ class TestGetCachedPriceEdge:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _cache_price
-# ---------------------------------------------------------------------------
-
-
 class TestCachePrice:
     """Test _cache_price."""
 
@@ -2715,11 +2184,6 @@ class TestCachePrice:
         b._write_kv = _make_gen(True)
         _exhaust(b._cache_price("ethereum", 1800.0, "01-01-2024"))
         b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: _request_with_retries
-# ---------------------------------------------------------------------------
 
 
 class TestRequestWithRetries:
@@ -2827,11 +2291,6 @@ class TestRequestWithRetries:
         assert success is True
 
 
-# ---------------------------------------------------------------------------
-# Tests: _do_connection_request
-# ---------------------------------------------------------------------------
-
-
 class TestDoConnectionRequest:
     """Test _do_connection_request."""
 
@@ -2847,11 +2306,6 @@ class TestDoConnectionRequest:
         b.wait_for_message = _make_gen(expected)
         result = _exhaust(b._do_connection_request(MagicMock(), MagicMock()))
         assert result == expected
-
-
-# ---------------------------------------------------------------------------
-# Tests: _call_mirrordb
-# ---------------------------------------------------------------------------
 
 
 class TestCallMirrordb:
@@ -2886,11 +2340,6 @@ class TestCallMirrordb:
         b.context.srr_dialogues = srr_dialogues
         result = _exhaust(b._call_mirrordb("read_", endpoint="test"))
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _read_kv / _write_kv
-# ---------------------------------------------------------------------------
 
 
 class TestReadWriteKV:
@@ -2943,11 +2392,6 @@ class TestReadWriteKV:
             _exhaust(b._write_kv({"key1": "val1"}))
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_safe_balances_with_pagination
-# ---------------------------------------------------------------------------
-
-
 class TestFetchSafeBalancesWithPagination:
     """Test _fetch_safe_balances_with_pagination."""
 
@@ -2971,11 +2415,6 @@ class TestFetchSafeBalancesWithPagination:
         assert result == []
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_mode_tokens_with_pagination
-# ---------------------------------------------------------------------------
-
-
 class TestFetchModeTokensWithPagination:
     """Test _fetch_mode_tokens_with_pagination."""
 
@@ -2997,11 +2436,6 @@ class TestFetchModeTokensWithPagination:
         b._request_with_retries = _make_gen((True, {"items": []}))
         result = _exhaust(b._fetch_mode_tokens_with_pagination("0xSafe"))
         assert result == []
-
-
-# ---------------------------------------------------------------------------
-# Tests: _adjust_current_positions_for_backward_compatibility
-# ---------------------------------------------------------------------------
 
 
 class TestAdjustCurrentPositions:
@@ -3081,11 +2515,6 @@ class TestAdjustCurrentPositions:
             assert b.current_positions[0]["entry_apr"] == 15.5
 
 
-# ---------------------------------------------------------------------------
-# Tests: calculate_initial_investment_value
-# ---------------------------------------------------------------------------
-
-
 class TestCalculateInitialInvestmentValue:
     """Test calculate_initial_investment_value."""
 
@@ -3097,7 +2526,12 @@ class TestCalculateInitialInvestmentValue:
     def test_no_token0_decimals(self) -> None:
         b = _make_behaviour()
         b._get_token_decimals = _make_gen(None)
-        pos = {"token0": "0xT0", "amount0": 1000, "timestamp": 1700000000, "chain": "optimism"}
+        pos = {
+            "token0": "0xT0",
+            "amount0": 1000,
+            "timestamp": 1700000000,
+            "chain": "optimism",
+        }
         result = _exhaust(b.calculate_initial_investment_value(pos))
         assert result is None
 
@@ -3118,9 +2552,7 @@ class TestCalculateInitialInvestmentValue:
     def test_two_tokens(self) -> None:
         b = _make_behaviour()
         b._get_token_decimals = _make_gen(18)
-        b._fetch_historical_token_prices = _make_gen(
-            {"0xT0": 1.0, "0xT1": 2.0}
-        )
+        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0, "0xT1": 2.0})
         pos = {
             "token0": "0xT0",
             "token0_symbol": "A",
@@ -3163,11 +2595,6 @@ class TestCalculateInitialInvestmentValue:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: calculate_initial_investment (aggregates over positions)
-# ---------------------------------------------------------------------------
-
-
 class TestCalculateInitialInvestment:
     """Test calculate_initial_investment."""
 
@@ -3197,11 +2624,6 @@ class TestCalculateInitialInvestment:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_historical_token_prices
-# ---------------------------------------------------------------------------
-
-
 class TestFetchHistoricalTokenPrices:
     """Test _fetch_historical_token_prices."""
 
@@ -3225,11 +2647,6 @@ class TestFetchHistoricalTokenPrices:
                 )
             )
             assert result == {}
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_historical_token_price
-# ---------------------------------------------------------------------------
 
 
 class TestFetchHistoricalTokenPrice:
@@ -3276,11 +2693,6 @@ class TestFetchHistoricalTokenPrice:
         b.coingecko.request = MagicMock(return_value=(False, {}))
         result = _exhaust(b._fetch_historical_token_price("usd-coin", "01-01-2024"))
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_token_prices_sma
-# ---------------------------------------------------------------------------
 
 
 class TestFetchTokenPricesSma:
@@ -3338,9 +2750,7 @@ class TestFetchTokenPricesSma:
         b._get_token_symbol = _make_gen("ETH")
         b.sleep = _make_gen(None)
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(
-                return_value=(True, {"prices": []})
-            )
+            b.coingecko.request = MagicMock(return_value=(True, {"prices": []}))
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
             assert result is None
 
@@ -3351,11 +2761,6 @@ class TestFetchTokenPricesSma:
         with patch.object(b, "get_coin_id_from_symbol", side_effect=Exception("err")):
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
             assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: query_service_rewards
-# ---------------------------------------------------------------------------
 
 
 class TestQueryServiceRewards:
@@ -3391,11 +2796,6 @@ class TestQueryServiceRewards:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: update_accumulated_rewards_for_chain
-# ---------------------------------------------------------------------------
-
-
 class TestUpdateAccumulatedRewardsForChain:
     """Test update_accumulated_rewards_for_chain."""
 
@@ -3423,11 +2823,6 @@ class TestUpdateAccumulatedRewardsForChain:
         b.query_service_rewards = _make_gen({"olasRewardsEarned": "not_a_number"})
         b._write_kv = _make_gen(True)
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
-
-
-# ---------------------------------------------------------------------------
-# Tests: should_update_rewards_from_subgraph
-# ---------------------------------------------------------------------------
 
 
 class TestShouldUpdateRewardsFromSubgraph:
@@ -3460,27 +2855,19 @@ class TestShouldUpdateRewardsFromSubgraph:
         assert result is False
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_all_entry_costs exception
-# ---------------------------------------------------------------------------
-
-
 class TestGetAllEntryCostsException:
     """Test _get_all_entry_costs exception path."""
 
     def test_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_read(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._read_kv = bad_read
         result = _exhaust(b._get_all_entry_costs())
         assert result == {}
-
-
-# ---------------------------------------------------------------------------
-# Tests: _build_exit_pool_action_base (full coverage)
-# ---------------------------------------------------------------------------
 
 
 class TestBuildExitPoolActionBaseFull:
@@ -3548,19 +2935,12 @@ class TestBuildExitPoolActionBaseFull:
         assert result["assets"] == ["0xA", "0xB"]
 
 
-# ---------------------------------------------------------------------------
-# Tests: _build_swap_to_usdc_action
-# ---------------------------------------------------------------------------
-
-
 class TestBuildSwapToUsdcAction:
     """Test _build_swap_to_usdc_action."""
 
     def test_success(self) -> None:
         b = _make_behaviour()
-        result = b._build_swap_to_usdc_action(
-            "optimism", "0x" + "ab" * 20, "WETH"
-        )
+        result = b._build_swap_to_usdc_action("optimism", "0x" + "ab" * 20, "WETH")
         assert result is not None
         assert result["action"] == Action.FIND_BRIDGE_ROUTE.value
 
@@ -3595,11 +2975,6 @@ class TestBuildSwapToUsdcAction:
             assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_usdc_address exception
-# ---------------------------------------------------------------------------
-
-
 class TestGetUsdcAddressException:
     """Test _get_usdc_address exception path."""
 
@@ -3613,20 +2988,19 @@ class TestGetUsdcAddressException:
             assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: Velodrome helper methods
-# ---------------------------------------------------------------------------
-
-
 class TestVelodromePositionPrincipal:
     """Test get_velodrome_position_principal."""
 
     def test_success(self) -> None:
         b = _make_behaviour()
-        b.params.velodrome_slipstream_helper_contract_addresses = {"optimism": "0x" + "55" * 20}
+        b.params.velodrome_slipstream_helper_contract_addresses = {
+            "optimism": "0x" + "55" * 20
+        }
         b.contract_interact = _make_gen([100, 200])
         result = _exhaust(
-            b.get_velodrome_position_principal("optimism", "0xPM", 1, 79228162514264337593543950336)
+            b.get_velodrome_position_principal(
+                "optimism", "0xPM", 1, 79228162514264337593543950336
+            )
         )
         assert result == (100, 200)
 
@@ -3634,16 +3008,22 @@ class TestVelodromePositionPrincipal:
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {}
         result = _exhaust(
-            b.get_velodrome_position_principal("optimism", "0xPM", 1, 79228162514264337593543950336)
+            b.get_velodrome_position_principal(
+                "optimism", "0xPM", 1, 79228162514264337593543950336
+            )
         )
         assert result == (0, 0)
 
     def test_no_amounts(self) -> None:
         b = _make_behaviour()
-        b.params.velodrome_slipstream_helper_contract_addresses = {"optimism": "0x" + "55" * 20}
+        b.params.velodrome_slipstream_helper_contract_addresses = {
+            "optimism": "0x" + "55" * 20
+        }
         b.contract_interact = _make_gen(None)
         result = _exhaust(
-            b.get_velodrome_position_principal("optimism", "0xPM", 1, 79228162514264337593543950336)
+            b.get_velodrome_position_principal(
+                "optimism", "0xPM", 1, 79228162514264337593543950336
+            )
         )
         assert result == (0, 0)
 
@@ -3653,7 +3033,9 @@ class TestVelodromeAmountsForLiquidity:
 
     def test_success(self) -> None:
         b = _make_behaviour()
-        b.params.velodrome_slipstream_helper_contract_addresses = {"optimism": "0x" + "55" * 20}
+        b.params.velodrome_slipstream_helper_contract_addresses = {
+            "optimism": "0x" + "55" * 20
+        }
         b.contract_interact = _make_gen([300, 400])
         result = _exhaust(
             b.get_velodrome_amounts_for_liquidity("optimism", 1000, 500, 2000, 100)
@@ -3670,7 +3052,9 @@ class TestVelodromeAmountsForLiquidity:
 
     def test_no_amounts(self) -> None:
         b = _make_behaviour()
-        b.params.velodrome_slipstream_helper_contract_addresses = {"optimism": "0x" + "55" * 20}
+        b.params.velodrome_slipstream_helper_contract_addresses = {
+            "optimism": "0x" + "55" * 20
+        }
         b.contract_interact = _make_gen(None)
         result = _exhaust(
             b.get_velodrome_amounts_for_liquidity("optimism", 1000, 500, 2000, 100)
@@ -3683,7 +3067,9 @@ class TestVelodromeSqrtRatioAtTick:
 
     def test_success(self) -> None:
         b = _make_behaviour()
-        b.params.velodrome_slipstream_helper_contract_addresses = {"optimism": "0x" + "55" * 20}
+        b.params.velodrome_slipstream_helper_contract_addresses = {
+            "optimism": "0x" + "55" * 20
+        }
         b.contract_interact = _make_gen(79228162514264337593543950336)
         result = _exhaust(b.get_velodrome_sqrt_ratio_at_tick("optimism", 0))
         assert result == 79228162514264337593543950336
@@ -3696,15 +3082,12 @@ class TestVelodromeSqrtRatioAtTick:
 
     def test_no_result(self) -> None:
         b = _make_behaviour()
-        b.params.velodrome_slipstream_helper_contract_addresses = {"optimism": "0x" + "55" * 20}
+        b.params.velodrome_slipstream_helper_contract_addresses = {
+            "optimism": "0x" + "55" * 20
+        }
         b.contract_interact = _make_gen(None)
         result = _exhaust(b.get_velodrome_sqrt_ratio_at_tick("optimism", 0))
         assert result == 0
-
-
-# ---------------------------------------------------------------------------
-# Tests: _build_unstake_lp_tokens_action (CL pool paths)
-# ---------------------------------------------------------------------------
 
 
 class TestBuildUnstakeActionFull:
@@ -3802,11 +3185,6 @@ class TestBuildUnstakeActionFull:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: MirrorDB agent registry methods
-# ---------------------------------------------------------------------------
-
-
 class TestAgentRegistryMethods:
     """Test MirrorDB agent registry generator methods."""
 
@@ -3871,11 +3249,6 @@ class TestAgentRegistryMethods:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_or_create_agent_type
-# ---------------------------------------------------------------------------
-
-
 class TestGetOrCreateAgentType:
     """Test _get_or_create_agent_type."""
 
@@ -3900,11 +3273,6 @@ class TestGetOrCreateAgentType:
         b._write_kv = _make_gen(True)
         result = _exhaust(b._get_or_create_agent_type("0xAddr"))
         assert result["type_id"] == "t3"
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_or_create_attr_def
-# ---------------------------------------------------------------------------
 
 
 class TestGetOrCreateAttrDef:
@@ -3933,19 +3301,12 @@ class TestGetOrCreateAttrDef:
         assert result["attr_id"] == "a3"
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_or_create_agent_registry
-# ---------------------------------------------------------------------------
-
-
 class TestGetOrCreateAgentRegistry:
     """Test _get_or_create_agent_registry."""
 
     def test_cached(self) -> None:
         b = _make_behaviour()
-        b._read_kv = _make_gen(
-            {"agent_registry": json.dumps({"agent_id": "ag1"})}
-        )
+        b._read_kv = _make_gen({"agent_registry": json.dumps({"agent_id": "ag1"})})
         result = _exhaust(b._get_or_create_agent_registry())
         assert result["agent_id"] == "ag1"
 
@@ -3978,17 +3339,14 @@ class TestGetOrCreateAgentRegistry:
     def test_exception(self) -> None:
         b = _make_behaviour()
         b._read_kv = _make_gen(None)
+
         def bad_gen(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._get_or_create_agent_type = bad_gen
         result = _exhaust(b._get_or_create_agent_registry())
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _update_airdrop_rewards exception
-# ---------------------------------------------------------------------------
 
 
 class TestUpdateAirdropRewardsException:
@@ -3996,17 +3354,14 @@ class TestUpdateAirdropRewardsException:
 
     def test_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_read(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._read_kv = bad_read
         _exhaust(b._update_airdrop_rewards(100, "optimism", "0xhash"))
         b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_reward_balances
-# ---------------------------------------------------------------------------
 
 
 class TestFetchRewardBalances:
@@ -4050,9 +3405,11 @@ class TestFetchRewardBalances:
 
     def test_token_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_balance(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._get_token_balance = bad_balance
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.REWARD_TOKEN_ADDRESSES",
@@ -4072,11 +3429,6 @@ class TestFetchRewardBalances:
             assert result == []
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_last_known_price
-# ---------------------------------------------------------------------------
-
-
 class TestGetLastKnownPrice:
     """Test _get_last_known_price."""
 
@@ -4084,12 +3436,14 @@ class TestGetLastKnownPrice:
         b = _make_behaviour()
         cache_data = json.dumps({"current": [5.0, time.time()]})
         key = b._get_price_cache_key("0xToken", None)
+
         # We need to mock _read_kv to return data for any cache key
         def mock_read(*args, **kwargs):
             keys = args[0] if args else kwargs.get("keys", ())
             k = keys[0]
             yield
             return {k: cache_data}
+
         b._read_kv = mock_read
         result = _exhaust(b._get_last_known_price("0xToken"))
         assert result == 5.0
@@ -4102,29 +3456,28 @@ class TestGetLastKnownPrice:
 
     def test_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_read(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._read_kv = bad_read
         result = _exhaust(b._get_last_known_price("0xToken"))
         assert result is None
 
     def test_invalid_cache_data(self) -> None:
         b = _make_behaviour()
+
         def mock_read(*args, **kwargs):
             keys = args[0] if args else kwargs.get("keys", ())
             k = keys[0]
             yield
             return {k: "not json"}
+
         b._read_kv = mock_read
         result = _exhaust(b._get_last_known_price("0xToken"))
         # Should continue to next dates and eventually return None
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_ousdt_balance
-# ---------------------------------------------------------------------------
 
 
 class TestFetchOusdtBalance:
@@ -4151,17 +3504,14 @@ class TestFetchOusdtBalance:
 
     def test_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_balance(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._get_token_balance = bad_balance
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_service_staking_state
-# ---------------------------------------------------------------------------
 
 
 class TestGetServiceStakingState:
@@ -4186,11 +3536,6 @@ class TestGetServiceStakingState:
         assert b.service_staking_state == StakingState.UNSTAKED
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_service_info
-# ---------------------------------------------------------------------------
-
-
 class TestGetServiceInfo:
     """Test _get_service_info."""
 
@@ -4206,11 +3551,6 @@ class TestGetServiceInfo:
         b.contract_interact = _make_gen(expected)
         result = _exhaust(b._get_service_info("optimism"))
         assert result == expected
-
-
-# ---------------------------------------------------------------------------
-# Tests: get_eth_remaining_amount edge cases
-# ---------------------------------------------------------------------------
 
 
 class TestGetEthRemainingAmountEdge:
@@ -4237,11 +3577,6 @@ class TestGetEthRemainingAmountEdge:
         b._write_kv = _make_gen(True)
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 1000
-
-
-# ---------------------------------------------------------------------------
-# Tests: update_eth_remaining_amount / reset_eth_remaining_amount
-# ---------------------------------------------------------------------------
 
 
 class TestUpdateEthRemainingAmount:
@@ -4272,11 +3607,6 @@ class TestResetEthRemainingAmount:
         assert result == 0
 
 
-# ---------------------------------------------------------------------------
-# Tests: _store_entry_costs
-# ---------------------------------------------------------------------------
-
-
 class TestStoreEntryCosts:
     """Test _store_entry_costs."""
 
@@ -4288,17 +3618,14 @@ class TestStoreEntryCosts:
 
     def test_exception(self) -> None:
         b = _make_behaviour()
+
         def bad_gen(*a, **kw):
             raise Exception("fail")
             yield  # noqa: unreachable
+
         b._get_all_entry_costs = bad_gen
         _exhaust(b._store_entry_costs("optimism", "pos1", 0.5))
         b.context.logger.error.assert_called()
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_mode_balances_from_explorer_api
-# ---------------------------------------------------------------------------
 
 
 class TestGetModeBalancesFromExplorerApi:
@@ -4314,7 +3641,14 @@ class TestGetModeBalancesFromExplorerApi:
         b = _make_behaviour()
         b._get_native_balance = _make_gen(1000)
         b._fetch_mode_token_balances = _make_gen(
-            [{"asset_symbol": "USDC", "asset_type": "erc_20", "address": "0xA", "balance": 500}]
+            [
+                {
+                    "asset_symbol": "USDC",
+                    "asset_type": "erc_20",
+                    "address": "0xA",
+                    "balance": 500,
+                }
+            ]
         )
         result = _exhaust(b._get_mode_balances_from_explorer_api())
         assert len(result) == 2  # ETH + USDC
@@ -4325,11 +3659,6 @@ class TestGetModeBalancesFromExplorerApi:
         b._fetch_mode_token_balances = _make_gen([])
         result = _exhaust(b._get_mode_balances_from_explorer_api())
         assert result == []
-
-
-# ---------------------------------------------------------------------------
-# Tests: _update_airdrop_rewards (full)
-# ---------------------------------------------------------------------------
 
 
 class TestUpdateAirdropRewardsFull:
@@ -4344,12 +3673,14 @@ class TestUpdateAirdropRewardsFull:
         b = _make_behaviour()
         # First call returns no processed key, second returns 0 total
         call_count = [0]
+
         def mock_read(*args, **kwargs):
             call_count[0] += 1
             yield
             if call_count[0] == 1:
                 return {}  # not processed yet
             return {}  # no total yet
+
         b._read_kv = mock_read
         b._write_kv = _make_gen(True)
         _exhaust(b._update_airdrop_rewards(100, "optimism", "0xhash"))
@@ -4359,11 +3690,6 @@ class TestUpdateAirdropRewardsFull:
         b._get_total_airdrop_rewards = _make_gen(50)
         b._write_kv = _make_gen(True)
         _exhaust(b._update_airdrop_rewards(100, "optimism"))
-
-
-# ---------------------------------------------------------------------------
-# Tests: _store_data IOError
-# ---------------------------------------------------------------------------
 
 
 class TestStoreDataIOError:
@@ -4379,11 +3705,6 @@ class TestStoreDataIOError:
                 b.context.logger.error.assert_called()
         finally:
             os.unlink(fname)
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_cached_price current price path (no date / TTL)
-# ---------------------------------------------------------------------------
 
 
 class TestGetCachedPriceCurrentPrice:
@@ -4421,11 +3742,6 @@ class TestGetCachedPriceCurrentPrice:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _cache_price without date
-# ---------------------------------------------------------------------------
-
-
 class TestCachePriceNoDate:
     """Test _cache_price without date (current price mode)."""
 
@@ -4435,11 +3751,6 @@ class TestCachePriceNoDate:
         b._write_kv = _make_gen(True)
         with patch.object(b, "_get_current_timestamp", return_value=1700000000):
             _exhaust(b._cache_price("0xToken", 5.0, ""))
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_zero_address_price
-# ---------------------------------------------------------------------------
 
 
 class TestFetchZeroAddressPrice:
@@ -4452,21 +3763,18 @@ class TestFetchZeroAddressPrice:
         assert result == 1800.0
 
 
-# ---------------------------------------------------------------------------
-# Tests: calculate_initial_investment_value edge cases
-# ---------------------------------------------------------------------------
-
-
 class TestCalcInitInvestEdge:
     """Test calculate_initial_investment_value additional edge cases."""
 
     def test_token1_decimals_none(self) -> None:
         b = _make_behaviour()
         call_count = [0]
+
         def mock_decimals(*args, **kwargs):
             call_count[0] += 1
             yield
             return 18 if call_count[0] == 1 else None
+
         b._get_token_decimals = mock_decimals
         pos = {
             "token0": "0xT0",
@@ -4513,11 +3821,6 @@ class TestCalcInitInvestEdge:
         assert result == 1.0
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_token_prices_sma edge cases
-# ---------------------------------------------------------------------------
-
-
 class TestFetchTokenPricesSmaEdge:
     """Test _fetch_token_prices_sma edge cases."""
 
@@ -4529,17 +3832,12 @@ class TestFetchTokenPricesSmaEdge:
         # Create 30 data points; num_hours=2 should truncate to last 2
         prices = [[i * 3600, 100 + i] for i in range(30)]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(
-                return_value=(True, {"prices": prices})
+            b.coingecko.request = MagicMock(return_value=(True, {"prices": prices}))
+            result = _exhaust(
+                b._fetch_token_prices_sma("0xToken", "optimism", num_hours=2)
             )
-            result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism", num_hours=2))
             # Last 2 prices: 128 and 129
             assert result == (128.0 + 129.0) / 2
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_or_create_agent_type create failure
-# ---------------------------------------------------------------------------
 
 
 class TestGetOrCreateAgentTypeFailure:
@@ -4554,11 +3852,6 @@ class TestGetOrCreateAgentTypeFailure:
             _exhaust(b._get_or_create_agent_type("0xAddr"))
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_or_create_attr_def create failure
-# ---------------------------------------------------------------------------
-
-
 class TestGetOrCreateAttrDefFailure:
     """Test _get_or_create_attr_def when creation fails."""
 
@@ -4569,11 +3862,6 @@ class TestGetOrCreateAttrDefFailure:
         b.create_attribute_definition = _make_gen(None)  # creation fails
         with pytest.raises(Exception, match="Failed to create attribute definition"):
             _exhaust(b._get_or_create_attr_def("t1", "ag1"))
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_or_create_agent_registry create_agent_registry fails
-# ---------------------------------------------------------------------------
 
 
 class TestGetOrCreateAgentRegistryCreateFails:
@@ -4590,11 +3878,6 @@ class TestGetOrCreateAgentRegistryCreateFails:
             assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_last_known_price historical price found
-# ---------------------------------------------------------------------------
-
-
 class TestGetLastKnownPriceHistorical:
     """Test _get_last_known_price finding historical price."""
 
@@ -4606,19 +3889,16 @@ class TestGetLastKnownPriceHistorical:
         with patch.object(b, "_get_current_timestamp", return_value=1700000000):
             date_str = datetime.utcfromtimestamp(1700000000).strftime("%d-%m-%Y")
             cache_data = json.dumps({date_str: 42.5})
+
             def mock_read(*args, **kwargs):
                 keys = args[0] if args else kwargs.get("keys", ())
                 k = keys[0]
                 yield
                 return {k: cache_data}
+
             b._read_kv = mock_read
             result = _exhaust(b._get_last_known_price("0xToken"))
             assert result == 42.5
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_reward_balances outer exception
-# ---------------------------------------------------------------------------
 
 
 class TestFetchRewardBalancesOuterException:
@@ -4633,23 +3913,23 @@ class TestFetchRewardBalancesOuterException:
         assert result == []
 
 
-# ---------------------------------------------------------------------------
-# Tests: Pagination multi-page (covering continuation lines)
-# ---------------------------------------------------------------------------
-
-
 class TestPaginationMultiPage:
     """Test pagination methods with multiple pages."""
 
     def test_safe_balances_two_pages(self) -> None:
         b = _make_behaviour()
         call_count = [0]
+
         def mock_request(*args, **kwargs):
             call_count[0] += 1
             yield
             if call_count[0] == 1:
                 return (True, {"results": [{"tokenAddress": None}], "next": "page2"})
-            return (True, {"results": [{"tokenAddress": "0x" + "ab" * 20}], "next": None})
+            return (
+                True,
+                {"results": [{"tokenAddress": "0x" + "ab" * 20}], "next": None},
+            )
+
         b._request_with_retries = mock_request
         result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
         assert len(result) == 2
@@ -4657,20 +3937,26 @@ class TestPaginationMultiPage:
     def test_mode_tokens_two_pages(self) -> None:
         b = _make_behaviour()
         call_count = [0]
+
         def mock_request(*args, **kwargs):
             call_count[0] += 1
             yield
             if call_count[0] == 1:
-                return (True, {"items": [{"token": {"address": "0xA"}}], "next_page_params": {"page": 2}})
-            return (True, {"items": [{"token": {"address": "0xB"}}], "next_page_params": None})
+                return (
+                    True,
+                    {
+                        "items": [{"token": {"address": "0xA"}}],
+                        "next_page_params": {"page": 2},
+                    },
+                )
+            return (
+                True,
+                {"items": [{"token": {"address": "0xB"}}], "next_page_params": None},
+            )
+
         b._request_with_retries = mock_request
         result = _exhaust(b._fetch_mode_tokens_with_pagination("0xSafe"))
         assert len(result) == 2
-
-
-# ---------------------------------------------------------------------------
-# Tests: _request_with_retries multi-iteration
-# ---------------------------------------------------------------------------
 
 
 class TestRequestWithRetriesMultiIteration:
@@ -4680,6 +3966,7 @@ class TestRequestWithRetriesMultiIteration:
         """Rate limited on first attempt, succeeds on second."""
         b = _make_behaviour()
         call_count = [0]
+
         def mock_http(*args, **kwargs):
             call_count[0] += 1
             yield
@@ -4692,6 +3979,7 @@ class TestRequestWithRetriesMultiIteration:
             resp.status_code = 200
             resp.body = json.dumps({"result": "ok"}).encode("utf-8")
             return resp
+
         b.get_http_response = mock_http
         b.sleep = _make_gen(None)
         success, data = _exhaust(
@@ -4708,6 +3996,7 @@ class TestRequestWithRetriesMultiIteration:
         """503 on first attempt, succeeds on second."""
         b = _make_behaviour()
         call_count = [0]
+
         def mock_http(*args, **kwargs):
             call_count[0] += 1
             yield
@@ -4720,6 +4009,7 @@ class TestRequestWithRetriesMultiIteration:
             resp.status_code = 200
             resp.body = json.dumps({"result": "ok"}).encode("utf-8")
             return resp
+
         b.get_http_response = mock_http
         b.sleep = _make_gen(None)
         success, data = _exhaust(
@@ -4736,6 +4026,7 @@ class TestRequestWithRetriesMultiIteration:
         """500 error on first attempt, succeeds on second."""
         b = _make_behaviour()
         call_count = [0]
+
         def mock_http(*args, **kwargs):
             call_count[0] += 1
             yield
@@ -4748,6 +4039,7 @@ class TestRequestWithRetriesMultiIteration:
             resp.status_code = 200
             resp.body = json.dumps({"result": "ok"}).encode("utf-8")
             return resp
+
         b.get_http_response = mock_http
         b.sleep = _make_gen(None)
         success, data = _exhaust(
@@ -4760,11 +4052,6 @@ class TestRequestWithRetriesMultiIteration:
             )
         )
         assert success is True
-
-
-# ---------------------------------------------------------------------------
-# Tests: SMA with all entries having len < 2
-# ---------------------------------------------------------------------------
 
 
 class TestFetchTokenPricesSmaEmptyAfterFilter:
@@ -4783,16 +4070,12 @@ class TestFetchTokenPricesSmaEmptyAfterFilter:
             assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: execute_strategy with pre-existing callable in globals
-# ---------------------------------------------------------------------------
-
-
 class TestExecuteStrategyGlobalsCleanup:
     """Test execute_strategy when callable already exists in globals."""
 
     def test_cleanup_existing_global(self) -> None:
         import packages.valory.skills.liquidity_trader_abci.behaviours.base as base_mod
+
         # Pre-populate globals with a callable that will be cleaned
         method_name = "_test_strategy_method"
         base_mod.__dict__[method_name] = lambda **kw: {"result": "old"}
@@ -4808,27 +4091,19 @@ class TestExecuteStrategyGlobalsCleanup:
             del base_mod.__dict__[method_name]
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_ousdt_balance inner exception (line 3361 is in execute_strategy, not here)
-# ---------------------------------------------------------------------------
-
-
 class TestFetchOusdtBalanceExceptionInner:
     """Test _fetch_ousdt_balance with exception during balance fetch."""
 
     def test_exception_during_get_balance(self) -> None:
         b = _make_behaviour()
+
         def bad_gen(*a, **kw):
             raise Exception("contract error")
             yield  # noqa: unreachable
+
         b._get_token_balance = bad_gen
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: _adjust_current_positions_for_backward_compatibility (false branches)
-# ---------------------------------------------------------------------------
 
 
 class TestAdjustCurrentPositionsFalseBranches:
@@ -4883,11 +4158,6 @@ class TestAdjustCurrentPositionsFalseBranches:
             assert "token0" not in b.current_positions[0]
 
 
-# ---------------------------------------------------------------------------
-# Tests: read_agent_performance (false branch on line 985)
-# ---------------------------------------------------------------------------
-
-
 class TestReadAgentPerformanceFalseBranch:
     """Test read_agent_performance when data already exists."""
 
@@ -4903,11 +4173,6 @@ class TestReadAgentPerformanceFalseBranch:
             assert b.agent_performance["timestamp"] == 123
         finally:
             os.unlink(fname)
-
-
-# ---------------------------------------------------------------------------
-# Tests: _get_balance matching chain (false branch on line 766)
-# ---------------------------------------------------------------------------
 
 
 class TestGetBalanceChainMatch:
@@ -4934,11 +4199,6 @@ class TestGetBalanceChainMatch:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: _fetch_token_prices (price None branch, line 1637)
-# ---------------------------------------------------------------------------
-
-
 class TestFetchTokenPricesPriceNone:
     """Test _fetch_token_prices when price is None (not added to dict)."""
 
@@ -4948,11 +4208,6 @@ class TestFetchTokenPricesPriceNone:
         token_balances = [{"token": "0x" + "ab" * 20, "chain": "optimism"}]
         result = _exhaust(b._fetch_token_prices(token_balances))
         assert result == {}
-
-
-# ---------------------------------------------------------------------------
-# Tests: _fetch_historical_token_prices (price falsy, line 1822)
-# ---------------------------------------------------------------------------
 
 
 class TestFetchHistoricalTokenPricesFalsy:
@@ -4970,11 +4225,6 @@ class TestFetchHistoricalTokenPricesFalsy:
             assert result == {}
 
 
-# ---------------------------------------------------------------------------
-# Tests: use_x402 True branches (lines 1276, 1665, 1849, 1933)
-# ---------------------------------------------------------------------------
-
-
 class TestUseX402True:
     """Test methods with use_x402=True to cover the other branch."""
 
@@ -4989,7 +4239,9 @@ class TestUseX402True:
         b._cache_price = _make_gen(None)
         b._get_last_known_price = _make_gen(None)
         # Need eoa_account property mock
-        with patch.object(type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()):
+        with patch.object(
+            type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()
+        ):
             result = _exhaust(b._fetch_token_price(token_addr, "optimism"))
             assert result == 1.0
 
@@ -5001,7 +4253,9 @@ class TestUseX402True:
             return_value=(True, {"ethereum": {"usd": 1800.0}})
         )
         b._cache_price = _make_gen(None)
-        with patch.object(type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()):
+        with patch.object(
+            type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()
+        ):
             result = _exhaust(b._fetch_coin_price("ethereum"))
             assert result == 1800.0
 
@@ -5013,7 +4267,9 @@ class TestUseX402True:
             return_value=(True, {"market_data": {"current_price": {"usd": 1.0}}})
         )
         b._cache_price = _make_gen(None)
-        with patch.object(type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()):
+        with patch.object(
+            type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()
+        ):
             result = _exhaust(b._fetch_historical_token_price("usd-coin", "01-01-2024"))
             assert result == 1.0
 
@@ -5026,14 +4282,14 @@ class TestUseX402True:
             b.coingecko.request = MagicMock(
                 return_value=(True, {"prices": [[1, 100.0]]})
             )
-            with patch.object(type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()):
+            with patch.object(
+                type(b),
+                "eoa_account",
+                new_callable=PropertyMock,
+                return_value=MagicMock(),
+            ):
                 result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
                 assert result == 100.0
-
-
-# ---------------------------------------------------------------------------
-# Tests: isinstance(response_json, dict) (line 1953)
-# ---------------------------------------------------------------------------
 
 
 class TestFetchSmaResponseNotDict:
@@ -5052,11 +4308,6 @@ class TestFetchSmaResponseNotDict:
             assert result == 100.0
 
 
-# ---------------------------------------------------------------------------
-# Tests: update_accumulated_rewards_for_chain (no olas_address, line 2193)
-# ---------------------------------------------------------------------------
-
-
 class TestUpdateAccumulatedRewardsNoOlas:
     """Test update_accumulated_rewards_for_chain when no OLAS address."""
 
@@ -5070,11 +4321,6 @@ class TestUpdateAccumulatedRewardsNoOlas:
             {},
         ):
             _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
-
-
-# ---------------------------------------------------------------------------
-# Tests: _build_exit_pool_action_base CL pool with empty lists (line 2336)
-# ---------------------------------------------------------------------------
 
 
 class TestBuildExitPoolActionBaseEmptyPositions:
@@ -5096,11 +4342,6 @@ class TestBuildExitPoolActionBaseEmptyPositions:
         assert "token_ids" not in result
 
 
-# ---------------------------------------------------------------------------
-# Tests: _get_last_known_price historical price branch (line 3281)
-# ---------------------------------------------------------------------------
-
-
 class TestGetLastKnownPriceHistoricalBranch:
     """Test _get_last_known_price finding historical price (not current)."""
 
@@ -5113,11 +4354,13 @@ class TestGetLastKnownPriceHistoricalBranch:
             date_str = datetime.utcfromtimestamp(1700000000).strftime("%d-%m-%Y")
             # Cache without "current" key, only historical
             cache_data = json.dumps({date_str: 42.5})
+
             def mock_read(*args, **kwargs):
                 keys = args[0] if args else kwargs.get("keys", ())
                 k = keys[0]
                 yield
                 return {k: cache_data}
+
             b._read_kv = mock_read
             result = _exhaust(b._get_last_known_price("0xToken"))
             assert result == 42.5

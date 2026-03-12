@@ -11,7 +11,8 @@ fingerprint:
   merkl_pools_search.py: bafybeib6exzyk7llb7wp5ssxrowheu5php54aykyvbvo4y7nrpwvdmzu2e
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/test_merkl_pools_search.py: bafybeiet4ztdegiknrav6cdngenywi73eyeoopfjq2u5yrxjd5kxmprkwu
-fingerprint_ignore_patterns: []
+fingerprint_ignore_patterns:
+- tests/
 entry_point: merkl_pools_search.py
 callable: run
 dependencies:

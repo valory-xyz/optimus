@@ -11,7 +11,8 @@ fingerprint:
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/test_uniswap_pools_search.py: bafybeieoigajjiqetaxs3hk3xyffratkkcg3pbptp2y3fnqnbwhy7ksg5y
   uniswap_pools_search.py: bafybeigqc2irnqvq7ul6ots77xdnanfpy4v5kgtqmvaqyscmj2nh6ssyta
-fingerprint_ignore_patterns: []
+fingerprint_ignore_patterns:
+- tests/
 entry_point: uniswap_pools_search.py
 callable: run
 dependencies:

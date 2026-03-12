@@ -10,7 +10,8 @@ fingerprint:
   max_apr_selection.py: bafybeidhhjcmjf2mjadzrjgs2dsjxuq7dbu4gix6by77zftlnusqxjnt5u
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/test_max_apr_selection.py: bafybeicbsemr4oyjuwr32hjshl4vfbifyxmo6lhoqienismghena6npzwm
-fingerprint_ignore_patterns: []
+fingerprint_ignore_patterns:
+- tests/
 entry_point: max_apr_selection.py
 callable: run
 dependencies: {}

@@ -12,7 +12,8 @@ fingerprint:
   tests/test_velodrome_pools_search.py: bafybeidhrlrpg5dbwnwq4d62km3hed3gvv7hlu4yyek4rdoaylnm5x3lya
   velodrome_lp_sugar.json: bafybeiamf3gev3vfeikh2mjmrhaqmyrsuzl6bt34gcilgz375z4o4uap2q
   velodrome_pools_search.py: bafybeid3zrx622zfsqacw4yp6a3ydh6mgmnyoh3gfm22ag47bhimornud4
-fingerprint_ignore_patterns: []
+fingerprint_ignore_patterns:
+- tests/
 entry_point: velodrome_pools_search.py
 callable: run
 dependencies:

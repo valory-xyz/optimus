@@ -21,7 +21,7 @@ dependencies:
   gql:
     version: ==3.5.0
   numpy:
-    version: ==2.2.0
+    version: '>=2.2.6'
   web3:
     version: ==6.20.4
   pandas:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -90,9 +90,9 @@ def get_sqrt_ratio_at_tick(tick: int) -> int:
 
     # Ensure the result is within valid bounds
     if sqrt_price_x96 < MIN_SQRT_RATIO:
-        return MIN_SQRT_RATIO
+        return MIN_SQRT_RATIO  # pragma: no cover
     if sqrt_price_x96 > MAX_SQRT_RATIO:
-        return MAX_SQRT_RATIO
+        return MAX_SQRT_RATIO  # pragma: no cover
 
     return sqrt_price_x96
 

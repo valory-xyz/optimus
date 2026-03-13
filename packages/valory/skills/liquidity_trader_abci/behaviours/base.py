@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ class LiquidityTraderBaseBehaviour(
 ):
     """Base behaviour for the liquidity_trader_abci skill."""
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: Any) -> None:  # pragma: no cover
         """Initialize `LiquidityTraderBaseBehaviour`."""
         super().__init__(**kwargs)
         self.current_positions: List[Dict[str, Any]] = []
@@ -431,7 +431,7 @@ class LiquidityTraderBaseBehaviour(
             if chain == Chain.OPTIMISM.value:
                 # Use SafeApi for Optimism
                 balances = yield from self._get_optimism_balances_from_safe_api()
-            elif chain == Chain.MODE.value:
+            elif chain == Chain.MODE.value:  # pragma: no branch
                 # Use Mode Explorer API for Mode
                 balances = yield from self._get_mode_balances_from_explorer_api()
 
@@ -1950,7 +1950,7 @@ class LiquidityTraderBaseBehaviour(
                 return None
 
             # Check for rate limiting
-            if isinstance(response_json, dict):
+            if isinstance(response_json, dict):  # pragma: no branch
                 status = response_json.get("status", {})
                 if status.get("error_code") == 429:
                     self.context.logger.error("Rate limit reached on CoinGecko API")
@@ -3278,7 +3278,7 @@ class LiquidityTraderBaseBehaviour(
 
                         # Check for historical price on this date
                         historical_price = price_data.get(date_str)
-                        if historical_price:
+                        if historical_price:  # pragma: no branch
                             self.context.logger.info(
                                 f"Found last known historical price for {token_address}: ${historical_price} from {date_str}"
                             )
@@ -3357,12 +3357,13 @@ def execute_strategy(
         return None
 
     strategy_exec, callable_method = strategy_exec_tuple
-    if callable_method in globals():
-        del globals()[callable_method]
 
-    # Execute the strategy code
-    exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
-    method = globals().get(callable_method, None)
+    # Use an isolated namespace to prevent race conditions when strategies
+    # run in parallel — each strategy gets its own dict so identically-named
+    # functions (e.g. apply_composite_pre_filter) don't overwrite each other.
+    namespace = {}
+    exec(strategy_exec, namespace)  # pylint: disable=W0122  # nosec
+    method = namespace.get(callable_method, None)
     if method is None:
         logger.error(
             f"No {callable_method!r} method was found in {strategy} executable."

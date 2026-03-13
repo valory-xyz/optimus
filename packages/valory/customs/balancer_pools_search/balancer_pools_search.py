@@ -1,3 +1,24 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2021-2026 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+
 import warnings
 
 warnings.filterwarnings("ignore")  # Suppress all warnings
@@ -19,6 +40,16 @@ from web3 import Web3
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
+    if session is None:
+        return
+    for adapter in session.adapters.values():
+        if hasattr(adapter, '_is_retry'):
+            adapter._is_retry = False
+
 
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
@@ -387,6 +418,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, x402_sessio
                 cg = CoinGeckoAPI()
                 if x402_session is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
+                    _reset_x402_adapter(x402_session)
                     cg.session = x402_session
                     cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 else:
@@ -470,57 +502,6 @@ def create_pool_snapshots_query(
     }}
     """
     )
-
-def fetch_liquidity_metrics(
-    pool_id: str,
-    chain: str,
-    client: Optional[Client] = None,
-    price_impact: float = 0.01,
-) -> Optional[Dict[str, Any]]:
-    logger.info(f"Fetching liquidity metrics for pool {pool_id} on chain {chain}")
-    if client is None:
-        client = create_graphql_client()
-    try:
-        query = create_pool_snapshots_query(pool_id, chain)
-        logger.info(f"Executing pool snapshots query for pool {pool_id}")
-        response = client.execute(query)
-        pool_snapshots = response["poolGetSnapshots"]
-        if not pool_snapshots:
-            logger.warning(f"No pool snapshots found for pool {pool_id}")
-            return None
-
-        logger.info(f"Found {len(pool_snapshots)} snapshots for pool {pool_id}")
-        avg_tvl = statistics.mean(float(s["totalLiquidity"]) for s in pool_snapshots)
-        avg_volume = statistics.mean(
-            float(s.get("volume24h", 0)) for s in pool_snapshots
-        )
-        
-        logger.info(f"Pool {pool_id} - Average TVL: {avg_tvl:.2f}, Average Volume: {avg_volume:.2f}")
-
-        depth_score = (
-            (np.log1p(avg_tvl) * np.log1p(avg_volume)) / (price_impact * 100)
-            if avg_tvl and avg_volume
-            else 0
-        )
-        liquidity_risk_multiplier = (
-            max(0, 1 - (1 / depth_score)) if depth_score != 0 else 0
-        )
-        max_position_size = 50 * (avg_tvl * liquidity_risk_multiplier) / 100
-
-        logger.info(f"Pool {pool_id} - Depth Score: {depth_score:.2f}, Max Position Size: {max_position_size:.2f}")
-
-        return {
-            "Average TVL": avg_tvl,
-            "Average Daily Volume": avg_volume,
-            "Depth Score": depth_score,
-            "Liquidity Risk Multiplier": liquidity_risk_multiplier,
-            "Maximum Position Size": max_position_size,
-            "Meets Depth Score Threshold": depth_score > 50,
-        }
-
-    except Exception as e:
-        logger.error(f"Error fetching liquidity metrics for pool {pool_id}: {str(e)}")
-        return None
 
 def analyze_pool_liquidity(
     pool_id: str,
@@ -690,13 +671,12 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
             
             # Filter out extreme values that could cause numerical issues
             for col in ["sharePrice", "fees24h", "totalLiquidity"]:
-                if col in df.columns:
-                    # Replace extreme values with NaN
-                    extreme_count = ((df[col] > 1e16) | (df[col] < -1e16)).sum()
-                    if extreme_count > 0:
-                        logger.warning(f"Pool {pool_id} - Filtering {extreme_count} extreme values in {col}")
-                    df[col] = df[col].mask(df[col] > 1e16, np.nan)
-                    df[col] = df[col].mask(df[col] < -1e16, np.nan)
+                # Replace extreme values with NaN
+                extreme_count = ((df[col] > 1e16) | (df[col] < -1e16)).sum()
+                if extreme_count > 0:
+                    logger.warning(f"Pool {pool_id} - Filtering {extreme_count} extreme values in {col}")
+                df[col] = df[col].mask(df[col] > 1e16, np.nan)
+                df[col] = df[col].mask(df[col] < -1e16, np.nan)
             
             # Calculate returns
             price_returns = df["sharePrice"].pct_change()
@@ -814,14 +794,12 @@ def get_pool_token_prices(token_symbols: List[str], coingecko_api_key: Optional[
                 
                 # Try each possible ID
                 for token_id in possible_ids:
-                    if price_found:
-                        break
-                        
                     time.sleep(2)  # Rate limiting
                     try:
                         cg = CoinGeckoAPI()
                         if x402_session is not None and x402_proxy is not None:
                             logger.info("Using x402 signer for CoinGecko API requests")
+                            _reset_x402_adapter(x402_session)
                             cg.session = x402_session
                             cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                         else:
@@ -849,33 +827,33 @@ def get_pool_token_prices(token_symbols: List[str], coingecko_api_key: Optional[
                 if not price_found:
                     time.sleep(2)
                     try:
-                        search_result = coingecko_api.search(underlying_symbol)
+                        search_result = cg.search(underlying_symbol)
                         if search_result and 'coins' in search_result and search_result['coins']:
                             coin_id = search_result['coins'][0]['id']
                             time.sleep(2)
-                            price_data = coingecko_api.get_price(ids=coin_id, vs_currencies='usd')
+                            price_data = cg.get_price(ids=coin_id, vs_currencies='usd')
                             if price_data and coin_id in price_data:
                                 prices[original_symbol] = price_data[coin_id]['usd']
                                 price_found = True
                     except Exception:
                         pass
-                
+
                 # Special handling for USD-pegged tokens
                 if not price_found and any(x in symbol.lower() for x in ['usd', 'dai', 'usdt', 'usdc']):
                     prices[original_symbol] = 1.0
                     price_found = True
-                
+
                 # Log warning if still no price found
                 if not price_found:
                     prices[original_symbol] = 0.0
-                    
+
             except Exception as e:
-                errors.append(f"Error fetching price for {original_symbol}: {str(e)}")
+                get_errors().append(f"Error fetching price for {original_symbol}: {str(e)}")
                 prices[original_symbol] = 0.0
-                
+
         return prices
     except Exception as e:
-        errors.append(f"Error in price fetching: {str(e)}")
+        get_errors().append(f"Error in price fetching: {str(e)}")
         return {symbol: 0.0 for symbol in token_symbols}
 
 def get_token_investments_multi(diff_investment: float, token_prices: Dict[str, float]) -> List[float]:
@@ -927,11 +905,8 @@ def get_token_investments_multi(diff_investment: float, token_prices: Dict[str, 
     if second_token_price > 0:
         valid_token_count += 1
         
-    if valid_token_count > 0:
-        per_token_investment = diff_investment / valid_token_count
-    else:
-        return []
-    
+    per_token_investment = diff_investment / valid_token_count
+
     # Initialize all amounts to 0
     token_amounts = [0.0] * len(token_prices)
     
@@ -988,43 +963,35 @@ def calculate_differential_investment(apr_current: float, apr_base: float, tvl: 
     Returns:
         float: Calculated investment amount, capped at $1000
     """
-    try:
-        # Handle invalid inputs
-        if tvl <= 0:
-            return 0.0
-            
-        # Handle single pool case
-        if is_single_pool:
-            return min(calculate_single_pool_investment(apr_current, tvl), 1000.0)
-            
-        # Handle case where current APR is too low
-        if apr_current <= 0.01:
-            return 0.0
-            
-        # Handle zero base APR case by using a fixed 25% reduction of current APR
-        if apr_base <= 0:
-            # Use 75% of current APR as the base APR (25% reduction)
-            apr_base = apr_current * 0.75
-            
-        # Calculate ratio with the possibly adjusted base APR
-        ratio = apr_current / apr_base
-        if ratio <= 1:
-            return 0.0
-            
-        # Calculate differential investment
-        diff_investment = (ratio - 1) * tvl
-        
-        # Apply minimum investment threshold and maximum cap
-        if diff_investment >= 100:
-            return min(diff_investment, 1000.0)
-        else:
-            return 0.0
-        
-    except ZeroDivisionError:
-        # If we somehow still get a zero division, use a fallback calculation
-        if apr_current > 0.02:  # Only invest if APR is above 2%
-            diff_investment = apr_current * tvl * 0.05  # Invest 5% of TVL multiplied by APR
-            return min(diff_investment, 1000.0) if diff_investment >= 100 else 0.0
+    # Handle invalid inputs
+    if tvl <= 0:
+        return 0.0
+
+    # Handle single pool case
+    if is_single_pool:
+        return min(calculate_single_pool_investment(apr_current, tvl), 1000.0)
+
+    # Handle case where current APR is too low
+    if apr_current <= 0.01:
+        return 0.0
+
+    # Handle zero base APR case by using a fixed 25% reduction of current APR
+    if apr_base <= 0:
+        # Use 75% of current APR as the base APR (25% reduction)
+        apr_base = apr_current * 0.75
+
+    # Calculate ratio with the possibly adjusted base APR
+    ratio = apr_current / apr_base
+    if ratio <= 1:
+        return 0.0
+
+    # Calculate differential investment
+    diff_investment = (ratio - 1) * tvl
+
+    # Apply minimum investment threshold and maximum cap
+    if diff_investment >= 100:
+        return min(diff_investment, 1000.0)
+    else:
         return 0.0
 
 def filter_valid_investment_pools(formatted_pools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1066,6 +1033,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str, x402_s
 
     if x402_session is not None and x402_proxy is not None:
         logger.info("Using x402 signer for CoinGecko API requests")
+        _reset_x402_adapter(x402_session)
         cg.session = x402_session
         cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
 

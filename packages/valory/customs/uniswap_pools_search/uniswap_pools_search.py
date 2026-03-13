@@ -1,3 +1,24 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2021-2026 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+
 import warnings
 
 warnings.filterwarnings("ignore")  # Suppress all warnings
@@ -8,7 +29,6 @@ import time
 import threading
 import statistics
 from datetime import datetime, timedelta
-from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -22,6 +42,16 @@ from web3 import Web3
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 _logger = setup_logger(__name__)
+
+
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
+    if session is None:
+        return
+    for adapter in session.adapters.values():
+        if hasattr(adapter, '_is_retry'):
+            adapter._is_retry = False
+
 
 # Constants and mappings
 UNISWAP = "UniswapV3"
@@ -58,18 +88,6 @@ def get_errors():
         _thread_local.errors = []
     return _thread_local.errors
 
-ERC20_ABI = [
-    {
-        "constant": True,
-        "inputs": [],
-        "name": "name",
-        "outputs": [{"name": "", "type": "string"}],
-        "payable": False,
-        "stateMutability": "view",
-        "type": "function",
-    }
-]
-
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     missing = [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
@@ -82,28 +100,6 @@ def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in required_fields}
-
-@lru_cache(None)
-def create_web3_connection(chain_name: str):
-    chain_url = CHAIN_URLS.get(chain_name)
-    if not chain_url:
-        return None
-    web3 = Web3(Web3.HTTPProvider(chain_url))
-    return web3 if web3.is_connected() else None
-
-
-@lru_cache(None)
-def fetch_token_name_from_contract(chain_name, token_address):
-    web3 = create_web3_connection(chain_name)
-    if not web3:
-        return None
-    contract = web3.eth.contract(
-        address=Web3.to_checksum_address(token_address), abi=ERC20_ABI
-    )
-    try:
-        return contract.functions.name().call()
-    except Exception:
-        return None
 
 def get_coin_id_from_symbol(
         coin_id_mapping, symbol, chain_name
@@ -447,6 +443,7 @@ def calculate_il_risk_score(
         cg = CoinGeckoAPI()
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
+            _reset_x402_adapter(x402_session)
             cg.session = x402_session
             cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
         else:

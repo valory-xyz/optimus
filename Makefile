@@ -27,23 +27,31 @@ clean-pyc:
 	find . -name '.DS_Store' -exec rm -fr {} +
 
 .PHONY: clean-test
-clean-test:
+clean-test: clean-cache
 	rm -fr .tox/
 	rm -f .coverage
 	find . -name ".coverage*" -not -name ".coveragerc" -exec rm -fr "{}" \;
 	rm -fr coverage.xml
 	rm -fr htmlcov/
-	rm -fr .hypothesis
-	rm -fr .pytest_cache
-	rm -fr .mypy_cache/
-	rm -fr .hypothesis/
 	find . -name 'log.txt' -exec rm -fr {} +
 	find . -name 'log.*.txt' -exec rm -fr {} +
+	rm -rf leak_report
+
+# removes various cache files
+.PHONY: clean-cache
+clean-cache:
+	find . -type d -name .hypothesis -prune -exec rm -rf {} \;
+	rm -fr .pytest_cache
+	rm -fr .mypy_cache/
 
 # isort: fix import orders
 # black: format files according to the pep standards
 .PHONY: formatters
 formatters:
+	tomte format-code
+
+.PHONY: format
+format:
 	tomte format-code
 
 # black-check: check code style
@@ -58,43 +66,53 @@ code-checks:
 
 # safety: checks dependencies for known security vulnerabilities
 # bandit: security linter
+# gitleaks: checks for sensitive information
 .PHONY: security
 security:
 	tomte check-security
-	gitleaks detect --report-format json --report-path leak_report
+	gitleaks detect --report-format json --report-path leak_report --log-opts="HEAD"
 
-# generate latest hashes for updated packages
-# generate docs for updated packages
+# generate abci docstrings
 # update copyright headers
+# generate latest hashes for updated packages
 .PHONY: generators
-generators:
+generators: clean-cache fix-abci-app-specs
 	tox -qq -e abci-docstrings
-	tomte format-copyright --author author_name
+	tomte format-copyright --author valory --exclude-part signing --exclude-part acn --exclude-part http --exclude-part ledger_api --exclude-part contract_api --exclude-part abci --exclude-part tendermint --exclude-part ipfs --exclude-part srr --exclude-part kv_store --exclude-part gnosis_safe_proxy_factory --exclude-part service_registry --exclude-part gnosis_safe --exclude-part multisend --exclude-part erc20 --exclude-part staking_activity_checker --exclude-part staking_token --exclude-part http_client --exclude-part ledger --exclude-part p2p_libp2p_client --exclude-part http_server --exclude-part x402 --exclude-part genai --exclude-part abstract_abci --exclude-part abstract_round_abci --exclude-part transaction_settlement_abci --exclude-part registration_abci --exclude-part reset_pause_abci --exclude-part termination_abci --exclude-part funds_manager
 	autonomy packages lock
 
 .PHONY: common-checks-1
 common-checks-1:
-	tomte check-copyright --author author_name
+	tox -qq -e copyright-check
 	tomte check-doc-links
 	tox -qq -p -e check-hash -e check-packages -e check-doc-hashes
 
-.PHONY: all-linters
-all-linters:
-	gitleaks detect --report-format json --report-path leak_report
-	tox -qq -e spell-check
-	tox -qq -e check-doc-hashes
-	tox -qq -e bandit
-	tox -qq -e safety
-	tox -qq -e liccheck
-	tox -qq -e check-packages
+.PHONY: common-checks-2
+common-checks-2:
+	tox -qq -e check-abci-docstrings
 	tox -qq -e check-abciapp-specs
+	tox -qq -e check-dependencies
+	tox -qq -e check-handlers
+
+.PHONY: all-checks
+all-checks: format code-checks security generators common-checks-1 common-checks-2
+
+.PHONY: ci-linter-checks
+ci-linter-checks:
+	gitleaks detect --report-format json --report-path leak_report --log-opts="HEAD"
+	tox -qq -e copyright-check
+	tox -qq -e liccheck
+	tox -qq -e check-dependencies
+	tomte check-doc-links
+	tox -qq -e check-doc-hashes
+	tomte check-security
+	tox -qq -e check-packages
 	tox -qq -e check-hash
-	tox -qq -e black-check
-	tox -qq -e isort-check
-	tox -qq -e flake8
-	tox -qq -e darglint
-	tox -qq -e pylint
-	tox -qq -e mypy
+	tomte check-code
+	tomte check-spelling
+	tox -qq -e check-abci-docstrings
+	tox -qq -e check-abciapp-specs
+	tox -qq -e check-handlers
 
 .PHONY: fix-abci-app-specs
 fix-abci-app-specs:

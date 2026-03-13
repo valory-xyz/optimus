@@ -6,9 +6,11 @@ description: A wrapper for Velodrome's Router calls.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeigovlecwwk2fgo2rmzhldxgbfdfelraz7mfswakorwkswlpgdqy7a
+  __init__.py: bafybeihiy552yxtb5vnipoeqfa3onfv65xhvarxo3loypurgrlv7iorr5i
   build/contract_interface.json: bafybeihmu27srsqj7tmsdrjrgnn657lyaupd6pzbyasytdxdfp3ui5u3nu
-  contract.py: bafybeicohyvq65vqvblxpg4ls73345ejsh6mthnbtcdxqn5fggn4zm3cfq
+  contract.py: bafybeif6depmg5o46h7cquf2tzbgeztppv2w6wqcl6osn34nn7xtiwbycm
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeicc76wf7x5zic4oezyy2fwen4pnrenr4x2slsz3irmttma2h6rza4
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeRouterContract

@@ -6,9 +6,11 @@ description: A wrapper for Velodrome's CLPoolManager calls.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeia7lmypaakjxrui66untszhhzzzwbzdpq3ps2htvval75f2io4vve
+  __init__.py: bafybeicfo4mzr7uf62wngjjxucsgdr2tbsycj6o72fyiymzqzqt3nbhice
   build/contract_interface.json: bafybeibsh5efqfgttzkbnvyipffdtn6fjwyv5veg3ihindd3rhslfmovb4
-  contract.py: bafybeicppunyndvmvduk6dtqzatxfffr3mqwbgbjoteo7c5hfhk57eph5e
+  contract.py: bafybeiawikro4y6vr2lxjkovhedcyun2ewlrl3hrggpk5jshzkkecxyqki
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeihv4xyml3jnke4e4dasa3hgl6gxoqjt4krp2mjiuqvdhs2cvnfvmu
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeNonFungiblePositionManagerContract

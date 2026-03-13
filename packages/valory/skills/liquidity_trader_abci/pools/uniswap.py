@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -473,15 +473,10 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         if not tick_spacing:
             return None, None
         # Adjust MIN_TICK to the nearest higher multiple of tick_spacing
-        adjusted_tick_lower = abs(MIN_TICK) // tick_spacing * tick_spacing
-        if adjusted_tick_lower > abs(MIN_TICK):
-            adjusted_tick_lower = adjusted_tick_lower - tick_spacing
-        adjusted_tick_lower = -adjusted_tick_lower
+        adjusted_tick_lower = -(abs(MIN_TICK) // tick_spacing * tick_spacing)
 
         # Adjust MAX_TICK to the nearest lower multiple of tick_spacing
         adjusted_tick_upper = MAX_TICK // tick_spacing * tick_spacing
-        if adjusted_tick_upper > MAX_TICK:
-            adjusted_tick_upper = adjusted_tick_upper - tick_spacing
 
         self.context.logger.info(
             f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}"

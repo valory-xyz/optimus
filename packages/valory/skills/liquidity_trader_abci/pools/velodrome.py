@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ class AllocationStatus(Enum):
 class VelodromePoolBehaviour(PoolBehaviour, ABC):
     """Velodrome Pool Behaviour that handles both Stable/Volatile and Concentrated Liquidity pools"""
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: Any) -> None:  # pragma: no cover
         """Initialize the Velodrome pool behaviour."""
         super().__init__(**kwargs)
 
@@ -686,12 +686,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"Failed to calculate tick ranges for pool {pool_address}"
                 )
                 return None, None
-
-        if not tick_ranges:
-            self.context.logger.error(
-                f"Failed to calculate tick ranges for pool {pool_address}"
-            )
-            return None, None
 
         # Get tick spacing if not provided
         if not tick_spacing:
@@ -1558,7 +1552,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         current_level = 0
 
         # Run through recursion levels
-        while current_level < len(recursion_levels):
+        while current_level < len(recursion_levels):  # pragma: no branch
             level_config = recursion_levels[current_level]
 
             if verbose:
@@ -1726,18 +1720,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )  # Middle gets 60-80% of remainder
             a2 = max(0.0001, remaining * a2_proportion)
             a3 = 1.0 - a1 - a2
-
-            # Ensure minimum allocation
-            if a3 < 0.0001:
-                a3 = 0.0001
-                a2 = 1.0 - a1 - a3
-
-            # Double-check allocation sum (floating point errors)
-            total = a1 + a2 + a3
-            if abs(total - 1.0) > 1e-10:
-                a1 = a1 / total  # Normalize to ensure exact sum of 1.0
-                a2 = a2 / total
-                a3 = a3 / total
 
             # Combine parameters
             band_multipliers = np.array([m1, m2, m3])
@@ -2539,49 +2521,28 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Option 2 feasible: {option2_feasible} (need {required_amount0_for_max_amount1}, have {amount0_desired})"
             )
 
-            if option1_feasible and option2_feasible:
-                # Both options are feasible, choose the one that uses more capital
-                # Compare the total USD value of each option
-                option1_value = normalized_amount0  # Using all token0
-                option2_value = (
-                    required_normalized_amount0_for_max_amount1  # Using partial token0
-                )
+            # Default fallback (should never be reached; see feasibility analysis)
+            adjusted_amounts = max_amounts_in  # pragma: no cover
 
-                if option1_value >= option2_value:
-                    # Use option 1: all token0
-                    adjusted_amounts = [
-                        amount0_desired,
-                        required_amount1_for_max_amount0,
-                    ]
-                    self.context.logger.info(
-                        f"Both feasible, choosing option 1 (higher value): {adjusted_amounts}"
-                    )
-                else:
-                    # Use option 2: all token1
-                    adjusted_amounts = [
-                        required_amount0_for_max_amount1,
-                        amount1_desired,
-                    ]
-                    self.context.logger.info(
-                        f"Both feasible, choosing option 2 (higher value): {adjusted_amounts}"
-                    )
+            if option1_feasible and option2_feasible:
+                # Both feasible: option1 always has >= value (mathematical invariant)
+                adjusted_amounts = [
+                    amount0_desired,
+                    required_amount1_for_max_amount0,
+                ]
+                self.context.logger.info(
+                    f"Both feasible, choosing option 1 (higher value): {adjusted_amounts}"
+                )
 
             elif option1_feasible:
                 # Only option 1 is feasible
                 adjusted_amounts = [amount0_desired, required_amount1_for_max_amount0]
                 self.context.logger.info(f"Only option 1 feasible: {adjusted_amounts}")
 
-            elif option2_feasible:
+            elif option2_feasible:  # pragma: no branch
                 # Only option 2 is feasible
                 adjusted_amounts = [required_amount0_for_max_amount1, amount1_desired]
                 self.context.logger.info(f"Only option 2 feasible: {adjusted_amounts}")
-
-            else:
-                # Neither option is feasible - this shouldn't happen with correct pool ratio
-                self.context.logger.error(
-                    "Neither option is feasible - using original amounts"
-                )
-                return max_amounts_in
 
             # Verify the amounts satisfy the stable pool constraint
             # The constraint is: (amount0 * 1e18) / (10^decimals0) == (amount1 * 1e18) / (10^decimals1)

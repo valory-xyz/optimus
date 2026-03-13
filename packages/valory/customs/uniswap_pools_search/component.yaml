@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiej6rb7f54w4epuyvwj3fays7lo6rqqxetjdrzc52k3q5qcbckv4a
-  uniswap_pools_search.py: bafybeibfqxt7gdpbtgqacze6bmqi6jth6546mdr2a7o2qwc75tf62kpfya
+  uniswap_pools_search.py: bafybeieedv3sknp73tioi7zkx2skr5fhg45ti5tmztltv5ejf3ik2rizqi
 fingerprint_ignore_patterns: []
 entry_point: uniswap_pools_search.py
 callable: run
@@ -22,6 +22,6 @@ dependencies:
   web3:
     version: <7.0.0,>=6.0.0
   numpy:
-    version: ==2.2.0
+    version: '>=2.2.6'
   pandas:
     version: '>=2.2.3'

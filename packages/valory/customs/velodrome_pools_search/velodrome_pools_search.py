@@ -37,6 +37,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
+    if session is None:
+        return
+    for adapter in session.adapters.values():
+        if hasattr(adapter, '_is_retry'):
+            adapter._is_retry = False
+
+
 # Constants and mappings
 REQUIRED_FIELDS = (
     "chains",
@@ -558,6 +568,7 @@ def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, t
                 cg = CoinGeckoAPI()
                 if x402_session is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
+                    _reset_x402_adapter(x402_session)
                     cg.session = x402_session
                     cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 else:
@@ -2030,12 +2041,12 @@ def get_coin_id_from_address(
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
             try:
-                
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
+                _reset_x402_adapter(x402_session)
                 cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-                
+
                 # Make the request using x402
                 endpoint = f"coins/{platform}/contract/{address}"
                 response = cg.session.get(f"{cg.api_base_url}{endpoint}")
@@ -2091,12 +2102,13 @@ def get_historical_market_data(
         # Use x402 requests if available
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
-            try:                
+            try:
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
+                _reset_x402_adapter(x402_session)
                 cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-                
+
                 # Make the request using x402
                 response = cg.get_coin_market_chart_by_id(
                     id=coin_id,

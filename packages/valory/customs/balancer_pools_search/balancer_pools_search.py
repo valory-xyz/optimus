@@ -41,6 +41,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
+    if session is None:
+        return
+    for adapter in session.adapters.values():
+        if hasattr(adapter, '_is_retry'):
+            adapter._is_retry = False
+
+
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
     "WEIGHTED": "Weighted",
@@ -408,6 +418,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, x402_sessio
                 cg = CoinGeckoAPI()
                 if x402_session is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
+                    _reset_x402_adapter(x402_session)
                     cg.session = x402_session
                     cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 else:
@@ -788,6 +799,7 @@ def get_pool_token_prices(token_symbols: List[str], coingecko_api_key: Optional[
                         cg = CoinGeckoAPI()
                         if x402_session is not None and x402_proxy is not None:
                             logger.info("Using x402 signer for CoinGecko API requests")
+                            _reset_x402_adapter(x402_session)
                             cg.session = x402_session
                             cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                         else:
@@ -1021,6 +1033,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str, x402_s
 
     if x402_session is not None and x402_proxy is not None:
         logger.info("Using x402 signer for CoinGecko API requests")
+        _reset_x402_adapter(x402_session)
         cg.session = x402_session
         cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
 

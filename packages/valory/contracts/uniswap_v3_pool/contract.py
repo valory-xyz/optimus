@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2022-2023 Valory AG
+#   Copyright 2022-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -101,8 +101,6 @@ class TickMath:
             ratio = (2**256 - 1) // ratio
         
         # Ensure the ratio is within valid bounds
-        if ratio < TickMath.MIN_SQRT_RATIO:
-            return TickMath.MIN_SQRT_RATIO
         if ratio > TickMath.MAX_SQRT_RATIO:
             return TickMath.MAX_SQRT_RATIO
             

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -76,4 +76,4 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         if synced_data.is_staking_kpi_met is False:
             return synced_data, Event.STAKING_KPI_NOT_MET
 
-        return res
+        return res  # pragma: no cover

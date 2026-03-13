@@ -7,9 +7,9 @@ description: A strategy that returns the highest APR yielding liquidity pool ove
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeig54kazemffrqk7h5ufvfm7n3fzg5pekpx75uxytjs3o7mnhywox4
+  __init__.py: bafybeici6ewm4ejxreykrcqqq3sj4fziv3yh6f2djec2nsxtfuh642wdkq
   velodrome_lp_sugar.json: bafybeiamf3gev3vfeikh2mjmrhaqmyrsuzl6bt34gcilgz375z4o4uap2q
-  velodrome_pools_search.py: bafybeicpr3iaost4f2cy2b52amvrggadobpfiuzqwa7l4ddbtb6j5e2qcy
+  velodrome_pools_search.py: bafybeig5siywandefkhbldmhwcwry4t74zts3ix4lqaiwrotgjff4pxyhe
 fingerprint_ignore_patterns: []
 entry_point: velodrome_pools_search.py
 callable: run
@@ -21,7 +21,7 @@ dependencies:
   gql:
     version: ==3.5.0
   numpy:
-    version: ==2.2.0
+    version: '>=2.2.6'
   web3:
     version: ==6.20.4
   pandas:

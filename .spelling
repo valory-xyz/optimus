@@ -89,4 +89,16 @@ PostTxSettlementRound
 blockchain
 Optimsim
 CoinGecko
+x402
+x402_session
+LiquidityTraderAbci
+ROUND_TIMEOUT
+NO_MAJORITY
+parameterization
+dialogues
+cleanup
+pre-built
+pre-existing
+unflagged
+enum
 

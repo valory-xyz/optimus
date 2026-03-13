@@ -1,3 +1,24 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2021-2026 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+
 import warnings
 
 warnings.filterwarnings("ignore")  # Suppress all warnings
@@ -15,6 +36,16 @@ from pycoingecko import CoinGeckoAPI
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
+    if session is None:
+        return
+    for adapter in session.adapters.values():
+        if hasattr(adapter, '_is_retry'):
+            adapter._is_retry = False
+
 
 # Constants and mappings
 REQUIRED_FIELDS = (
@@ -537,6 +568,7 @@ def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, t
                 cg = CoinGeckoAPI()
                 if x402_session is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
+                    _reset_x402_adapter(x402_session)
                     cg.session = x402_session
                     cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 else:
@@ -829,18 +861,13 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, pool_fee, timerange="NINETY_
                     nan_indices = total_rets.index[total_rets.isna()].tolist()
                     inf_indices = total_rets.index[np.isinf(total_rets)].tolist()
                     
-                    if nan_indices or inf_indices:
-                        logger.warning(f"Pool {pool_id}: Found {len(nan_indices)} NaN and {len(inf_indices)} infinite values in returns")
-                    
+                    logger.warning(f"Pool {pool_id}: Found {len(nan_indices)} NaN and {len(inf_indices)} infinite values in returns")
+
                     # Replace infinities with large but finite values
                     total_rets = total_rets.replace([np.inf, -np.inf], [1e10, -1e10])
-                    
+
                     # Remove NaN values
                     total_rets = total_rets.dropna()
-                    
-                    if len(total_rets) <= 1:
-                        logger.warning(f"Pool {pool_id}: Not enough data points after cleaning (only {len(total_rets)} left)")
-                        return None
                 
                 # Apply winsorization to limit extreme values (clip at 99th percentile)
                 if len(total_rets) > 3:  # Need enough data points for percentile calculation
@@ -1109,9 +1136,6 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
         # Convert Sugar pool format to match subgraph format
         formatted_pools = []
         for pool in all_pools:
-            # Skip invalid or empty entries returned by the contract
-            if pool is None or not isinstance(pool, dict):
-                continue
             # Skip pools with missing or zero-address tokens
             ZERO_ADDR = "0x0000000000000000000000000000000000000000"
             token0 = str(pool.get("token0", ZERO_ADDR)).lower()
@@ -1292,7 +1316,7 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
         is_cl_pool = pool_type not in [0, -1]
        
         if is_cl_pool:
-            # Get chain ID from pool data or context            
+            # Get chain ID from pool data or context
             try:
                 tick_bands = calculate_tick_lower_and_upper_velodrome(
                     chain="optimism",  # Should be passed as parameter
@@ -1302,25 +1326,29 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
                     x402_session=x402_session,
                     x402_proxy=x402_proxy
                 )
-                
+
                 if tick_bands:
                     min_tick_lower = min(pos["tick_lower"] for pos in tick_bands)
                     max_tick_upper = max(pos["tick_upper"] for pos in tick_bands)
                     effective_width = max_tick_upper - min_tick_lower
-                    
+
                     # Calculate adjusted APR
                     if effective_width > 0:
                         apr = advertised_apr/effective_width
                     else:
                         apr = advertised_apr
-                    
+
                     return {
                         "apr": apr,
                         "advertised_apr": advertised_apr,
                         "tick_bands": tick_bands,
                     }
+                else:
+                    logger.warning(f"No tick bands found for CL pool {pool_data.get('id')}, using advertised APR")
+                    return {"apr": advertised_apr}
             except Exception as e:
                 logger.error(f"Error calculating tick data for CL pool: {str(e)}")
+                return {"apr": advertised_apr}
         else:
             return {"apr": advertised_apr}  # Return basic APR for non-CL pools or if calculation fails
     else:
@@ -1516,12 +1544,11 @@ def run_monte_carlo_level(
             a3 = 0.0001
             a2 = 1.0 - a1 - a3
 
-        # Double-check allocation sum (floating point errors)
+        # Normalize allocations to ensure exact sum of 1.0
         total = a1 + a2 + a3
-        if abs(total - 1.0) > 1e-10:
-            a1 = a1 / total  # Normalize to ensure exact sum of 1.0
-            a2 = a2 / total
-            a3 = a3 / total
+        a1 = a1 / total
+        a2 = a2 / total
+        a3 = a3 / total
 
         # Combine parameters
         band_multipliers = np.array([m1, m2, m3])
@@ -1655,11 +1682,9 @@ def optimize_stablecoin_bands(
     # Initialize results storage
     results_by_level = []
     best_overall = None
-    current_level = 0
 
     # Run through recursion levels
-    while current_level < len(recursion_levels):
-        level_config = recursion_levels[current_level]
+    for current_level, level_config in enumerate(recursion_levels):
 
         if verbose:
             logger.info(
@@ -1721,7 +1746,7 @@ def optimize_stablecoin_bands(
                         f"Inner band multiplier: {best_config['band_multipliers'][0]:.4f}σ "
                         f"(trigger: {level_config['trigger_multiplier']:.4f}σ)"
                     )
-                current_level += 1
+                continue  # Move to next recursion level
             else:
                 if verbose:
                     logger.info(
@@ -1729,8 +1754,8 @@ def optimize_stablecoin_bands(
                     )
                 break  # Exit the recursion if trigger conditions not met
         else:
-            # This is the final level, so we're done
-            break
+            # This is the final level, so we're done (loop ends naturally)
+            pass
 
     # After all recursion levels, return the best overall result
     if verbose:
@@ -2016,12 +2041,12 @@ def get_coin_id_from_address(
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
             try:
-                
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
+                _reset_x402_adapter(x402_session)
                 cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-                
+
                 # Make the request using x402
                 endpoint = f"coins/{platform}/contract/{address}"
                 response = cg.session.get(f"{cg.api_base_url}{endpoint}")
@@ -2077,12 +2102,13 @@ def get_historical_market_data(
         # Use x402 requests if available
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
-            try:                
+            try:
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
+                _reset_x402_adapter(x402_session)
                 cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-                
+
                 # Make the request using x402
                 response = cg.get_coin_market_chart_by_id(
                     id=coin_id,
@@ -2419,12 +2445,11 @@ def calculate_tick_lower_and_upper_velodrome(
             f"Total allocation before normalization: {total_alloc}"
         )
 
-        if total_alloc > 0:
-            for p in collapsed_positions:
-                p["allocation"] /= total_alloc
-                logger.info(
-                    f"Normalized allocation for position with ticks ({p['tick_lower']}, {p['tick_upper']}): {p['allocation']:.1%}"
-                )
+        for p in collapsed_positions:
+            p["allocation"] /= total_alloc
+            logger.info(
+                f"Normalized allocation for position with ticks ({p['tick_lower']}, {p['tick_upper']}): {p['allocation']:.1%}"
+            )
 
         positions = collapsed_positions
         logger.info(
@@ -2518,8 +2543,7 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
                 
                 # Update token symbols in the input_tokens
                 for i, symbol in enumerate(token_symbols):
-                    if i < len(input_tokens):
-                        input_tokens[i]["symbol"] = symbol
+                    input_tokens[i]["symbol"] = symbol
             
             # Add basic metrics
             pool["token_count"] = token_count
@@ -2569,18 +2593,18 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "pool_fee": pool.get("pool_fee")
         }
 
-        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_session, x402_proxy)  
+        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_session, x402_proxy)
+        if position_data is None:
+            logger.error(f"calculate_position_details_for_velodrome returned None for pool {pool.get('id')}, skipping")
+            continue
         formatted_pool.update(position_data)
 
-        # Add tokens (should be at least 2 tokens)
+        # Add tokens (pools always have at least 2 tokens after filtering)
         tokens = pool.get("inputTokens", [])
-        if len(tokens) >= 1:
-            formatted_pool["token0"] = tokens[0]["id"]
-            formatted_pool["token0_symbol"] = tokens[0]["symbol"]
-        
-        if len(tokens) >= 2:
-            formatted_pool["token1"] = tokens[1]["id"]
-            formatted_pool["token1_symbol"] = tokens[1]["symbol"]
+        formatted_pool["token0"] = tokens[0]["id"]
+        formatted_pool["token0_symbol"] = tokens[0]["symbol"]
+        formatted_pool["token1"] = tokens[1]["id"]
+        formatted_pool["token1_symbol"] = tokens[1]["symbol"]
         
         # Calculate advanced metrics if we have the necessary data
         if coingecko_api_key or (x402_session and x402_proxy) and len(tokens) >= 2:
@@ -2908,13 +2932,8 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         logger.warning("No pools remaining after formatting")
         return {"error": "No suitable pools found"}
         
-    top_pools = formatted_pools if top_n <= 0 else formatted_pools
-    
-    # Final check - if no pools after filtering, return early
-    if not top_pools:
-        logger.warning("No pools remaining after APR filtering")
-        return {"error": "No suitable pools found"}
-    
+    top_pools = formatted_pools
+
     # Cache the result
     set_cached_data("formatted_pools", top_pools, cache_key)
     

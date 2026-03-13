@@ -3845,13 +3845,15 @@ class TestExecuteStrategyExecPath:
         result = b.execute_strategy(strategy="test_strat")
         assert result == {"result": "ok"}
 
-    def test_exec_with_globals_cleanup(self):
+    def test_exec_with_isolated_namespace(self):
+        """Test that strategies execute in isolated namespaces, not globals."""
         b = _mk()
-        # Put something in globals first
         code = "def my_func(**kwargs): return {'done': True}"
         b.shared_state.strategies_executables = {"s": (code, "my_func")}
         result = b.execute_strategy(strategy="s")
         assert result == {"done": True}
+        # Verify the function was NOT injected into globals
+        assert "my_func" not in globals()
 
 
 class TestPushOpportunityMetricsToMirrordb:
@@ -6220,15 +6222,17 @@ class TestReconstructActionsStakingBranch:
 class TestExecuteStrategyGlobals:
     """Test for execute_strategy globals cleanup."""
 
-    def test_del_existing_callable_in_globals(self):
-        """Test that callable already in globals gets deleted before re-exec."""
+    def test_isolated_namespace_no_globals_pollution(self):
+        """Test that strategies use isolated namespaces and don't pollute globals."""
         b = _mk()
         exec_code = "def my_test_func(*a, **kw): return 42"
         b.strategy_exec = MagicMock(return_value=(exec_code, "my_test_func"))
-        # First call defines my_test_func in evaluate_strategy module globals
+        # First call should work in isolated namespace
         result1 = b.execute_strategy(strategy="test")
         assert result1 == 42
-        # Second call finds my_test_func already in globals, triggers del on line 2107
+        # Verify the function was NOT injected into globals
+        assert "my_test_func" not in globals()
+        # Second call should also work since each call gets its own namespace
         result2 = b.execute_strategy(strategy="test")
         assert result2 == 42
 

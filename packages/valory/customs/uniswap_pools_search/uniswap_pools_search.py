@@ -43,6 +43,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 _logger = setup_logger(__name__)
 
+
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
+    if session is None:
+        return
+    for adapter in session.adapters.values():
+        if hasattr(adapter, '_is_retry'):
+            adapter._is_retry = False
+
+
 # Constants and mappings
 UNISWAP = "UniswapV3"
 REQUIRED_FIELDS = (
@@ -433,6 +443,7 @@ def calculate_il_risk_score(
         cg = CoinGeckoAPI()
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
+            _reset_x402_adapter(x402_session)
             cg.session = x402_session
             cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
         else:

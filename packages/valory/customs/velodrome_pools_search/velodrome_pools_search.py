@@ -37,6 +37,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
+    if session is None:
+        return
+    for adapter in session.adapters.values():
+        if hasattr(adapter, '_is_retry'):
+            adapter._is_retry = False
+
+
 # Constants and mappings
 REQUIRED_FIELDS = (
     "chains",
@@ -558,6 +568,7 @@ def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, t
                 cg = CoinGeckoAPI()
                 if x402_session is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
+                    _reset_x402_adapter(x402_session)
                     cg.session = x402_session
                     cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 else:
@@ -1305,7 +1316,7 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
         is_cl_pool = pool_type not in [0, -1]
        
         if is_cl_pool:
-            # Get chain ID from pool data or context            
+            # Get chain ID from pool data or context
             try:
                 tick_bands = calculate_tick_lower_and_upper_velodrome(
                     chain="optimism",  # Should be passed as parameter
@@ -1315,25 +1326,29 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
                     x402_session=x402_session,
                     x402_proxy=x402_proxy
                 )
-                
+
                 if tick_bands:
                     min_tick_lower = min(pos["tick_lower"] for pos in tick_bands)
                     max_tick_upper = max(pos["tick_upper"] for pos in tick_bands)
                     effective_width = max_tick_upper - min_tick_lower
-                    
+
                     # Calculate adjusted APR
                     if effective_width > 0:
                         apr = advertised_apr/effective_width
                     else:
                         apr = advertised_apr
-                    
+
                     return {
                         "apr": apr,
                         "advertised_apr": advertised_apr,
                         "tick_bands": tick_bands,
                     }
+                else:
+                    logger.warning(f"No tick bands found for CL pool {pool_data.get('id')}, using advertised APR")
+                    return {"apr": advertised_apr}
             except Exception as e:
                 logger.error(f"Error calculating tick data for CL pool: {str(e)}")
+                return {"apr": advertised_apr}
         else:
             return {"apr": advertised_apr}  # Return basic APR for non-CL pools or if calculation fails
     else:
@@ -2026,12 +2041,12 @@ def get_coin_id_from_address(
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
             try:
-                
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
+                _reset_x402_adapter(x402_session)
                 cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-                
+
                 # Make the request using x402
                 endpoint = f"coins/{platform}/contract/{address}"
                 response = cg.session.get(f"{cg.api_base_url}{endpoint}")
@@ -2087,12 +2102,13 @@ def get_historical_market_data(
         # Use x402 requests if available
         if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
-            try:                
+            try:
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
+                _reset_x402_adapter(x402_session)
                 cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-                
+
                 # Make the request using x402
                 response = cg.get_coin_market_chart_by_id(
                     id=coin_id,
@@ -2577,7 +2593,10 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "pool_fee": pool.get("pool_fee")
         }
 
-        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_session, x402_proxy)  
+        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_session, x402_proxy)
+        if position_data is None:
+            logger.error(f"calculate_position_details_for_velodrome returned None for pool {pool.get('id')}, skipping")
+            continue
         formatted_pool.update(position_data)
 
         # Add tokens (pools always have at least 2 tokens after filtering)

@@ -82,6 +82,7 @@ from packages.valory.customs.velodrome_pools_search.velodrome_pools_search impor
     run_monte_carlo_level,
     set_cached_data,
     standardize_metrics,
+    _reset_x402_adapter,
 )
 
 
@@ -1002,8 +1003,9 @@ class TestCalculatePositionDetailsForVelodrome:
             "type": 1,
         }
         result = calculate_position_details_for_velodrome(pool_data, "key")
-        # Exception is caught, falls through to None return
-        assert result is None
+        # Exception is caught, returns fallback APR
+        assert result is not None
+        assert "apr" in result
 
     def test_zero_total_supply(self):
         """Test with zero total_supply (staked_pct = 0)."""
@@ -2743,6 +2745,16 @@ class TestFormatVelodromePoolData:
     @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
     )
+    def test_skip_pool_when_position_data_none(self, mock_pos_details):
+        """Test that pool is skipped when calculate_position_details returns None."""
+        mock_pos_details.return_value = None
+        pool = self._make_pool()
+        result = format_velodrome_pool_data([pool], OPTIMISM_CHAIN_ID)
+        assert len(result) == 0
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
     def test_non_cl_pool(self, mock_pos_details):
         """Test non-CL pool (sugar_type = 0)."""
         mock_pos_details.return_value = {}
@@ -4157,3 +4169,33 @@ class TestGetOpportunitiesTopPoolsEmpty:
         )
         assert isinstance(result, dict)
         assert "error" in result
+
+
+class TestResetX402Adapter:
+    """Tests for _reset_x402_adapter helper."""
+
+    def test_none_session(self):
+        """No error when session is None."""
+        _reset_x402_adapter(None)
+
+    def test_session_with_retry_flag(self):
+        """Resets _is_retry on adapters that have it."""
+        adapter = MagicMock()
+        adapter._is_retry = True
+        session = MagicMock()
+        session.adapters = {"https://": adapter}
+        _reset_x402_adapter(session)
+        assert adapter._is_retry is False
+
+    def test_session_without_retry_flag(self):
+        """No error when adapter lacks _is_retry."""
+        adapter = object()  # no _is_retry attribute
+        session = MagicMock()
+        session.adapters = {"https://": adapter}
+        _reset_x402_adapter(session)  # should not raise
+
+    def test_empty_adapters(self):
+        """No error when session has no adapters."""
+        session = MagicMock()
+        session.adapters = {}
+        _reset_x402_adapter(session)

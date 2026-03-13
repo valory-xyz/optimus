@@ -50,6 +50,7 @@ from packages.valory.customs.uniswap_pools_search.uniswap_pools_search import (
     run,
     run_query,
     standardize_metrics,
+    _reset_x402_adapter,
 )
 
 
@@ -983,3 +984,33 @@ class TestRun:
             whitelisted_assets={},
         )
         assert "result" in result
+
+
+class TestResetX402Adapter:
+    """Tests for _reset_x402_adapter helper."""
+
+    def test_none_session(self):
+        """No error when session is None."""
+        _reset_x402_adapter(None)
+
+    def test_session_with_retry_flag(self):
+        """Resets _is_retry on adapters that have it."""
+        adapter = MagicMock()
+        adapter._is_retry = True
+        session = MagicMock()
+        session.adapters = {"https://": adapter}
+        _reset_x402_adapter(session)
+        assert adapter._is_retry is False
+
+    def test_session_without_retry_flag(self):
+        """No error when adapter lacks _is_retry."""
+        adapter = object()
+        session = MagicMock()
+        session.adapters = {"https://": adapter}
+        _reset_x402_adapter(session)
+
+    def test_empty_adapters(self):
+        """No error when session has no adapters."""
+        session = MagicMock()
+        session.adapters = {}
+        _reset_x402_adapter(session)

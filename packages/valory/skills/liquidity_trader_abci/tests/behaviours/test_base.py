@@ -4067,25 +4067,21 @@ class TestFetchTokenPricesSmaEmptyAfterFilter:
             assert result is None
 
 
-class TestExecuteStrategyGlobalsCleanup:
-    """Test execute_strategy when callable already exists in globals."""
+class TestExecuteStrategyIsolatedNamespace:
+    """Test execute_strategy uses isolated namespaces instead of globals."""
 
-    def test_cleanup_existing_global(self) -> None:
+    def test_isolated_namespace(self) -> None:
         import packages.valory.skills.liquidity_trader_abci.behaviours.base as base_mod
 
-        # Pre-populate globals with a callable that will be cleaned
         method_name = "_test_strategy_method"
-        base_mod.__dict__[method_name] = lambda **kw: {"result": "old"}
-
         strategy_code = f"def {method_name}(**kwargs):\n    return {{'result': 'new'}}"
         executables = {"test_strat": (strategy_code, method_name)}
 
         result = execute_strategy("test_strat", executables)
         assert result["result"] == "new"
 
-        # Cleanup
-        if method_name in base_mod.__dict__:
-            del base_mod.__dict__[method_name]
+        # Verify the function was NOT injected into module globals
+        assert method_name not in base_mod.__dict__
 
 
 class TestFetchOusdtBalanceExceptionInner:

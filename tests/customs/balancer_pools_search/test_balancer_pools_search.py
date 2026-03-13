@@ -939,13 +939,13 @@ class TestGetBalancerPoolSharpeRatio:
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
     def test_successful(self, mock_post):
-        """Test successful Sharpe ratio calculation."""
+        """Test successful Sharpe ratio calculation returns capped value."""
         data = [
             {
                 "timestamp": 1700000000 + i * 86400,
-                "sharePrice": str(1.0 + i * 0.001),
-                "fees24h": str(100 + i),
-                "totalLiquidity": str(100000),
+                "sharePrice": 1.0 + i * 0.001,
+                "fees24h": 100 + i,
+                "totalLiquidity": 100000,
             }
             for i in range(30)
         ]
@@ -953,7 +953,8 @@ class TestGetBalancerPoolSharpeRatio:
         mock_resp.json.return_value = {"data": {"poolGetSnapshots": data}}
         mock_post.return_value = mock_resp
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
-        assert result is not None or result is None
+        assert result is not None
+        assert -10 <= result <= 10
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
@@ -988,24 +989,25 @@ class TestGetBalancerPoolSharpeRatio:
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
     def test_extreme_values_filtered(self, mock_post):
-        """Test extreme values are replaced with NaN."""
+        """Test extreme values are replaced with NaN and warning is logged."""
         data = []
         for i in range(30):
             sp = 1e17 if i == 0 else 1.0 + i * 0.001
             data.append(
                 {
-                    "timestamp": str(1700000000 + i * 86400),
-                    "sharePrice": str(sp),
-                    "fees24h": str(100 + i),
-                    "totalLiquidity": str(100000),
+                    "timestamp": 1700000000 + i * 86400,
+                    "sharePrice": sp,
+                    "fees24h": 100 + i,
+                    "totalLiquidity": 100000,
                 }
             )
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"poolGetSnapshots": data}}
         mock_post.return_value = mock_resp
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
-        # May return None or a numeric value depending on remaining valid data
-        assert result is None or isinstance(result, (int, float))
+        # Should still compute a result with remaining valid data
+        assert result is not None
+        assert -10 <= result <= 10
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
@@ -1044,7 +1046,7 @@ class TestGetBalancerPoolSharpeRatio:
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
     def test_infinite_returns_replaced(self, mock_post):
-        """Test that infinite values in returns are handled."""
+        """Test that infinite values in returns are handled and warning is logged."""
         data = []
         for i in range(30):
             sp = (
@@ -1053,9 +1055,9 @@ class TestGetBalancerPoolSharpeRatio:
             data.append(
                 {
                     "timestamp": 1700000000 + i * 86400,
-                    "sharePrice": str(sp),
-                    "fees24h": str(100),
-                    "totalLiquidity": str(100000),
+                    "sharePrice": sp,
+                    "fees24h": 100,
+                    "totalLiquidity": 100000,
                 }
             )
         mock_resp = MagicMock()
@@ -1063,7 +1065,8 @@ class TestGetBalancerPoolSharpeRatio:
         mock_post.return_value = mock_resp
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
         # Should handle inf values and still return a result
-        assert result is None or isinstance(result, float)
+        assert result is not None
+        assert -10 <= result <= 10
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
@@ -1100,9 +1103,9 @@ class TestGetBalancerPoolSharpeRatio:
         data = [
             {
                 "timestamp": 1700000000 + i * 86400,
-                "sharePrice": str(1.0 + i * 0.1),  # Large consistent increases
-                "fees24h": str(1000),
-                "totalLiquidity": str(100000),
+                "sharePrice": 1.0 + i * 0.1,  # Large consistent increases
+                "fees24h": 1000,
+                "totalLiquidity": 100000,
             }
             for i in range(30)
         ]
@@ -1110,8 +1113,8 @@ class TestGetBalancerPoolSharpeRatio:
         mock_resp.json.return_value = {"data": {"poolGetSnapshots": data}}
         mock_post.return_value = mock_resp
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
-        if result is not None:
-            assert -10 <= result <= 10
+        assert result is not None
+        assert -10 <= result <= 10
 
 
 class TestGetUnderlyingTokenSymbol:

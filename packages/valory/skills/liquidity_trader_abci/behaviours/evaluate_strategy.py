@@ -2112,11 +2112,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         strategy_exec, callable_method = strategy
-        if callable_method in globals():  # pragma: no branch
-            del globals()[callable_method]
 
-        exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
-        method = globals().get(callable_method, None)
+        # Use an isolated namespace to prevent race conditions when strategies
+        # run in parallel — each strategy gets its own dict so identically-named
+        # functions (e.g. apply_composite_pre_filter) don't overwrite each other.
+        namespace = {}
+        exec(strategy_exec, namespace)  # pylint: disable=W0122  # nosec
+        method = namespace.get(callable_method, None)
         if method is None:
             self.context.logger.error(
                 f"No {callable_method!r} method was found in {strategy} executable."

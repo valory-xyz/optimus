@@ -3357,12 +3357,13 @@ def execute_strategy(
         return None
 
     strategy_exec, callable_method = strategy_exec_tuple
-    if callable_method in globals():
-        del globals()[callable_method]
 
-    # Execute the strategy code
-    exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
-    method = globals().get(callable_method, None)
+    # Use an isolated namespace to prevent race conditions when strategies
+    # run in parallel — each strategy gets its own dict so identically-named
+    # functions (e.g. apply_composite_pre_filter) don't overwrite each other.
+    namespace = {}
+    exec(strategy_exec, namespace)  # pylint: disable=W0122  # nosec
+    method = namespace.get(callable_method, None)
     if method is None:
         logger.error(
             f"No {callable_method!r} method was found in {strategy} executable."

@@ -682,7 +682,7 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
             price_returns = df["sharePrice"].pct_change()
             
             # Calculate fee returns, handling potential division by zero
-            fee_returns = pd.Series(0, index=df.index)  # Default to zero
+            fee_returns = pd.Series(0.0, index=df.index)  # Default to zero
             mask = (df["totalLiquidity"] > 0) & df["fees24h"].notnull()
             fee_returns[mask] = df.loc[mask, "fees24h"] / df.loc[mask, "totalLiquidity"]
             

@@ -1305,7 +1305,7 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
         is_cl_pool = pool_type not in [0, -1]
        
         if is_cl_pool:
-            # Get chain ID from pool data or context            
+            # Get chain ID from pool data or context
             try:
                 tick_bands = calculate_tick_lower_and_upper_velodrome(
                     chain="optimism",  # Should be passed as parameter
@@ -1315,25 +1315,29 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
                     x402_session=x402_session,
                     x402_proxy=x402_proxy
                 )
-                
+
                 if tick_bands:
                     min_tick_lower = min(pos["tick_lower"] for pos in tick_bands)
                     max_tick_upper = max(pos["tick_upper"] for pos in tick_bands)
                     effective_width = max_tick_upper - min_tick_lower
-                    
+
                     # Calculate adjusted APR
                     if effective_width > 0:
                         apr = advertised_apr/effective_width
                     else:
                         apr = advertised_apr
-                    
+
                     return {
                         "apr": apr,
                         "advertised_apr": advertised_apr,
                         "tick_bands": tick_bands,
                     }
+                else:
+                    logger.warning(f"No tick bands found for CL pool {pool_data.get('id')}, using advertised APR")
+                    return {"apr": advertised_apr}
             except Exception as e:
                 logger.error(f"Error calculating tick data for CL pool: {str(e)}")
+                return {"apr": advertised_apr}
         else:
             return {"apr": advertised_apr}  # Return basic APR for non-CL pools or if calculation fails
     else:
@@ -2577,7 +2581,10 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "pool_fee": pool.get("pool_fee")
         }
 
-        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_session, x402_proxy)  
+        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_session, x402_proxy)
+        if position_data is None:
+            logger.error(f"calculate_position_details_for_velodrome returned None for pool {pool.get('id')}, skipping")
+            continue
         formatted_pool.update(position_data)
 
         # Add tokens (pools always have at least 2 tokens after filtering)

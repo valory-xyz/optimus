@@ -7783,6 +7783,48 @@ class TestCoverageGaps:
         assert "2024-12-15" in result
         o.store_funding_events.assert_called()
 
+    def test_outgoing_merge_skips_existing_dates(self):
+        """New transfers on already-stored dates are not overwritten during merge."""
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        o.funding_events = {
+            "optimism_outgoing": {
+                "2024-12-15": [{"symbol": "ETH", "amount": 0.5, "tx_hash": "0xOLD"}],
+            }
+        }
+        # Page has one transfer on an existing date and one on a new date
+        page_data = {
+            "results": [
+                {
+                    "executionDate": "2024-12-20T10:00:00Z",
+                    "from": "0xsafe",
+                    "to": "0xR",
+                    "type": "ETHER_TRANSFER",
+                    "value": str(10**18),
+                    "transactionHash": "0xNEW",
+                },
+                {
+                    "executionDate": "2024-12-15T12:00:00Z",
+                    "from": "0xsafe",
+                    "to": "0xR",
+                    "type": "ETHER_TRANSFER",
+                    "value": str(10**18),
+                    "transactionHash": "0xDUP",
+                },
+            ],
+            "next": None,
+        }
+        o._request_with_retries = _gen_return((True, page_data))
+
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("0xSafe", "2025-01-01")
+        )
+        # New date added
+        assert "2024-12-20" in result
+        # Existing date kept original data (not overwritten)
+        assert result["2024-12-15"][0]["tx_hash"] == "0xOLD"
+
 
 class TestClosedPositionsBranch:
     """Test the closed_positions branch (lines 557-560) specifically."""

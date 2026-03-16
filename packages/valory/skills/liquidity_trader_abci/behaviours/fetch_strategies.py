@@ -4508,9 +4508,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 transfers_url = cursor
 
             # Merge new dates into persisted data and save
-            for date, transfers_list in all_transfers.items():
-                if date not in existing_outgoing:
-                    existing_outgoing[date] = transfers_list
+            # (all_transfers only contains dates not already in existing_outgoing,
+            # because the fetch loop skips existing dates)
+            existing_outgoing.update(all_transfers)
 
             self.funding_events["optimism_outgoing"] = existing_outgoing
             self.store_funding_events()

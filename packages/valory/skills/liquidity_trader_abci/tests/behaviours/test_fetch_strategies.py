@@ -7711,6 +7711,78 @@ class TestCoverageGaps:
         assert result == 2500.0
         assert call_count["n"] == 2
 
+    def test_fetch_historical_eth_price_no_price_but_fallback(self):
+        """API succeeds but no price in response, fallback cache returns price."""
+        o = _mk()
+        cg = MagicMock()
+        o.context.coingecko = cg
+        cg.historical_price_endpoint = "url/{coin_id}/{date}"
+        cg.api_key = "key"
+        cg.request.return_value = (True, {"market_data": {"current_price": {}}})
+        o.params.use_x402 = False
+
+        call_count = {"n": 0}
+
+        def cache_returns_on_second_call(*a, **kw):
+            call_count["n"] += 1
+            yield
+            if call_count["n"] >= 2:
+                return 1800.0
+            return None
+
+        o._get_cached_price = cache_returns_on_second_call
+        o._cache_price = _gen_none
+
+        result = _drive(o._fetch_historical_eth_price("01-01-2025"))
+        assert result == 1800.0
+
+    def test_load_priced_transfers_type_error(self):
+        """Return empty dict on TypeError during JSON parse."""
+        o = _mk()
+        o._read_kv = _gen_return({"optimism_priced_transfers": 12345})
+        result = _drive(o._load_priced_transfers("optimism"))
+        assert result == {}
+        o.context.logger.warning.assert_called()
+
+    def test_outgoing_early_stop(self):
+        """Outgoing pagination stops when entire page is on stored dates."""
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        o.funding_events = {
+            "optimism_outgoing": {
+                "2024-12-15": [{"symbol": "ETH", "amount": 1.0}],
+            }
+        }
+        page_data = {
+            "results": [
+                {
+                    "executionDate": "2024-12-15T10:00:00Z",
+                    "from": "0xsafe",
+                    "to": "0xR",
+                    "type": "ETHER_TRANSFER",
+                    "value": str(10**18),
+                    "transactionHash": "0xH1",
+                },
+                {
+                    "executionDate": "2024-12-15T11:00:00Z",
+                    "from": "0xsafe",
+                    "to": "0xR",
+                    "type": "ETHER_TRANSFER",
+                    "value": str(10**18),
+                    "transactionHash": "0xH2",
+                },
+            ],
+            "next": "http://next-page-url",
+        }
+        o._request_with_retries = _gen_return((True, page_data))
+
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("0xSafe", "2025-01-01")
+        )
+        assert "2024-12-15" in result
+        o.store_funding_events.assert_called()
+
 
 class TestClosedPositionsBranch:
     """Test the closed_positions branch (lines 557-560) specifically."""

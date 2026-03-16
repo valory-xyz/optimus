@@ -167,6 +167,18 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
+    def test_null_data_response(self, mock_post):
+        """Test that {"data": null} response does not crash."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": None}
+        mock_post.return_value = mock_resp
+        result = run_query("{pools{id}}", "https://api.example.com")
+        assert result == {}
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
     def test_with_variables(self, mock_post):
         """Test query with variables."""
         mock_resp = MagicMock()
@@ -413,6 +425,17 @@ class TestGetUniswapPoolSharpeRatio:
         """Test with no data."""
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"poolDayDatas": []}}
+        mock_post.return_value = mock_resp
+        result = get_uniswap_pool_sharpe_ratio("0x1", "https://api.example.com")
+        assert np.isnan(result)
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_null_data_response(self, mock_post):
+        """Test that {"data": null} response does not crash."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": None}
         mock_post.return_value = mock_resp
         result = get_uniswap_pool_sharpe_ratio("0x1", "https://api.example.com")
         assert np.isnan(result)
@@ -1014,3 +1037,110 @@ class TestResetX402Adapter:
         session = MagicMock()
         session.adapters = {}
         _reset_x402_adapter(session)
+
+
+class TestRunQueryNetworkResilience:
+    """Tests for run_query handling network errors and parse failures."""
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_connection_error(self, mock_post):
+        """Test that ConnectionError is caught and returns error dict."""
+        import requests as req_lib
+
+        mock_post.side_effect = req_lib.ConnectionError("connection refused")
+        result = run_query("{pools{id}}", "https://api.example.com")
+        assert "error" in result
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_timeout_error(self, mock_post):
+        """Test that Timeout is caught and returns error dict."""
+        import requests as req_lib
+
+        mock_post.side_effect = req_lib.Timeout("timed out")
+        result = run_query("{pools{id}}", "https://api.example.com")
+        assert "error" in result
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_json_decode_error(self, mock_post):
+        """Test that JSONDecodeError from response.json() returns error dict."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.side_effect = ValueError("No JSON")
+        mock_post.return_value = mock_resp
+        result = run_query("{pools{id}}", "https://api.example.com")
+        assert "error" in result
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_timeout_kwarg_passed(self, mock_post):
+        """Test that timeout=30 is passed to requests.post."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": {"pools": []}}
+        mock_post.return_value = mock_resp
+        run_query("{pools{id}}", "https://api.example.com")
+        _, kwargs = mock_post.call_args
+        assert kwargs.get("timeout") == 30
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_data_null_returns_empty_dict(self, mock_post):
+        """Test that {"data": null} returns empty dict."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": None}
+        mock_post.return_value = mock_resp
+        result = run_query("{pools{id}}", "https://api.example.com")
+        assert result == {}
+
+
+class TestGetUniswapPoolSharpeRatioNetworkResilience:
+    """Tests for get_uniswap_pool_sharpe_ratio handling network errors."""
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_connection_error(self, mock_post):
+        """Test that ConnectionError returns NaN."""
+        import requests as req_lib
+
+        mock_post.side_effect = req_lib.ConnectionError("refused")
+        result = get_uniswap_pool_sharpe_ratio("0x1", "https://api.example.com")
+        assert np.isnan(result)
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_timeout_kwarg_passed(self, mock_post):
+        """Test that timeout=30 is passed to requests.post."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": {"poolDayDatas": []}}
+        mock_post.return_value = mock_resp
+        get_uniswap_pool_sharpe_ratio("0x1", "https://api.example.com")
+        _, kwargs = mock_post.call_args
+        assert kwargs.get("timeout") == 30
+
+
+class TestFetchPoolDataNetworkResilience:
+    """Tests for fetch_pool_data handling timeout parameter."""
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_timeout_kwarg_passed(self, mock_post):
+        """Test that timeout=30 is passed to requests.post."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": {"pool": {"id": "0x1"}}}
+        mock_post.return_value = mock_resp
+        fetch_pool_data("0x1", "https://api.example.com")
+        _, kwargs = mock_post.call_args
+        assert kwargs.get("timeout") == 30

@@ -86,6 +86,8 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
 MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
+MAX_RETRIES_FOR_STATUS_CHECK = 5
+MAX_SWAP_CONFIRMATION_RETRIES = 60
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
 CAMPAIGN_TYPES = [1, 2]
@@ -2117,7 +2119,8 @@ class LiquidityTraderBaseBehaviour(
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
         service_id = self.params.on_chain_service_id
 
-        query = {"query": f"""
+        query = {
+            "query": f"""
             {{
             service(id: {service_id!r}) {{
                 blockNumber
@@ -2127,7 +2130,8 @@ class LiquidityTraderBaseBehaviour(
                 olasRewardsEarned
             }}
             }}
-            """}
+            """
+        }
 
         self.context.logger.info(
             f"Querying subgraph for service {service_id} on {chain}"
@@ -2141,8 +2145,12 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if response.status_code in HTTP_OK:
-            data = json.loads(response.body)
-            service_data = data.get("data", {}).get("service")
+            try:
+                data = json.loads(response.body)
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                self.context.logger.error(f"Failed to parse subgraph response: {e}")
+                return None
+            service_data = (data.get("data") or {}).get("service")
             if service_data:
                 self.context.logger.info(
                     f"Retrieved service data from subgraph: olasRewardsEarned={service_data.get('olasRewardsEarned', 0)}"

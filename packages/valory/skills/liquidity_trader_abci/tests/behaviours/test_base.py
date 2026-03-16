@@ -2792,6 +2792,27 @@ class TestQueryServiceRewards:
         result = _exhaust(b.query_service_rewards("optimism"))
         assert result is None
 
+    def test_json_decode_error(self) -> None:
+        """Test query_service_rewards with malformed JSON body."""
+        b = _make_behaviour()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.body = b"not valid json {"
+        b.get_http_response = _make_gen(resp)
+        result = _exhaust(b.query_service_rewards("optimism"))
+        assert result is None
+        b.context.logger.error.assert_called()
+
+    def test_data_null_response(self) -> None:
+        """Test query_service_rewards when data is null in response."""
+        b = _make_behaviour()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.body = json.dumps({"data": None}).encode("utf-8")
+        b.get_http_response = _make_gen(resp)
+        result = _exhaust(b.query_service_rewards("optimism"))
+        assert result is None
+
 
 class TestUpdateAccumulatedRewardsForChain:
     """Test update_accumulated_rewards_for_chain."""

@@ -33,6 +33,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Decision,
     DexType,
     MAX_RETRIES_FOR_ROUTES,
+    MAX_RETRIES_FOR_STATUS_CHECK,
+    MAX_SWAP_CONFIRMATION_RETRIES,
     MIN_TIME_IN_POSITION,
     PositionStatus,
     SwapStatus,
@@ -1153,6 +1155,39 @@ class TestGetSwapStatus:
         b.sleep = _make_gen_method(None)
         result = _exhaust(b.get_swap_status("0xabc"))
         assert result == ("DONE", "OK")
+
+    def test_retry_exhaustion_returns_none(self):
+        """When status polling exceeds MAX_RETRIES_FOR_STATUS_CHECK, return (None, None)."""
+        b = _make_behaviour()
+
+        def always_404(*a, **kw):
+            resp = MagicMock()
+            resp.status_code = 404
+            resp.body = "not found"
+            yield
+            return resp
+
+        b.get_http_response = always_404
+        b.sleep = _make_gen_method(None)
+        result = _exhaust(b.get_swap_status("0xabc"))
+        assert result == (None, None)
+        b.context.logger.error.assert_called()
+
+    def test_retry_exhaustion_400_returns_none(self):
+        """When status polling exceeds MAX_RETRIES_FOR_STATUS_CHECK with 400s."""
+        b = _make_behaviour()
+
+        def always_400(*a, **kw):
+            resp = MagicMock()
+            resp.status_code = 400
+            resp.body = "bad request"
+            yield
+            return resp
+
+        b.get_http_response = always_400
+        b.sleep = _make_gen_method(None)
+        result = _exhaust(b.get_swap_status("0xabc"))
+        assert result == (None, None)
 
 
 class TestCalculateMinHoldDays:
@@ -3518,6 +3553,51 @@ class TestGetWithdrawTxHash:
         result = _exhaust(b.get_withdraw_tx_hash(action))
         assert result == (None, None, None)
 
+    def test_non_sturdy_zero_amount_is_valid(self):
+        """Test that amount=0 from max_withdraw does NOT trigger early return."""
+        b = _make_behaviour()
+        call_count = [0]
+
+        def ci(*a, **kw):
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return 0  # amount=0 (max_withdraw returns zero)
+            if call_count[0] == 2:
+                return b"\xab" * 32  # tx_hash (withdraw)
+            return "0x" + "ab" * 32  # safe_tx_hash
+
+        b.contract_interact = ci
+        action = {
+            "chain": "optimism",
+            "pool_address": self.POOL_ADDR,
+            "dex_type": "Other",
+        }
+        result = _exhaust(b.get_withdraw_tx_hash(action))
+        # amount=0 should proceed to prepare the withdraw transaction
+        assert result[0] is not None
+
+    def test_non_sturdy_none_amount_returns_error(self):
+        """Test that amount=None from max_withdraw triggers early return."""
+        b = _make_behaviour()
+        call_count = [0]
+
+        def ci(*a, **kw):
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return None  # amount=None (error)
+            return "0x" + "ab" * 32
+
+        b.contract_interact = ci
+        action = {
+            "chain": "optimism",
+            "pool_address": self.POOL_ADDR,
+            "dex_type": "Other",
+        }
+        result = _exhaust(b.get_withdraw_tx_hash(action))
+        assert result == (None, None, None)
+
     def test_tx_hash_none(self):
         b = _make_behaviour()
         call_count = [0]
@@ -3796,6 +3876,20 @@ class TestGetStepTransaction:
         b.get_http_response = _make_gen_method(resp)
         result = _exhaust(b._get_step_transaction({"action": {}}))
         assert result is None
+
+    def test_error_status_code_no_message_key(self):
+        """Test LiFi error response JSON without a 'message' key."""
+        b = _make_behaviour()
+        resp = MagicMock()
+        resp.status_code = 500
+        resp.body = json.dumps({"error": "something went wrong"})
+        b.get_http_response = _make_gen_method(resp)
+        result = _exhaust(b._get_step_transaction({"action": {}}))
+        assert result is None
+        # Should log with 'Unknown error' instead of raising KeyError
+        b.context.logger.error.assert_called()
+        logged_msg = b.context.logger.error.call_args[0][0]
+        assert "Unknown error" in logged_msg
 
     def test_parse_error(self):
         b = _make_behaviour()
@@ -6024,3 +6118,19 @@ class TestCLPositionLoopIterationAndGaugeSkip:
         result = _exhaust(b.get_claim_staking_rewards_tx_hash(action))
         assert result[0] is not None
         mock_pool.get_gauge_address.assert_not_called()
+
+
+class TestWaitForSwapConfirmationRetryExhaustion:
+    """Tests for _wait_for_swap_confirmation max retry exhaustion."""
+
+    def test_retries_exhausted_returns_exit(self):
+        """When get_decision_on_swap always returns WAIT, retries exhaust and return EXIT."""
+        b = _make_behaviour()
+        b.sleep = _make_gen_method(None)
+        b.get_decision_on_swap = _make_gen_method(Decision.WAIT)
+        result = _exhaust(b._wait_for_swap_confirmation())
+        assert result == Decision.EXIT
+        b.context.logger.error.assert_called_once()
+        assert str(MAX_SWAP_CONFIRMATION_RETRIES) in str(
+            b.context.logger.error.call_args
+        )

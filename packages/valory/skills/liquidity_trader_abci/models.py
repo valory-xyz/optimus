@@ -147,7 +147,12 @@ class CoingeckoRateLimiter:
     def credits_reset_timestamp(self) -> int:
         """Get the UNIX timestamp in which the Coingecko credits reset."""
         current_date = datetime.now()
-        first_day_of_next_month = datetime(current_date.year, current_date.month + 1, 1)
+        if current_date.month == 12:
+            first_day_of_next_month = datetime(current_date.year + 1, 1, 1)
+        else:
+            first_day_of_next_month = datetime(
+                current_date.year, current_date.month + 1, 1
+            )
         return int(first_day_of_next_month.timestamp())
 
     @property

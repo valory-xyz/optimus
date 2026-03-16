@@ -7522,3 +7522,132 @@ class TestTokenTransfersModeAmountZero:
             )
         )
         assert len(t) == 0
+
+
+class TestFetchTokenTransfersModeNetworkErrors:
+    """Test _fetch_token_transfers_mode handles network and parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_connection_error(self, m):
+        """Test that ConnectionError is caught and returns False."""
+        import requests as req_lib
+
+        m.side_effect = req_lib.ConnectionError("connection refused")
+        obj = _mk()
+        obj.funding_events = {}
+        result = _drive(
+            obj._fetch_token_transfers_mode(
+                "0xA", datetime(2025, 1, 1, tzinfo=timezone.utc), {}, False
+            )
+        )
+        assert result is False
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_json_decode_error(self, m):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        m.return_value = resp
+        obj = _mk()
+        obj.funding_events = {}
+        result = _drive(
+            obj._fetch_token_transfers_mode(
+                "0xA", datetime(2025, 1, 1, tzinfo=timezone.utc), {}, False
+            )
+        )
+        assert result is False
+
+
+class TestFetchEthTransfersModeNetworkErrors:
+    """Test _fetch_eth_transfers_mode handles network and parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_connection_error(self, m):
+        """Test that ConnectionError is caught and returns False."""
+        import requests as req_lib
+
+        m.side_effect = req_lib.ConnectionError("connection refused")
+        obj = _mk()
+        obj.funding_events = {}
+        result = obj._fetch_eth_transfers_mode("0xA", "2025-01-01", {}, False)
+        assert result is False
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_json_decode_error(self, m):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        m.return_value = resp
+        obj = _mk()
+        obj.funding_events = {}
+        result = obj._fetch_eth_transfers_mode("0xA", "2025-01-01", {}, False)
+        assert result is False
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_bad_block_timestamp(self, m):
+        """Test that a bad block_timestamp in balance entry is skipped."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {
+            "items": [
+                {
+                    "value": str(10**18),
+                    "delta": str(10**18),
+                    "transaction_hash": None,
+                    "block_timestamp": "not-a-date",
+                    "block_number": 1,
+                }
+            ],
+            "next_page_params": None,
+        }
+        m.return_value = resp
+        obj = _mk()
+        obj.funding_events = {}
+        transfers = {}
+        result = obj._fetch_eth_transfers_mode("0xA", "2025-01-01", transfers, True)
+        # Should not crash; the bad entry is skipped
+        assert result is True
+
+
+class TestTrackEthTransfersModeJsonError:
+    """Test _track_eth_transfers_mode handles JSON parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
+    )
+    def test_json_decode_error(self, mock_requests):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        mock_requests.get.return_value = resp
+        result = _mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")
+        assert result == {"incoming": {}, "outgoing": {}}
+
+
+class TestTrackErc20TransfersModeJsonError:
+    """Test _track_erc20_transfers_mode handles JSON parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
+    )
+    def test_json_decode_error(self, mock_requests):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        mock_requests.get.return_value = resp
+        result = _mk()._track_erc20_transfers_mode("0xSafe", 1704067200)
+        assert result == {"outgoing": {}}

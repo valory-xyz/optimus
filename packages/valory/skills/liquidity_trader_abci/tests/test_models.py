@@ -23,6 +23,7 @@
 
 import json
 import tempfile
+from datetime import datetime
 from time import time
 from unittest.mock import MagicMock, patch
 
@@ -216,6 +217,36 @@ class TestCoingeckoRateLimiter:
         limiter._last_request_time = limiter.credits_reset_timestamp + 1000
         limiter._update_limits()
         assert limiter.remaining_credits == 10000
+
+    def test_credits_reset_timestamp_december(self) -> None:
+        """Test credits_reset_timestamp does not crash when month is December."""
+        limiter = CoingeckoRateLimiter(limit=30, credits_=10000)
+        dec_31 = datetime(2025, 12, 31, 23, 59, 59)
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.datetime"
+        ) as mock_dt:
+            mock_dt.now.return_value = dec_31
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            ts = limiter.credits_reset_timestamp
+        assert isinstance(ts, int)
+        assert ts > 0
+        # The reset timestamp should correspond to January 1 of next year
+        expected = datetime(2026, 1, 1)
+        assert ts == int(expected.timestamp())
+
+    def test_credits_reset_timestamp_non_december(self) -> None:
+        """Test credits_reset_timestamp for a non-December month."""
+        limiter = CoingeckoRateLimiter(limit=30, credits_=10000)
+        june_15 = datetime(2025, 6, 15, 10, 0, 0)
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.datetime"
+        ) as mock_dt:
+            mock_dt.now.return_value = june_15
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            ts = limiter.credits_reset_timestamp
+        assert isinstance(ts, int)
+        expected = datetime(2025, 7, 1)
+        assert ts == int(expected.timestamp())
 
 
 class TestCoingecko:

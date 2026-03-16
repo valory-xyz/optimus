@@ -49,7 +49,7 @@ def _reset_x402_adapter(session):
     if session is None:
         return
     for adapter in session.adapters.values():
-        if hasattr(adapter, '_is_retry'):
+        if hasattr(adapter, "_is_retry"):
             adapter._is_retry = False
 
 
@@ -82,9 +82,10 @@ LP = "lp"
 # Thread-local storage for errors
 _thread_local = threading.local()
 
+
 def get_errors():
     """Get thread-local error list."""
-    if not hasattr(_thread_local, 'errors'):
+    if not hasattr(_thread_local, "errors"):
         _thread_local.errors = []
     return _thread_local.errors
 
@@ -101,34 +102,43 @@ def remove_irrelevant_fields(
 ) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in required_fields}
 
-def get_coin_id_from_symbol(
-        coin_id_mapping, symbol, chain_name
-    ) -> Optional[str]:
-        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
-        # Check if coin_list is valid
-        symbol = symbol.lower()
-        if symbol in coin_id_mapping.get(chain_name, {}):
-            return coin_id_mapping[chain_name][symbol]
 
-        return None
+def get_coin_id_from_symbol(coin_id_mapping, symbol, chain_name) -> Optional[str]:
+    """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+    # Check if coin_list is valid
+    symbol = symbol.lower()
+    if symbol in coin_id_mapping.get(chain_name, {}):
+        return coin_id_mapping[chain_name][symbol]
+
+    return None
 
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     logger.info(f"Running GraphQL query to endpoint: {graphql_endpoint}")
     headers = {"Content-Type": "application/json"}
     payload = {"query": query, "variables": variables or {}}
-    response = requests.post(graphql_endpoint, json=payload, headers=headers)
+    try:
+        response = requests.post(
+            graphql_endpoint, json=payload, headers=headers, timeout=30
+        )
+    except (requests.RequestException, ValueError) as e:
+        logger.error(f"GraphQL request failed: {e}")
+        return {"error": f"GraphQL request failed: {e}"}
     if response.status_code != 200:
         logger.error(f"GraphQL query failed with status code {response.status_code}")
         return {
             "error": f"GraphQL query failed with status code {response.status_code}"
         }
-    result = response.json()
+    try:
+        result = response.json()
+    except (ValueError, TypeError) as e:
+        logger.error(f"Failed to parse GraphQL response: {e}")
+        return {"error": f"Failed to parse GraphQL response: {e}"}
     if "errors" in result:
         logger.error(f"GraphQL Errors: {result['errors']}")
         return {"error": f"GraphQL Errors: {result['errors']}"}
     logger.info("GraphQL query executed successfully")
-    return result.get("data", {})
+    return result.get("data") or {}
 
 
 def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
@@ -143,68 +153,74 @@ def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
 def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
     """
     Standardize APR and TVL using Z-score normalization and calculate composite scores.
-    
+
     Args:
         pools: List of pool dictionaries
         apr_weight: Weight for APR in composite score (0-1)
         tvl_weight: Weight for TVL in composite score (0-1)
-    
+
     Returns:
         List of pools with added standardized metrics and composite scores
     """
     if not pools:
         return pools
-    
+
     # Extract APR and TVL values with proper type conversion
     aprs = []
     tvls = []
-    
+
     for pool in pools:
         try:
-            apr_value = float(pool.get('apr', 0))
-            tvl_value = float(pool.get('tvl', 0))
+            apr_value = float(pool.get("apr", 0))
+            tvl_value = float(pool.get("tvl", 0))
             aprs.append(apr_value)
             tvls.append(tvl_value)
         except (ValueError, TypeError):
             # Use 0 for invalid values
             aprs.append(0.0)
             tvls.append(0.0)
-    
+
     # Calculate means and standard deviations
     apr_mean = np.mean(aprs) if aprs else 0
     apr_std = np.std(aprs) if aprs else 1
     tvl_mean = np.mean(tvls) if tvls else 0
     tvl_std = np.std(tvls) if tvls else 1
-    
+
     # Avoid division by zero
     if apr_std == 0:
         apr_std = 1
     if tvl_std == 0:
         tvl_std = 1
-    
+
     # Standardize metrics and calculate composite scores
     for i, pool in enumerate(pools):
         apr = aprs[i]
         tvl = tvls[i]
-        
+
         # Z-score normalization
-        pool['apr_standardized'] = (apr - apr_mean) / apr_std
-        pool['tvl_standardized'] = (tvl - tvl_mean) / tvl_std
-        
+        pool["apr_standardized"] = (apr - apr_mean) / apr_std
+        pool["tvl_standardized"] = (tvl - tvl_mean) / tvl_std
+
         # Composite score with configurable weights
-        pool['composite_score'] = (
-            pool['apr_standardized'] * apr_weight + 
-            pool['tvl_standardized'] * tvl_weight
+        pool["composite_score"] = (
+            pool["apr_standardized"] * apr_weight
+            + pool["tvl_standardized"] * tvl_weight
         )
-    
+
     return pools
 
 
-def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
-                              min_tvl_threshold=1000, use_composite_filter=True):
+def apply_composite_pre_filter(
+    pools,
+    top_n=10,
+    apr_weight=0.7,
+    tvl_weight=0.3,
+    min_tvl_threshold=1000,
+    use_composite_filter=True,
+):
     """
     Apply composite pre-filtering to select top pools based on standardized APR and TVL.
-    
+
     Args:
         pools: List of pool dictionaries
         top_n: Number of top pools to select
@@ -212,50 +228,57 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3,
         tvl_weight: Weight for TVL in composite score
         min_tvl_threshold: Minimum TVL threshold for inclusion
         use_composite_filter: Whether to use composite filtering
-    
+
     Returns:
         List of filtered and ranked pools
     """
     if not pools or not use_composite_filter:
         return pools[:top_n] if pools else []
-    
+
     # Filter by minimum TVL threshold with proper type conversion
     tvl_filtered = []
     for pool in pools:
         try:
-            tvl_value = float(pool.get('tvl', 0))
+            tvl_value = float(pool.get("tvl", 0))
             if tvl_value >= float(min_tvl_threshold):
                 tvl_filtered.append(pool)
         except (ValueError, TypeError):
             # Skip pools with invalid TVL values
             continue
-    
+
     if not tvl_filtered:
         return []
-    
+
     # Apply standardization and composite scoring
     standardized_pools = standardize_metrics(tvl_filtered, apr_weight, tvl_weight)
-    
+
     # Sort by composite score (descending)
-    standardized_pools.sort(key=lambda x: x.get('composite_score', float('-inf')), reverse=True)
-    
+    standardized_pools.sort(
+        key=lambda x: x.get("composite_score", float("-inf")), reverse=True
+    )
+
     # Select top N pools
     final_selection = standardized_pools[:top_n]
-    
+
     return final_selection
 
-def get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets, **kwargs) -> List[Dict[str, Any]]:
+
+def get_filtered_pools_for_uniswap(
+    pools, current_positions, whitelisted_assets, **kwargs
+) -> List[Dict[str, Any]]:
     logger.info(f"Filtering Uniswap pools - Total pools: {len(pools)}")
     logger.info(f"Current positions to exclude: {current_positions}")
-    
+
     # Extract composite filtering parameters
-    top_n = kwargs.get('top_n', 10)
-    apr_weight = kwargs.get('apr_weight', 0.7)
-    tvl_weight = kwargs.get('tvl_weight', 0.3)
-    min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)
-    max_apr_threshold = kwargs.get('max_apr_threshold', 0)
-    
-    logger.info(f"Filtering parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}, max_apr_threshold={max_apr_threshold}")
+    top_n = kwargs.get("top_n", 10)
+    apr_weight = kwargs.get("apr_weight", 0.7)
+    tvl_weight = kwargs.get("tvl_weight", 0.3)
+    min_tvl_threshold = kwargs.get("min_tvl_threshold", 1000)
+    max_apr_threshold = kwargs.get("max_apr_threshold", 0)
+
+    logger.info(
+        f"Filtering parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}, max_apr_threshold={max_apr_threshold}"
+    )
 
     qualifying_pools = []
     for pool in pools:
@@ -265,16 +288,19 @@ def get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets,
         apr = calculate_apr(daily_volume, tvl, fee_rate)
         pool["apr"] = apr
         pool["tvl"] = tvl
-        
+
         # Filter out pools with APR >= max_apr_threshold
         if apr >= max_apr_threshold:
-            logger.info(f"Filtered out pool {pool['id']} with APR: {apr:.2f}% (>= threshold: {max_apr_threshold:.2f}%)")
+            logger.info(
+                f"Filtered out pool {pool['id']} with APR: {apr:.2f}% (>= threshold: {max_apr_threshold:.2f}%)"
+            )
             continue
-        
+
         chain = pool["chain"].lower()
         whitelisted_tokens = list(whitelisted_assets.get(chain, {}).keys())
-        
-        if (Web3.to_checksum_address(pool["id"]) not in current_positions
+
+        if (
+            Web3.to_checksum_address(pool["id"]) not in current_positions
             and chain in whitelisted_assets
             and (
                 not whitelisted_tokens
@@ -285,7 +311,9 @@ def get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets,
             )
         ):
             qualifying_pools.append(pool)
-            logger.info(f"Added qualifying pool: {pool['id']} with APR: {apr:.2f}%, TVL: ${tvl:,.0f}")
+            logger.info(
+                f"Added qualifying pool: {pool['id']} with APR: {apr:.2f}%, TVL: ${tvl:,.0f}"
+            )
 
     logger.info(f"After initial filtering: {len(qualifying_pools)} qualifying pools")
 
@@ -359,7 +387,7 @@ def fetch_graphql_data(
         for p in pools:
             p["chain"] = chain
         all_pools.extend(pools)
-    
+
     logger.info(f"Total pools fetched across all chains: {len(all_pools)}")
     return all_pools
 
@@ -387,8 +415,12 @@ def get_uniswap_pool_sharpe_ratio(
       }}
     }}
     """
-    response = requests.post(graphql_endpoint, json={"query": query})
-    data = response.json().get("data", {}).get("poolDayDatas", [])
+    try:
+        response = requests.post(graphql_endpoint, json={"query": query}, timeout=30)
+        data = (response.json().get("data") or {}).get("poolDayDatas", [])
+    except (requests.RequestException, ValueError, TypeError) as e:
+        get_errors().append(f"Error fetching Sharpe ratio data: {e}")
+        return float("nan")
     if not data:
         return float("nan")
 
@@ -421,10 +453,7 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
     cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
     try:
         response = cg_pro.get_coin_market_chart_range_by_id(
-            id="bitcoin",
-            vs_currency="usd",
-            from_timestamp=0,
-            to_timestamp=0
+            id="bitcoin", vs_currency="usd", from_timestamp=0, to_timestamp=0
         )
         if response:
             return True
@@ -435,7 +464,12 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
 
 
 def calculate_il_risk_score(
-    token_0, token_1, coingecko_api_key: str, x402_session: Optional[str] = None, x402_proxy: Optional[str] = None, time_period: int = 90
+    token_0,
+    token_1,
+    coingecko_api_key: str,
+    x402_session: Optional[str] = None,
+    x402_proxy: Optional[str] = None,
+    time_period: int = 90,
 ) -> float:
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
@@ -516,7 +550,10 @@ def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]
     }
     try:
         response = requests.post(
-            SUBGRAPH_URL, json=query, headers={"Content-Type": "application/json"}
+            SUBGRAPH_URL,
+            json=query,
+            headers={"Content-Type": "application/json"},
+            timeout=30,
         )
         response_json = response.json()
         if response.status_code == 200 and "data" in response_json:
@@ -568,27 +605,39 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "sharpe_ratio": pool["sharpe_ratio"],
         "depth_score": pool["depth_score"],
         "max_position_size": pool["max_position_size"],
-        "type": pool["type"]
+        "type": pool["type"],
     }
 
 
 def get_opportunities_for_uniswap(
-    chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, x402_session=None, x402_proxy=None, **kwargs
+    chains,
+    graphql_endpoints,
+    current_positions,
+    coingecko_api_key,
+    whitelisted_assets,
+    coin_id_mapping,
+    x402_session=None,
+    x402_proxy=None,
+    **kwargs,
 ) -> List[Dict[str, Any]]:
     logger.info(f"Getting Uniswap opportunities for chains: {chains}")
     logger.info(f"Current positions to exclude: {current_positions}")
-    
+
     pools = fetch_graphql_data(chains, graphql_endpoints)
     if isinstance(pools, dict) and "error" in pools:
         logger.error(f"Error fetching GraphQL data: {pools}")
         return pools
 
-    filtered_pools = get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets, **kwargs)
+    filtered_pools = get_filtered_pools_for_uniswap(
+        pools, current_positions, whitelisted_assets, **kwargs
+    )
     if not filtered_pools:
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}
 
-    logger.info(f"Processing {len(filtered_pools)} filtered pools for metrics calculation")
+    logger.info(
+        f"Processing {len(filtered_pools)} filtered pools for metrics calculation"
+    )
     token_id_cache = {}
     for i, pool in enumerate(filtered_pools):
         logger.info(f"Processing pool {i+1}/{len(filtered_pools)}: {pool['id']}")
@@ -603,7 +652,9 @@ def get_opportunities_for_uniswap(
             )
             if token_0_id:
                 token_id_cache[token_0_symbol] = token_0_id
-                logger.info(f"Token0 {token_0_symbol} mapped to CoinGecko ID: {token_0_id}")
+                logger.info(
+                    f"Token0 {token_0_symbol} mapped to CoinGecko ID: {token_0_id}"
+                )
         else:
             token_0_id = token_id_cache[token_0_symbol]
 
@@ -614,25 +665,31 @@ def get_opportunities_for_uniswap(
             )
             if token_1_id:
                 token_id_cache[token_1_symbol] = token_1_id
-                logger.info(f"Token1 {token_1_symbol} mapped to CoinGecko ID: {token_1_id}")
+                logger.info(
+                    f"Token1 {token_1_symbol} mapped to CoinGecko ID: {token_1_id}"
+                )
         else:
             token_1_id = token_id_cache[token_1_symbol]
 
         if token_0_id and token_1_id:
-            logger.info(f"Calculating IL risk score for {token_0_symbol}/{token_1_symbol}")
+            logger.info(
+                f"Calculating IL risk score for {token_0_symbol}/{token_1_symbol}"
+            )
             pool["il_risk_score"] = calculate_il_risk_score(
                 token_0_id, token_1_id, coingecko_api_key, x402_session, x402_proxy
             )
         else:
-            logger.warning(f"Could not find CoinGecko IDs for {token_0_symbol}/{token_1_symbol}")
+            logger.warning(
+                f"Could not find CoinGecko IDs for {token_0_symbol}/{token_1_symbol}"
+            )
             pool["il_risk_score"] = None
-            
+
         logger.info(f"Calculating Sharpe ratio for pool {pool['id']}")
         graphql_endpoint = graphql_endpoints.get(pool_chain)
         pool["sharpe_ratio"] = get_uniswap_pool_sharpe_ratio(
             pool["id"], graphql_endpoint
         )
-        
+
         logger.info(f"Calculating liquidity metrics for pool {pool['id']}")
         depth_score, max_position_size = assess_pool_liquidity(
             pool["id"], graphql_endpoint
@@ -662,7 +719,9 @@ def calculate_metrics(
         coin_id_mapping, position["token1_symbol"], position["chain"]
     )
     il_risk_score = (
-        calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key, x402_session, x402_proxy)
+        calculate_il_risk_score(
+            token_0_id, token_1_id, coingecko_api_key, x402_session, x402_proxy
+        )
         if token_0_id and token_1_id
         else None
     )
@@ -685,7 +744,7 @@ def calculate_metrics(
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     logger.info("Starting Uniswap pools search strategy execution")
     logger.info(f"Received kwargs: {list(kwargs.keys())}")
-    
+
     missing = check_missing_fields(kwargs)
     if missing:
         logger.error(f"Required kwargs {missing} were not provided")
@@ -695,7 +754,7 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
     logger.info(f"Get metrics mode: {get_metrics}")
-    
+
     if get_metrics:
         required_fields.append("position")
 
@@ -715,6 +774,6 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
         if not result:
             logger.warning("No suitable pools found")
             get_errors().append("No suitable aggregators found")
-        
+
         logger.info(f"Successfully found opportunities: {result}")
         return {"result": result, "error": get_errors()}

@@ -98,7 +98,7 @@ class TestThrottledRequest:
         """Test that first request is not throttled."""
         mock_get.return_value = MagicMock()
         throttled_request("https://example.com")
-        mock_get.assert_called_once_with("https://example.com")
+        mock_get.assert_called_once_with("https://example.com", timeout=30)
 
     @patch("packages.valory.customs.asset_lending.asset_lending.requests.get")
     @patch("packages.valory.customs.asset_lending.asset_lending.time.sleep")
@@ -118,7 +118,7 @@ class TestThrottledRequest:
         # Set last request time far in the past so elapsed > min_interval
         al_module._last_request_time["https://example.com"] = time.time() - 100
         throttled_request("https://example.com", min_interval=0.01)
-        mock_get.assert_called_once_with("https://example.com")
+        mock_get.assert_called_once_with("https://example.com", timeout=30)
 
 
 class TestGetCoinList:
@@ -937,3 +937,34 @@ class TestBranchCoverage:
         depth, max_pos = analyze_vault_liquidity(agg)
         assert depth > 0
         assert max_pos > 0
+
+
+class TestNetworkResilience:
+    """Tests for network resilience in asset_lending."""
+
+    @patch("packages.valory.customs.asset_lending.asset_lending.requests.get")
+    def test_throttled_request_passes_timeout(self, mock_get):
+        """Test that throttled_request passes timeout=30 to requests.get."""
+        mock_get.return_value = MagicMock()
+        throttled_request("https://example.com")
+        _, kwargs = mock_get.call_args
+        assert kwargs.get("timeout") == 30
+
+    @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
+    def test_fetch_historical_data_connection_error(self, mock_req):
+        """Test that ConnectionError in fetch_historical_data returns None."""
+        import requests as req_lib
+
+        mock_req.side_effect = req_lib.ConnectionError("connection refused")
+        result = fetch_historical_data()
+        assert result is None
+
+    @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
+    def test_fetch_historical_data_json_decode_error(self, mock_req):
+        """Test that JSONDecodeError in fetch_historical_data returns None."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.side_effect = ValueError("No JSON")
+        mock_req.return_value = mock_resp
+        result = fetch_historical_data()
+        assert result is None

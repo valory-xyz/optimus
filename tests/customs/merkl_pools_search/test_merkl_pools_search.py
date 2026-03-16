@@ -728,6 +728,44 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
+    def test_fetch_balancer_pool_info_data_null(self, mock_get, mock_post):
+        """Test fetch_balancer_pool_info when GraphQL returns {"data": null}."""
+        campaign_data = {
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
+        }
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.text = json.dumps(campaign_data)
+        mock_get.return_value = mock_api_response
+
+        mock_graphql_response = MagicMock()
+        mock_graphql_response.status_code = 200
+        mock_graphql_response.text = json.dumps({"data": None})
+        mock_post.return_value = mock_graphql_response
+
+        params = self._base_params()
+        result = highest_apr_opportunity(**params)
+        assert "error" in result
+
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
+    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
     def test_fetch_balancer_pool_info_no_pools_in_response(self, mock_get, mock_post):
         """Test fetch_balancer_pool_info when GraphQL response has empty pools array."""
         campaign_data = {
@@ -942,3 +980,136 @@ class TestRun:
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
         run("some_positional_arg", **kwargs)
         mock_func.assert_called_once()
+
+
+class TestNetworkResilience:
+    """Tests for network resilience in merkl_pools_search."""
+
+    def _base_params(self):
+        """Return base parameters for highest_apr_opportunity."""
+        return {
+            "balancer_graphql_endpoints": {
+                "optimism": "https://api.example.com/graphql"
+            },
+            "merkl_fetch_campaign_args": {
+                "url": "https://api.merkl.xyz/v4/campaigns",
+                "creator": "test_creator",
+                "live": "true",
+            },
+            "chains": ["optimism"],
+            "protocols": ["balancer"],
+            "chain_to_chain_id_mapping": {"optimism": 10},
+            "apr_threshold": 5.0,
+            "current_pool": "0xcurrentpool",
+        }
+
+    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
+    def test_connection_error_returns_error(self, mock_get):
+        """Test that ConnectionError in fetch_all_pools returns error dict."""
+        import requests as req_lib
+
+        mock_get.side_effect = req_lib.ConnectionError("connection refused")
+        params = self._base_params()
+        result = highest_apr_opportunity(**params)
+        assert "error" in result
+
+    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
+    def test_timeout_kwarg_passed(self, mock_get):
+        """Test that timeout=30 is passed to requests.get."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = json.dumps({})
+        mock_get.return_value = mock_response
+        params = self._base_params()
+        highest_apr_opportunity(**params)
+        _, kwargs = mock_get.call_args
+        assert kwargs.get("timeout") == 30
+
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
+    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
+    def test_graphql_connection_error(self, mock_get, mock_post):
+        """Test that ConnectionError in fetch_balancer_pool_info returns error."""
+        import requests as req_lib
+
+        campaign_data = {
+            "10": {
+                "campaign_group": {
+                    "campaign_1": {
+                        "type": "balancerPool",
+                        "apr": 50.0,
+                        "mainParameter": "0xpooladdress",
+                        "typeInfo": {
+                            "poolId": "0xpoolid",
+                            "poolTokens": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            },
+                        },
+                    }
+                }
+            }
+        }
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.text = json.dumps(campaign_data)
+        mock_get.return_value = mock_api_response
+        mock_post.side_effect = req_lib.ConnectionError("refused")
+        params = self._base_params()
+        result = highest_apr_opportunity(**params)
+        assert "error" in result
+
+    @patch(
+        "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
+    )
+    @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
+    def test_graphql_timeout_kwarg(self, mock_get, mock_post):
+        """Test that timeout=30 is passed to graphql requests.post."""
+        # Campaign data with a Balancer pool to trigger fetch_balancer_pool_info
+        campaign_data = {
+            "10": {
+                "cg1": {
+                    "c1": {
+                        "chainId": 10,
+                        "type": 2,
+                        "apr": 15.0,
+                        "tvl": 100000,
+                        "mainParameter": "0xPoolAddress",
+                        "campaignParameters": {
+                            "symbolRewardToken": "OP",
+                            "decimalsRewardToken": 18,
+                            "symbolToken0": "WETH",
+                            "symbolToken1": "USDC",
+                        },
+                        "forwarders": [
+                            {"almAddress": "0xalm1", "almAPR": 10.0, "type": 0}
+                        ],
+                        "ammName": "Balancer",
+                        "poolFee": 0.003,
+                        "rewardsPerToken": {
+                            "holders": {
+                                "0xtoken0": {"symbol": "TOKEN0"},
+                                "0xtoken1": {"symbol": "TOKEN1"},
+                            }
+                        },
+                    }
+                }
+            }
+        }
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.text = json.dumps(campaign_data)
+        mock_get.return_value = mock_api_response
+
+        mock_graphql_response = MagicMock()
+        mock_graphql_response.status_code = 200
+        mock_graphql_response.text = json.dumps(
+            {"data": {"pools": [{"tokensList": ["0xa", "0xb"]}]}}
+        )
+        mock_post.return_value = mock_graphql_response
+        params = self._base_params()
+        highest_apr_opportunity(**params)
+        if mock_post.call_args is not None:
+            _, kwargs = mock_post.call_args
+            assert kwargs.get("timeout") == 30

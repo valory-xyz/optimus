@@ -3417,19 +3417,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
-            response = requests.get(
-                endpoint,
-                params=params,
-                headers={"Accept": "application/json"},
-                timeout=self.params.request_timeout,
-                verify=False,  # nosec B501
-            )
+            try:
+                response = requests.get(
+                    endpoint,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                    timeout=self.params.request_timeout,
+                    verify=False,  # nosec B501
+                )
+            except (requests.RequestException, ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Request failed fetching Mode token transfers: {e}"
+                )
+                return False
 
             if not response.status_code == 200:
                 self.context.logger.error("Failed to fetch Mode token transfers")
                 return False
 
-            response_data = response.json()
+            try:
+                response_data = response.json()
+            except (ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Failed to parse Mode token transfers response: {e}"
+                )
+                return False
             transfers = response_data.get("items", [])
             if not transfers:
                 break
@@ -3553,19 +3565,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
-            response = requests.get(
-                endpoint,
-                params=params,
-                headers={"Accept": "application/json"},
-                timeout=self.params.request_timeout,
-                verify=False,  # nosec B501
-            )
+            try:
+                response = requests.get(
+                    endpoint,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                    timeout=self.params.request_timeout,
+                    verify=False,  # nosec B501
+                )
+            except (requests.RequestException, ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Request failed fetching Mode coin balance history: {e}"
+                )
+                return False
 
             if not response.status_code == 200:
                 self.context.logger.error("Failed to fetch Mode coin balance history")
                 return False
 
-            response_data = response.json()
+            try:
+                response_data = response.json()
+            except (ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Failed to parse Mode coin balance history response: {e}"
+                )
+                return False
             balance_history = response_data.get("items", [])
 
             if not balance_history:
@@ -3590,9 +3614,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if tx_hash is not None and tx_hash != "":
                     continue
 
-                tx_datetime = datetime.strptime(
-                    entry.get("block_timestamp", ""), "%Y-%m-%dT%H:%M:%SZ"
-                )
+                try:
+                    tx_datetime = datetime.strptime(
+                        entry.get("block_timestamp", ""), "%Y-%m-%dT%H:%M:%SZ"
+                    )
+                except (ValueError, TypeError) as e:
+                    self.context.logger.error(f"Failed to parse block_timestamp: {e}")
+                    continue
                 # Ensure timezone awareness for comparison
                 tx_datetime = tx_datetime.replace(tzinfo=timezone.utc)
                 # Convert from wei to ETH
@@ -4535,7 +4563,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return all_transfers
 
-            response_data = response.json()
+            try:
+                response_data = response.json()
+            except (ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Failed to parse Mode ETH transfers response: {e}"
+                )
+                return all_transfers
             if response_data.get("status") != "1":
                 self.context.logger.error(
                     f"Error in Mode API response: {response_data.get('message', 'Unknown error')}"
@@ -4642,7 +4676,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     return all_transfers
 
-                response_data = response.json()
+                try:
+                    response_data = response.json()
+                except (ValueError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Failed to parse Mode ERC20 transfers response: {e}"
+                    )
+                    return all_transfers
                 transactions = response_data.get("items", [])
 
                 if not transactions:

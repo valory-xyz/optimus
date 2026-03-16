@@ -211,6 +211,17 @@ class TestConnect:
         finally:
             await connection.disconnect()
 
+    @pytest.mark.asyncio
+    async def test_connect_session_has_timeout(self) -> None:
+        """Test that connect sets a timeout on the aiohttp session."""
+        connection = _make_connection()
+        await connection.connect()
+        try:
+            assert connection.session is not None
+            assert connection.session.timeout.total == 30
+        finally:
+            await connection.disconnect()
+
 
 class TestDisconnect:
     """Tests for the disconnect method."""

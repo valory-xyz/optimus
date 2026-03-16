@@ -81,7 +81,12 @@ class IpfsHandler(AbstractResponseHandler):
 
         dialogue = self.context.ipfs_dialogues.update(message)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
-        callback = self.shared_state.req_to_callback.pop(nonce)
+        callback = self.shared_state.req_to_callback.pop(nonce, None)
+        if callback is None:
+            self.context.logger.warning(
+                f"No callback found for nonce {nonce}, skipping"
+            )
+            return
         callback(message, dialogue)
 
 

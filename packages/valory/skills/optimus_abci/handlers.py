@@ -1295,11 +1295,18 @@ class HttpHandler(BaseHttpHandler):
         if agent_reasoning and "evaluate_strategy_round" in self.rounds_info:
             self.rounds_info["evaluate_strategy_round"]["description"] = agent_reasoning
 
+        try:
+            period = self.synchronized_data.period_count
+        except (AttributeError, ValueError):
+            period = None
+
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
-            "is_tm_healthy": not is_tm_unhealthy,
+            "is_tm_healthy": (
+                (not is_tm_unhealthy) if is_tm_unhealthy is not None else None
+            ),
             "is_healthy": is_healthy,
-            "period": self.synchronized_data.period_count,
+            "period": period,
             "reset_pause_duration": self.context.params.reset_pause_duration,
             "rounds": rounds,
             "is_transitioning_fast": is_transitioning_fast,

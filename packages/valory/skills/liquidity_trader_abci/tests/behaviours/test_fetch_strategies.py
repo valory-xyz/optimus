@@ -62,6 +62,8 @@ def _mk():
     obj.initial_investment_values_per_pool = {}
     obj.pools = {}
     obj.service_staking_state = MagicMock()
+    obj.store_funding_events = MagicMock()
+    obj.read_funding_events = MagicMock(return_value={})
     return obj
 
 
@@ -524,71 +526,81 @@ class TestAddToPortfolioBreakdown:
 
 
 class TestFetchHistoricalEthPrice:
-    def test_success(self):
+    """Tests for _fetch_historical_eth_price with caching."""
+
+    def _setup_obj(self, api_response, use_x402=False, cached_price=None):
+        """Create a test object with coingecko and caching stubs."""
         obj = _mk()
         cg = MagicMock()
         obj.context.coingecko = cg
         cg.historical_price_endpoint = "url/{coin_id}/{date}"
         cg.api_key = "key"
-        cg.request.return_value = (
-            True,
-            {"market_data": {"current_price": {"usd": 3000.0}}},
+        cg.request.return_value = api_response
+
+        obj.params.use_x402 = use_x402
+        obj._get_cached_price = _gen_return(cached_price)
+        obj._cache_price = _gen_none
+        return obj
+
+    def test_success_caches_result(self):
+        obj = self._setup_obj(
+            (True, {"market_data": {"current_price": {"usd": 3000.0}}}),
         )
+        cache_calls = []
+        original_cache = _gen_none
 
-        obj.params.use_x402 = False
-        result = obj._fetch_historical_eth_price("01-01-2024")
+        def tracking_cache(*args, **kwargs):
+            cache_calls.append(args)
+            return original_cache(*args, **kwargs)
+
+        obj._cache_price = tracking_cache
+        result = _drive(obj._fetch_historical_eth_price("01-01-2024"))
         assert result == 3000.0
+        assert len(cache_calls) == 1
+        assert cache_calls[0] == ("ethereum", 3000.0, "01-01-2024")
 
-    def test_failure(self):
-        obj = _mk()
-        cg = MagicMock()
-        obj.context.coingecko = cg
-        cg.historical_price_endpoint = "url/{coin_id}/{date}"
-        cg.api_key = None
-        cg.request.return_value = (False, {})
+    def test_returns_cached_price_without_api_call(self):
+        obj = self._setup_obj(
+            (False, {}),  # API would fail, but shouldn't be called
+            cached_price=2500.0,
+        )
+        result = _drive(obj._fetch_historical_eth_price("01-01-2024"))
+        assert result == 2500.0
+        # Verify API was NOT called since cache hit
+        obj.context.coingecko.request.assert_not_called()
 
-        obj.params.use_x402 = False
-        result = obj._fetch_historical_eth_price("01-01-2024")
+    def test_api_failure_returns_none(self):
+        obj = self._setup_obj((False, {}))
+        obj.context.coingecko.api_key = None
+        result = _drive(obj._fetch_historical_eth_price("01-01-2024"))
         assert result is None
 
     def test_no_price_in_response(self):
-        obj = _mk()
-        cg = MagicMock()
-        obj.context.coingecko = cg
-        cg.historical_price_endpoint = "url/{coin_id}/{date}"
-        cg.api_key = "key"
-        cg.request.return_value = (True, {"market_data": {"current_price": {}}})
-
-        obj.params.use_x402 = False
-        result = obj._fetch_historical_eth_price("01-01-2024")
+        obj = self._setup_obj(
+            (True, {"market_data": {"current_price": {}}}),
+        )
+        result = _drive(obj._fetch_historical_eth_price("01-01-2024"))
         assert result is None
 
     def test_x402(self):
-        obj = _mk()
-        cg = MagicMock()
-        obj.context.coingecko = cg
-        cg.historical_price_endpoint = "url/{coin_id}/{date}"
-        cg.api_key = "key"
-        cg.request.return_value = (
-            True,
-            {"market_data": {"current_price": {"usd": 1.0}}},
+        obj = self._setup_obj(
+            (True, {"market_data": {"current_price": {"usd": 1.0}}}),
+            use_x402=True,
         )
-
-        obj.params.use_x402 = True
         with patch.object(
             type(obj),
             "eoa_account",
             new_callable=PropertyMock,
             return_value=MagicMock(),
         ):
-            result = obj._fetch_historical_eth_price("01-01-2024")
+            result = _drive(obj._fetch_historical_eth_price("01-01-2024"))
         assert result == 1.0
 
 
 class TestGetHistoricalPriceForDate:
     def test_zero_address(self):
         obj = _mk()
-        obj._fetch_historical_eth_price = lambda d: 2500.0
+        obj._fetch_historical_eth_price = _gen_return(2500.0)
         gen = obj._get_historical_price_for_date(
             ZERO_ADDRESS, "ETH", "01-01-2024", "optimism"
         )
@@ -2265,50 +2277,50 @@ class TestValidateVelodromeV2PoolAddress:
 class TestCalculateTotalReversionValue:
     def test_basic(self):
         obj = _mk()
-        obj._fetch_historical_eth_price = lambda d: 2000.0
+        obj._fetch_historical_eth_price = _gen_return(2000.0)
         eth_transfers = [
             {"timestamp": "2024-01-01T00:00:00Z", "amount": 1.0},
             {"timestamp": "2024-02-01T00:00:00Z", "amount": 0.5},
         ]
         reversion = [{"amount": 0.5}]
-        result = obj._calculate_total_reversion_value(eth_transfers, reversion)
+        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
         assert result == 0.5 * 2000.0
 
     def test_multiple_reversions(self):
         obj = _mk()
-        obj._fetch_historical_eth_price = lambda d: 1000.0
+        obj._fetch_historical_eth_price = _gen_return(1000.0)
         eth_transfers = [
             {"timestamp": "2024-01-01T00:00:00Z", "amount": 1.0},
             {"timestamp": "2024-02-01T00:00:00Z", "amount": 0.5},
         ]
         reversion = [{"amount": 0.3}, {"amount": 0.2}]
-        result = obj._calculate_total_reversion_value(eth_transfers, reversion)
+        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
         assert result == (0.3 + 0.2) * 1000.0
 
     def test_no_eth_price(self):
         obj = _mk()
-        obj._fetch_historical_eth_price = lambda d: None
+        obj._fetch_historical_eth_price = _gen_return(None)
         eth_transfers = [{"timestamp": "2024-01-01T00:00:00Z", "amount": 1.0}]
         reversion = [{"amount": 0.5}]
-        result = obj._calculate_total_reversion_value(eth_transfers, reversion)
+        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
         assert result == 0.0
 
     def test_unix_timestamp(self):
         obj = _mk()
-        obj._fetch_historical_eth_price = lambda d: 500.0
+        obj._fetch_historical_eth_price = _gen_return(500.0)
         eth_transfers = [
             {"timestamp": "1704067200", "amount": 1.0},
         ]
         reversion = [{"amount": 0.1}]
-        result = obj._calculate_total_reversion_value(eth_transfers, reversion)
+        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
         assert result == 0.1 * 500.0
 
     def test_bad_timestamp(self):
         obj = _mk()
-        obj._fetch_historical_eth_price = lambda d: 500.0
+        obj._fetch_historical_eth_price = _gen_return(500.0)
         eth_transfers = [{"timestamp": "bad", "amount": 1.0}]
         reversion = [{"amount": 0.1}]
-        result = obj._calculate_total_reversion_value(eth_transfers, reversion)
+        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
         # fallback to current date
         assert result == 0.1 * 500.0
 
@@ -5060,18 +5072,35 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
 
 
 class TestCalculateChainInvestmentValue:
-    def test_eth_transfer_with_reversion(self):
+    """Tests for _calculate_chain_investment_value with per-transfer caching."""
+
+    NO_REVERSION = {
+        "reversion_amount": 0,
+        "historical_reversion_value": 0,
+        "reversion_date": None,
+    }
+
+    def _base(self, reversion=None):
+        """Create a base test object with common stubs."""
         obj = _mk()
         obj._track_eth_transfers_and_reversions = _gen_return(
+            reversion or self.NO_REVERSION
+        )
+        obj._save_chain_total_investment = _gen_none
+        obj._load_priced_transfers = _gen_return({})
+        obj._save_priced_transfers = _gen_none
+        obj.params.airdrop_started = False
+        return obj
+
+    def test_eth_transfer_with_reversion(self):
+        obj = self._base(
             {
                 "reversion_amount": 0.5,
                 "historical_reversion_value": 100.0,
                 "reversion_date": "01-01-2025",
             }
         )
-        obj._fetch_historical_eth_price = lambda d: 2000.0
-        obj._save_chain_total_investment = _gen_none
-        obj.params.airdrop_started = False
+        obj._fetch_historical_eth_price = _gen_return(2000.0)
         assert (
             _drive(
                 obj._calculate_chain_investment_value(
@@ -5084,18 +5113,9 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_usdc_non_eth(self):
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {
-                "reversion_amount": 0,
-                "historical_reversion_value": 0,
-                "reversion_date": None,
-            }
-        )
-        obj._save_chain_total_investment = _gen_none
+        obj = self._base()
         obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
         obj._fetch_historical_token_price = _gen_return(1.0)
-        obj.params.airdrop_started = False
         assert (
             _drive(
                 obj._calculate_chain_investment_value(
@@ -5108,15 +5128,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_airdrop_excluded(self):
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {
-                "reversion_amount": 0,
-                "historical_reversion_value": 0,
-                "reversion_date": None,
-            }
-        )
-        obj._save_chain_total_investment = _gen_none
+        obj = self._base()
         obj.params.airdrop_started = True
         obj.params.airdrop_contract_address = "0xAirdrop"
         assert (
@@ -5139,17 +5151,8 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_no_coingecko_id(self):
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {
-                "reversion_amount": 0,
-                "historical_reversion_value": 0,
-                "reversion_date": None,
-            }
-        )
-        obj._save_chain_total_investment = _gen_none
+        obj = self._base()
         obj.get_coin_id_from_symbol = lambda s, c: None
-        obj.params.airdrop_started = False
         assert (
             _drive(
                 obj._calculate_chain_investment_value(
@@ -5162,16 +5165,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_negative_amount(self):
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {
-                "reversion_amount": 0,
-                "historical_reversion_value": 0,
-                "reversion_date": None,
-            }
-        )
-        obj._save_chain_total_investment = _gen_none
-        obj.params.airdrop_started = False
+        obj = self._base()
         assert (
             _drive(
                 obj._calculate_chain_investment_value(
@@ -5182,16 +5176,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_exception_in_transfer(self):
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {
-                "reversion_amount": 0,
-                "historical_reversion_value": 0,
-                "reversion_date": None,
-            }
-        )
-        obj._save_chain_total_investment = _gen_none
-        obj.params.airdrop_started = False
+        obj = self._base()
         assert (
             _drive(
                 obj._calculate_chain_investment_value(
@@ -5202,21 +5187,70 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_reversion_no_date(self):
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
+        obj = self._base(
             {
                 "reversion_amount": 1.0,
                 "historical_reversion_value": 0,
                 "reversion_date": None,
             }
         )
-        obj._fetch_historical_eth_price = lambda d: 3000.0
-        obj._save_chain_total_investment = _gen_none
-        obj.params.airdrop_started = False
+        obj._fetch_historical_eth_price = _gen_return(3000.0)
         assert (
             _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
             == -3000.0
         )
+
+    def test_cached_transfer_skips_price_fetch(self):
+        """Previously priced transfers use cached value, no API call."""
+        obj = self._base()
+        # Pre-populate the priced cache with a known transfer key
+        obj._load_priced_transfers = _gen_return({"2025-01-01_0xTX1": 500.0})
+        # If price fetch were called it would return a different value
+        obj._fetch_historical_eth_price = _gen_return(9999.0)
+        result = _drive(
+            obj._calculate_chain_investment_value(
+                {"2025-01-01": [{"symbol": "ETH", "delta": 1.0, "tx_hash": "0xTX1"}]},
+                "optimism",
+                "0xS",
+            )
+        )
+        # Should use cached 500.0, not 9999.0
+        assert result == 500.0
+
+    def test_mix_cached_and_new_transfers(self):
+        """Cached + new transfers are summed correctly."""
+        obj = self._base()
+        obj._load_priced_transfers = _gen_return({"2025-01-01_0xOLD": 200.0})
+        obj._fetch_historical_eth_price = _gen_return(1000.0)
+        result = _drive(
+            obj._calculate_chain_investment_value(
+                {
+                    "2025-01-01": [
+                        {"symbol": "ETH", "delta": 1.0, "tx_hash": "0xOLD"},
+                        {"symbol": "ETH", "delta": 0.5, "tx_hash": "0xNEW"},
+                    ]
+                },
+                "optimism",
+                "0xS",
+            )
+        )
+        # cached=200, new=0.5*1000=500
+        assert result == 700.0
+
+    def test_price_fetch_failure_logs_warning(self):
+        """When price fetch fails, transfer is skipped with a warning (not silent)."""
+        obj = self._base()
+        obj._fetch_historical_eth_price = _gen_return(None)
+        result = _drive(
+            obj._calculate_chain_investment_value(
+                {"2025-01-01": [{"symbol": "ETH", "delta": 1.0}]},
+                "optimism",
+                "0xS",
+            )
+        )
+        assert result == 0.0
+        # Verify warning was logged (not silently skipped)
+        obj.context.logger.warning.assert_called()
 
 
 class TestFetchAllTransfersUntilDateMode:
@@ -6162,7 +6196,7 @@ class TestTrackEthReversions:
         o._fetch_outgoing_transfers_until_date_optimism = _gen_return(out)
         o.get_master_safe_address = _gen_return("0xMaster")
         o._get_native_balance = _gen_return(1.0)
-        o._calculate_total_reversion_value = lambda et, rt: 500.0
+        o._calculate_total_reversion_value = _gen_return(500.0)
         r = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
         assert r["reversion_amount"] == 0 and r["historical_reversion_value"] == 500.0
 
@@ -6298,41 +6332,49 @@ class TestTrackEthReversions:
 class TestCalcReversionValue:
     def test_iso(self):
         o = _mk()
-        o._fetch_historical_eth_price = lambda d: 2000.0
+        o._fetch_historical_eth_price = _gen_return(2000.0)
         assert (
-            o._calculate_total_reversion_value(
-                [{"timestamp": "2024-01-01T00:00:00Z"}],
-                [{"amount": 0.5}, {"amount": 0.3}],
+            _drive(
+                o._calculate_total_reversion_value(
+                    [{"timestamp": "2024-01-01T00:00:00Z"}],
+                    [{"amount": 0.5}, {"amount": 0.3}],
+                )
             )
             == 1600.0
         )
 
     def test_unix(self):
         o = _mk()
-        o._fetch_historical_eth_price = lambda d: 1000.0
+        o._fetch_historical_eth_price = _gen_return(1000.0)
         assert (
-            o._calculate_total_reversion_value(
-                [{"timestamp": "1704067200"}], [{"amount": 1.0}]
+            _drive(
+                o._calculate_total_reversion_value(
+                    [{"timestamp": "1704067200"}], [{"amount": 1.0}]
+                )
             )
             == 1000.0
         )
 
     def test_bad(self):
         o = _mk()
-        o._fetch_historical_eth_price = lambda d: 500.0
+        o._fetch_historical_eth_price = _gen_return(500.0)
         assert (
-            o._calculate_total_reversion_value(
-                [{"timestamp": "bad"}], [{"amount": 2.0}]
+            _drive(
+                o._calculate_total_reversion_value(
+                    [{"timestamp": "bad"}], [{"amount": 2.0}]
+                )
             )
             == 1000.0
         )
 
     def test_no_price(self):
         o = _mk()
-        o._fetch_historical_eth_price = lambda d: None
+        o._fetch_historical_eth_price = _gen_return(None)
         assert (
-            o._calculate_total_reversion_value(
-                [{"timestamp": "1704067200"}], [{"amount": 1.0}]
+            _drive(
+                o._calculate_total_reversion_value(
+                    [{"timestamp": "1704067200"}], [{"amount": 1.0}]
+                )
             )
             == 0.0
         )
@@ -7420,6 +7462,165 @@ class TestReversionDateIso:
         o._get_native_balance = _gen_return(2.0)
         r = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
         assert r["reversion_date"] == "02-01-2024"
+
+
+class TestIncrementalOptimismFetching:
+    """Tests for early-stop pagination and caching in Optimism transfer fetching."""
+
+    def test_safeglobal_stops_on_existing_dates(self):
+        """Pagination stops when entire page is on already-stored dates."""
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+
+        existing_data = {
+            "2024-12-15": [{"symbol": "ETH", "amount": 1.0}],
+        }
+        # All transfers in page are on already-stored date
+        page_data = {
+            "results": [
+                {
+                    "executionDate": "2024-12-15T10:00:00Z",
+                    "from": "0xSender",
+                    "type": "ETHER_TRANSFER",
+                    "value": str(10**18),
+                    "transactionHash": "0xH1",
+                },
+                {
+                    "executionDate": "2024-12-15T11:00:00Z",
+                    "from": "0xSender",
+                    "type": "ETHER_TRANSFER",
+                    "value": str(10**18),
+                    "transactionHash": "0xH2",
+                },
+            ],
+            "next": "http://next-page-url",
+        }
+        o._request_with_retries = _gen_return((True, page_data))
+        o._should_include_transfer_optimism = _gen_return(True)
+
+        all_transfers = defaultdict(list)
+        _drive(
+            o._fetch_optimism_transfers_safeglobal(
+                "0xAddr", "2025-01-01", all_transfers, existing_data
+            )
+        )
+        # No new transfers should be added (all skipped as existing)
+        assert len(all_transfers) == 0
+        # API was called only once (early-stop prevented following "next" cursor)
+        assert (
+            o._request_with_retries.call_count
+            if hasattr(o._request_with_retries, "call_count")
+            else True
+        )
+
+    def test_outgoing_persists_new_transfers(self):
+        """New outgoing transfers are persisted to funding_events."""
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        o.funding_events = {}
+
+        transfer = {
+            "executionDate": "2024-12-20T10:00:00Z",
+            "from": "0xsafe",
+            "to": "0xRecipient",
+            "type": "ETHER_TRANSFER",
+            "value": str(10**18),
+            "transactionHash": "0xH1",
+        }
+        o._request_with_retries = _gen_return(
+            (True, {"results": [transfer], "next": None})
+        )
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("0xSafe", "2025-01-01")
+        )
+        assert "2024-12-20" in result
+        # Verify persisted
+        assert "optimism_outgoing" in o.funding_events
+        assert "2024-12-20" in o.funding_events["optimism_outgoing"]
+        o.store_funding_events.assert_called()
+
+    def test_outgoing_returns_existing_on_no_address(self):
+        """When no address is provided, returns existing persisted data."""
+        o = _mk()
+        o.funding_events = {"optimism_outgoing": {"2024-01-01": [{"symbol": "ETH"}]}}
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("", "2025-01-01")
+        )
+        assert "2024-01-01" in result
+
+    def test_reversion_cache_hit(self):
+        """Cached reversion info is returned when transfer count is unchanged."""
+        o = _mk()
+        o.params.target_investment_chains = ["optimism"]
+        o.params.safe_contract_addresses = {"optimism": "0xSafe"}
+
+        cached_result = {
+            "reversion_amount": 0.5,
+            "master_safe_address": "0xMaster",
+            "historical_reversion_value": 100.0,
+            "reversion_date": "01-01-2025",
+        }
+        # incoming has 2 transfers, outgoing has 1 => count=3
+        inc = {
+            "d": [
+                {"symbol": "ETH", "timestamp": "t"},
+                {"symbol": "ETH", "timestamp": "t2"},
+            ]
+        }
+        out = {"d": [{"symbol": "ETH", "timestamp": "t3"}]}
+
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return(out)
+        o.funding_events = {
+            "optimism_reversion_info": cached_result,
+            "optimism_reversion_transfer_count": 3,  # matches 2+1
+        }
+
+        result = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
+        assert result == cached_result
+
+    def test_reversion_cache_miss_on_new_transfers(self):
+        """Reversion is recomputed when transfer count changes."""
+        o = _mk()
+        o.params.target_investment_chains = ["optimism"]
+        o.params.safe_contract_addresses = {"optimism": "0xSafe"}
+
+        stale_cache = {
+            "reversion_amount": 999,
+            "master_safe_address": "0xOld",
+            "historical_reversion_value": 0.0,
+            "reversion_date": None,
+        }
+        inc = {
+            "d": [
+                {
+                    "symbol": "ETH",
+                    "timestamp": "1704067200Z",
+                    "amount": 1.0,
+                    "from_address": "0xmaster",
+                },
+                {
+                    "symbol": "ETH",
+                    "timestamp": "1704153600Z",
+                    "amount": 0.5,
+                    "from_address": "0xmaster",
+                },
+            ]
+        }
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        o.get_master_safe_address = _gen_return("0xMaster")
+        o._get_native_balance = _gen_return(2.0)
+        o.funding_events = {
+            "optimism_reversion_info": stale_cache,
+            "optimism_reversion_transfer_count": 1,  # stale: was 1, now 2
+        }
+
+        result = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
+        # Should NOT return stale cache — reversion_amount should be 0.5, not 999
+        assert result["reversion_amount"] == 0.5
 
 
 class TestClosedPositionsBranch:

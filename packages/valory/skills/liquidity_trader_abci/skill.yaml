@@ -14,7 +14,7 @@ fingerprint:
   behaviours/check_staking_kpi_met.py: bafybeigiala5rucuxthkmoirq3hfdrtd3um4uuwiavufs6k4xiw3kta35y
   behaviours/decision_making.py: bafybeih2l4acs6hgbzc3lpfoqy6gdlswv4u3mlxbipj7caopfj56im2vsm
   behaviours/evaluate_strategy.py: bafybeia2k6kmypmant4yczpaicuc2wvropnn2kmft2xegvx3g6txihanvm
-  behaviours/fetch_strategies.py: bafybeic2mdzdi3tnqntygzbyx4ucf7l4achu75vkvtlosggn7dnrtnn7j4
+  behaviours/fetch_strategies.py: bafybeigibchli6ewlry56qfpjc5mdvopmxq6p5yx55bvkf5gimqfgirxle
   behaviours/get_positions.py: bafybeihmv3pjtso44gwtwzqjp62cb5n5qtxhxqpc5ybsrixp2cmtplpifa
   behaviours/post_tx_settlement.py: bafybeid2wjs3damzbsors5jr4rt7kbkbieljaex64b52zphfteve4hfnli
   behaviours/round_behaviour.py: bafybeicqhex5umf4ngytpgcrtf27qiwdytidqedzx2jzxhgxottpukabum
@@ -54,7 +54,7 @@ fingerprint:
   tests/behaviours/test_check_staking_kpi_met.py: bafybeib2nmk66boi42cpotgnpxlbpdtov3oiua77wprb3x63qjve5zb4vq
   tests/behaviours/test_decision_making.py: bafybeif6kujtavptqxms43gugvki3hm2qsp5nfpn33kjr2cxvjs5colkge
   tests/behaviours/test_evaluate_strategy.py: bafybeigddzx7awz4j5smgr6dfz3k6yviydst37so2nkctbsaye32bmh2me
-  tests/behaviours/test_fetch_strategies.py: bafybeiciyvw6jmrtgj3dkmera3muiwbnwdrsc3kvx7nxahbwk3nwmlgvyy
+  tests/behaviours/test_fetch_strategies.py: bafybeiee3kjb3rodrmzkczfoj4susascmbanz2buqvfcvsk3br3iwn535u
   tests/behaviours/test_get_positions.py: bafybeial3qhqe6rwwspzvzp7xrw2upf7pjhtvgmtmomwz5zhjcd3q5nrmy
   tests/behaviours/test_post_tx_settlement.py: bafybeiariqcbvwh4rw3s2pzhbzqmagyq6irv7muytafvlue4jqgqsn3nt4
   tests/behaviours/test_round_behaviour.py: bafybeie3eqpc3t7ejy2wrc2jbrwk36vbdviuamvywmtmge4zl25ydswemq
@@ -216,7 +216,7 @@ models:
       max_healthcheck: 120
       on_chain_service_id: null
       request_retry_delay: 1.0
-      request_timeout: 20.0
+      request_timeout: 10.0
       reset_pause_duration: 10
       reset_tendermint_after: 2
       retry_attempts: 400

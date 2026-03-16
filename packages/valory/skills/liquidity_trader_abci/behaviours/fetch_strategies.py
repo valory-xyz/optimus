@@ -421,7 +421,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         try:
             # For zero address (ETH), use a different approach
             if token_address == ZERO_ADDRESS:
-                return self._fetch_historical_eth_price(date_str)
+                return (yield from self._fetch_historical_eth_price(date_str))
 
             # Get CoinGecko ID for the token
             coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
@@ -444,8 +444,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def _fetch_historical_eth_price(self, date_str: str) -> Optional[float]:
-        """Fetch historical ETH price for a specific date."""
+    def _fetch_historical_eth_price(
+        self, date_str: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Fetch historical ETH price for a specific date, with caching."""
+        # Check cache first
+        cached_price = yield from self._get_cached_price("ethereum", date_str)
+        if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached ETH price for {date_str}: ${cached_price}"
+            )
+            return cached_price
+
         endpoint = self.coingecko.historical_price_endpoint.format(
             coin_id="ethereum",
             date=date_str,
@@ -467,13 +477,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 response_json.get("market_data", {}).get("current_price", {}).get("usd")
             )
             if price:
+                yield from self._cache_price("ethereum", price, date_str)
                 return price
             else:
                 self.context.logger.error("No ETH price in response")
-                return None
         else:
             self.context.logger.error("Failed to fetch historical ETH price")
-            return None
+
+        # Fall back to last known cached price (in case of stale cache from prior date format)
+        fallback_price = yield from self._get_cached_price("ethereum", date_str)
+        if fallback_price is not None:
+            self.context.logger.info(
+                f"Using fallback cached ETH price for {date_str}: ${fallback_price}"
+            )
+            return fallback_price
+
+        return None
 
     def should_recalculate_portfolio(
         self, last_portfolio_data: Dict
@@ -3026,6 +3045,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return total_investment if total_investment > 0 else None
 
+    def _get_transfer_key(self, date: str, transfer: Dict, index: int) -> str:
+        """Build a unique key for a transfer using tx_hash or fallback fields."""
+        tx_hash = transfer.get("tx_hash", "")
+        if tx_hash:
+            return f"{date}_{tx_hash}"
+        symbol = transfer.get("symbol", "")
+        amount = transfer.get("delta", transfer.get("amount", 0))
+        from_addr = transfer.get("from_address", "")
+        return f"{date}_{symbol}_{amount}_{from_addr}_{index}"
+
+    def _load_priced_transfers(
+        self, chain: str
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Load per-transfer priced values from KV store."""
+        key = f"{chain}_priced_transfers"
+        cached_data = yield from self._read_kv(keys=(key,))
+        if cached_data and cached_data.get(key):
+            try:
+                return json.loads(cached_data[key])
+            except (json.JSONDecodeError, TypeError):
+                self.context.logger.warning(
+                    f"Failed to parse cached priced transfers for {chain}"
+                )
+        return {}
+
+    def _save_priced_transfers(
+        self, chain: str, priced: Dict[str, float]
+    ) -> Generator[None, None, None]:
+        """Persist per-transfer priced values to KV store."""
+        key = f"{chain}_priced_transfers"
+        yield from self._write_kv({key: json.dumps(priced, ensure_ascii=True)})
+
     def _calculate_chain_investment_value(
         self, all_transfers: Dict, chain: str, safe_address: str
     ) -> Generator[None, None, float]:
@@ -3055,7 +3106,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if reversion_date
                 else datetime.now().strftime("%d-%m-%Y")
             )
-            eth_price = self._fetch_historical_eth_price(date_str)
+            eth_price = yield from self._fetch_historical_eth_price(date_str)
             if eth_price:  # pragma: no branch
                 reversion_value = reversion_amount * eth_price
                 total_reversion += reversion_value
@@ -3063,10 +3114,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"{chain.upper()} REVERSION: {reversion_amount} ETH @ ${eth_price} = ${reversion_value} (from {reversion_date})"
                 )
 
+        # Load previously priced transfers so we never re-fetch their prices
+        priced_transfers = yield from self._load_priced_transfers(chain)
+        cached_investment = 0.0
+        priced_updated = False
+
         for date, transfers in all_transfers.items():
-            for transfer in transfers:
+            for idx, transfer in enumerate(transfers):
                 try:
-                    # Get token price for the transfer date
                     token_symbol = transfer.get("symbol", "Unknown")
                     amount = transfer.get("delta", transfer.get("amount", 0))
 
@@ -3090,11 +3145,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             )
                             continue
 
+                    transfer_key = self._get_transfer_key(date, transfer, idx)
+
+                    # If this transfer was already priced, use the cached value
+                    if transfer_key in priced_transfers:
+                        cached_investment += priced_transfers[transfer_key]
+                        continue
+
                     # Get historical price for the transfer date
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
 
                     if token_symbol == "ETH":  # nosec B105
-                        price = self._fetch_historical_eth_price(date_str)
+                        price = yield from self._fetch_historical_eth_price(date_str)
                     else:
                         coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
                         if coingecko_id:
@@ -3107,8 +3169,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if price:
                         transfer_value = amount * price
                         new_investment += transfer_value
+                        # Persist the priced value so it is never re-fetched
+                        priced_transfers[transfer_key] = transfer_value
+                        priced_updated = True
                         self.context.logger.info(
                             f"{chain.upper()} NEW transfer on {date}: {amount} {token_symbol} @ ${price} = ${transfer_value}"
+                        )
+                    else:
+                        self.context.logger.warning(
+                            f"{chain.upper()} SKIPPED transfer on {date}: {amount} {token_symbol} — price fetch failed"
                         )
 
                 except Exception as e:
@@ -3117,12 +3186,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     continue
 
-        # Update total investment for this chain
-        updated_total = new_investment - total_reversion
+        # Persist priced transfers if any new ones were added
+        if priced_updated:
+            yield from self._save_priced_transfers(chain, priced_transfers)
+
+        # Total = previously priced + newly priced - reversions
+        updated_total = cached_investment + new_investment - total_reversion
         yield from self._save_chain_total_investment(chain, updated_total)
 
         self.context.logger.info(
-            f"Total {chain} investment (updated): ${updated_total}"
+            f"Total {chain} investment (updated): ${updated_total} "
+            f"(cached: ${cached_investment}, new: ${new_investment}, reversions: ${total_reversion})"
         )
 
         return updated_total
@@ -3710,6 +3784,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if not transfers:
                     break
 
+                # Track how many transfers in this page are on already-stored dates.
+                # The API returns newest-first, so once an entire page is old we can stop.
+                consecutive_existing = 0
+                stop_pagination = False
+
                 for transfer in transfers:
                     # Parse timestamp
                     timestamp = transfer.get("executionDate")
@@ -3724,7 +3803,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Skip if date already exists in stored data
                     if tx_date in existing_data:
+                        consecutive_existing += 1
+                        if consecutive_existing >= len(transfers):
+                            stop_pagination = True
                         continue
+                    else:
+                        consecutive_existing = 0
 
                     # Only process transfers until end_date
                     if tx_date > end_date:
@@ -3828,6 +3912,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Processed {processed_count} Optimism transfers..."
                     )
+
+                # Stop early if the entire page was on already-stored dates
+                if stop_pagination:
+                    self.context.logger.info(
+                        "All transfers on this page already stored — stopping pagination"
+                    )
+                    break
 
                 # Check for next page and advance the URL
                 cursor = response_json.get("next")
@@ -4038,6 +4129,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 return {}
         return {}
 
+    def _count_transfers(self, transfers_dict: Dict) -> int:
+        """Count total number of individual transfers across all dates."""
+        return sum(len(v) for v in transfers_dict.values())
+
     def _track_eth_transfers_and_reversions(
         self,
         safe_address: str,
@@ -4060,6 +4155,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         safe_address, current_date
                     )
                 ) or {}
+
+                # Check if reversion result is cached and still valid
+                total_count = self._count_transfers(
+                    all_incoming_transfers
+                ) + self._count_transfers(all_outgoing_transfers)
+                cached_reversion = self.funding_events.get("optimism_reversion_info")
+                cached_count = self.funding_events.get(
+                    "optimism_reversion_transfer_count", -1
+                )
+                if (
+                    cached_reversion
+                    and isinstance(cached_reversion, dict)
+                    and cached_count == total_count
+                ):
+                    self.context.logger.info(
+                        f"Using cached reversion info (transfer count unchanged: {total_count})"
+                    )
+                    return cached_reversion
+
             elif chain == Chain.MODE.value:
                 # Use new Mode-specific tracking function
                 transfers = self._track_eth_transfers_mode(safe_address, current_date)
@@ -4189,16 +4303,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
 
             if len(reversion_transfers) > 0:
-                historical_reversion_value = self._calculate_total_reversion_value(
-                    eth_transfers, reversion_transfers
+                historical_reversion_value = (
+                    yield from self._calculate_total_reversion_value(
+                        eth_transfers, reversion_transfers
+                    )
                 )
 
-            return {
+            result = {
                 "reversion_amount": reversion_amount,
                 "master_safe_address": master_safe_address,
                 "historical_reversion_value": historical_reversion_value,
                 "reversion_date": reversion_date,
             }
+
+            # Cache the reversion result for Optimism so we skip recomputation
+            # when no new transfers have arrived
+            if chain == Chain.OPTIMISM.value:
+                self.funding_events["optimism_reversion_info"] = result
+                self.funding_events["optimism_reversion_transfer_count"] = (
+                    self._count_transfers(all_incoming_transfers)
+                    + self._count_transfers(all_outgoing_transfers)
+                )
+                self.store_funding_events()
+
+            return result
 
         except Exception as e:
             self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
@@ -4211,7 +4339,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _calculate_total_reversion_value(
         self, eth_transfers: List[Dict], reversion_transfers: List[Dict]
-    ) -> Optional[float]:
+    ) -> Generator[None, None, Optional[float]]:
         """Calculate the total reversion value from the reversion transfers."""
         reversion_amount = 0.0
         reversion_date = None
@@ -4238,9 +4366,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         for index, transfer in enumerate(reversion_transfers):
             if index == 0:
-                eth_price = self._fetch_historical_eth_price(reversion_date)
+                eth_price = yield from self._fetch_historical_eth_price(reversion_date)
             else:
-                eth_price = self._fetch_historical_eth_price(current_date)
+                eth_price = yield from self._fetch_historical_eth_price(current_date)
             if eth_price:
                 reversion_amount = transfer.get("amount", 0)
                 reversion_value += reversion_amount * eth_price
@@ -4252,14 +4380,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         address: str,
         current_date: str,
     ) -> Generator[None, None, Dict]:
-        """Fetch all outgoing transfers from the safe address on Mode until a specific date."""
+        """Fetch outgoing ETH transfers from the safe address on Optimism, with persistence."""
+        # Load persisted outgoing data
+        if not self.funding_events:
+            self.funding_events = self.read_funding_events() or {}
+        existing_outgoing = self.funding_events.get("optimism_outgoing", {})
+
         all_transfers = {}
 
         if not address:
             self.context.logger.warning(
                 "No address provided for fetching Optimism outgoing transfers"
             )
-            return all_transfers
+            return existing_outgoing
 
         try:
             # Use SafeGlobal API for Optimism transfers
@@ -4286,6 +4419,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if not transfers:
                     break
 
+                consecutive_existing = 0
+                stop_pagination = False
+
                 for transfer in transfers:
                     # Parse timestamp
                     timestamp = transfer.get("executionDate")
@@ -4306,6 +4442,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                     if tx_date > current_date:
                         continue
+
+                    # Skip dates already persisted
+                    if tx_date in existing_outgoing:
+                        consecutive_existing += 1
+                        if consecutive_existing >= len(transfers):
+                            stop_pagination = True
+                        continue
+                    else:
+                        consecutive_existing = 0
 
                     # Only process outgoing transfers (where from address is equal to our safe address)
                     if transfer.get("from").lower() == address.lower():
@@ -4350,19 +4495,33 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Completed Optimism outgoing transfers: {processed_count} found"
                 )
 
+                if stop_pagination:
+                    self.context.logger.info(
+                        "Outgoing transfers: entire page already stored — stopping pagination"
+                    )
+                    break
+
                 # Advance pagination if available
                 cursor = response_json.get("next")
                 if not cursor:
-                    return all_transfers
+                    break
                 transfers_url = cursor
 
-            return all_transfers
+            # Merge new dates into persisted data and save
+            for date, transfers_list in all_transfers.items():
+                if date not in existing_outgoing:
+                    existing_outgoing[date] = transfers_list
+
+            self.funding_events["optimism_outgoing"] = existing_outgoing
+            self.store_funding_events()
+
+            return existing_outgoing
 
         except Exception as e:
             self.context.logger.error(
                 f"Error fetching Optimism outgoing transfers: {e}"
             )
-            return {}
+            return existing_outgoing
 
     def _track_erc20_transfers_optimism(
         self,

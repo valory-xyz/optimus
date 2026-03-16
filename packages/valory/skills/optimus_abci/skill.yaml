@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeieuibrkf5jnhzfdrhr2li3momxbwzilftrcmo7xo36blbwussug2e
   fsm_specification.yaml: bafybeiclrv7v4i2dvig7uea3fjxqfwwfqp3vsnumy5647dulgfhha6mlea
-  handlers.py: bafybeia3pjmry3mo6wdhss47q7jfn2nqtf6zw75uoaxi7qksu6tldy7vhm
+  handlers.py: bafybeibkaolltjmm5hfb4vsh5xnd7jxhepehqbis2vu6ct2aftvzxo4dzq
   models.py: bafybeib6hdrjjemlrllw4zr3famqllxzbon4pobpk62jmqpo2b2nk244se
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -108,7 +108,7 @@ fingerprint:
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
   tests/test_dialogues.py: bafybeihpst6mpbhgq26pmkfib6srai6bcji35cerfu66krivgpp4awsjda
-  tests/test_handlers.py: bafybeieu5xydlliqejqetnh4qqumn3wiufr4sckefzpvxyidmlvwn7f634
+  tests/test_handlers.py: bafybeihejpvfwyjofh4b7omnpiyjt2pk6orawgrkpjnplvviatrthmwpf4
   tests/test_models.py: bafybeieqaueff2rl65fuq6hwwqvq2yez2kd2yfuyjj6fi7i5j7en2ttwda
   tests/test_prompts.py: bafybeialrz3mvpiu2xruv3dtnhxolgduom5izwo2q343oiazfoh44usmam
 fingerprint_ignore_patterns: []
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
-- valory/liquidity_trader_abci:0.1.0:bafybeie7rt4y37c3vfamnqkrs4wqep4j2s5ry7msdkxp3luy54a67vrvjy
+- valory/liquidity_trader_abci:0.1.0:bafybeiaohh6ppmxxdwyqfloi7mdlx4dexyu77m5ym3rogirdnyv3fmpw2q
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 - valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
 behaviours:

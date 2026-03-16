@@ -99,6 +99,9 @@ class TestSharedState:
         from packages.valory.skills.liquidity_trader_abci.rounds import (
             Event as LiquidityTraderEvent,
         )
+        from packages.valory.skills.registration_abci.rounds import (
+            Event as RegistrationEvent,
+        )
         from packages.valory.skills.reset_pause_abci.rounds import (
             Event as ResetPauseEvent,
         )
@@ -118,3 +121,4 @@ class TestSharedState:
             OptimusAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT]
             == 20 + MARGIN
         )
+        assert OptimusAbciApp.event_to_timeout[RegistrationEvent.ROUND_TIMEOUT] == 10.0

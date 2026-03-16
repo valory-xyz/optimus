@@ -3421,7 +3421,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 endpoint,
                 params=params,
                 headers={"Accept": "application/json"},
-                timeout=30,
+                timeout=self.params.request_timeout,
                 verify=False,  # nosec B501
             )
 
@@ -3557,7 +3557,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 endpoint,
                 params=params,
                 headers={"Accept": "application/json"},
-                timeout=30,
+                timeout=self.params.request_timeout,
                 verify=False,  # nosec B501
             )
 
@@ -4525,7 +4525,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 base_url,
                 params=params,
                 headers={"Accept": "application/json"},
-                timeout=30,
+                timeout=self.params.request_timeout,
                 verify=False,  # nosec B501
             )
 
@@ -4632,7 +4632,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
-                    timeout=30,
+                    timeout=self.params.request_timeout,
                     verify=False,  # nosec B501
                 )
 

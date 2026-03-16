@@ -76,7 +76,7 @@ class SynchronizedData(BaseSynchronizedData):
         return CollectionRound.deserialize_collection(serialized)
 
     @property
-    def most_voted_tx_hash(self) -> Optional[float]:
+    def most_voted_tx_hash(self) -> Optional[str]:
         """Get the token most_voted_tx_hash."""
         return self.db.get("most_voted_tx_hash", None)
 

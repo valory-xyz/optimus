@@ -8,7 +8,8 @@
 - `liquidity_trader_abci` (custom/production)
 - `optimus_abci` (composed app)
 
-**Date:** 2026-03-10
+**Initial audit:** 2026-03-10
+**Re-audit:** 2026-03-16
 
 ---
 
@@ -36,6 +37,11 @@ No findings.
 - **Issue:** A `requests.Session()` is created but never closed. In a long-running agent service, this leaks TCP connections and can cause socket exhaustion.
 - **Fix applied:** Wrapped session usage in `with session:` context manager to ensure proper cleanup.
 
+### H3b: Missing timeout on `session.get()` in CoinGecko Client -- FIXED (2026-03-16)
+- **File:** `packages/valory/skills/liquidity_trader_abci/models.py:243`
+- **Issue:** While the session leak was fixed (H3 above), the `session.get(url, headers=headers)` call still had no `timeout` parameter. If the CoinGecko server is unresponsive, this blocks the agent indefinitely.
+- **Fix applied:** Added configurable `request_timeout` parameter to the `Coingecko` model (default: 10s, shorter than round timeout). Used in the `session.get()` call.
+
 ---
 
 ## Medium Findings
@@ -44,6 +50,16 @@ No findings.
 - **Files:** `states/withdraw_funds.py:45`, `rounds.py:166`, `fsm_specification.yaml:120`, `optimus_abci/fsm_specification.yaml:186`
 - **Issue:** The round defined `withdrawal_completed_event = Event.WITHDRAWAL_COMPLETED` and the transition function mapped `Event.WITHDRAWAL_COMPLETED -> FetchStrategiesRound`, but `end_block()` only ever returned `Event.DONE` or `Event.NO_MAJORITY`. The `WITHDRAWAL_COMPLETED` transition was dead — it could never fire from `WithdrawFundsRound`. (Note: `Event.WITHDRAWAL_COMPLETED` IS correctly used by `PostTxSettlementRound` — only the `WithdrawFundsRound` entry was dead.)
 - **Fix applied:** Removed the dead `withdrawal_completed_event` attribute, the unreachable transition from `WithdrawFundsRound` in `rounds.py`, and the corresponding entries in both `fsm_specification.yaml` files.
+
+### M-NEW-1: Missing `RegistrationEvent` in timeout configuration -- FIXED (2026-03-16)
+- **File:** `packages/valory/skills/optimus_abci/models.py:48-52,94-97`
+- **Issue:** `SharedState.setup()` configured `ROUND_TIMEOUT` overrides for 3 of the 4 composed apps but omitted `RegistrationEvent` from `AgentRegistrationAbciApp`.
+- **Fix applied:** Imported `RegistrationEvent`, added it to `EventType` union, `EventToTimeoutMappingType` union, and the `events` tuple in `setup()`.
+
+### M-NEW-2: Wrong type annotation on `most_voted_tx_hash` -- FIXED (2026-03-16)
+- **File:** `packages/valory/skills/liquidity_trader_abci/states/base.py:79`
+- **Issue:** Return type was `Optional[float]` but this property returns a transaction hash (a hex string).
+- **Fix applied:** Changed type annotation from `Optional[float]` to `Optional[str]`.
 
 ### Dependency Declaration Issues -- FIXED (refactored)
 - **Files:** `packages/valory/customs/{uniswap,balancer,velodrome}_pools_search/*.py`, `packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py`
@@ -81,12 +97,12 @@ RegistrationAbci -> LiquidityTraderAbci -> TransactionSettlementAbci -> ResetPau
 
 ## Summary
 
-| Severity | Count | Fixed |
-|----------|-------|-------|
-| Critical | 0 | - |
-| High | 1 | 1 |
-| Medium | 2 | 2 |
-| Low | 1 | 1 |
+| Severity | Count | Fixed | Open |
+|----------|-------|-------|------|
+| Critical | 0 | - | 0 |
+| High | 2 | 2 | 0 |
+| Medium | 4 | 4 | 0 |
+| Low | 1 | 1 | 0 |
 
 ## Notes
 
@@ -96,3 +112,4 @@ RegistrationAbci -> LiquidityTraderAbci -> TransactionSettlementAbci -> ResetPau
 - **x402 dependency fix:** Rather than working around the AEA framework limitation (lazy imports), we properly refactored the architecture: the skill layer now creates x402 sessions and passes them to custom packages, eliminating the undeclared cross-package import.
 - All 5 FSM skills pass `fsm-specs` and `docstrings` validation.
 - All skills pass `handlers` and `dialogues` validation (with `funds_manager` excluded).
+- **Re-audit (2026-03-16):** All previously fixed findings confirmed resolved. Three new findings added (H3b, M-NEW-1, M-NEW-2). CLI tools could not be re-run (missing `aea` module in environment). C1-C4 re-checked clean. All test checks (T1-T6) passed. No shared mutable references, no operator precedence bugs, no dead timeouts found.

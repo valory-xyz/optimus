@@ -274,6 +274,7 @@ class TestCoingecko:
     def test_request_success_non_x402(self) -> None:
         """Test request method without x402."""
         mock_context = MagicMock()
+        mock_context.params.request_timeout = 20.0
         kwargs = self._make_kwargs()
         cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
 
@@ -294,6 +295,9 @@ class TestCoingecko:
 
         assert success is True
         assert data == {"price": 1.0}
+        mock_session.get.assert_called_once_with(
+            "https://api.coingecko.com/test", headers={}, timeout=20.0
+        )
 
     def test_request_success_x402(self) -> None:
         """Test request method with x402."""
@@ -449,6 +453,7 @@ class TestParams:
             "x402_payment_requirements": json.dumps({}),
             "optimism_ledger_rpc": "https://optimism.rpc.example.com",
             "lifi_quote_to_amount_url": "https://lifi.example.com/quote",
+            "request_timeout": 20.0,
             "skill_context": MagicMock(),
         }
 

@@ -2294,4 +2294,7 @@ e45a61059eb485ccc4cf68801d8682e49f3ee3e3:tests/integration/protocols/uniswap_v3/
 55f8ab515599911401627262abbaa1a89ce5d2a0:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_evaluate_strategy.py:generic-api-key:5263
 55f8ab515599911401627262abbaa1a89ce5d2a0:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_evaluate_strategy.py:generic-api-key:5273
 4f0aa2b0bd2db77d91470671ca70502fd3a42b14:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_base.py:generic-api-key:1312
+fb9a0678812d66b5c0b32494d05331de12c9ab5b:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_base.py:generic-api-key:935
+fb9a0678812d66b5c0b32494d05331de12c9ab5b:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_evaluate_strategy.py:generic-api-key:5845
+fb9a0678812d66b5c0b32494d05331de12c9ab5b:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_evaluate_strategy.py:generic-api-key:5857
 f1467b991fd6dc09e24e6b18cab1d0c7ed66f43d:packages/valory/skills/liquidity_trader_abci/tests/test_evaluate_strategy_behaviour.py:generic-api-key:2967

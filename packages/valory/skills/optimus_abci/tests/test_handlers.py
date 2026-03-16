@@ -3016,6 +3016,23 @@ class TestHttpHandlerMethods:
         result = handler._inject_x402_eth_deficit(existing, 1000)
         assert result["optimism"]["0xagent"][ZERO_ADDRESS]["deficit"] == str(99999)
 
+    def test_inject_x402_eth_deficit_balance_exceeds_need(self) -> None:
+        """Test _inject_x402_eth_deficit when balance already covers the deficit."""
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.agent_address = "0xagent"
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
+        existing = {
+            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "5000", "deficit": "0"}}}
+        }
+        result = handler._inject_x402_eth_deficit(existing, 1000)
+        # balance=5000 > eth_deficit=1000, so new_deficit = max(0, 1000-5000) = 0
+        # deficit stays "0" (not updated)
+        assert result["optimism"]["0xagent"][ZERO_ADDRESS]["deficit"] == "0"
+
     def test_handle_get_funds_status_injects_x402_deficit(self) -> None:
         """Test _handle_get_funds_status injects x402_eth_deficit when present."""
         handler, ctx = _make_http_handler()

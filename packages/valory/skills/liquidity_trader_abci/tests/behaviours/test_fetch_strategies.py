@@ -7623,6 +7623,95 @@ class TestIncrementalOptimismFetching:
         assert result["reversion_amount"] == 0.5
 
 
+class TestCoverageGaps:
+    """Tests for uncovered lines/branches in new code."""
+
+    def test_get_transfer_key_no_tx_hash(self):
+        """Fallback key when tx_hash is missing."""
+        o = _mk()
+        key = o._get_transfer_key(
+            "2025-01-01", {"symbol": "ETH", "delta": 1.5, "from_address": "0xF"}, 3
+        )
+        assert key == "2025-01-01_ETH_1.5_0xF_3"
+
+    def test_get_transfer_key_empty_tx_hash(self):
+        """Fallback key when tx_hash is empty string."""
+        o = _mk()
+        key = o._get_transfer_key("2025-01-01", {"tx_hash": "", "symbol": "USDC"}, 0)
+        assert key == "2025-01-01_USDC_0__0"
+
+    def test_load_priced_transfers_valid(self):
+        """Load valid JSON from KV store."""
+        o = _mk()
+        data = json.dumps({"k1": 100.0, "k2": 200.0})
+        o._read_kv = _gen_return({"optimism_priced_transfers": data})
+        result = _drive(o._load_priced_transfers("optimism"))
+        assert result == {"k1": 100.0, "k2": 200.0}
+
+    def test_load_priced_transfers_empty(self):
+        """Return empty dict when KV has no data."""
+        o = _mk()
+        o._read_kv = _gen_return({})
+        result = _drive(o._load_priced_transfers("optimism"))
+        assert result == {}
+
+    def test_load_priced_transfers_malformed_json(self):
+        """Return empty dict and log warning on malformed JSON."""
+        o = _mk()
+        o._read_kv = _gen_return({"optimism_priced_transfers": "not-json{{"})
+        result = _drive(o._load_priced_transfers("optimism"))
+        assert result == {}
+        o.context.logger.warning.assert_called()
+
+    def test_save_priced_transfers(self):
+        """Verify KV write is called with serialized JSON."""
+        o = _mk()
+        written = {}
+
+        def capture_write(data):
+            written.update(data)
+            yield
+
+        o._write_kv = capture_write
+        _drive(o._save_priced_transfers("optimism", {"k": 42.0}))
+        assert "optimism_priced_transfers" in written
+        assert json.loads(written["optimism_priced_transfers"]) == {"k": 42.0}
+
+    def test_count_transfers(self):
+        """Verify transfer counting across dates."""
+        o = _mk()
+        transfers = {"d1": [{"a": 1}, {"b": 2}], "d2": [{"c": 3}]}
+        assert o._count_transfers(transfers) == 3
+        assert o._count_transfers({}) == 0
+
+    def test_fetch_historical_eth_price_fallback_cache(self):
+        """When API fails but fallback cache has a price, return it."""
+        o = _mk()
+        cg = MagicMock()
+        o.context.coingecko = cg
+        cg.historical_price_endpoint = "url/{coin_id}/{date}"
+        cg.api_key = "key"
+        cg.request.return_value = (False, {})  # API fails
+        o.params.use_x402 = False
+
+        call_count = {"n": 0}
+
+        def cache_returns_on_second_call(*a, **kw):
+            call_count["n"] += 1
+            yield
+            # First call (before API): no cache. Second call (fallback): has price.
+            if call_count["n"] >= 2:
+                return 2500.0
+            return None
+
+        o._get_cached_price = cache_returns_on_second_call
+        o._cache_price = _gen_none
+
+        result = _drive(o._fetch_historical_eth_price("01-01-2025"))
+        assert result == 2500.0
+        assert call_count["n"] == 2
+
+
 class TestClosedPositionsBranch:
     """Test the closed_positions branch (lines 557-560) specifically."""
 

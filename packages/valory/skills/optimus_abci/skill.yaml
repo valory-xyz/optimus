@@ -108,7 +108,7 @@ fingerprint:
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
   tests/test_dialogues.py: bafybeihpst6mpbhgq26pmkfib6srai6bcji35cerfu66krivgpp4awsjda
-  tests/test_handlers.py: bafybeihejpvfwyjofh4b7omnpiyjt2pk6orawgrkpjnplvviatrthmwpf4
+  tests/test_handlers.py: bafybeifr2h57do5fs56yfojnhbzd4nhfvbdg7afamftpqbk6wrb7sennia
   tests/test_models.py: bafybeieqaueff2rl65fuq6hwwqvq2yez2kd2yfuyjj6fi7i5j7en2ttwda
   tests/test_prompts.py: bafybeialrz3mvpiu2xruv3dtnhxolgduom5izwo2q343oiazfoh44usmam
 fingerprint_ignore_patterns: []
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
-- valory/liquidity_trader_abci:0.1.0:bafybeigmdtv6cr37ghinz5d4i7b22hs57t2zun7terqq5jlfwqtuf3hgta
+- valory/liquidity_trader_abci:0.1.0:bafybeiey5icgpgh7wag7wg4p6qd67ajuvgjytjtwpepss25igshxxscw74
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 - valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
 behaviours:

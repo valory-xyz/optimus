@@ -4976,12 +4976,11 @@ class TestGetBestAvailableOpportunityYieldBranches:
     def test_exception_in_yield_calc(self):
         """Cover lines 1189-1193: exception handler."""
         b = _mk()
-        # Use a mock that raises on iteration
-        b.trading_opportunities = MagicMock()
-        b.trading_opportunities.__bool__ = MagicMock(return_value=True)
-        # sorted() will try to iterate, but side_effect raises
-        with patch("builtins.sorted", side_effect=TypeError("broken")):
-            result = b._get_best_available_opportunity_yield()
+        # Item whose .get raises during sorted key function
+        bad_item = MagicMock()
+        bad_item.get = MagicMock(side_effect=TypeError("broken"))
+        b.trading_opportunities = [bad_item]
+        result = b._get_best_available_opportunity_yield()
         assert result is None
 
 
@@ -5430,16 +5429,12 @@ class TestMergeDuplicateBranchesExtra:
     def test_outer_exception(self):
         """Cover lines 2289-2295: outer exception returns original actions."""
         b = _mk()
-        original = [{"action": "test"}]
-        with patch.object(
-            b,
-            "_merge_duplicate_bridge_swap_actions",
-            wraps=b._merge_duplicate_bridge_swap_actions,
-        ):
-            # Force enumerate to raise
-            with patch("builtins.enumerate", side_effect=RuntimeError("fail")):
-                result = b._merge_duplicate_bridge_swap_actions(original)
-        assert result == original
+        # Pass an object that is truthy but fails during iteration
+        original = MagicMock()
+        original.__bool__ = MagicMock(return_value=True)
+        original.__iter__ = MagicMock(side_effect=RuntimeError("fail"))
+        result = b._merge_duplicate_bridge_swap_actions(original)
+        assert result is original
 
 
 class TestHandleVelodromeTokenAllocationBranches:

@@ -294,6 +294,9 @@ class TestCoingecko:
 
         assert success is True
         assert data == {"price": 1.0}
+        mock_session.get.assert_called_once_with(
+            "https://api.coingecko.com/test", headers={}, timeout=30
+        )
 
     def test_request_success_x402(self) -> None:
         """Test request method with x402."""

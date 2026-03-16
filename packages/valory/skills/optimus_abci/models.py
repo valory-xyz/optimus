@@ -39,6 +39,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     Event as LiquidityTraderEvent,
 )
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
+from packages.valory.skills.registration_abci.rounds import Event as RegistrationEvent
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
@@ -49,9 +50,15 @@ EventType = Union[
     Type[LiquidityTraderEvent],
     Type[TransactionSettlementEvent],
     Type[ResetPauseEvent],
+    Type[RegistrationEvent],
 ]
 EventToTimeoutMappingType = Dict[
-    Union[LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent],
+    Union[
+        LiquidityTraderEvent,
+        TransactionSettlementEvent,
+        ResetPauseEvent,
+        RegistrationEvent,
+    ],
     float,
 ]
 
@@ -91,7 +98,12 @@ class SharedState(BaseSharedState):
         """Set up."""
         super().setup()
 
-        events = (LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent)
+        events = (
+            LiquidityTraderEvent,
+            TransactionSettlementEvent,
+            ResetPauseEvent,
+            RegistrationEvent,
+        )
         round_timeout = self.params.round_timeout_seconds
         round_timeout_overrides = {
             cast(EventType, event).ROUND_TIMEOUT: round_timeout for event in events

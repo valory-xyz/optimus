@@ -37,19 +37,10 @@ No findings.
 - **Issue:** A `requests.Session()` is created but never closed. In a long-running agent service, this leaks TCP connections and can cause socket exhaustion.
 - **Fix applied:** Wrapped session usage in `with session:` context manager to ensure proper cleanup.
 
-### H3b: Missing timeout on `session.get()` in CoinGecko Client -- OPEN (2026-03-16)
+### H3b: Missing timeout on `session.get()` in CoinGecko Client -- FIXED (2026-03-16)
 - **File:** `packages/valory/skills/liquidity_trader_abci/models.py:243`
-- **Issue:** While the session leak was fixed (H3 above), the `session.get(url, headers=headers)` call still has no `timeout` parameter. If the CoinGecko server is unresponsive, this blocks the agent indefinitely.
-- **Code:**
-  ```python
-  with session:
-      response = session.get(url, headers=headers)
-  ```
-- **Suggested fix:**
-  ```python
-  with session:
-      response = session.get(url, headers=headers, timeout=30)
-  ```
+- **Issue:** While the session leak was fixed (H3 above), the `session.get(url, headers=headers)` call still had no `timeout` parameter. If the CoinGecko server is unresponsive, this blocks the agent indefinitely.
+- **Fix applied:** Added `timeout=30` to the `session.get()` call.
 
 ---
 
@@ -60,50 +51,15 @@ No findings.
 - **Issue:** The round defined `withdrawal_completed_event = Event.WITHDRAWAL_COMPLETED` and the transition function mapped `Event.WITHDRAWAL_COMPLETED -> FetchStrategiesRound`, but `end_block()` only ever returned `Event.DONE` or `Event.NO_MAJORITY`. The `WITHDRAWAL_COMPLETED` transition was dead — it could never fire from `WithdrawFundsRound`. (Note: `Event.WITHDRAWAL_COMPLETED` IS correctly used by `PostTxSettlementRound` — only the `WithdrawFundsRound` entry was dead.)
 - **Fix applied:** Removed the dead `withdrawal_completed_event` attribute, the unreachable transition from `WithdrawFundsRound` in `rounds.py`, and the corresponding entries in both `fsm_specification.yaml` files.
 
-### M-NEW-1: Missing `RegistrationEvent` in timeout configuration -- OPEN (2026-03-16)
+### M-NEW-1: Missing `RegistrationEvent` in timeout configuration -- FIXED (2026-03-16)
 - **File:** `packages/valory/skills/optimus_abci/models.py:48-52,94-97`
-- **Issue:** `SharedState.setup()` configures `ROUND_TIMEOUT` overrides for 3 of the 4 composed apps but omits `RegistrationEvent` from `AgentRegistrationAbciApp`. The `EventType` union and `events` tuple are incomplete.
-- **Code:**
-  ```python
-  EventType = Union[
-      Type[LiquidityTraderEvent],
-      Type[TransactionSettlementEvent],
-      Type[ResetPauseEvent],
-  ]
-  # ...
-  events = (LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent)
-  ```
-- **Suggested fix:** If `registration_abci` uses `ROUND_TIMEOUT` in the composed transition function, add:
-  ```python
-  from packages.valory.skills.registration_abci.rounds import Event as RegistrationEvent
+- **Issue:** `SharedState.setup()` configured `ROUND_TIMEOUT` overrides for 3 of the 4 composed apps but omitted `RegistrationEvent` from `AgentRegistrationAbciApp`.
+- **Fix applied:** Imported `RegistrationEvent`, added it to `EventType` union, `EventToTimeoutMappingType` union, and the `events` tuple in `setup()`.
 
-  EventType = Union[
-      Type[RegistrationEvent],
-      Type[LiquidityTraderEvent],
-      Type[TransactionSettlementEvent],
-      Type[ResetPauseEvent],
-  ]
-  # ...
-  events = (RegistrationEvent, LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent)
-  ```
-
-### M-NEW-2: Wrong type annotation on `most_voted_tx_hash` -- OPEN (2026-03-16)
+### M-NEW-2: Wrong type annotation on `most_voted_tx_hash` -- FIXED (2026-03-16)
 - **File:** `packages/valory/skills/liquidity_trader_abci/states/base.py:79`
-- **Issue:** Return type is `Optional[float]` but this property returns a transaction hash (a hex string). The payload definition uses `Optional[str]`.
-- **Code:**
-  ```python
-  @property
-  def most_voted_tx_hash(self) -> Optional[float]:
-      """Get the token most_voted_tx_hash."""
-      return self.db.get("most_voted_tx_hash", None)
-  ```
-- **Suggested fix:**
-  ```python
-  @property
-  def most_voted_tx_hash(self) -> Optional[str]:
-      """Get the most_voted_tx_hash."""
-      return self.db.get("most_voted_tx_hash", None)
-  ```
+- **Issue:** Return type was `Optional[float]` but this property returns a transaction hash (a hex string).
+- **Fix applied:** Changed type annotation from `Optional[float]` to `Optional[str]`.
 
 ### Dependency Declaration Issues -- FIXED (refactored)
 - **Files:** `packages/valory/customs/{uniswap,balancer,velodrome}_pools_search/*.py`, `packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py`
@@ -144,8 +100,8 @@ RegistrationAbci -> LiquidityTraderAbci -> TransactionSettlementAbci -> ResetPau
 | Severity | Count | Fixed | Open |
 |----------|-------|-------|------|
 | Critical | 0 | - | 0 |
-| High | 2 | 1 | 1 (H3b) |
-| Medium | 4 | 2 | 2 (M-NEW-1, M-NEW-2) |
+| High | 2 | 2 | 0 |
+| Medium | 4 | 4 | 0 |
 | Low | 1 | 1 | 0 |
 
 ## Notes

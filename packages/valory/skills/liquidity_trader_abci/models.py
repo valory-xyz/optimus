@@ -240,7 +240,7 @@ class Coingecko(Model, TypeCheckMixin):
                 url = self.coingecko_server_base_url + endpoint
 
             with session:
-                response = session.get(url, headers=headers)
+                response = session.get(url, headers=headers, timeout=30)
                 success = response.status_code in HTTP_OK
                 return success, response.json()
         except Exception as exc:

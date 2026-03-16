@@ -504,6 +504,178 @@ class TestEnter:
             result = _drive(gen)
             assert result == (None, None)
 
+    def test_tick_lower_zero_is_valid(self) -> None:
+        """Test enter when tick_lower=0 (valid for 1:1 price ratio pools)."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_calc_ticks(addr, chain):
+            yield
+            return 0, 887220
+
+        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+            yield
+            return 90, 180
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return "0xmint_hash"
+
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
+
+        obj._calculate_tick_lower_and_upper = fake_calc_ticks
+        obj._calculate_slippage_protection_for_mint = fake_slippage_for_mint
+        obj.contract_interact = fake_contract_interact
+        obj.context.state.round_sequence = rs
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
+            result = _drive(gen)
+            assert result == ("0xmint_hash", "0xpm")
+
+    def test_tick_upper_zero_is_valid(self) -> None:
+        """Test enter when tick_upper=0 (valid for 1:1 price ratio pools)."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_calc_ticks(addr, chain):
+            yield
+            return -887220, 0
+
+        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+            yield
+            return 90, 180
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return "0xmint_hash"
+
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
+
+        obj._calculate_tick_lower_and_upper = fake_calc_ticks
+        obj._calculate_slippage_protection_for_mint = fake_slippage_for_mint
+        obj.contract_interact = fake_contract_interact
+        obj.context.state.round_sequence = rs
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
+            result = _drive(gen)
+            assert result == ("0xmint_hash", "0xpm")
+
+    def test_both_ticks_zero_is_valid(self) -> None:
+        """Test enter when both tick_lower=0 and tick_upper=0."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_calc_ticks(addr, chain):
+            yield
+            return 0, 0
+
+        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+            yield
+            return 90, 180
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return "0xmint_hash"
+
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
+
+        obj._calculate_tick_lower_and_upper = fake_calc_ticks
+        obj._calculate_slippage_protection_for_mint = fake_slippage_for_mint
+        obj.contract_interact = fake_contract_interact
+        obj.context.state.round_sequence = rs
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
+            result = _drive(gen)
+            assert result == ("0xmint_hash", "0xpm")
+
+    def test_tick_lower_none_returns_error(self) -> None:
+        """Test enter when tick_lower=None returns error."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_calc_ticks(addr, chain):
+            yield
+            return None, 887220
+
+        obj._calculate_tick_lower_and_upper = fake_calc_ticks
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
+            result = _drive(gen)
+            assert result == (None, None)
+
+    def test_tick_upper_none_returns_error(self) -> None:
+        """Test enter when tick_upper=None returns error."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_calc_ticks(addr, chain):
+            yield
+            return -887220, None
+
+        obj._calculate_tick_lower_and_upper = fake_calc_ticks
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.enter(
+                pool_address="0xpool",
+                safe_address="0xsafe",
+                assets=["0xa", "0xb"],
+                chain="optimism",
+                max_amounts_in=[100, 200],
+                pool_fee=3000,
+            )
+            result = _drive(gen)
+            assert result == (None, None)
+
     def test_slippage_protection_fails(self) -> None:
         """Test enter when slippage protection returns None."""
         obj = _make_behaviour()

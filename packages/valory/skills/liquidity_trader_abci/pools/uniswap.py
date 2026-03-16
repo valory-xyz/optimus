@@ -120,7 +120,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(
             pool_address, chain
         )
-        if not tick_lower or not tick_upper:
+        if tick_lower is None or tick_upper is None:
             return None, None
 
         # Calculate slippage protection using TickMath utilities

@@ -101,7 +101,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         total_actual_apr = actual_apr_data.get("total_actual_apr")
         adjusted_apr = actual_apr_data.get("adjusted_apr")
 
-        if not total_actual_apr:
+        if total_actual_apr is None:
             return
 
         # Get agent_hash from environment

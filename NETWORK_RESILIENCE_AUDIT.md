@@ -146,7 +146,7 @@ Balance fetch failure → empty/incomplete token balances → FetchStrategiesRou
 
 | | |
 |---|---|
-| **Base URL** | **Hardcoded**: `https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2`, `https://explorer.mode.network/api` |
+| **Base URL** | **Hardcoded**: `explorer-mode-mainnet-0.t.conduit.xyz/api/v2`, `explorer.mode.network/api` |
 | **Called from** | `fetch_strategies.py:3420,3556,4524,4631` (sync `requests.get`), `base.py:706` (framework path) |
 | **Method** | GET |
 | **Purpose** | Token transfers, ERC-20 balances on Mode chain |

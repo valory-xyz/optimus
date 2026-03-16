@@ -16,7 +16,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 - dvilela/genai:0.1.0:bafybeieuwwoww4scfzs7ljzlmotldu5jp24o4h235qy54ovliwxf6zjxai
 - dvilela/kv_store:0.1.0:bafybeihmppbeo5gh3w7gnr3vff6u4qlurt3dhxd4cn4mnrzyhnrxdr336u
-- valory/mirror_db:0.1.0:bafybeidj7jdv3ojcrjzgltr4efoimcvjmhk2wjh2lvegyyjobnfwtxj5x4
+- valory/mirror_db:0.1.0:bafybeickaytigebxoabjmcrxibktwwm5zdzxvqhl7bp4sqx6wpacmueoe4
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeico3uzjdwumf2jg2e627ut4rwzwmedjavenw6e2hshi2m6yw642bq
@@ -52,18 +52,18 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeia36n7ci7b6pi2bpa4r4ty6dcb3r4vs46vjftolsdxfl4y5iieyyy
 - valory/abstract_round_abci:0.1.0:bafybeiaalla55aprhvoumv4u7qt4v6l53fjmgln6wgyjr5e5tw7u4kscja
 - valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
-- valory/liquidity_trader_abci:0.1.0:bafybeie7rt4y37c3vfamnqkrs4wqep4j2s5ry7msdkxp3luy54a67vrvjy
-- valory/optimus_abci:0.1.0:bafybeifcw5l5irjwqq6hjbqdcgxe32n5ekkx4lpl3ggewf3ctn6dyjp5vi
+- valory/liquidity_trader_abci:0.1.0:bafybeiemmo4grqvyc5ikbaxfg5thgvrkrmkdqop64mizx5e7zfhv5hb32u
+- valory/optimus_abci:0.1.0:bafybeifdjho64u7q4s5aaqwek4kklrs5nmirdpe7t7zhpxuonqbngozyue
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 customs:
-- valory/merkl_pools_search:0.1.0:bafybeiha2kwudpl7p56dwzu67qdrqv4j643qoricmlpci6nde25zf3ajju
+- valory/merkl_pools_search:0.1.0:bafybeia3sgiwgziklshidalvex5f2h5osee6te7kp7vxicnqkq773vvkjy
 - valory/max_apr_selection:0.1.0:bafybeibktrritn4yv44dz3yxnzhyhfuqvzkjc6yis7idk54egc6q3y4wcm
-- valory/balancer_pools_search:0.1.0:bafybeiams7ylue6ejm43sfsnidtujwcv5bzemcleaa2bdtmgvhync23xai
-- valory/uniswap_pools_search:0.1.0:bafybeie22lvu6pfil6siqr5ihirwrjnctq7c2y53l76wrfcblg27ci76ce
-- valory/asset_lending:0.1.0:bafybeia34jkizwh53yna3k6dk43doovohiawflrcz5pnl64oqmuuje53sy
+- valory/balancer_pools_search:0.1.0:bafybeia46f5zotbjapfha4tkw2fzb7zsbjmoqzcmmvbxxiwprr6ollsydq
+- valory/uniswap_pools_search:0.1.0:bafybeibibvvg26qtxcepoaj3cuvrs5igpyuylzwuoca4bm2j6zyt54ne5a
+- valory/asset_lending:0.1.0:bafybeib5qxeldoxn2376om4fsdusllkv32ynytvzjze2be5zji2vhuhk54
 - valory/velodrome_pools_search:0.1.0:bafybeiffi6zxzv2oins6465zpwa2udf2zf4vfs7tmrsbgp2k42nf4klsja
 default_ledger: ethereum
 required_ledgers:

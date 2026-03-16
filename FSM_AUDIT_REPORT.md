@@ -40,7 +40,7 @@ No findings.
 ### H3b: Missing timeout on `session.get()` in CoinGecko Client -- FIXED (2026-03-16)
 - **File:** `packages/valory/skills/liquidity_trader_abci/models.py:243`
 - **Issue:** While the session leak was fixed (H3 above), the `session.get(url, headers=headers)` call still had no `timeout` parameter. If the CoinGecko server is unresponsive, this blocks the agent indefinitely.
-- **Fix applied:** Added `timeout=30` to the `session.get()` call.
+- **Fix applied:** Added configurable `request_timeout` parameter to the `Coingecko` model (default: 10s, shorter than round timeout). Used in the `session.get()` call.
 
 ---
 

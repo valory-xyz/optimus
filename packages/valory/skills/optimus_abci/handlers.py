@@ -499,7 +499,9 @@ class HttpHandler(BaseHttpHandler):
             }
 
             response = requests.get(
-                self.context.params.lifi_quote_to_amount_url, params=params, timeout=30
+                self.context.params.lifi_quote_to_amount_url,
+                params=params,
+                timeout=self.context.params.request_timeout,
             )
 
             if response.status_code == 200:

@@ -240,7 +240,9 @@ class Coingecko(Model, TypeCheckMixin):
                 url = self.coingecko_server_base_url + endpoint
 
             with session:
-                response = session.get(url, headers=headers, timeout=30)
+                response = session.get(
+                    url, headers=headers, timeout=self.context.params.request_timeout
+                )
                 success = response.status_code in HTTP_OK
                 return success, response.json()
         except Exception as exc:
@@ -438,6 +440,7 @@ class Params(BaseParams):
         self.stoploss_threshold_multiplier = kwargs.get(
             "stoploss_threshold_multiplier", 0.43
         )
+        self.request_timeout: float = self._ensure("request_timeout", kwargs, float)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

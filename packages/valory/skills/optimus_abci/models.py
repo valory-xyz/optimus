@@ -81,7 +81,6 @@ class Params(  # pylint: disable=too-many-ancestors
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Init"""
         self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
-        self.request_timeout: float = self._ensure("request_timeout", kwargs, float)
         super().__init__(*args, **kwargs)
 
 

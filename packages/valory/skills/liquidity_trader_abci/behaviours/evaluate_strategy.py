@@ -23,6 +23,7 @@ import asyncio
 import json
 import math
 import os
+import time as time_module
 import traceback
 from concurrent.futures import Future
 from typing import (
@@ -134,6 +135,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.send_actions()
                 return
 
+            # Check strategy evaluation backoff
+            if self._is_in_strategy_backoff():
+                yield from self.send_actions()
+                return
+
             # Check if we have a cached Velodrome CL pool opportunity to reuse
             cached_opportunity_result = (
                 yield from self._check_and_use_cached_cl_opportunity()
@@ -155,6 +161,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                 # Push opportunity data to MirrorDB
                 yield from self._push_opportunity_metrics_to_mirrordb()
+
+            # Track backoff state based on whether we produced actionable results
+            self._update_strategy_backoff(actions)
 
             # Send final actions
             yield from self.send_actions(actions)
@@ -1260,6 +1269,62 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return True
 
+    def _is_in_strategy_backoff(self) -> bool:
+        """Check if strategy evaluation should be skipped due to backoff."""
+        state = self.shared_state
+        if state.consecutive_no_action_count == 0:
+            return False
+
+        base = self.params.strategy_backoff_base_seconds
+        max_backoff = self.params.strategy_backoff_max_seconds
+        backoff_seconds = min(
+            base * (2 ** (state.consecutive_no_action_count - 1)),
+            max_backoff,
+        )
+        elapsed = time_module.time() - state.last_strategy_evaluation_time
+        if elapsed < backoff_seconds:
+            remaining = backoff_seconds - elapsed
+            self.context.logger.info(
+                f"Strategy evaluation in backoff: {state.consecutive_no_action_count} "
+                f"consecutive cycles with no actionable result. "
+                f"Next evaluation in {remaining:.0f}s "
+                f"(backoff {backoff_seconds:.0f}s)."
+            )
+            return True
+
+        self.context.logger.info(
+            f"Strategy backoff period elapsed after {elapsed:.0f}s. "
+            f"Retrying strategy evaluation "
+            f"(attempt after {state.consecutive_no_action_count} failures)."
+        )
+        return False
+
+    def _update_strategy_backoff(self, actions: Optional[List[Any]]) -> None:
+        """Update backoff state based on strategy evaluation outcome."""
+        state = self.shared_state
+        state.last_strategy_evaluation_time = time_module.time()
+
+        if actions:
+            if state.consecutive_no_action_count > 0:
+                self.context.logger.info(
+                    f"Strategy backoff reset: actionable result found "
+                    f"after {state.consecutive_no_action_count} empty cycles."
+                )
+            state.consecutive_no_action_count = 0
+        else:
+            state.consecutive_no_action_count += 1
+            base = self.params.strategy_backoff_base_seconds
+            max_backoff = self.params.strategy_backoff_max_seconds
+            next_backoff = min(
+                base * (2 ** (state.consecutive_no_action_count - 1)),
+                max_backoff,
+            )
+            self.context.logger.info(
+                f"No actionable strategy result "
+                f"({state.consecutive_no_action_count} consecutive). "
+                f"Next retry in {next_backoff:.0f}s."
+            )
+
     def update_position_metrics(self) -> None:
         """Update metrics for all open positions."""
         if not self.positions_eligible_for_exit:
@@ -1600,6 +1665,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         if self.coingecko.use_x402
                         else None
                     ),
+                    "price_cache_ttl": self.params.strategy_price_cache_ttl,
                 }
             )
             strategy_kwargs_list.append((next_strategy, kwargs))

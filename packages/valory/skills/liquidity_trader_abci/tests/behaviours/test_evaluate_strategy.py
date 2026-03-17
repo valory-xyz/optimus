@@ -59,6 +59,9 @@ def _mk(**overrides):
     params.dex_type_to_strategy = {"velodrome": "strategy_a"}
     params.velodrome_voter_contract_addresses = {"optimism": "0x" + "cc" * 20}
     params.min_investment_amount = 1.0
+    params.strategy_backoff_base_seconds = 1800
+    params.strategy_backoff_max_seconds = 14400
+    params.strategy_price_cache_ttl = 1800
 
     synced = MagicMock()
     synced.positions = []
@@ -77,6 +80,8 @@ def _mk(**overrides):
     shared_state.synchronized_data = synced
     shared_state.strategies_executables = {}
     shared_state.strategy_to_filehash = {}
+    shared_state.consecutive_no_action_count = 0
+    shared_state.last_strategy_evaluation_time = 0.0
     ctx.state = shared_state
 
     obj.__dict__.update(
@@ -6663,3 +6668,109 @@ class TestTrackOpportunitiesStages:
                 b._track_opportunities([{"pool_address": "0x1"}], "final_selection"),
                 sends=[None] * 10,
             )
+
+
+class TestIsInStrategyBackoff:
+    """Tests for _is_in_strategy_backoff."""
+
+    def test_no_backoff_when_count_zero(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 0
+        assert b._is_in_strategy_backoff() is False
+
+    def test_in_backoff_when_within_window(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 1
+        b.shared_state.last_strategy_evaluation_time = time.time()  # just now
+        assert b._is_in_strategy_backoff() is True
+        b.context.logger.info.assert_called()
+
+    def test_backoff_elapsed(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 1
+        # Set last eval far in the past (base=1800s, so 2000s ago is enough)
+        b.shared_state.last_strategy_evaluation_time = time.time() - 2000
+        assert b._is_in_strategy_backoff() is False
+        b.context.logger.info.assert_called()
+
+    def test_exponential_growth_capped(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 10  # 2^9 * 1800 >> max
+        b.shared_state.last_strategy_evaluation_time = time.time()
+        assert b._is_in_strategy_backoff() is True
+
+
+class TestUpdateStrategyBackoff:
+    """Tests for _update_strategy_backoff."""
+
+    def test_actions_present_resets_count(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 5
+        b._update_strategy_backoff([{"action": "enter"}])
+        assert b.shared_state.consecutive_no_action_count == 0
+        assert b.shared_state.last_strategy_evaluation_time > 0
+
+    def test_actions_present_logs_reset_when_count_was_nonzero(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 3
+        b._update_strategy_backoff([{"action": "enter"}])
+        b.context.logger.info.assert_called()
+        assert b.shared_state.consecutive_no_action_count == 0
+
+    def test_no_actions_increments_count(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 0
+        b._update_strategy_backoff(None)
+        assert b.shared_state.consecutive_no_action_count == 1
+        b.context.logger.info.assert_called()
+
+    def test_no_actions_increments_from_existing(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 4
+        b._update_strategy_backoff([])
+        assert b.shared_state.consecutive_no_action_count == 5
+
+    def test_empty_list_treated_as_no_actions(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 0
+        b._update_strategy_backoff([])
+        assert b.shared_state.consecutive_no_action_count == 1
+
+    def test_actions_present_with_zero_count_no_reset_log(self):
+        b = _mk()
+        b.shared_state.consecutive_no_action_count = 0
+        b.context.logger.info.reset_mock()
+        b._update_strategy_backoff([{"action": "enter"}])
+        # Should NOT log the "backoff reset" message since count was 0
+        for call in b.context.logger.info.call_args_list:
+            assert "backoff reset" not in str(call).lower()
+
+
+class TestAsyncActBackoff:
+    """Test that async_act exits early when in backoff."""
+
+    @staticmethod
+    def _make_send_actions():
+        calls = []
+
+        def send_actions(actions=None):
+            calls.append(actions)
+            yield
+
+        return send_actions, calls
+
+    def test_backoff_causes_early_return(self):
+        b = _mk()
+        b._read_investing_paused = _gen_return(False)
+        b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
+        b._apply_tip_filters_to_exit_decisions = _gen_return((True, []))
+        b.check_funds = MagicMock(return_value=True)
+        # Set backoff state: 1 consecutive failure, just happened
+        b.shared_state.consecutive_no_action_count = 1
+        b.shared_state.last_strategy_evaluation_time = time.time()
+        send_actions, calls = self._make_send_actions()
+        b.send_actions = send_actions
+        _drive(b.async_act(), sends=[None] * 10)
+        # send_actions called once with no args (early return)
+        assert len(calls) == 1
+        assert calls[0] is None

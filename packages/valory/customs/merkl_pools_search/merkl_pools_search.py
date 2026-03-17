@@ -93,7 +93,12 @@ def highest_apr_opportunity(
         }
         api_url = f"{base_url}?{urlencode(query_params, doseq=True)}"
 
-        response = requests.get(api_url, headers={"accept": "application/json"})
+        try:
+            response = requests.get(
+                api_url, headers={"accept": "application/json"}, timeout=30
+            )
+        except requests.RequestException as e:
+            return {"error": f"Request failed for url {api_url}: {e}"}
 
         if response.status_code not in HTTP_OK:
             return {
@@ -258,11 +263,15 @@ def highest_apr_opportunity(
         if not url:
             return {"error": f"GraphQL endpoint not found for chain {chain}."}
 
-        response = requests.post(
-            url,
-            json={"query": query},
-            headers={"Content-Type": "application/json"},
-        )
+        try:
+            response = requests.post(
+                url,
+                json={"query": query},
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            )
+        except requests.RequestException as e:
+            return {"error": f"GraphQL request failed for chain {chain}: {e}"}
         if response.status_code not in HTTP_OK:
             return {
                 "error": f"Could not retrieve data from GraphQL endpoint. Status code {response.status_code}."
@@ -273,7 +282,7 @@ def highest_apr_opportunity(
             if res is None:
                 return {"error": "No data returned from GraphQL endpoint."}
 
-            pools = res.get("data", {}).get("pools", [])
+            pools = (res.get("data") or {}).get("pools", [])
             if pools:
                 return {detail: pools[0].get(detail)}
             return {"error": "No pools found in GraphQL response."}

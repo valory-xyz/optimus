@@ -395,6 +395,58 @@ class TestCalculateAndStoreApr:
         result = _drive(gen)
         assert result is None
 
+    def test_zero_total_actual_apr_is_valid(self) -> None:
+        """Test that total_actual_apr=0.0 does NOT trigger early return."""
+        obj = _make_behaviour()
+        obj.portfolio_data = {"portfolio_value": 100, "volume": 50}
+        obj.current_positions = [{"timestamp": 1700000000}]
+
+        shared = MagicMock()
+        shared.trading_type = "balanced"
+        shared.selected_protocols = ["uniswap"]
+
+        def fake_calc_actual_apr(pv):
+            yield
+            return {"total_actual_apr": 0.0, "adjusted_apr": 0.0}
+
+        def fake_create_agent_attr(agent_id, attr_def_id, data):
+            yield
+            return {"id": "attr1"}
+
+        def fake_write_kv(data):
+            yield
+
+        obj.calculate_actual_apr = fake_calc_actual_apr
+        obj._create_portfolio_snapshot = MagicMock(return_value={"snap": True})
+        obj._get_apr_calculation_metrics = MagicMock(return_value={"m": 1})
+        obj._get_current_timestamp = MagicMock(return_value=1700000000)
+        obj.create_agent_attribute = fake_create_agent_attr
+        obj._write_kv = fake_write_kv
+
+        with patch.object(
+            type(obj), "shared_state", new_callable=PropertyMock, return_value=shared
+        ):
+            gen = obj._calculate_and_store_apr("a1", "ad1")
+            _drive(gen)
+            # Should NOT return early; should log stored APR data
+            obj.context.logger.info.assert_called()
+
+    def test_none_total_actual_apr_returns_early(self) -> None:
+        """Test that total_actual_apr=None triggers early return."""
+        obj = _make_behaviour()
+        obj.portfolio_data = {"portfolio_value": 100}
+
+        def fake_calc_actual_apr(pv):
+            yield
+            return {"total_actual_apr": None, "adjusted_apr": 5.0}
+
+        obj.calculate_actual_apr = fake_calc_actual_apr
+        obj._create_portfolio_snapshot = MagicMock(return_value={})
+
+        gen = obj._calculate_and_store_apr("a1", "ad1")
+        result = _drive(gen)
+        assert result is None
+
     def test_success(self) -> None:
         """Test full success path."""
         obj = _make_behaviour()

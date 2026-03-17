@@ -801,6 +801,30 @@ class TestHttpHandlerMethods:
             result = handler._get_withdrawal_actions()
         assert result == []
 
+    def test_get_withdrawal_actions_pre_fsm_attribute_error(self) -> None:
+        """Test _get_withdrawal_actions returns [] before FSM init."""
+        handler, ctx = _make_http_handler()
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            side_effect=AttributeError("FSM not initialized"),
+        ):
+            result = handler._get_withdrawal_actions()
+        assert result == []
+
+    def test_get_withdrawal_actions_pre_fsm_value_error(self) -> None:
+        """Test _get_withdrawal_actions returns [] on ValueError."""
+        handler, ctx = _make_http_handler()
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            side_effect=ValueError("no round"),
+        ):
+            result = handler._get_withdrawal_actions()
+        assert result == []
+
     def test_get_password_from_args_with_flag(self) -> None:
         """Test _get_password_from_args with --password flag."""
         handler, _ = _make_http_handler()
@@ -3421,3 +3445,67 @@ class TestHttpHandlerMethods:
             handler._handle_get_withdrawal_status(MagicMock(), MagicMock(), "abc-123")
         call_data = handler._send_ok_response.call_args[0][2]
         assert call_data["status"] == "initiated"
+
+    def test_handle_get_health_pre_fsm_attribute_error(self) -> None:
+        """Test _handle_get_health when synchronized_data raises AttributeError (pre-FSM)."""
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        mock_round_seq = MagicMock()
+        mock_round_seq._last_round_transition_timestamp = None
+        mock_round_seq._abci_app = None
+        ctx.state.round_sequence = mock_round_seq
+        ctx.state.agent_reasoning = None
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            side_effect=AttributeError("no synchronized_data yet"),
+        ):
+            handler._handle_get_health(MagicMock(), MagicMock())
+        handler._send_ok_response.assert_called_once()
+        call_data = handler._send_ok_response.call_args[0][2]
+        assert call_data["period"] is None
+
+    def test_handle_get_health_pre_fsm_value_error(self) -> None:
+        """Test _handle_get_health when synchronized_data raises ValueError (pre-FSM)."""
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        mock_round_seq = MagicMock()
+        mock_round_seq._last_round_transition_timestamp = None
+        mock_round_seq._abci_app = None
+        ctx.state.round_sequence = mock_round_seq
+        ctx.state.agent_reasoning = None
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            side_effect=ValueError("not ready"),
+        ):
+            handler._handle_get_health(MagicMock(), MagicMock())
+        handler._send_ok_response.assert_called_once()
+        call_data = handler._send_ok_response.call_args[0][2]
+        assert call_data["period"] is None
+
+    def test_handle_get_health_tm_unhealthy_is_none(self) -> None:
+        """Test _handle_get_health when is_tm_unhealthy is None reports is_tm_healthy as None."""
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        mock_round_seq = MagicMock()
+        # No transition timestamp means is_tm_unhealthy stays None
+        mock_round_seq._last_round_transition_timestamp = None
+        mock_round_seq._abci_app = None
+        ctx.state.round_sequence = mock_round_seq
+        ctx.state.agent_reasoning = None
+        mock_synced = MagicMock()
+        mock_synced.period_count = 0
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
+        ):
+            handler._handle_get_health(MagicMock(), MagicMock())
+        handler._send_ok_response.assert_called_once()
+        call_data = handler._send_ok_response.call_args[0][2]
+        # When is_tm_unhealthy is None, is_tm_healthy should be None, not True
+        assert call_data["is_tm_healthy"] is None

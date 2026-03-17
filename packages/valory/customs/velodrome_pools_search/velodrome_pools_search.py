@@ -2049,7 +2049,9 @@ def get_coin_id_from_address(
 
                 # Make the request using x402
                 endpoint = f"coins/{platform}/contract/{address}"
-                response = cg.session.get(f"{cg.api_base_url}{endpoint}")
+                response = cg.session.get(
+                    f"{cg.api_base_url}{endpoint}", timeout=30
+                )
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -2601,13 +2603,18 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
 
         # Add tokens (pools always have at least 2 tokens after filtering)
         tokens = pool.get("inputTokens", [])
+        if len(tokens) < 2:
+            logger.warning(
+                f"Pool {pool.get('id')} has fewer than 2 tokens, skipping"
+            )
+            continue
         formatted_pool["token0"] = tokens[0]["id"]
         formatted_pool["token0_symbol"] = tokens[0]["symbol"]
         formatted_pool["token1"] = tokens[1]["id"]
         formatted_pool["token1_symbol"] = tokens[1]["symbol"]
-        
+
         # Calculate advanced metrics if we have the necessary data
-        if coingecko_api_key or (x402_session and x402_proxy) and len(tokens) >= 2:
+        if coingecko_api_key or (x402_session and x402_proxy):
             # Calculate Sharpe ratio
             try:
                 sharpe_ratio = get_velodrome_pool_sharpe_ratio(

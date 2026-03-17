@@ -54,7 +54,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     INTEGRATOR,
     LiquidityTraderBaseBehaviour,
     MAX_RETRIES_FOR_ROUTES,
+    MAX_RETRIES_FOR_STATUS_CHECK,
     MAX_STEP_COST_RATIO,
+    MAX_SWAP_CONFIRMATION_RETRIES,
     MIN_TIME_IN_POSITION,
     PositionStatus,
     SAFE_TX_GAS,
@@ -345,13 +347,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
         """Wait for swap confirmation."""
         self.context.logger.info("Waiting for tx to get executed")
-        while True:
+        for _ in range(MAX_SWAP_CONFIRMATION_RETRIES):
             yield from self.sleep(self.params.waiting_period_for_status_check)
             decision = yield from self.get_decision_on_swap()
             self.context.logger.info(f"Action to take {decision}")
             if decision != Decision.WAIT:
-                break
-        return decision
+                return decision
+        self.context.logger.error(
+            f"Swap confirmation retries exhausted after "
+            f"{MAX_SWAP_CONFIRMATION_RETRIES} attempts"
+        )
+        return Decision.EXIT
 
     def _update_assets_after_swap(
         self, actions, last_executed_action_index
@@ -1016,6 +1022,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
         self.context.logger.info(f"checking status from endpoint {url}")
 
+        retries = 0
         while True:
             response = yield from self.get_http_response(
                 method="GET",
@@ -1024,6 +1031,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if response.status_code in HTTP_NOT_FOUND:
+                retries += 1
+                if retries >= MAX_RETRIES_FOR_STATUS_CHECK:
+                    self.context.logger.error(
+                        f"Max retries ({MAX_RETRIES_FOR_STATUS_CHECK}) exceeded "
+                        f"for status check on tx {tx_hash}. "
+                        f"Last message: {response.body}"
+                    )
+                    return None, None
                 self.context.logger.warning(f"Message {response.body}. Retrying..")
                 yield from self.sleep(self.params.waiting_period_for_status_check)
                 continue
@@ -1047,7 +1062,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             status = tx_status.get("status")
             sub_status = tx_status.get("substatus")
 
-            if not status and sub_status:
+            if not status and not sub_status:
                 self.context.logger.error("No status or sub_status found in response")
                 return None, None
 
@@ -2009,7 +2024,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 data_key="amount",
                 chain_id=chain,
             )
-            if not amount:
+            if amount is None:
                 self.context.logger.error("Error fetching max withdraw amount")
                 return None, None, None
 
@@ -2399,7 +2414,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             try:
                 response_data = json.loads(response.body)
                 self.context.logger.error(
-                    f"[LiFi API Error Message] Error encountered: {response_data['message']}"
+                    f"[LiFi API Error Message] Error encountered: {response_data.get('message', 'Unknown error')}"
                 )
             except (ValueError, TypeError) as e:
                 self.context.logger.error(

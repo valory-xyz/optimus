@@ -106,23 +106,23 @@ class GenericMirrorDBConnection(Connection):
 
     # Registry of valid endpoint patterns (using regex patterns)
     _VALID_ENDPOINTS = {
-        r"^api/[a-zA-Z0-9_-]+/?$",                  # Base resources
-        r"^api/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/?$",   # Specific resource by ID
-        r"^api/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/?$"  # Nested resources
+        r"^api/[a-zA-Z0-9_-]+/?$",  # Base resources
+        r"^api/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/?$",  # Specific resource by ID
+        r"^api/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/?$",  # Nested resources
     }
-    
+
     # List of allowed methods that can be called via the SRR protocol
     _ALLOWED_METHODS = {
         "create_",
         "read_",
         "update_",
-        "delete_", 
+        "delete_",
     }
-    
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize the connection.
-        
+
         :param args: positional arguments passed to component base
         :param kwargs: keyword arguments passed to component base
         """
@@ -134,7 +134,7 @@ class GenericMirrorDBConnection(Connection):
         self._response_envelopes: Optional[asyncio.Queue] = None
         self.task_to_request: Dict[asyncio.Future, Envelope] = {}
         self.ssl_context = ssl.create_default_context(cafile=certifi.where())
-        
+
         # Store all configuration in a single dictionary
         self._config = {
             # "api_key": self.api_key,
@@ -146,7 +146,7 @@ class GenericMirrorDBConnection(Connection):
     def response_envelopes(self) -> asyncio.Queue:
         """
         Returns the response envelopes queue.
-        
+
         :return: The queue of response envelopes
         :raises ValueError: If the queue is not initialized
         """
@@ -159,19 +159,20 @@ class GenericMirrorDBConnection(Connection):
     async def connect(self) -> None:
         """
         Connect to the backend service.
-        
+
         Sets up the response queue and initializes the HTTP session.
         """
         self._response_envelopes = asyncio.Queue()
         self.session = aiohttp.ClientSession(
-            connector=aiohttp.TCPConnector(ssl=self.ssl_context)
+            connector=aiohttp.TCPConnector(ssl=self.ssl_context),
+            timeout=aiohttp.ClientTimeout(total=30),
         )
         self.state = ConnectionStates.connected
 
     async def disconnect(self) -> None:
         """
         Disconnect from the backend service.
-        
+
         Closes the HTTP session and cleans up resources.
         """
         if self.is_disconnected:
@@ -195,7 +196,7 @@ class GenericMirrorDBConnection(Connection):
     ) -> Optional[Union["Envelope", None]]:
         """
         Receive an envelope.
-        
+
         :param args: Arguments for the receive method
         :param kwargs: Keyword arguments for the receive method
         :return: The received envelope or None
@@ -205,7 +206,7 @@ class GenericMirrorDBConnection(Connection):
     async def send(self, envelope: Envelope) -> None:
         """
         Send an envelope.
-        
+
         :param envelope: The envelope to send
         """
         task = self._handle_envelope(envelope)
@@ -215,7 +216,7 @@ class GenericMirrorDBConnection(Connection):
     def _handle_envelope(self, envelope: Envelope) -> asyncio.Task:
         """
         Handle incoming envelopes by dispatching background tasks.
-        
+
         :param envelope: The envelope to handle
         :return: The task handling the envelope
         """
@@ -229,7 +230,7 @@ class GenericMirrorDBConnection(Connection):
     ) -> SrrMessage:
         """
         Prepare error message.
-        
+
         :param srr_message: The original message
         :param dialogue: The dialogue
         :param error: The error message
@@ -249,7 +250,7 @@ class GenericMirrorDBConnection(Connection):
     def _handle_done_task(self, task: asyncio.Future) -> None:
         """
         Process a completed task.
-        
+
         :param task: The completed task
         """
         request = self.task_to_request.pop(task)
@@ -271,7 +272,7 @@ class GenericMirrorDBConnection(Connection):
     ) -> SrrMessage:
         """
         Get response from the backend service.
-        
+
         :param srr_message: The request message
         :param dialogue: The dialogue
         :return: The response message
@@ -307,7 +308,7 @@ class GenericMirrorDBConnection(Connection):
         try:
             print(f"endpoint,payload : {endpoint,payload}")
         except UnicodeEncodeError:
-            safe_payload = str(payload).encode('ascii', 'replace').decode('ascii')
+            safe_payload = str(payload).encode("ascii", "replace").decode("ascii")
             print(f"endpoint,payload : {endpoint},{safe_payload}")
 
         try:
@@ -333,7 +334,7 @@ class GenericMirrorDBConnection(Connection):
     ) -> None:
         """
         Raise exception with relevant message based on the HTTP status code.
-        
+
         :param response: The HTTP response
         :param action: The action being performed (for error messages)
         :raises Exception: If the response status is not 200
@@ -348,7 +349,7 @@ class GenericMirrorDBConnection(Connection):
     async def create_(self, method_name: str, endpoint: str, data: Dict) -> Dict:
         """
         Create a resource using a POST request.
-        
+
         :param method_name: Name of the method for logging and error reporting
         :param endpoint: API endpoint to call
         :param data: The data to send in the request body
@@ -359,14 +360,16 @@ class GenericMirrorDBConnection(Connection):
             json=data,
             # headers={"access-token": f"{self.api_key}"},
         ) as response:
-            await self._raise_for_response(response, f"creating resource via {method_name}")
+            await self._raise_for_response(
+                response, f"creating resource via {method_name}"
+            )
             return await response.json()
 
     @retry_with_exponential_backoff()
     async def read_(self, method_name: str, endpoint: str) -> Dict:
         """
         Read a resource using a GET request.
-        
+
         :param method_name: Name of the method for logging and error reporting
         :param endpoint: API endpoint to call
         :return: Response from the API
@@ -375,14 +378,16 @@ class GenericMirrorDBConnection(Connection):
             f"{self.base_url}/{endpoint}",
             # headers={"access-token": f"{self.api_key}"},
         ) as response:
-            await self._raise_for_response(response, f"reading resource via {method_name}")
+            await self._raise_for_response(
+                response, f"reading resource via {method_name}"
+            )
             return await response.json()
 
     @retry_with_exponential_backoff()
     async def update_(self, method_name: str, endpoint: str, data: Dict) -> Dict:
         """
         Update a resource using a PUT request.
-        
+
         :param method_name: Name of the method for logging and error reporting
         :param endpoint: API endpoint to call
         :param data: The data to send in the request body
@@ -393,14 +398,16 @@ class GenericMirrorDBConnection(Connection):
             json=data,
             # headers={"access-token": f"{self.api_key}"},
         ) as response:
-            await self._raise_for_response(response, f"updating resource via {method_name}")
+            await self._raise_for_response(
+                response, f"updating resource via {method_name}"
+            )
             return await response.json()
 
     @retry_with_exponential_backoff()
     async def delete_(self, method_name: str, endpoint: str) -> Dict:
         """
         Delete a resource using a DELETE request.
-        
+
         :param method_name: Name of the method for logging and error reporting
         :param endpoint: API endpoint to call
         :return: Response from the API
@@ -409,5 +416,7 @@ class GenericMirrorDBConnection(Connection):
             f"{self.base_url}/{endpoint}",
             # headers={"access-token": f"{self.api_key}"},
         ) as response:
-            await self._raise_for_response(response, f"deleting resource via {method_name}")
+            await self._raise_for_response(
+                response, f"deleting resource via {method_name}"
+            )
             return await response.json()

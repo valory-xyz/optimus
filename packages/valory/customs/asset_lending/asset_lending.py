@@ -79,11 +79,13 @@ _thread_local = threading.local()
 _last_request_time = {}
 _request_lock = threading.Lock()
 
+
 def get_errors():
     """Get thread-local error list."""
-    if not hasattr(_thread_local, 'errors'):
+    if not hasattr(_thread_local, "errors"):
         _thread_local.errors = []
     return _thread_local.errors
+
 
 def throttled_request(url, min_interval=0.1):
     """Make a throttled HTTP request to prevent rate limiting."""
@@ -94,13 +96,14 @@ def throttled_request(url, min_interval=0.1):
             if elapsed < min_interval:
                 time.sleep(min_interval - elapsed)
         _last_request_time[url] = time.time()
-    
-    return requests.get(url)
+
+    return requests.get(url, timeout=30)
+
 
 def get_coin_list():
     global _coin_list_cache
     logger.info("Fetching coin list from CoinGecko")
-    
+
     with _coin_list_lock:
         if _coin_list_cache is None:
             url = "https://api.coingecko.com/api/v3/coins/list"
@@ -108,11 +111,13 @@ def get_coin_list():
                 response = throttled_request(url, 0.2)
                 response.raise_for_status()
                 _coin_list_cache = response.json()
-                logger.info(f"Successfully fetched {len(_coin_list_cache)} coins from CoinGecko")
-            except requests.RequestException as e:
+                logger.info(
+                    f"Successfully fetched {len(_coin_list_cache)} coins from CoinGecko"
+                )
+            except (requests.RequestException, ValueError) as e:
                 logger.error(f"Failed to fetch coin list: {e}")
                 get_errors().append(f"Failed to fetch coin list: {e}")
-                _coin_list_cache = []
+                return []
         return _coin_list_cache
 
 
@@ -121,7 +126,9 @@ def fetch_token_id(symbol):
     symbol = symbol.lower()
     # First check known mappings
     if symbol in coingecko_name_to_id:
-        logger.info(f"Found token ID in known mappings: {symbol} -> {coingecko_name_to_id[symbol]}")
+        logger.info(
+            f"Found token ID in known mappings: {symbol} -> {coingecko_name_to_id[symbol]}"
+        )
         return coingecko_name_to_id[symbol]
 
     coin_list = get_coin_list()
@@ -138,7 +145,7 @@ def fetch_token_id(symbol):
 def fetch_historical_data(limit: int = 720):
     global _historical_data_cache
     logger.info(f"Fetching historical data with limit: {limit}")
-    
+
     with _historical_data_lock:
         if _historical_data_cache is not None:
             logger.info("Using cached historical data")
@@ -148,15 +155,31 @@ def fetch_historical_data(limit: int = 720):
         one_month_ago_ms = current_time_ms - (30 * 24 * 60 * 60 * 1000)
         url = f"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/getV2AggregatorHistoricalData?last_time={one_month_ago_ms}&limit={limit}"
         logger.info(f"Fetching historical data from: {url}")
-        
-        response = throttled_request(url, 0.2)
-        if response.status_code != 200:
-            logger.error(f"Failed to fetch historical data. Status code: {response.status_code}")
+
+        try:
+            response = throttled_request(url, 0.2)
+        except requests.RequestException as e:
+            logger.error(f"Request failed fetching historical data: {e}")
             get_errors().append("Failed to fetch historical data from STURDY API.")
             return None
-        
-        _historical_data_cache = response.json()
-        logger.info(f"Successfully fetched historical data with {len(_historical_data_cache)} entries")
+        if response.status_code != 200:
+            logger.error(
+                f"Failed to fetch historical data. "
+                f"Status code: {response.status_code}"
+            )
+            get_errors().append("Failed to fetch historical data from STURDY API.")
+            return None
+
+        try:
+            _historical_data_cache = response.json()
+        except (ValueError, TypeError) as e:
+            logger.error(f"Failed to parse historical data response: {e}")
+            get_errors().append("Failed to parse historical data from STURDY API.")
+            return None
+        logger.info(
+            f"Successfully fetched historical data "
+            f"with {len(_historical_data_cache)} entries"
+        )
         return _historical_data_cache
 
 
@@ -235,7 +258,7 @@ def remove_irrelevant_fields(
 def fetch_aggregators() -> List[Dict[str, Any]]:
     global _aggregators_cache
     logger.info("Fetching aggregators from STURDY API")
-    
+
     with _aggregators_lock:
         if _aggregators_cache is not None:
             logger.info("Using cached aggregators data")
@@ -252,8 +275,10 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
                 _aggregators_cache = []
             else:
                 _aggregators_cache = result
-                logger.info(f"Successfully fetched {len(_aggregators_cache)} aggregators")
-        except requests.RequestException as e:
+                logger.info(
+                    f"Successfully fetched {len(_aggregators_cache)} aggregators"
+                )
+        except (requests.RequestException, ValueError) as e:
             logger.error(f"REST API request failed: {e}")
             get_errors().append(f"REST API request failed: {e}")
             _aggregators_cache = []
@@ -263,57 +288,63 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
 def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
     """
     Standardize APR and TVL using Z-score normalization and calculate composite scores.
-    
+
     Args:
         pools: List of pool dictionaries
         apr_weight: Weight for APR in composite score (0-1)
         tvl_weight: Weight for TVL in composite score (0-1)
-    
+
     Returns:
         List of pools with added standardized metrics and composite scores
     """
     if not pools:
         return pools
-    
+
     # Extract APR and TVL values
-    aprs = [pool.get('total_apr', 0) for pool in pools]
-    tvls = [pool.get('tvl', 0) for pool in pools]
-    
+    aprs = [pool.get("total_apr", 0) for pool in pools]
+    tvls = [pool.get("tvl", 0) for pool in pools]
+
     # Calculate means and standard deviations
     apr_mean = np.mean(aprs) if aprs else 0
     apr_std = np.std(aprs) if aprs else 1
     tvl_mean = np.mean(tvls) if tvls else 0
     tvl_std = np.std(tvls) if tvls else 1
-    
+
     # Avoid division by zero
     if apr_std == 0:
         apr_std = 1
     if tvl_std == 0:
         tvl_std = 1
-    
+
     # Standardize metrics and calculate composite scores
     for pool in pools:
-        apr = pool.get('total_apr', 0)
-        tvl = pool.get('tvl', 0)
-        
+        apr = pool.get("total_apr", 0)
+        tvl = pool.get("tvl", 0)
+
         # Z-score normalization
-        pool['apr_standardized'] = (apr - apr_mean) / apr_std
-        pool['tvl_standardized'] = (tvl - tvl_mean) / tvl_std
-        
+        pool["apr_standardized"] = (apr - apr_mean) / apr_std
+        pool["tvl_standardized"] = (tvl - tvl_mean) / tvl_std
+
         # Composite score with configurable weights
-        pool['composite_score'] = (
-            pool['apr_standardized'] * apr_weight + 
-            pool['tvl_standardized'] * tvl_weight
+        pool["composite_score"] = (
+            pool["apr_standardized"] * apr_weight
+            + pool["tvl_standardized"] * tvl_weight
         )
-    
+
     return pools
 
 
-def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
-                              min_tvl_threshold=1000, use_composite_filter=True):
+def apply_composite_pre_filter(
+    pools,
+    top_n=10,
+    apr_weight=0.7,
+    tvl_weight=0.3,
+    min_tvl_threshold=1000,
+    use_composite_filter=True,
+):
     """
     Apply composite pre-filtering to select top pools based on standardized APR and TVL.
-    
+
     Args:
         pools: List of pool dictionaries
         top_n: Number of top pools to select
@@ -321,53 +352,61 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3,
         tvl_weight: Weight for TVL in composite score
         min_tvl_threshold: Minimum TVL threshold for inclusion
         use_composite_filter: Whether to use composite filtering
-    
+
     Returns:
         List of filtered and ranked pools
     """
     if not pools or not use_composite_filter:
         logger.info("Skipping composite pre-filter")
         return pools[:top_n] if pools else []
-    
+
     logger.info(f"Starting composite pre-filter with {len(pools)} pools")
-    logger.info(f"Parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}")
-    
+    logger.info(
+        f"Parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}"
+    )
+
     # Filter by minimum TVL threshold with proper type conversion
     tvl_filtered = []
     for pool in pools:
         try:
-            tvl_value = float(pool.get('tvl', 0))
+            tvl_value = float(pool.get("tvl", 0))
             if tvl_value >= float(min_tvl_threshold):
                 tvl_filtered.append(pool)
         except (ValueError, TypeError):
             # Skip pools with invalid TVL values
-            logger.warning(f"Skipping pool with invalid TVL: {pool.get('address', 'unknown')}")
+            logger.warning(
+                f"Skipping pool with invalid TVL: {pool.get('address', 'unknown')}"
+            )
             continue
     logger.info(f"After TVL filter (>= {min_tvl_threshold}): {len(tvl_filtered)} pools")
-    
+
     if not tvl_filtered:
         logger.warning("No pools meet minimum TVL threshold")
         return []
-    
+
     # Apply standardization and composite scoring
     standardized_pools = standardize_metrics(tvl_filtered, apr_weight, tvl_weight)
-    
+
     # Sort by composite score (descending)
-    standardized_pools.sort(key=lambda x: x.get('composite_score', float('-inf')), reverse=True)
-    
+    standardized_pools.sort(
+        key=lambda x: x.get("composite_score", float("-inf")), reverse=True
+    )
+
     # Select top N pools
     final_selection = standardized_pools[:top_n]
     logger.info(f"Final selection: {len(final_selection)} pools")
-    
+
     # Log top pools for debugging
     for i, pool in enumerate(final_selection[:5]):
-        apr = pool.get('total_apr', 0)
-        tvl = pool.get('tvl', 0)
-        composite_score = pool.get('composite_score', 'N/A')
-        pool_address = pool.get('address', 'N/A')
-        
-        logger.info(f"Pool #{i+1}: {pool_address} - APR: {apr:.2f}%, TVL: ${tvl:,.0f}, Composite Score: {composite_score:.3f}")
-    
+        apr = pool.get("total_apr", 0)
+        tvl = pool.get("tvl", 0)
+        composite_score = pool.get("composite_score", "N/A")
+        pool_address = pool.get("address", "N/A")
+
+        logger.info(
+            f"Pool #{i+1}: {pool_address} - APR: {apr:.2f}%, TVL: ${tvl:,.0f}, Composite Score: {composite_score:.3f}"
+        )
+
     logger.info("Applied composite pre-filter")
     return final_selection
 
@@ -375,15 +414,17 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3,
 def filter_aggregators(
     chains, aggregators, lending_asset, current_positions, **kwargs
 ) -> List[Dict[str, Any]]:
-    logger.info(f"Filtering aggregators for chains: {chains}, lending_asset: {lending_asset}")
+    logger.info(
+        f"Filtering aggregators for chains: {chains}, lending_asset: {lending_asset}"
+    )
     logger.info(f"Total aggregators to filter: {len(aggregators)}")
     logger.info(f"Current positions to exclude: {current_positions}")
-    
+
     # Extract composite filtering parameters
-    top_n = kwargs.get('top_n', 10)
-    apr_weight = kwargs.get('apr_weight', 0.7)
-    tvl_weight = kwargs.get('tvl_weight', 0.3)
-    min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)    
+    top_n = kwargs.get("top_n", 10)
+    apr_weight = kwargs.get("apr_weight", 0.7)
+    tvl_weight = kwargs.get("tvl_weight", 0.3)
+    min_tvl_threshold = kwargs.get("min_tvl_threshold", 1000)
     filtered_aggregators = []
 
     # Filter by chain, asset, and exclude current_positions
@@ -399,7 +440,9 @@ def filter_aggregators(
                 aggregator["total_apr"] = total_apr
                 aggregator["tvl"] = tvl
                 filtered_aggregators.append(aggregator)
-                logger.info(f"Added aggregator: {aggregator.get('address')} with TVL: {tvl}, APR: {total_apr}")
+                logger.info(
+                    f"Added aggregator: {aggregator.get('address')} with TVL: {tvl}, APR: {total_apr}"
+                )
 
     logger.info(f"After initial filtering: {len(filtered_aggregators)} aggregators")
 
@@ -410,13 +453,13 @@ def filter_aggregators(
 
     # Apply composite pre-filtering
     filtered_aggregators = apply_composite_pre_filter(
-        filtered_aggregators, 
+        filtered_aggregators,
         top_n=top_n,
         apr_weight=apr_weight,
         tvl_weight=tvl_weight,
         min_tvl_threshold=min_tvl_threshold,
     )
-    
+
     return filtered_aggregators
 
 
@@ -426,7 +469,9 @@ def calculate_il_risk_score_for_lending(
     coingecko_api_key: str,
     time_period: int = 90,
 ) -> float:
-    logger.info(f"Calculating IL risk score for tokens: {asset_token_1}, {asset_token_2}")
+    logger.info(
+        f"Calculating IL risk score for tokens: {asset_token_1}, {asset_token_2}"
+    )
     if not asset_token_1 or not asset_token_2:
         logger.error("Tokens are required for IL risk score calculation")
         get_errors().append(
@@ -436,7 +481,7 @@ def calculate_il_risk_score_for_lending(
 
     is_pro = is_pro_api_key(coingecko_api_key)
     logger.info(f"Using {'pro' if is_pro else 'demo'} CoinGecko API")
-    
+
     if is_pro:
         cg = CoinGeckoAPI(api_key=coingecko_api_key)
     else:
@@ -463,10 +508,18 @@ def calculate_il_risk_score_for_lending(
         logger.error(f"Error fetching price data: {e}")
         get_errors().append(f"Error fetching price data: {e}")
         return None
-    
-    prices_1_data = np.array([x[1] for x in prices_1["prices"]])
-    prices_2_data = np.array([x[1] for x in prices_2["prices"]])
-    logger.info(f"Price data points: {len(prices_1_data)} for {asset_token_1}, {len(prices_2_data)} for {asset_token_2}")
+
+    try:
+        prices_1_data = np.array([x[1] for x in prices_1["prices"]])
+        prices_2_data = np.array([x[1] for x in prices_2["prices"]])
+    except (KeyError, TypeError) as e:
+        logger.error(f"Error parsing price data: {e}")
+        get_errors().append(f"Error parsing price data: {e}")
+        return None
+
+    logger.info(
+        f"Price data points: {len(prices_1_data)} for {asset_token_1}, {len(prices_2_data)} for {asset_token_2}"
+    )
 
     min_length = min(len(prices_1_data), len(prices_2_data))
     if min_length == 0:
@@ -493,7 +546,7 @@ def calculate_il_risk_score_for_lending(
 def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
     logger.info(f"Calculating IL risk score for silos with token0: {token0_symbol}")
     logger.info(f"Number of silos: {len(silos)}")
-    
+
     il_risk_scores = []
     token_id_cache = {}
 
@@ -520,14 +573,18 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
                 token_0_id, token_1_id, coingecko_api_key
             )
             if not il_risk_score:
-                logger.warning(f"Could not calculate IL risk score for silo: {token_1_symbol}")
+                logger.warning(
+                    f"Could not calculate IL risk score for silo: {token_1_symbol}"
+                )
                 return None
-            
+
             il_risk_scores.append(il_risk_score)
             logger.info(f"IL risk score for {token_1_symbol}: {il_risk_score}")
         else:
             logger.error(f"Failed to fetch token IDs for silo: {silo['collateral']}")
-            get_errors().append(f"Failed to fetch token IDs for silo: {silo['collateral']}")
+            get_errors().append(
+                f"Failed to fetch token IDs for silo: {silo['collateral']}"
+            )
 
     if not il_risk_scores:
         logger.warning("No IL risk scores calculated")
@@ -539,7 +596,9 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 
 
 def analyze_vault_liquidity(aggregator):
-    logger.info(f"Analyzing vault liquidity for aggregator: {aggregator.get('address')}")
+    logger.info(
+        f"Analyzing vault liquidity for aggregator: {aggregator.get('address')}"
+    )
     tvl = float(aggregator.get("tvl", 0))
     total_assets = float(aggregator.get("totalAssets", 0))
     logger.info(f"Initial TVL: {tvl}, Total Assets: {total_assets}")
@@ -558,7 +617,9 @@ def analyze_vault_liquidity(aggregator):
                 break
 
     if not tvl or not total_assets:
-        logger.error("Could not retrieve TVL and total assets for depth score calculation")
+        logger.error(
+            "Could not retrieve TVL and total assets for depth score calculation"
+        )
         get_errors().append("Could not retrieve depth score and maximum position size.")
         return float("nan"), float("nan")
 
@@ -570,7 +631,9 @@ def analyze_vault_liquidity(aggregator):
     liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
     max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
 
-    logger.info(f"Calculated depth score: {depth_score}, max position size: {max_position_size}")
+    logger.info(
+        f"Calculated depth score: {depth_score}, max position size: {max_position_size}"
+    )
     return depth_score, max_position_size
 
 
@@ -588,15 +651,17 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
         "sharpe_ratio": aggregator["sharpe_ratio"],
         "depth_score": aggregator["depth_score"],
         "max_position_size": aggregator["max_position_size"],
-        "type": aggregator["type"]
+        "type": aggregator["type"],
     }
 
 
 def get_best_opportunities(
     chains, lending_asset, current_positions, coingecko_api_key, **kwargs
 ) -> List[Dict[str, Any]]:
-    logger.info(f"Getting best opportunities for chains: {chains}, lending_asset: {lending_asset}")
-    
+    logger.info(
+        f"Getting best opportunities for chains: {chains}, lending_asset: {lending_asset}"
+    )
+
     data = fetch_aggregators()
     if not data:
         logger.error("Failed to fetch aggregators")
@@ -616,10 +681,14 @@ def get_best_opportunities(
         logger.error("Failed to fetch historical data")
         return {"error": get_errors()}
 
-    logger.info(f"Processing {len(filtered_aggregators)} aggregators for metrics calculation")
+    logger.info(
+        f"Processing {len(filtered_aggregators)} aggregators for metrics calculation"
+    )
     for i, aggregator in enumerate(filtered_aggregators):
-        logger.info(f"Processing aggregator {i+1}/{len(filtered_aggregators)}: {aggregator.get('address')}")
-        
+        logger.info(
+            f"Processing aggregator {i+1}/{len(filtered_aggregators)}: {aggregator.get('address')}"
+        )
+
         silos = aggregator.get("whitelistedSilos", [])
         aggregator["il_risk_score"] = calculate_il_risk_score_for_silos(
             aggregator["asset"]["symbol"], silos, coingecko_api_key
@@ -644,7 +713,7 @@ def calculate_metrics(
     position: Dict[str, Any], coingecko_api_key: str, **kwargs
 ) -> Optional[Dict[str, Any]]:
     logger.info(f"Calculating metrics for position: {position.get('pool_address')}")
-    
+
     il_risk_score = calculate_il_risk_score_for_silos(
         position.get("token0_symbol"),
         position.get("whitelistedSilos", []),
@@ -659,7 +728,7 @@ def calculate_metrics(
         historical_data, position["pool_address"]
     )
     depth_score, max_position_size = analyze_vault_liquidity(position)
-    
+
     metrics = {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
@@ -679,10 +748,7 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
     cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
     try:
         response = cg_pro.get_coin_market_chart_range_by_id(
-            id="bitcoin",
-            vs_currency="usd",
-            from_timestamp=0,
-            to_timestamp=0
+            id="bitcoin", vs_currency="usd", from_timestamp=0, to_timestamp=0
         )
         if response:
             logger.info("CoinGecko API key is pro")
@@ -693,10 +759,11 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
 
     return False
 
+
 def run(*_args, **kwargs) -> Any:
     logger.info("Starting asset lending strategy execution")
     logger.info(f"Received kwargs: {list(kwargs.keys())}")
-    
+
     missing = check_missing_fields(kwargs)
     if missing:
         logger.error(f"Required kwargs {missing} were not provided")
@@ -709,7 +776,7 @@ def run(*_args, **kwargs) -> Any:
 
     # Add lending_asset to required fields as during run time it is not present in the REQUIRED_FIELDS tuple
     required_fields.append("lending_asset")
-    
+
     if get_metrics:
         required_fields.append("position")
 
@@ -724,25 +791,26 @@ def run(*_args, **kwargs) -> Any:
         return {"error": get_errors()} if get_errors() else metrics
     else:
         logger.info("Finding best opportunities")
-        
+
         # Extract required positional arguments from kwargs
         chains = kwargs.pop("chains", [])
-        lending_asset = kwargs.pop("lending_asset", "0x4200000000000000000000000000000000000006")
+        lending_asset = kwargs.pop(
+            "lending_asset", "0x4200000000000000000000000000000000000006"
+        )
         current_positions = kwargs.pop("current_positions", [])
         coingecko_api_key = kwargs.pop("coingecko_api_key", "")
-        
+
         # Call get_best_opportunities with positional arguments and remaining kwargs
         result = get_best_opportunities(
             chains, lending_asset, current_positions, coingecko_api_key, **kwargs
         )
-        
+
         if isinstance(result, dict) and "error" in result:
             logger.error(f"Error in get_best_opportunities: {result['error']}")
             get_errors().append(result["error"])
         if not result:
             logger.warning("No suitable aggregators found")
             get_errors().append("No suitable aggregators found")
-        
-        
+
         logger.info(f"Successfully found opportunities: {result}")
         return {"result": result, "error": get_errors()}

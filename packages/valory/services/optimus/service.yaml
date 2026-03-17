@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeieflbtoxq6ayse6rzog7xya4uj6icvk2mfh5kzwe4gtgv3gezvepa
+agent: valory/optimus:0.1.0:bafybeihwrjcmjwerka5lrunld6vrdcxl663mtd7444hpjy6y4xeyorphga
 number_of_agents: 1
 deployment:
   agent:
@@ -57,7 +57,7 @@ models:
       max_healthcheck: 120
       multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       termination_sleep: ${TERMINATION_SLEEP:int:900}
-      reset_pause_duration: ${RESET_PAUSE_DURATION:int:300}
+      reset_pause_duration: ${RESET_PAUSE_DURATION:int:30}
       on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
       reset_tendermint_after: ${RESET_TENDERMINT_AFTER:int:30}
       retry_attempts: 400

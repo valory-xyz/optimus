@@ -98,6 +98,25 @@ class TestIpfsHandler:
         handler.context.ipfs_dialogues.update.assert_called_once_with(message)
         callback.assert_called_once_with(message, mock_dialogue)
 
+    def test_handle_files_stale_nonce(self) -> None:
+        """Test handle with FILES performative and stale nonce does not crash."""
+        handler = self._make_handler()
+        message = MagicMock(spec=IpfsMessage)
+        message.performative = IpfsMessage.Performative.FILES
+
+        mock_dialogue = MagicMock()
+        mock_dialogue.dialogue_label.dialogue_reference = ("stale_nonce", "")
+        handler.context.ipfs_dialogues.update.return_value = mock_dialogue
+
+        # Empty req_to_callback - the nonce is stale
+        handler.context.state.req_to_callback = {}
+
+        handler.handle(message)
+
+        assert handler.context.state.in_flight_req is False
+        handler.context.logger.warning.assert_called_once()
+        assert "stale_nonce" in str(handler.context.logger.warning.call_args)
+
 
 class TestKvStoreHandler:
     """Test KvStoreHandler class."""
@@ -157,6 +176,25 @@ class TestKvStoreHandler:
         handler.context.kv_store_dialogues.update.assert_called_once_with(message)
         callback.assert_called_once_with(message, mock_dialogue, key="value")
         assert handler.context.state.in_flight_req is False
+
+    def test_handle_success_stale_nonce(self) -> None:
+        """Test handle with SUCCESS performative and stale nonce does not crash."""
+        handler = self._make_handler()
+        message = MagicMock(spec=KvStoreMessage)
+        message.performative = KvStoreMessage.Performative.SUCCESS
+
+        mock_dialogue = MagicMock()
+        mock_dialogue.dialogue_label.dialogue_reference = ("stale_nonce", "")
+        handler.context.kv_store_dialogues.update.return_value = mock_dialogue
+
+        # Empty req_to_callback - the nonce is stale
+        handler.context.state.req_to_callback = {}
+
+        handler.handle(message)
+
+        assert handler.context.state.in_flight_req is False
+        handler.context.logger.warning.assert_called_once()
+        assert "stale_nonce" in str(handler.context.logger.warning.call_args)
 
     def test_handle_other_allowed_performative_calls_super(self) -> None:
         """Test handle with non-SUCCESS allowed performative calls super."""

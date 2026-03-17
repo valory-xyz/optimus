@@ -7926,3 +7926,176 @@ class TestTokenTransfersModeAmountZero:
             )
         )
         assert len(t) == 0
+
+
+class TestFetchTokenTransfersModeNetworkErrors:
+    """Test _fetch_token_transfers_mode handles network and parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_connection_error(self, m):
+        """Test that ConnectionError is caught and returns False."""
+        import requests as req_lib
+
+        m.side_effect = req_lib.ConnectionError("connection refused")
+        obj = _mk()
+        obj.funding_events = {}
+        result = _drive(
+            obj._fetch_token_transfers_mode(
+                "0xA", datetime(2025, 1, 1, tzinfo=timezone.utc), {}, False
+            )
+        )
+        assert result is False
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_json_decode_error(self, m):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        m.return_value = resp
+        obj = _mk()
+        obj.funding_events = {}
+        result = _drive(
+            obj._fetch_token_transfers_mode(
+                "0xA", datetime(2025, 1, 1, tzinfo=timezone.utc), {}, False
+            )
+        )
+        assert result is False
+
+
+class TestFetchEthTransfersModeNetworkErrors:
+    """Test _fetch_eth_transfers_mode handles network and parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_connection_error(self, m):
+        """Test that ConnectionError is caught and returns False."""
+        import requests as req_lib
+
+        m.side_effect = req_lib.ConnectionError("connection refused")
+        obj = _mk()
+        obj.funding_events = {}
+        result = obj._fetch_eth_transfers_mode("0xA", "2025-01-01", {}, False)
+        assert result is False
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_json_decode_error(self, m):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        m.return_value = resp
+        obj = _mk()
+        obj.funding_events = {}
+        result = obj._fetch_eth_transfers_mode("0xA", "2025-01-01", {}, False)
+        assert result is False
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_bad_block_timestamp(self, m):
+        """Test that a bad block_timestamp in balance entry is skipped."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {
+            "items": [
+                {
+                    "value": str(10**18),
+                    "delta": str(10**18),
+                    "transaction_hash": None,
+                    "block_timestamp": "not-a-date",
+                    "block_number": 1,
+                }
+            ],
+            "next_page_params": None,
+        }
+        m.return_value = resp
+        obj = _mk()
+        obj.funding_events = {}
+        transfers = {}
+        result = obj._fetch_eth_transfers_mode("0xA", "2025-01-01", transfers, True)
+        # Should not crash; the bad entry is skipped
+        assert result is True
+
+
+class TestTrackEthTransfersModeJsonError:
+    """Test _track_eth_transfers_mode handles JSON parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
+    )
+    def test_json_decode_error(self, mock_requests):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        mock_requests.get.return_value = resp
+        result = _mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")
+        assert result == {"incoming": {}, "outgoing": {}}
+
+
+class TestTrackErc20TransfersModeJsonError:
+    """Test _track_erc20_transfers_mode handles JSON parse errors."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
+    )
+    def test_json_decode_error(self, mock_requests):
+        """Test that JSONDecodeError from response.json() is caught."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        mock_requests.get.return_value = resp
+        result = _mk()._track_erc20_transfers_mode("0xSafe", 1704067200)
+        assert result == {"outgoing": {}}
+
+
+class TestTransferMissingFromKey:
+    """Test that transfer dicts with missing 'from' key do not crash."""
+
+    def _obj(self):
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        return o
+
+    def test_outgoing_transfer_missing_from_key(self):
+        """Transfer dict without 'from' key should not raise AttributeError."""
+        td = {
+            "executionDate": "2024-12-15T10:00:00Z",
+            "to": "0xR",
+            "type": "ETHER_TRANSFER",
+            "value": str(10**18),
+            "transactionHash": "0xH",
+        }
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01")
+        )
+        # Transfer without "from" should be silently skipped, no crash
+        assert isinstance(result, dict)
+
+    def test_erc20_transfer_missing_from_key(self):
+        """ERC20 transfer dict without 'from' key should not raise."""
+        td = {
+            "executionDate": "2024-01-01T10:00:00Z",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xT",
+            "value": "1000000",
+            "transactionHash": "0xH",
+            "to": "0xR",
+        }
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        result = _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # Transfer without "from" should be silently skipped, no crash
+        assert isinstance(result, dict)

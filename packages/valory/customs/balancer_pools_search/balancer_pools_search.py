@@ -1466,11 +1466,14 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     logger.info("Starting Balancer pools search execution")
     logger.info(f"Input parameters: {list(kwargs.keys())}")
 
-    # Apply configurable price cache TTL
+    # Apply configurable price cache TTL and shared cache dict
     price_cache_ttl = kwargs.pop("price_cache_ttl", None)
+    price_cache = kwargs.pop("price_cache", None)
+    global COINGECKO_PRICE_CACHE_TTL, COINGECKO_PRICE_CACHE
     if price_cache_ttl is not None:
-        global COINGECKO_PRICE_CACHE_TTL
         COINGECKO_PRICE_CACHE_TTL = int(price_cache_ttl)
+    if price_cache is not None:
+        COINGECKO_PRICE_CACHE = price_cache
 
     missing = check_missing_fields(kwargs)
     if missing:

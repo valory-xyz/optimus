@@ -13,7 +13,7 @@ fingerprint:
   behaviours/call_checkpoint.py: bafybeifo4us3o55gkrsfecxnuop7qdbsnaj4dfc4pj4soxfpx6qiztddeq
   behaviours/check_staking_kpi_met.py: bafybeigiala5rucuxthkmoirq3hfdrtd3um4uuwiavufs6k4xiw3kta35y
   behaviours/decision_making.py: bafybeibxpz25t6wl46bh7a6zralg5lddtvhostqs53mbali5uj245wbdmi
-  behaviours/evaluate_strategy.py: bafybeicvtln5bk7erscmlq7zfrxum3ovacpfqjazzqzi6pekvtv7i3qhfm
+  behaviours/evaluate_strategy.py: bafybeib3cyhh52kg2gfnel2ndbol2brl5ipg5xezqpqgovomld3dprd2yy
   behaviours/fetch_strategies.py: bafybeifdhfds3x3q4ecfy5h6p36bjvsymjqizhkvwpiwksjl5fcrglhwve
   behaviours/get_positions.py: bafybeihmv3pjtso44gwtwzqjp62cb5n5qtxhxqpc5ybsrixp2cmtplpifa
   behaviours/post_tx_settlement.py: bafybeid2wjs3damzbsors5jr4rt7kbkbieljaex64b52zphfteve4hfnli
@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeignomrsbhu5wumnchfkbvdpw6wnhk5cx5mieyuq3dueubbp2lsp2m
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeifj27onuyt3quqfogdyrbmngtlfen2si4djenddnuo4xgby2rhc6u
+  models.py: bafybeigzlwlb63eaukwlbaju3eutnjonhu6w5caedg25o4hpwsnfllieve
   payloads.py: bafybeiefg35dfa2b6tl6mhtq6pmlqzud4qm6axvpqefkz7qg2w23yub2om
   pool_behaviour.py: bafybeigztdzmnzkkbyjdpbfxt25v73fezgdg5vckr75jujcjzckd3grzw4
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -53,7 +53,7 @@ fingerprint:
   tests/behaviours/test_call_checkpoint.py: bafybeichc7rmi55lg5jo657x32zb443r3lstivhj4ijc534lgi2u33pkke
   tests/behaviours/test_check_staking_kpi_met.py: bafybeib2nmk66boi42cpotgnpxlbpdtov3oiua77wprb3x63qjve5zb4vq
   tests/behaviours/test_decision_making.py: bafybeif5bqpc267ptnsis63f2cwqjq4gcl6gday2adh4tr72ajsobsxpxm
-  tests/behaviours/test_evaluate_strategy.py: bafybeibxtgaj7du3qxglw64nrgkui5i3bppbhodzs6qdjyjdzsrwacwwee
+  tests/behaviours/test_evaluate_strategy.py: bafybeifdx2bjhuypz7har2rqbpsee4nv72y63jpybqhh7bwh242pkwt6rq
   tests/behaviours/test_fetch_strategies.py: bafybeig3axm7uvetdjjk5xci6c5ywkqbkceshcumpydeks4oy7xb3xwntu
   tests/behaviours/test_get_positions.py: bafybeial3qhqe6rwwspzvzp7xrw2upf7pjhtvgmtmomwz5zhjcd3q5nrmy
   tests/behaviours/test_post_tx_settlement.py: bafybeiariqcbvwh4rw3s2pzhbzqmagyq6irv7muytafvlue4jqgqsn3nt4

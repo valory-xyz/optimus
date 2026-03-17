@@ -1666,6 +1666,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         else None
                     ),
                     "price_cache_ttl": self.params.strategy_price_cache_ttl,
+                    "price_cache": self.shared_state.strategy_coingecko_price_cache,
                 }
             )
             strategy_kwargs_list.append((next_strategy, kwargs))

@@ -3218,10 +3218,14 @@ def run(
     get_errors().clear()
 
     # Apply configurable price cache TTL
+    # Apply configurable price cache TTL and shared cache dict
     price_cache_ttl = kwargs.pop("price_cache_ttl", None)
+    price_cache = kwargs.pop("price_cache", None)
+    global COINGECKO_PRICE_CACHE_TTL, COINGECKO_PRICE_CACHE
     if price_cache_ttl is not None:
-        global COINGECKO_PRICE_CACHE_TTL
         COINGECKO_PRICE_CACHE_TTL = int(price_cache_ttl)
+    if price_cache is not None:
+        COINGECKO_PRICE_CACHE = price_cache
 
     # Force refresh cache if requested
     if force_refresh:

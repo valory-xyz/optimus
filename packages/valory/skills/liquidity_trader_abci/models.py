@@ -68,6 +68,9 @@ class SharedState(BaseSharedState):
         # Strategy evaluation backoff state
         self.consecutive_no_action_count: int = 0
         self.last_strategy_evaluation_time: float = 0.0
+        # Shared price cache passed to strategies via kwargs.
+        # Dict[str, {"data": Any, "timestamp": float}]
+        self.strategy_coingecko_price_cache: Dict[str, Any] = {}
 
     def setup(self) -> None:
         """Set up the model."""

@@ -82,6 +82,7 @@ def _mk(**overrides):
     shared_state.strategy_to_filehash = {}
     shared_state.consecutive_no_action_count = 0
     shared_state.last_strategy_evaluation_time = 0.0
+    shared_state.strategy_coingecko_price_cache = {}
     ctx.state = shared_state
 
     obj.__dict__.update(

@@ -927,7 +927,12 @@ class HttpHandler(BaseHttpHandler):
     def _get_withdrawal_actions(self) -> List[Dict]:
         """Get prepared withdrawal actions from synchronized data."""
         try:
-            actions_str = self.synchronized_data.db.get("withdrawal_actions", "[]")
+            synced = self.synchronized_data
+        except (AttributeError, ValueError) as e:
+            self.context.logger.error(f"Cannot access synchronized_data: {e}")
+            return []
+        try:
+            actions_str = synced.db.get("withdrawal_actions", "[]")
             actions = json.loads(actions_str) if actions_str else []
             return actions
         except Exception as e:

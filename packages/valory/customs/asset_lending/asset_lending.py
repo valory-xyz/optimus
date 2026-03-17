@@ -114,7 +114,7 @@ def get_coin_list():
                 logger.info(
                     f"Successfully fetched {len(_coin_list_cache)} coins from CoinGecko"
                 )
-            except requests.RequestException as e:
+            except (requests.RequestException, ValueError) as e:
                 logger.error(f"Failed to fetch coin list: {e}")
                 get_errors().append(f"Failed to fetch coin list: {e}")
                 _coin_list_cache = []
@@ -278,7 +278,7 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
                 logger.info(
                     f"Successfully fetched {len(_aggregators_cache)} aggregators"
                 )
-        except requests.RequestException as e:
+        except (requests.RequestException, ValueError) as e:
             logger.error(f"REST API request failed: {e}")
             get_errors().append(f"REST API request failed: {e}")
             _aggregators_cache = []
@@ -509,8 +509,14 @@ def calculate_il_risk_score_for_lending(
         get_errors().append(f"Error fetching price data: {e}")
         return None
 
-    prices_1_data = np.array([x[1] for x in prices_1["prices"]])
-    prices_2_data = np.array([x[1] for x in prices_2["prices"]])
+    try:
+        prices_1_data = np.array([x[1] for x in prices_1["prices"]])
+        prices_2_data = np.array([x[1] for x in prices_2["prices"]])
+    except (KeyError, TypeError) as e:
+        logger.error(f"Error parsing price data: {e}")
+        get_errors().append(f"Error parsing price data: {e}")
+        return None
+
     logger.info(
         f"Price data points: {len(prices_1_data)} for {asset_token_1}, {len(prices_2_data)} for {asset_token_2}"
     )

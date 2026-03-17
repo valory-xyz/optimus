@@ -1062,7 +1062,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             status = tx_status.get("status")
             sub_status = tx_status.get("substatus")
 
-            if not status and sub_status:
+            if not status and not sub_status:
                 self.context.logger.error("No status or sub_status found in response")
                 return None, None
 

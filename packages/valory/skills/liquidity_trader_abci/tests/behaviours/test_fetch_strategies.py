@@ -7651,3 +7651,47 @@ class TestTrackErc20TransfersModeJsonError:
         mock_requests.get.return_value = resp
         result = _mk()._track_erc20_transfers_mode("0xSafe", 1704067200)
         assert result == {"outgoing": {}}
+
+
+class TestTransferMissingFromKey:
+    """Test that transfer dicts with missing 'from' key do not crash."""
+
+    def _obj(self):
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        return o
+
+    def test_outgoing_transfer_missing_from_key(self):
+        """Transfer dict without 'from' key should not raise AttributeError."""
+        td = {
+            "executionDate": "2024-12-15T10:00:00Z",
+            "to": "0xR",
+            "type": "ETHER_TRANSFER",
+            "value": str(10**18),
+            "transactionHash": "0xH",
+        }
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01")
+        )
+        # Transfer without "from" should be silently skipped, no crash
+        assert isinstance(result, dict)
+
+    def test_erc20_transfer_missing_from_key(self):
+        """ERC20 transfer dict without 'from' key should not raise."""
+        td = {
+            "executionDate": "2024-01-01T10:00:00Z",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xT",
+            "value": "1000000",
+            "transactionHash": "0xH",
+            "to": "0xR",
+        }
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        result = _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # Transfer without "from" should be silently skipped, no crash
+        assert isinstance(result, dict)

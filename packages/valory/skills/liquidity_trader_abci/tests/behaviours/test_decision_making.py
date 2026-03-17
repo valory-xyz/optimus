@@ -1131,7 +1131,7 @@ class TestGetSwapStatus:
         mock_resp.body = json.dumps({"substatus": "X"})
         b.get_http_response = _make_gen_method(mock_resp)
         result = _exhaust(b.get_swap_status("0xabc"))
-        assert result == (None, None)
+        assert result == (None, "X")
 
     def test_400_not_found(self):
         b = _make_behaviour()
@@ -6118,6 +6118,30 @@ class TestCLPositionLoopIterationAndGaugeSkip:
         result = _exhaust(b.get_claim_staking_rewards_tx_hash(action))
         assert result[0] is not None
         mock_pool.get_gauge_address.assert_not_called()
+
+
+class TestGetSwapStatusBooleanLogic:
+    """Tests for the boolean guard in get_swap_status."""
+
+    def test_both_none_returns_none(self):
+        """When both status and substatus are None, return (None, None)."""
+        b = _make_behaviour()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.body = json.dumps({})
+        b.get_http_response = _make_gen_method(mock_resp)
+        result = _exhaust(b.get_swap_status("0xabc"))
+        assert result == (None, None)
+
+    def test_none_status_with_substatus_returns_both(self):
+        """When status is None but substatus is present, return (None, substatus)."""
+        b = _make_behaviour()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.body = json.dumps({"substatus": "PARTIAL"})
+        b.get_http_response = _make_gen_method(mock_resp)
+        result = _exhaust(b.get_swap_status("0xabc"))
+        assert result == (None, "PARTIAL")
 
 
 class TestWaitForSwapConfirmationRetryExhaustion:

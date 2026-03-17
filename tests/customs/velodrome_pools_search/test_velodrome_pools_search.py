@@ -2010,6 +2010,29 @@ class TestGetCoinIdFromAddress:
     @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
     )
+    def test_x402_session_passes_timeout(self, mock_sleep, mock_cg_class):
+        """Test that x402 session GET request passes timeout=30."""
+        mock_session = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": "ethereum"}
+        mock_session.get.return_value = mock_response
+        get_coin_id_from_address(
+            "optimism",
+            "0xunknown",
+            "optimistic-ethereum",
+            x402_session=mock_session,
+            x402_proxy="https://proxy.example.com",
+        )
+        _, kwargs = mock_session.get.call_args
+        assert kwargs.get("timeout") == 30
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     def test_x402_session_failure(self, mock_sleep, mock_cg_class):
         """Test x402 session API call failure (non-200)."""
         mock_session = MagicMock()
@@ -4199,3 +4222,31 @@ class TestResetX402Adapter:
         session = MagicMock()
         session.adapters = {}
         _reset_x402_adapter(session)
+
+
+class TestOperatorPrecedenceBug:
+    """Tests for operator precedence fix in format_velodrome_pool_data."""
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_position_details_for_velodrome"
+    )
+    def test_coingecko_key_with_single_token_skips_metrics(self, mock_pos_details):
+        """Test that coingecko_api_key alone with <2 tokens skips metrics."""
+        mock_pos_details.return_value = {"apr": 10.0}
+        pool = {
+            "id": "0xpool1",
+            "token_count": 2,
+            "totalValueLockedUSD": "1000",
+            "cumulativeVolumeUSD": "5000",
+            "is_stable": False,
+            "pool_fee": 500,
+            "sugar_data": {"type": 1},
+            "inputTokens": [
+                {"id": "0xtoken0", "symbol": "TK0"},
+            ],
+        }
+        result = format_velodrome_pool_data(
+            [pool], OPTIMISM_CHAIN_ID, coingecko_api_key="some_key"
+        )
+        # Pool with <2 tokens is skipped entirely (continue)
+        assert len(result) == 0

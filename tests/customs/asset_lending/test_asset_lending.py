@@ -152,6 +152,16 @@ class TestGetCoinList:
         result = get_coin_list()
         assert result == []
 
+    @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
+    def test_json_decode_error_returns_empty_list(self, mock_req):
+        """Test that ValueError from response.json() returns empty list."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.side_effect = ValueError("No JSON object")
+        mock_req.return_value = mock_response
+        result = get_coin_list()
+        assert result == []
+
 
 class TestFetchTokenId:
     """Tests for fetch_token_id function."""
@@ -967,4 +977,33 @@ class TestNetworkResilience:
         mock_resp.json.side_effect = ValueError("No JSON")
         mock_req.return_value = mock_resp
         result = fetch_historical_data()
+        assert result is None
+
+    @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
+    def test_fetch_aggregators_json_decode_error(self, mock_req):
+        """Test that ValueError from response.json() in fetch_aggregators is caught."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.side_effect = ValueError("No JSON object could be decoded")
+        mock_req.return_value = mock_resp
+        result = fetch_aggregators()
+        assert result == []
+        errors = get_errors()
+        assert any(
+            "failed" in str(e).lower() or "error" in str(e).lower() for e in errors
+        )
+
+    @patch("packages.valory.customs.asset_lending.asset_lending.is_pro_api_key")
+    @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
+    def test_il_risk_score_missing_prices_key(self, mock_cg_class, mock_is_pro):
+        """Test that missing 'prices' key in CoinGecko response returns None."""
+        mock_is_pro.return_value = False
+        mock_cg = MagicMock()
+        # Response missing "prices" key
+        mock_cg.get_coin_market_chart_range_by_id.side_effect = [
+            {"market_caps": []},
+            {"prices": [[i, 200 + i] for i in range(10)]},
+        ]
+        mock_cg_class.return_value = mock_cg
+        result = calculate_il_risk_score_for_lending("token1", "token2", "key")
         assert result is None

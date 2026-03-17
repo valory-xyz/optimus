@@ -122,7 +122,14 @@ class KvStoreHandler(AbstractResponseHandler):
         if kv_store_msg.performative == KvStoreMessage.Performative.SUCCESS:
             dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
             nonce = dialogue.dialogue_label.dialogue_reference[0]
-            callback, kwargs = self.context.state.req_to_callback.pop(nonce)
+            result = self.context.state.req_to_callback.pop(nonce, None)
+            if result is None:
+                self.context.logger.warning(
+                    f"No callback found for KvStore nonce {nonce}, skipping"
+                )
+                self.context.state.in_flight_req = False
+                return
+            callback, kwargs = result
             callback(kv_store_msg, dialogue, **kwargs)
 
             self.context.state.in_flight_req = False

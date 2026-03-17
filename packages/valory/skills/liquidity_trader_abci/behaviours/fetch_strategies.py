@@ -4336,7 +4336,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Only process outgoing transfers (where from address is equal to our safe address)
-                    if transfer.get("from").lower() == address.lower():
+                    if transfer.get("from", "").lower() == address.lower():
                         transfer_type = transfer.get("type", "")
 
                         # Deduplicate per tx hash + type
@@ -4455,7 +4455,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Only process outgoing transfers (where from address is equal to our safe address)
-                    if transfer.get("from").lower() != safe_address.lower():
+                    if transfer.get("from", "").lower() != safe_address.lower():
                         continue
 
                     transfer_type = transfer.get("type", "")

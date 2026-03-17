@@ -801,6 +801,30 @@ class TestHttpHandlerMethods:
             result = handler._get_withdrawal_actions()
         assert result == []
 
+    def test_get_withdrawal_actions_pre_fsm_attribute_error(self) -> None:
+        """Test _get_withdrawal_actions returns [] before FSM init."""
+        handler, ctx = _make_http_handler()
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            side_effect=AttributeError("FSM not initialized"),
+        ):
+            result = handler._get_withdrawal_actions()
+        assert result == []
+
+    def test_get_withdrawal_actions_pre_fsm_value_error(self) -> None:
+        """Test _get_withdrawal_actions returns [] on ValueError."""
+        handler, ctx = _make_http_handler()
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            side_effect=ValueError("no round"),
+        ):
+            result = handler._get_withdrawal_actions()
+        assert result == []
+
     def test_get_password_from_args_with_flag(self) -> None:
         """Test _get_password_from_args with --password flag."""
         handler, _ = _make_http_handler()

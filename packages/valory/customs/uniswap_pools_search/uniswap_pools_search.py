@@ -504,8 +504,13 @@ def calculate_il_risk_score(
         get_errors().append(f"Error fetching price data: {e}")
         return None
 
-    prices_1_data = np.array([x[1] for x in prices_1["prices"]])
-    prices_2_data = np.array([x[1] for x in prices_2["prices"]])
+    try:
+        prices_1_data = np.array([x[1] for x in prices_1["prices"]])
+        prices_2_data = np.array([x[1] for x in prices_2["prices"]])
+    except (KeyError, TypeError) as e:
+        get_errors().append(f"Error parsing price data: {e}")
+        return None
+
     min_length = min(len(prices_1_data), len(prices_2_data))
     prices_1_data = prices_1_data[:min_length]
     prices_2_data = prices_2_data[:min_length]

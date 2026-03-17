@@ -1144,3 +1144,44 @@ class TestFetchPoolDataNetworkResilience:
         fetch_pool_data("0x1", "https://api.example.com")
         _, kwargs = mock_post.call_args
         assert kwargs.get("timeout") == 30
+
+
+class TestCalculateIlRiskScoreMissingPricesKey:
+    """Tests for calculate_il_risk_score with missing prices key."""
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_missing_prices_key_returns_none(self, mock_cg, mock_is_pro):
+        """Test that missing 'prices' key in response returns None."""
+        mock_is_pro.return_value = False
+        inst = MagicMock()
+        # Response dict lacks "prices" key
+        inst.get_coin_market_chart_range_by_id.side_effect = [
+            {"market_caps": []},
+            {"prices": [[i, 200 + i] for i in range(10)]},
+        ]
+        mock_cg.return_value = inst
+        result = calculate_il_risk_score("t0", "t1", "key")
+        assert result is None
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_none_response_returns_none(self, mock_cg, mock_is_pro):
+        """Test that None response (TypeError on key access) returns None."""
+        mock_is_pro.return_value = False
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = [
+            None,
+            {"prices": [[i, 200 + i] for i in range(10)]},
+        ]
+        mock_cg.return_value = inst
+        result = calculate_il_risk_score("t0", "t1", "key")
+        assert result is None

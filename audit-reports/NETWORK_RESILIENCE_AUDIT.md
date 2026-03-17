@@ -570,3 +570,49 @@ Three high-risk sites where `0` is a semantically valid value:
 - [x] The crash/stuck/side-effect classification is complete
 - [x] The priority matrix covers every finding
 - [x] Each fix description is specific enough to implement directly
+
+---
+
+## Re-Audit Findings (2026-03-17)
+
+After all 32 original findings were fixed, a full re-audit was performed. All original fixes were verified as correctly applied. The re-audit discovered **10 new actionable findings** — issues that were missed in the first pass or introduced in adjacent code.
+
+### Verified FIXED (all 32 original findings)
+
+- All 9 customs `requests.*` calls have `timeout=30`
+- All `.get("data", {})` patterns use `or {}` guard (CC7 fully clean)
+- December crash in rate limiter fixed
+- LiFi infinite retry loop bounded with `MAX_RETRIES_FOR_STATUS_CHECK`
+- Swap confirmation loop bounded with `MAX_SWAP_CONFIRMATION_RETRIES`
+- `if not tick_lower` / `if not amount` / `if not apr` changed to `is None`
+- `response_data['message']` changed to `.get('message', 'Unknown error')`
+- Subgraph `json.loads` guarded with try/except
+- Pre-FSM `synchronized_data.period_count` access guarded
+- IpfsHandler `.pop(nonce, None)` fixed
+- mirror_db aiohttp `ClientTimeout(total=30)` added
+- All 4 Mode Explorer `requests.get()` sites wrapped in try/except
+
+### New Findings
+
+| # | Severity | Location | Bug | Category | Fix |
+|---|----------|----------|-----|----------|-----|
+| R1 | **HIGH** | `liquidity_trader_abci/handlers.py:125` | KvStoreHandler `.pop(nonce)` without default — KeyError on stale messages. IpfsHandler was fixed but KvStoreHandler was missed | Crash | Change to `.pop(nonce, (None, {}))` with None guard |
+| R2 | **HIGH** | `velodrome_pools_search.py:2052` | `cg.session.get()` has no `timeout=` on x402 CoinGecko request — hangs indefinitely | Stuck | Add `timeout=30` |
+| R3 | **HIGH** | `fetch_strategies.py:4339` | `transfer.get("from").lower()` — AttributeError if `"from"` key missing from API response | Crash | Change to `.get("from", "").lower()` |
+| R4 | **MEDIUM** | `decision_making.py:1065` | `if not status and sub_status:` — wrong boolean logic. When both are missing, condition is False and error is not logged | Side-effect | Change to `if not status and not sub_status:` |
+| R5 | **MEDIUM** | `asset_lending.py:113` | `get_coin_list()`: `response.json()` inside `except RequestException` — `ValueError` from `.json()` escapes | Crash | Add `ValueError` to except clause |
+| R6 | **MEDIUM** | `asset_lending.py:271` | `fetch_aggregators()`: same pattern as R5 | Crash | Add `ValueError` to except clause |
+| R7 | **MEDIUM** | `uniswap_pools_search.py:507-508` | `prices_1["prices"]` — direct key access on CoinGecko response outside try/except | Crash | Wrap in try/except KeyError or use `.get()` |
+| R8 | **MEDIUM** | `asset_lending.py:512-513` | Same `prices_1["prices"]` direct key access pattern as R7 | Crash | Wrap in try/except KeyError or use `.get()` |
+| R9 | **MEDIUM** | `optimus_abci/handlers.py:930` | `_get_withdrawal_actions` accesses `synchronized_data` without pre-FSM guard | Crash | Wrap in try/except AttributeError |
+| R10 | **MEDIUM** | `velodrome_pools_search.py:2610` | Operator precedence: `key or (x402 and proxy) and len(tokens) >= 2` — `len` check skipped when api_key is truthy | Crash | Add parentheses: `(key or (x402 and proxy)) and len(tokens) >= 2` |
+
+### Accepted Low-Severity Items
+
+| Category | Sites | Notes |
+|---|---|---|
+| `if not tick_spacing` | 9 sites | tick_spacing=0 is invalid on-chain; accidentally correct behavior |
+| `if not liquidity` | 4 sites | liquidity=0 means nothing to remove; accidentally correct |
+| `if not total_supply` | 3 sites | Prevents division-by-zero; accidentally correct |
+| FSM self-loop (CC2) | All 9 rounds | Systemic architecture — no round-level escalation. Requires FSM design change (P3) |
+| No retries in customs | All customs | Single-attempt design; FSM-level retry is the backstop |

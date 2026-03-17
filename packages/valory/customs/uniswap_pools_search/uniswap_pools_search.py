@@ -88,7 +88,7 @@ COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwa
 
 
 def get_cached_price(
-    token_id: str, time_period: int, prefix: str = "uni_il"
+    token_id: str, time_period: int, prefix: str = "il_range"
 ) -> Optional[Any]:
     """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
@@ -103,7 +103,7 @@ def get_cached_price(
 
 
 def set_cached_price(
-    token_id: str, time_period: int, data: Any, prefix: str = "uni_il"
+    token_id: str, time_period: int, data: Any, prefix: str = "il_range"
 ) -> None:
     """Cache CoinGecko price data with current timestamp."""
     cache_key = f"{prefix}_{token_id}_{time_period}"

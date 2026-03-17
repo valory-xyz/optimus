@@ -273,7 +273,7 @@ COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwa
 
 
 def get_cached_price(
-    token_id: str, time_period: int, prefix: str = "velo_il"
+    token_id: str, time_period: int, prefix: str = "il_range"
 ) -> Optional[Any]:
     """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
@@ -288,7 +288,7 @@ def get_cached_price(
 
 
 def set_cached_price(
-    token_id: str, time_period: int, data: Any, prefix: str = "velo_il"
+    token_id: str, time_period: int, data: Any, prefix: str = "il_range"
 ) -> None:
     """Cache CoinGecko price data with current timestamp."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
@@ -557,10 +557,10 @@ def calculate_velodrome_il_risk_score_multi(
         prices_data = []
         for token_id in valid_token_ids:
             try:
-                # Check price cache first
+                # Check price cache first (stores raw API response)
                 cached = get_cached_price(token_id, time_period)
                 if cached is not None:
-                    prices_data.append(cached)
+                    prices_data.append([x[1] for x in cached["prices"]])
                     continue
 
                 cg = CoinGeckoAPI()
@@ -584,9 +584,8 @@ def calculate_velodrome_il_risk_score_multi(
                     from_timestamp=from_timestamp,
                     to_timestamp=to_timestamp,
                 )
-                prices_list = [x[1] for x in prices["prices"]]
-                set_cached_price(token_id, time_period, prices_list)
-                prices_data.append(prices_list)
+                set_cached_price(token_id, time_period, prices)
+                prices_data.append([x[1] for x in prices["prices"]])
                 time.sleep(1)  # Rate limiting
             except Exception as e:
                 error_msg = f"Error fetching price data for {token_id}: {str(e)}"

@@ -807,7 +807,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 return None, None
 
             self.context.logger.info(
-                f"amount0_desired,amount1_desired :{amount0_desired,amount1_desired}"
+                f"amount0_desired, amount1_desired :{amount0_desired, amount1_desired}"
             )
 
             # Store in position for second pass
@@ -1328,7 +1328,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             band_allocations = result["band_allocations"]
 
             for i, _band_name in enumerate(["inner", "middle", "outer"]):
-                band_data = tick_range_results[f"band{i+1}"]
+                band_data = tick_range_results[f"band{i + 1}"]
                 tick_lower = band_data["tick_lower"]
                 tick_upper = band_data["tick_upper"]
 
@@ -1608,8 +1608,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                             ">> Triggering next recursion level <<"
                         )
                         self.context.logger.info(
-                            f"Inner band allocation: {best_config['band_allocations'][0]*100:.1f}% "
-                            f"(threshold: {level_config['trigger_threshold']*100:.1f}%)"
+                            f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "
+                            f"(threshold: {level_config['trigger_threshold'] * 100:.1f}%)"
                         )
                         self.context.logger.info(
                             f"Inner band multiplier: {best_config['band_multipliers'][0]:.4f}σ "
@@ -1636,9 +1636,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"{best_overall['best_config']['band_multipliers'][2]:.4f}"
             )
             self.context.logger.info(
-                f"Band Allocations: {best_overall['best_config']['band_allocations'][0]*100:.1f}%, "
-                f"{best_overall['best_config']['band_allocations'][1]*100:.1f}%, "
-                f"{best_overall['best_config']['band_allocations'][2]*100:.1f}%"
+                f"Band Allocations: {best_overall['best_config']['band_allocations'][0] * 100:.1f}%, "
+                f"{best_overall['best_config']['band_allocations'][1] * 100:.1f}%, "
+                f"{best_overall['best_config']['band_allocations'][2] * 100:.1f}%"
             )
             self.context.logger.info(
                 f"Z-Score Economic Score: {best_overall['best_config']['zscore_economic_score']:.4f}"
@@ -1687,7 +1687,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             if verbose and sim_num % 20 == 0:
                 self.context.logger.info(
                     f"Level {min_multiplier:.4f}-{max_multiplier:.4f}: "
-                    f"Simulation {sim_num+1}/{num_simulations}"
+                    f"Simulation {sim_num + 1}/{num_simulations}"
                 )
 
             # Generate random inner band multiplier within range
@@ -1769,15 +1769,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             self.context.logger.info(
                 f"  Inner Band: {top_config['band_multipliers'][0]:.4f}σ "
-                f"({top_config['band_allocations'][0]*100:.1f}% allocation)"
+                f"({top_config['band_allocations'][0] * 100:.1f}% allocation)"
             )
             self.context.logger.info(
                 f"  Middle Band: {top_config['band_multipliers'][1]:.4f}σ "
-                f"({top_config['band_allocations'][1]*100:.1f}% allocation)"
+                f"({top_config['band_allocations'][1] * 100:.1f}% allocation)"
             )
             self.context.logger.info(
                 f"  Outer Band: {top_config['band_multipliers'][2]:.4f}σ "
-                f"({top_config['band_allocations'][2]*100:.1f}% allocation)"
+                f"({top_config['band_allocations'][2] * 100:.1f}% allocation)"
             )
             self.context.logger.info(
                 f"  Performance: {top_config['percent_in_bounds']:.2f}% in bounds, "

@@ -417,7 +417,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     agg_token0_ratio,
                     agg_token1_ratio,
                 ) = self._calculate_aggregate_token_ratios(position_requirements)
-                recommendation = f"Provide {agg_token0_ratio*100:.2f}% token0, {agg_token1_ratio*100:.2f}% token1 for all positions"
+                recommendation = f"Provide {agg_token0_ratio * 100:.2f}% token0, {agg_token1_ratio * 100:.2f}% token1 for all positions"
         else:
             recommendation = (
                 f"Mixed position requirements across {len(position_requirements)} bands"
@@ -3934,8 +3934,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         max_amounts_in = [max_amount0, max_amount1]
         log_message = (
-            f"Using both tokens: {max_amount0} {token0_symbol} ({aggregate_token0_ratio*100:.2f}%), "
-            f"{max_amount1} {token1_symbol} ({aggregate_token1_ratio*100:.2f}%)"
+            f"Using both tokens: {max_amount0} {token0_symbol} ({aggregate_token0_ratio * 100:.2f}%), "
+            f"{max_amount1} {token1_symbol} ({aggregate_token1_ratio * 100:.2f}%)"
         )
 
         return max_amounts_in, log_message

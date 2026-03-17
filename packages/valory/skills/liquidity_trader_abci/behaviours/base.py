@@ -2106,7 +2106,7 @@ class LiquidityTraderBaseBehaviour(
         should_update = time_since_update >= REWARD_UPDATE_INTERVAL
 
         self.context.logger.info(
-            f"Reward update check for {chain}: Last update {time_since_update/3600:.1f}h ago, "
+            f"Reward update check for {chain}: Last update {time_since_update / 3600:.1f}h ago, "
             f"Should update: {should_update}"
         )
 

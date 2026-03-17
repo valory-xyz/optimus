@@ -2886,7 +2886,7 @@ class TestHttpHandlerMethods:
             assert mock_ss.sufficient_funds_for_x402_payments is False
 
     def test_ensure_sufficient_funds_swap_tx_fail(self) -> None:
-        """Test _ensure_sufficient_funds when tx submission fails."""
+        """Test _ensure_sufficient_funds when tx submission fails stores ETH deficit."""
         handler, ctx = _make_http_handler()
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
@@ -2914,9 +2914,11 @@ class TestHttpHandlerMethods:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
+            # value=0x100=256, gas=21000, gasPrice=1000 => total=21000*1000+256=21000256
+            assert mock_ss.x402_eth_deficit == 21000 * 1000 + 256
 
     def test_ensure_sufficient_funds_swap_tx_not_successful(self) -> None:
-        """Test _ensure_sufficient_funds when tx is not successful."""
+        """Test _ensure_sufficient_funds when tx is not successful stores ETH deficit."""
         handler, ctx = _make_http_handler()
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
@@ -2945,9 +2947,11 @@ class TestHttpHandlerMethods:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
+            # value=256, gas=21000, gasPrice=1000 => total=21000*1000+256=21000256
+            assert mock_ss.x402_eth_deficit == 21000 * 1000 + 256
 
     def test_ensure_sufficient_funds_swap_success(self) -> None:
-        """Test _ensure_sufficient_funds when swap succeeds."""
+        """Test _ensure_sufficient_funds when swap succeeds clears deficit."""
         handler, ctx = _make_http_handler()
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
@@ -2976,6 +2980,7 @@ class TestHttpHandlerMethods:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is True
+            assert mock_ss.x402_eth_deficit == 0
 
     def test_ensure_sufficient_funds_exception(self) -> None:
         """Test _ensure_sufficient_funds handles exception."""
@@ -2989,6 +2994,109 @@ class TestHttpHandlerMethods:
             mock_shared.return_value = mock_ss
             handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
+
+    def test_inject_x402_eth_deficit_into_empty_response(self) -> None:
+        """Test _inject_x402_eth_deficit adds deficit to empty response."""
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.agent_address = "0xagent"
+        result = handler._inject_x402_eth_deficit({}, 1000000)
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
+        assert result["optimism"]["0xagent"][ZERO_ADDRESS]["deficit"] == str(1000000)
+
+    def test_inject_x402_eth_deficit_overrides_smaller_deficit(self) -> None:
+        """Test _inject_x402_eth_deficit overrides when x402 deficit is larger."""
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.agent_address = "0xagent"
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
+        existing = {
+            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "100", "deficit": "50"}}}
+        }
+        result = handler._inject_x402_eth_deficit(existing, 5000)
+        # x402 needs 5000, balance is 100, so deficit = 5000-100 = 4900 > existing 50
+        assert result["optimism"]["0xagent"][ZERO_ADDRESS]["deficit"] == str(4900)
+
+    def test_inject_x402_eth_deficit_keeps_larger_existing(self) -> None:
+        """Test _inject_x402_eth_deficit keeps existing deficit when it's larger."""
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.agent_address = "0xagent"
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
+        existing = {
+            "optimism": {
+                "0xagent": {ZERO_ADDRESS: {"balance": "0", "deficit": "99999"}}
+            }
+        }
+        result = handler._inject_x402_eth_deficit(existing, 1000)
+        assert result["optimism"]["0xagent"][ZERO_ADDRESS]["deficit"] == str(99999)
+
+    def test_inject_x402_eth_deficit_balance_exceeds_need(self) -> None:
+        """Test _inject_x402_eth_deficit when balance already covers the deficit."""
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.agent_address = "0xagent"
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
+        existing = {
+            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "5000", "deficit": "0"}}}
+        }
+        result = handler._inject_x402_eth_deficit(existing, 1000)
+        # balance=5000 > eth_deficit=1000, so new_deficit = max(0, 1000-5000) = 0
+        # deficit stays "0" (not updated)
+        assert result["optimism"]["0xagent"][ZERO_ADDRESS]["deficit"] == "0"
+
+    def test_handle_get_funds_status_injects_x402_deficit(self) -> None:
+        """Test _handle_get_funds_status injects x402_eth_deficit when present."""
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        handler._ensure_sufficient_funds_for_x402_payments = MagicMock()
+        ctx.params.use_x402 = True
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.agent_address = "0xagent"
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
+        mock_fund_req = MagicMock()
+        mock_fund_req.get_response_body.return_value = {
+            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "100", "deficit": "0"}}}
+        }
+
+        mock_ss = MagicMock()
+        mock_ss.x402_eth_deficit = 50000
+
+        with patch.object(
+            type(handler),
+            "funds_status",
+            new_callable=PropertyMock,
+            return_value=mock_fund_req,
+        ), patch.object(
+            type(handler),
+            "shared_state",
+            new_callable=PropertyMock,
+            return_value=mock_ss,
+        ), patch(
+            "packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"
+        ):
+            handler._handle_get_funds_status(MagicMock(), MagicMock())
+
+        # Verify the response included the injected deficit
+        call_args = handler._send_ok_response.call_args
+        response = call_args[0][2]
+        assert int(response["optimism"]["0xagent"][ZERO_ADDRESS]["deficit"]) == 49900
 
     def test_parse_llm_response_valid(self) -> None:
         """Test _parse_llm_response with valid response."""

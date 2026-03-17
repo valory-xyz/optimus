@@ -14,7 +14,7 @@ fingerprint:
   behaviours/check_staking_kpi_met.py: bafybeigiala5rucuxthkmoirq3hfdrtd3um4uuwiavufs6k4xiw3kta35y
   behaviours/decision_making.py: bafybeibxpz25t6wl46bh7a6zralg5lddtvhostqs53mbali5uj245wbdmi
   behaviours/evaluate_strategy.py: bafybeia2k6kmypmant4yczpaicuc2wvropnn2kmft2xegvx3g6txihanvm
-  behaviours/fetch_strategies.py: bafybeibndzfh673jc7de3hrr5x5mrwjg3uz7nmb6jlyg3tygwoncovxi4a
+  behaviours/fetch_strategies.py: bafybeifojdi5fuol5ayf2wjcaend63zul2ngtnjklop2nxt5i7bvu7wafm
   behaviours/get_positions.py: bafybeihmv3pjtso44gwtwzqjp62cb5n5qtxhxqpc5ybsrixp2cmtplpifa
   behaviours/post_tx_settlement.py: bafybeid2wjs3damzbsors5jr4rt7kbkbieljaex64b52zphfteve4hfnli
   behaviours/round_behaviour.py: bafybeicqhex5umf4ngytpgcrtf27qiwdytidqedzx2jzxhgxottpukabum
@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeignomrsbhu5wumnchfkbvdpw6wnhk5cx5mieyuq3dueubbp2lsp2m
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeigodn6ey5fnozvalaxk6klrccuu2sqpsgb3upkakc7voarg4huxii
+  models.py: bafybeigmxns3oqt243522fi2gj5aom2jgoytycdbpbruue6toowocpstae
   payloads.py: bafybeiefg35dfa2b6tl6mhtq6pmlqzud4qm6axvpqefkz7qg2w23yub2om
   pool_behaviour.py: bafybeigztdzmnzkkbyjdpbfxt25v73fezgdg5vckr75jujcjzckd3grzw4
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -54,7 +54,7 @@ fingerprint:
   tests/behaviours/test_check_staking_kpi_met.py: bafybeib2nmk66boi42cpotgnpxlbpdtov3oiua77wprb3x63qjve5zb4vq
   tests/behaviours/test_decision_making.py: bafybeif5bqpc267ptnsis63f2cwqjq4gcl6gday2adh4tr72ajsobsxpxm
   tests/behaviours/test_evaluate_strategy.py: bafybeigddzx7awz4j5smgr6dfz3k6yviydst37so2nkctbsaye32bmh2me
-  tests/behaviours/test_fetch_strategies.py: bafybeickg7ckvscbfddaflbjcvisuzpatj7s4zm73lztfkx5bwgkz5mcde
+  tests/behaviours/test_fetch_strategies.py: bafybeib6rhdk4ngqsl5cbermtm6vba3w3kjpvnqylxioc4qcynbxpg7cse
   tests/behaviours/test_get_positions.py: bafybeial3qhqe6rwwspzvzp7xrw2upf7pjhtvgmtmomwz5zhjcd3q5nrmy
   tests/behaviours/test_post_tx_settlement.py: bafybeiariqcbvwh4rw3s2pzhbzqmagyq6irv7muytafvlue4jqgqsn3nt4
   tests/behaviours/test_round_behaviour.py: bafybeie3eqpc3t7ejy2wrc2jbrwk36vbdviuamvywmtmge4zl25ydswemq
@@ -216,7 +216,7 @@ models:
       max_healthcheck: 120
       on_chain_service_id: null
       request_retry_delay: 1.0
-      request_timeout: 20.0
+      request_timeout: 10.0
       reset_pause_duration: 10
       reset_tendermint_after: 2
       retry_attempts: 400

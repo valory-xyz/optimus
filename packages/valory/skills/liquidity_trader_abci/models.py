@@ -445,7 +445,6 @@ class Params(BaseParams):
         self.stoploss_threshold_multiplier = kwargs.get(
             "stoploss_threshold_multiplier", 0.43
         )
-        self.request_timeout: float = self._ensure("request_timeout", kwargs, float)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

@@ -704,6 +704,9 @@ class HttpHandler(BaseHttpHandler):
                 else tx_request["value"]
             )
 
+            # Calculate total ETH needed for the swap (gas cost + tx value)
+            total_eth_needed = tx_gas * gas_price + tx_value
+
             tx_data = {
                 "to": Web3.to_checksum_address(tx_request["to"]),
                 "data": tx_request["data"],
@@ -725,6 +728,11 @@ class HttpHandler(BaseHttpHandler):
             if not tx_hash:
                 self.context.logger.error("Failed to submit transaction")
                 self.shared_state.sufficient_funds_for_x402_payments = False
+                # Store the ETH deficit so funds-status can request a top-up
+                self.shared_state.x402_eth_deficit = total_eth_needed
+                self.context.logger.info(
+                    f"Stored x402_eth_deficit={total_eth_needed} for funds-status"
+                )
                 return
 
             self.context.logger.info(f"ETH to USDC swap submitted: {tx_hash}")
@@ -735,12 +743,19 @@ class HttpHandler(BaseHttpHandler):
             if not tx_successful:
                 self.context.logger.error(f"Transaction {tx_hash} failed or timed out")
                 self.shared_state.sufficient_funds_for_x402_payments = False
+                # Store the ETH deficit so funds-status can request a top-up
+                self.shared_state.x402_eth_deficit = total_eth_needed
+                self.context.logger.info(
+                    f"Stored x402_eth_deficit={total_eth_needed} for funds-status"
+                )
                 return
 
             self.context.logger.info(
                 f"ETH to USDC swap completed successfully: {tx_hash}"
             )
             self.shared_state.sufficient_funds_for_x402_payments = True
+            # Clear the stored deficit on success
+            self.shared_state.x402_eth_deficit = 0
             return
 
         except Exception as e:
@@ -800,6 +815,16 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info(
             f"Standard deficit for agent from funds manager: {standard_deficit}"
         )
+
+        # Inject x402 ETH deficit into the response if a prior swap failed
+        x402_eth_deficit = getattr(self.shared_state, "x402_eth_deficit", None)
+        if isinstance(x402_eth_deficit, (int, float)) and x402_eth_deficit > 0:
+            standard_deficit = self._inject_x402_eth_deficit(
+                standard_deficit or {}, x402_eth_deficit
+            )
+            self.context.logger.info(
+                f"Injected x402 ETH deficit of {x402_eth_deficit} into funds-status response"
+            )
 
         # Check if in withdrawal mode
         in_withdrawal = self._is_in_withdrawal_mode()
@@ -988,6 +1013,30 @@ class HttpHandler(BaseHttpHandler):
                 }
             }
         }
+
+    def _inject_x402_eth_deficit(self, response: Dict, eth_deficit: int) -> Dict:
+        """Inject x402 ETH deficit into the funds-status response.
+
+        Ensures the external funding system sees the ETH needed for the
+        ETH->USDC swap so it can top up the agent EOA.
+        """
+        chain = self.context.params.target_investment_chains[0]
+        agent_address = self.context.agent_address
+        native_token = ZERO_ADDRESS
+
+        chain_data = response.setdefault(chain, {})
+        agent_data = chain_data.setdefault(agent_address, {})
+        token_data = agent_data.setdefault(native_token, {})
+
+        existing_deficit = int(token_data.get("deficit", 0))
+        existing_balance = int(token_data.get("balance", 0))
+
+        # Use the larger of the existing deficit and the x402 deficit
+        new_deficit = max(existing_deficit, eth_deficit - existing_balance)
+        if new_deficit > 0:
+            token_data["deficit"] = str(new_deficit)
+
+        return response
 
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

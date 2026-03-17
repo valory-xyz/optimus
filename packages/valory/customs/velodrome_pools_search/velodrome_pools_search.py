@@ -773,11 +773,11 @@ def get_epochs_by_address(pool_id, chain, limit=30, offset=0):
             # or the contract address is incorrect
             if "execution reverted" in str(e):
                 logger.warning(
-                    f"Contract execution reverted. The RewardsSugar contract address might be incorrect or the function might not exist."
+                    "Contract execution reverted. The RewardsSugar contract address might be incorrect or the function might not exist."
                 )
             elif "not found in this contract's abi" in str(e):
                 logger.warning(
-                    f"Function not found in contract ABI. The ABI might be incorrect or outdated."
+                    "Function not found in contract ABI. The ABI might be incorrect or outdated."
                 )
 
             return None

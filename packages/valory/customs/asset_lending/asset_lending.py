@@ -117,7 +117,7 @@ def get_coin_list():
             except (requests.RequestException, ValueError) as e:
                 logger.error(f"Failed to fetch coin list: {e}")
                 get_errors().append(f"Failed to fetch coin list: {e}")
-                _coin_list_cache = []
+                return []
         return _coin_list_cache
 
 

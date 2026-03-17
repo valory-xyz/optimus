@@ -162,6 +162,26 @@ class TestGetCoinList:
         result = get_coin_list()
         assert result == []
 
+    @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
+    def test_error_does_not_permanently_cache_empty_list(self, mock_req):
+        """Test that a failed fetch does not poison the cache permanently."""
+        import requests as req_lib
+
+        # First call fails
+        mock_req.side_effect = req_lib.RequestException("transient")
+        result = get_coin_list()
+        assert result == []
+
+        # Second call succeeds — should retry, not return cached []
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{"id": "bitcoin", "symbol": "btc"}]
+        mock_response.raise_for_status = MagicMock()
+        mock_req.side_effect = None
+        mock_req.return_value = mock_response
+        result = get_coin_list()
+        assert len(result) == 1
+        assert result[0]["id"] == "bitcoin"
+
 
 class TestFetchTokenId:
     """Tests for fetch_token_id function."""

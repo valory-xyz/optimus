@@ -95,9 +95,11 @@ COINGECKO_PRICE_CACHE: Dict[str, Any] = {}
 COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwargs
 
 
-def get_cached_price(token_id: str, time_period: int) -> Optional[Any]:
+def get_cached_price(
+    token_id: str, time_period: int, prefix: str = "bal_il"
+) -> Optional[Any]:
     """Get cached CoinGecko price data if it exists and is not expired."""
-    cache_key = f"{token_id}_{time_period}"
+    cache_key = f"{prefix}_{token_id}_{time_period}"
     entry = COINGECKO_PRICE_CACHE.get(cache_key)
     if entry is None:
         return None
@@ -108,9 +110,11 @@ def get_cached_price(token_id: str, time_period: int) -> Optional[Any]:
     return entry["data"]
 
 
-def set_cached_price(token_id: str, time_period: int, data: Any) -> None:
+def set_cached_price(
+    token_id: str, time_period: int, data: Any, prefix: str = "bal_il"
+) -> None:
     """Cache CoinGecko price data with current timestamp."""
-    cache_key = f"{token_id}_{time_period}"
+    cache_key = f"{prefix}_{token_id}_{time_period}"
     COINGECKO_PRICE_CACHE[cache_key] = {
         "data": data,
         "timestamp": time.time(),

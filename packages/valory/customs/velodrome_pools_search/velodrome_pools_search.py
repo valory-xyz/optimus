@@ -272,9 +272,11 @@ COINGECKO_PRICE_CACHE: Dict[str, Any] = {}
 COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwargs
 
 
-def get_cached_price(token_id: str, time_period: int) -> Optional[Any]:
+def get_cached_price(
+    token_id: str, time_period: int, prefix: str = "velo_il"
+) -> Optional[Any]:
     """Get cached CoinGecko price data if it exists and is not expired."""
-    cache_key = f"{token_id}_{time_period}"
+    cache_key = f"{prefix}_{token_id}_{time_period}"
     entry = COINGECKO_PRICE_CACHE.get(cache_key)
     if entry is None:
         return None
@@ -285,9 +287,11 @@ def get_cached_price(token_id: str, time_period: int) -> Optional[Any]:
     return entry["data"]
 
 
-def set_cached_price(token_id: str, time_period: int, data: Any) -> None:
+def set_cached_price(
+    token_id: str, time_period: int, data: Any, prefix: str = "velo_il"
+) -> None:
     """Cache CoinGecko price data with current timestamp."""
-    cache_key = f"{token_id}_{time_period}"
+    cache_key = f"{prefix}_{token_id}_{time_period}"
     COINGECKO_PRICE_CACHE[cache_key] = {
         "data": data,
         "timestamp": time.time(),
@@ -2161,7 +2165,7 @@ def get_historical_market_data(
     """Get historical market data using x402 requests when available"""
     try:
         # Check price cache first
-        cached = get_cached_price(coin_id, days)
+        cached = get_cached_price(coin_id, days, prefix="velo_hist")
         if cached is not None:
             return cached
 
@@ -2196,7 +2200,7 @@ def get_historical_market_data(
                         "days": days,
                         "last_updated": time.time(),
                     }
-                    set_cached_price(coin_id, days, result)
+                    set_cached_price(coin_id, days, result, prefix="velo_hist")
                     return result
                 else:
                     logger.warning(
@@ -2239,7 +2243,7 @@ def get_historical_market_data(
                         "days": days,
                         "last_updated": time.time(),
                     }
-                    set_cached_price(coin_id, days, result)
+                    set_cached_price(coin_id, days, result, prefix="velo_hist")
                     return result
                 else:
                     logger.warning(f"Failed to fetch market data for {coin_id}")
@@ -3217,7 +3221,6 @@ def run(
     # Clear previous errors
     get_errors().clear()
 
-    # Apply configurable price cache TTL
     # Apply configurable price cache TTL and shared cache dict
     price_cache_ttl = kwargs.pop("price_cache_ttl", None)
     price_cache = kwargs.pop("price_cache", None)

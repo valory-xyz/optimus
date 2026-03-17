@@ -24,21 +24,21 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _clear_coingecko_price_caches():
-    """Clear CoinGecko price caches before each test to prevent cross-test pollution."""
-    from packages.valory.customs.balancer_pools_search.balancer_pools_search import (
-        COINGECKO_PRICE_CACHE as bal_cache,
-    )
-    from packages.valory.customs.uniswap_pools_search.uniswap_pools_search import (
-        COINGECKO_PRICE_CACHE as uni_cache,
-    )
-    from packages.valory.customs.velodrome_pools_search.velodrome_pools_search import (
-        COINGECKO_PRICE_CACHE as velo_cache,
-    )
+    """Reset CoinGecko price caches before each test.
 
-    bal_cache.clear()
-    uni_cache.clear()
-    velo_cache.clear()
+    Strategies use module-level COINGECKO_PRICE_CACHE dicts that can be
+    reassigned by run(price_cache=shared_dict).  Importing the name only
+    captures the reference at import time, so we reset the attribute on
+    the module directly to guarantee isolation regardless of reassignment.
+    """
+    import packages.valory.customs.balancer_pools_search.balancer_pools_search as bal
+    import packages.valory.customs.uniswap_pools_search.uniswap_pools_search as uni
+    import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as velo
+
+    bal.COINGECKO_PRICE_CACHE = {}
+    uni.COINGECKO_PRICE_CACHE = {}
+    velo.COINGECKO_PRICE_CACHE = {}
     yield
-    bal_cache.clear()
-    uni_cache.clear()
-    velo_cache.clear()
+    bal.COINGECKO_PRICE_CACHE = {}
+    uni.COINGECKO_PRICE_CACHE = {}
+    velo.COINGECKO_PRICE_CACHE = {}

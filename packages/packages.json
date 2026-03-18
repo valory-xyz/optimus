@@ -4,7 +4,7 @@
         "custom/valory/asset_lending/0.1.0": "bafybeibguibghowik2pp4yx3675k4dpr7epdl2chtub7ozp62e5hqbefhe",
         "custom/valory/max_apr_selection/0.1.0": "bafybeibktrritn4yv44dz3yxnzhyhfuqvzkjc6yis7idk54egc6q3y4wcm",
         "custom/valory/balancer_pools_search/0.1.0": "bafybeicdutfzjp47vqffpguum46d5ttp7d5cdu7a6kh6mjv3kdhwmlhy3q",
-        "custom/valory/uniswap_pools_search/0.1.0": "bafybeifye2kq47twuhngxoexl3eyn6enwfigaqlbfrqsvd2qmywjuzwhkq",
+        "custom/valory/uniswap_pools_search/0.1.0": "bafybeih2vc4q44zxd3aensfz3nvz426ruxcnw2wwp5beaxxa4jqsgv76ka",
         "custom/valory/velodrome_pools_search/0.1.0": "bafybeidv2rwth6z2ko4po3w3tntsfvuw7ty34opdefhzwctpp5gtghc3ea",
         "contract/valory/velodrome_router/0.1.0": "bafybeigeaclpkvjawpull4y6ay3bwr5kxkkqjympewneaxfwvwp3by3ksi",
         "contract/valory/velodrome_cl_pool/0.1.0": "bafybeihrz7qq5b2aem6u7hcn467x2hjhvp3j2phivpptpdfvqjh36ojklq",
@@ -25,8 +25,8 @@
         "connection/valory/mirror_db/0.1.0": "bafybeickaytigebxoabjmcrxibktwwm5zdzxvqhl7bp4sqx6wpacmueoe4",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeignun66pqws36s5wrvufhvw6p6hudz56utu6d64nyiz6hmid2jjle",
         "skill/valory/optimus_abci/0.1.0": "bafybeiawa65hgflrc45wqo3mjve4et3xkxzbrlaohgayduaz32e2vzfigu",
-        "agent/valory/optimus/0.1.0": "bafybeieh63h4bncobxfrc4nrjtzcuivphds2jp3iikqfv46lhntmawnazm",
-        "service/valory/optimus/0.1.0": "bafybeieyth4n5l7kojk4zk6wyx2lbg2nf7st6juudv3tp36fkxdu3r3pki"
+        "agent/valory/optimus/0.1.0": "bafybeig52md54mdcucyqpz7rywifbcg3ikg77trxqwwkt542x4tgertgcm",
+        "service/valory/optimus/0.1.0": "bafybeicsg6pllmdqt32dtjsh4s236dffeews34k6rcotue6ohdrurufqzm"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

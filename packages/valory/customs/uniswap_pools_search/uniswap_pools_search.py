@@ -517,12 +517,8 @@ def calculate_il_risk_score(
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
     try:
         # Check price cache for both tokens
-        cached_1 = get_cached_price(
-            token_0, time_period, price_cache, price_cache_ttl
-        )
-        cached_2 = get_cached_price(
-            token_1, time_period, price_cache, price_cache_ttl
-        )
+        cached_1 = get_cached_price(token_0, time_period, price_cache, price_cache_ttl)
+        cached_2 = get_cached_price(token_1, time_period, price_cache, price_cache_ttl)
 
         if cached_1 is not None and cached_2 is not None:
             prices_1 = cached_1
@@ -551,6 +547,8 @@ def calculate_il_risk_score(
                     to_timestamp=to_timestamp,
                 )
                 set_cached_price(token_0, time_period, prices_1, price_cache)
+            else:
+                prices_1 = cached_1
 
             if cached_2 is None:
                 prices_2 = cg.get_coin_market_chart_range_by_id(
@@ -560,6 +558,8 @@ def calculate_il_risk_score(
                     to_timestamp=to_timestamp,
                 )
                 set_cached_price(token_1, time_period, prices_2, price_cache)
+            else:
+                prices_2 = cached_2
     except Exception as e:
         get_errors().append(f"Error fetching price data: {e}")
         return None

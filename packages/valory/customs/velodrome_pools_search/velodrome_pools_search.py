@@ -273,26 +273,34 @@ COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwa
 
 
 def get_cached_price(
-    token_id: str, time_period: int, prefix: str = "il_range"
+    token_id: str,
+    time_period: int,
+    cache: Dict[str, Any],
+    ttl: int,
+    prefix: str = "il_range",
 ) -> Optional[Any]:
     """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
-    entry = COINGECKO_PRICE_CACHE.get(cache_key)
+    entry = cache.get(cache_key)
     if entry is None:
         return None
     elapsed = time.time() - entry["timestamp"]
-    if elapsed > COINGECKO_PRICE_CACHE_TTL:
+    if elapsed > ttl:
         return None
     logger.info(f"CoinGecko price cache hit for {token_id} (age {elapsed:.0f}s)")
     return entry["data"]
 
 
 def set_cached_price(
-    token_id: str, time_period: int, data: Any, prefix: str = "il_range"
+    token_id: str,
+    time_period: int,
+    data: Any,
+    cache: Dict[str, Any],
+    prefix: str = "il_range",
 ) -> None:
     """Cache CoinGecko price data with current timestamp."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
-    COINGECKO_PRICE_CACHE[cache_key] = {
+    cache[cache_key] = {
         "data": data,
         "timestamp": time.time(),
     }
@@ -522,8 +530,12 @@ def calculate_velodrome_il_risk_score_multi(
     chain=None,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
 ) -> float:
     """Calculate IL risk score for multiple tokens."""
+    if price_cache is None:
+        price_cache = {}
 
     # Create a debug data structure
     debug_data = {
@@ -558,7 +570,9 @@ def calculate_velodrome_il_risk_score_multi(
         for token_id in valid_token_ids:
             try:
                 # Check price cache first (stores raw API response)
-                cached = get_cached_price(token_id, time_period)
+                cached = get_cached_price(
+                    token_id, time_period, price_cache, price_cache_ttl
+                )
                 if cached is not None:
                     prices_data.append([x[1] for x in cached["prices"]])
                     continue
@@ -584,7 +598,7 @@ def calculate_velodrome_il_risk_score_multi(
                     from_timestamp=from_timestamp,
                     to_timestamp=to_timestamp,
                 )
-                set_cached_price(token_id, time_period, prices)
+                set_cached_price(token_id, time_period, prices, price_cache)
                 prices_data.append([x[1] for x in prices["prices"]])
                 time.sleep(1)  # Rate limiting
             except Exception as e:
@@ -1323,7 +1337,12 @@ def calculate_tvl_from_reserves(
 
 
 def calculate_position_details_for_velodrome(
-    pool_data, coingecko_api_key: None, x402_session=None, x402_proxy=None
+    pool_data,
+    coingecko_api_key: None,
+    x402_session=None,
+    x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
 ):
     """Calculate APR and other position data for a pool based on the official Velodrome formula"""
     # Extract necessary values from pool data
@@ -1403,6 +1422,8 @@ def calculate_position_details_for_velodrome(
                     coingecko_api_key=coingecko_api_key,
                     x402_session=x402_session,
                     x402_proxy=x402_proxy,
+                    price_cache=price_cache,
+                    price_cache_ttl=price_cache_ttl,
                 )
 
                 if tick_bands:
@@ -2160,11 +2181,17 @@ def get_historical_market_data(
     coingecko_api_key: Optional[str] = None,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
 ) -> Optional[Dict[str, Any]]:
     """Get historical market data using x402 requests when available"""
+    if price_cache is None:
+        price_cache = {}
     try:
         # Check price cache first
-        cached = get_cached_price(coin_id, days, prefix="velo_hist")
+        cached = get_cached_price(
+            coin_id, days, price_cache, price_cache_ttl, prefix="velo_hist"
+        )
         if cached is not None:
             return cached
 
@@ -2199,7 +2226,9 @@ def get_historical_market_data(
                         "days": days,
                         "last_updated": time.time(),
                     }
-                    set_cached_price(coin_id, days, result, prefix="velo_hist")
+                    set_cached_price(
+                        coin_id, days, result, price_cache, prefix="velo_hist"
+                    )
                     return result
                 else:
                     logger.warning(
@@ -2242,7 +2271,9 @@ def get_historical_market_data(
                         "days": days,
                         "last_updated": time.time(),
                     }
-                    set_cached_price(coin_id, days, result, prefix="velo_hist")
+                    set_cached_price(
+                        coin_id, days, result, price_cache, prefix="velo_hist"
+                    )
                     return result
                 else:
                     logger.warning(f"Failed to fetch market data for {coin_id}")
@@ -2265,6 +2296,8 @@ def get_pool_token_history(
     coingecko_api_key: Optional[str] = None,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
 ) -> Optional[Dict[str, Any]]:
     """Fetch historical price data for a token pair"""
     logger.info(
@@ -2303,10 +2336,22 @@ def get_pool_token_history(
 
         # Get price history for both tokens
         token0_data = get_historical_market_data(
-            token0_id, days, coingecko_api_key, x402_session, x402_proxy
+            token0_id,
+            days,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
+            price_cache_ttl=price_cache_ttl,
         )
         token1_data = get_historical_market_data(
-            token1_id, days, coingecko_api_key, x402_session, x402_proxy
+            token1_id,
+            days,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
+            price_cache_ttl=price_cache_ttl,
         )
 
         # Check if we have valid price data
@@ -2355,6 +2400,8 @@ def calculate_tick_lower_and_upper_velodrome(
     coingecko_api_key=None,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
 ) -> Optional[List[Dict[str, Any]]]:
     """Calculate optimal tick ranges for a Velodrome Concentrated position based on pool features."""
     logger.info(
@@ -2401,6 +2448,8 @@ def calculate_tick_lower_and_upper_velodrome(
                 coingecko_api_key=coingecko_api_key,
                 x402_session=x402_session,
                 x402_proxy=x402_proxy,
+                price_cache=price_cache,
+                price_cache_ttl=price_cache_ttl,
             )
 
             # Check if we have valid pool data
@@ -2653,6 +2702,8 @@ def format_velodrome_pool_data(
     coin_id_mapping=None,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
     **kwargs,
 ) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
@@ -2694,7 +2745,12 @@ def format_velodrome_pool_data(
         }
 
         position_data = calculate_position_details_for_velodrome(
-            sugar_data, coingecko_api_key, x402_session, x402_proxy
+            sugar_data,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
+            price_cache_ttl=price_cache_ttl,
         )
         if position_data is None:
             logger.error(
@@ -2770,6 +2826,8 @@ def format_velodrome_pool_data(
                         chain=chain_name,
                         x402_session=x402_session,
                         x402_proxy=x402_proxy,
+                        price_cache=price_cache,
+                        price_cache_ttl=price_cache_ttl,
                     )
                     formatted_pool["il_risk_score"] = il_risk_score
                     logger.info(
@@ -3008,6 +3066,8 @@ def get_opportunities_for_velodrome(
     coin_id_mapping=None,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
     **kwargs,
 ):
     """
@@ -3089,6 +3149,8 @@ def get_opportunities_for_velodrome(
         coin_id_mapping,
         x402_session=x402_session,
         x402_proxy=x402_proxy,
+        price_cache=price_cache,
+        price_cache_ttl=price_cache_ttl,
         max_allocation_percentage=max_allocation_percentage,
     )
 
@@ -3115,6 +3177,8 @@ def calculate_metrics(
     coin_id_mapping: List[Any],
     x402_session: Optional[Any] = None,
     x402_proxy: Optional[Any] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -3173,6 +3237,8 @@ def calculate_metrics(
                 chain=chain,
                 x402_session=x402_session,
                 x402_proxy=x402_proxy,
+                price_cache=price_cache,
+                price_cache_ttl=price_cache_ttl,
             )
 
         # Calculate Sharpe ratio
@@ -3221,13 +3287,10 @@ def run(
     get_errors().clear()
 
     # Apply configurable price cache TTL and shared cache dict
-    price_cache_ttl = kwargs.pop("price_cache_ttl", None)
-    price_cache = kwargs.pop("price_cache", None)
-    global COINGECKO_PRICE_CACHE_TTL, COINGECKO_PRICE_CACHE
-    if price_cache_ttl is not None:
-        COINGECKO_PRICE_CACHE_TTL = int(price_cache_ttl)
-    if price_cache is not None:
-        COINGECKO_PRICE_CACHE = price_cache
+    price_cache_ttl_val = int(kwargs.pop("price_cache_ttl", 1800))
+    price_cache_val = kwargs.pop("price_cache", None)
+    if price_cache_val is None:
+        price_cache_val = {}
 
     # Force refresh cache if requested
     if force_refresh:
@@ -3267,6 +3330,8 @@ def run(
             coin_id_mapping=kwargs["coin_id_mapping"],
             x402_session=kwargs.get("x402_session"),
             x402_proxy=kwargs.get("x402_proxy"),
+            price_cache=price_cache_val,
+            price_cache_ttl=price_cache_ttl_val,
         )
 
         if metrics is None:
@@ -3332,6 +3397,8 @@ def run(
             "coin_id_mapping": kwargs.get("coin_id_mapping"),
             "x402_session": kwargs.get("x402_session"),
             "x402_proxy": kwargs.get("x402_proxy"),
+            "price_cache": price_cache_val,
+            "price_cache_ttl": price_cache_ttl_val,
         }
 
         # Create a copy of kwargs without the explicitly passed parameters

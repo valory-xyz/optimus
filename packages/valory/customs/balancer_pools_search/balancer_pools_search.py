@@ -90,32 +90,40 @@ LP = "lp"
 # Thread-local storage for errors
 _thread_local = threading.local()
 
-# CoinGecko price cache with per-key timestamps
-COINGECKO_PRICE_CACHE: Dict[str, Any] = {}
-COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwargs
+# CoinGecko price cache defaults (not used at runtime; pass via params)
+DEFAULT_PRICE_CACHE: Dict[str, Any] = {}
+DEFAULT_PRICE_CACHE_TTL: int = 1800  # default 30 minutes
 
 
 def get_cached_price(
-    token_id: str, time_period: int, prefix: str = "il_range"
+    token_id: str,
+    time_period: int,
+    cache: Dict[str, Any],
+    ttl: int,
+    prefix: str = "il_range",
 ) -> Optional[Any]:
     """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
-    entry = COINGECKO_PRICE_CACHE.get(cache_key)
+    entry = cache.get(cache_key)
     if entry is None:
         return None
     elapsed = time.time() - entry["timestamp"]
-    if elapsed > COINGECKO_PRICE_CACHE_TTL:
+    if elapsed > ttl:
         return None
     logger.info(f"CoinGecko price cache hit for {token_id} (age {elapsed:.0f}s)")
     return entry["data"]
 
 
 def set_cached_price(
-    token_id: str, time_period: int, data: Any, prefix: str = "il_range"
+    token_id: str,
+    time_period: int,
+    data: Any,
+    cache: Dict[str, Any],
+    prefix: str = "il_range",
 ) -> None:
     """Cache CoinGecko price data with current timestamp."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
-    COINGECKO_PRICE_CACHE[cache_key] = {
+    cache[cache_key] = {
         "data": data,
         "timestamp": time.time(),
     }
@@ -469,8 +477,12 @@ def calculate_il_risk_score_multi(
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
     time_period: int = 90,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
 ) -> float:
     """Calculate IL risk score for multiple tokens."""
+    if price_cache is None:
+        price_cache = {}
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
 
@@ -485,7 +497,9 @@ def calculate_il_risk_score_multi(
         for token_id in valid_token_ids:
             try:
                 # Check price cache first (stores raw API response)
-                cached = get_cached_price(token_id, time_period)
+                cached = get_cached_price(
+                    token_id, time_period, price_cache, price_cache_ttl
+                )
                 if cached is not None:
                     prices_data.append([x[1] for x in cached["prices"]])
                     continue
@@ -511,7 +525,7 @@ def calculate_il_risk_score_multi(
                     from_timestamp=from_timestamp,
                     to_timestamp=to_timestamp,
                 )
-                set_cached_price(token_id, time_period, prices)
+                set_cached_price(token_id, time_period, prices, price_cache)
                 prices_data.append([x[1] for x in prices["prices"]])
                 time.sleep(1)  # Rate limiting
             except Exception as e:
@@ -1314,6 +1328,8 @@ def get_opportunities_for_balancer(
     coin_id_mapping,
     x402_session,
     x402_proxy,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
     **kwargs,
 ):
     """Get and format pool opportunities with investment calculations."""
@@ -1366,7 +1382,12 @@ def get_opportunities_for_balancer(
         valid_token_ids = [tid for tid in token_ids if tid]
         if len(valid_token_ids) >= 2:
             pool["il_risk_score"] = calculate_il_risk_score_multi(
-                valid_token_ids, coingecko_api_key, x402_session, x402_proxy
+                valid_token_ids,
+                coingecko_api_key,
+                x402_session,
+                x402_proxy,
+                price_cache=price_cache,
+                price_cache_ttl=price_cache_ttl,
             )
             logger.info(f"IL risk score calculated: {pool['il_risk_score']}")
         else:
@@ -1397,6 +1418,8 @@ def calculate_metrics(
     coin_id_mapping: dict,
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
     # Dynamic handling of tokens
@@ -1429,7 +1452,12 @@ def calculate_metrics(
     il_risk_score = None
     if len(valid_token_ids) >= 2:
         il_risk_score = calculate_il_risk_score_multi(
-            valid_token_ids, coingecko_api_key, x402_session, x402_proxy
+            valid_token_ids,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
+            price_cache_ttl=price_cache_ttl,
         )
 
     sharpe_ratio = get_balancer_pool_sharpe_ratio(
@@ -1469,14 +1497,11 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     logger.info("Starting Balancer pools search execution")
     logger.info(f"Input parameters: {list(kwargs.keys())}")
 
-    # Apply configurable price cache TTL and shared cache dict
-    price_cache_ttl = kwargs.pop("price_cache_ttl", None)
-    price_cache = kwargs.pop("price_cache", None)
-    global COINGECKO_PRICE_CACHE_TTL, COINGECKO_PRICE_CACHE
-    if price_cache_ttl is not None:
-        COINGECKO_PRICE_CACHE_TTL = int(price_cache_ttl)
-    if price_cache is not None:
-        COINGECKO_PRICE_CACHE = price_cache
+    # Extract price cache config from kwargs before dispatching
+    price_cache_ttl_val = int(kwargs.pop("price_cache_ttl", 1800))
+    price_cache_val = kwargs.pop("price_cache", None)
+    if price_cache_val is None:
+        price_cache_val = {}
 
     missing = check_missing_fields(kwargs)
     if missing:
@@ -1495,7 +1520,11 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
 
     if get_metrics:
         logger.info("Calculating metrics for position")
-        metrics = calculate_metrics(**kwargs)
+        metrics = calculate_metrics(
+            price_cache=price_cache_val,
+            price_cache_ttl=price_cache_ttl_val,
+            **kwargs,
+        )
         if metrics is None:
             logger.error("Failed to calculate metrics")
             get_errors().append("Failed to calculate metrics.")
@@ -1504,7 +1533,11 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
         return {"error": get_errors()} if get_errors() else metrics
     else:
         logger.info("Searching for investment opportunities")
-        result = get_opportunities_for_balancer(**kwargs)
+        result = get_opportunities_for_balancer(
+            price_cache=price_cache_val,
+            price_cache_ttl=price_cache_ttl_val,
+            **kwargs,
+        )
         if isinstance(result, dict) and "error" in result:
             logger.error(f"Error in opportunity search: {result['error']}")
             get_errors().append(result["error"])

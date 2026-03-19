@@ -9,28 +9,28 @@ fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
   behaviours/apr_population.py: bafybeihbrgslrn5ks5sr7h6npswsdb6bcg4xjahtknw2sffevicxrwlq5i
-  behaviours/base.py: bafybeidzf6nw4zpf7yfpl7mxj3tu7ebxwyrclrlnaex3t2ls4h63cgokre
+  behaviours/base.py: bafybeibyqvwhzrgevvqykk2fdglrnngjharjn6xo7p4oqnnll45qb47kja
   behaviours/call_checkpoint.py: bafybeifo4us3o55gkrsfecxnuop7qdbsnaj4dfc4pj4soxfpx6qiztddeq
   behaviours/check_staking_kpi_met.py: bafybeigiala5rucuxthkmoirq3hfdrtd3um4uuwiavufs6k4xiw3kta35y
-  behaviours/decision_making.py: bafybeibxpz25t6wl46bh7a6zralg5lddtvhostqs53mbali5uj245wbdmi
-  behaviours/evaluate_strategy.py: bafybeia2k6kmypmant4yczpaicuc2wvropnn2kmft2xegvx3g6txihanvm
+  behaviours/decision_making.py: bafybeidvpakmgzvufbfh7uajesek6n47pikmknj4z5ztzr6evgzfmfraha
+  behaviours/evaluate_strategy.py: bafybeifalis2hz7nttqi5jkc6i2ylyruw4ee4kqf3zlkzzdfw6muade67q
   behaviours/fetch_strategies.py: bafybeifdhfds3x3q4ecfy5h6p36bjvsymjqizhkvwpiwksjl5fcrglhwve
   behaviours/get_positions.py: bafybeihmv3pjtso44gwtwzqjp62cb5n5qtxhxqpc5ybsrixp2cmtplpifa
   behaviours/post_tx_settlement.py: bafybeid2wjs3damzbsors5jr4rt7kbkbieljaex64b52zphfteve4hfnli
   behaviours/round_behaviour.py: bafybeicqhex5umf4ngytpgcrtf27qiwdytidqedzx2jzxhgxottpukabum
-  behaviours/withdraw_funds.py: bafybeihh4aags6llektftda5gjm5dpodfzowrv5huxf27yrt36fj5n3hcq
+  behaviours/withdraw_funds.py: bafybeib5p4mxgty5e4i7eribxlihanhybfqpn6zvrc5qcj5ndwfdgbiwku
   dialogues.py: bafybeievwxiev22jjoqwwdaxfn6oedevemy7e4hsj3pei4kvorwjxsdyxi
   fsm_specification.yaml: bafybeieqpelkdmo5shywlun3v53dgpv4gwscs3kton5deww2xztfwx5uvu
   handlers.py: bafybeignomrsbhu5wumnchfkbvdpw6wnhk5cx5mieyuq3dueubbp2lsp2m
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiddicjgk2d65z436nlfene4j3bpeht66izmwra7s5ntu2sktvpzo4
+  models.py: bafybeiejx4wiiozwsykmgu47g2ntyqnnhiwduucguftqmwdvfcz7qskk7m
   payloads.py: bafybeiefg35dfa2b6tl6mhtq6pmlqzud4qm6axvpqefkz7qg2w23yub2om
   pool_behaviour.py: bafybeigztdzmnzkkbyjdpbfxt25v73fezgdg5vckr75jujcjzckd3grzw4
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
   pools/balancer.py: bafybeigqgrn23bwqjj3c2ptui34di4jnug7kqmyev3jtqxu357qxogc62i
   pools/uniswap.py: bafybeidqb22ks7bc3lwtkyvc3a2pa554ldq6p5xgorbiro3aittaed6754
-  pools/velodrome.py: bafybeihlglaem6k3vx76qjv75bdyytrcddoif3kwzgwgpa6smtzmprr26a
+  pools/velodrome.py: bafybeibv4lahzc2lg3accmrho6ssmtueo5bomux6mqkt3tylkyt24knkza
   rounds.py: bafybeiao54i3b3s6dz7lme24l7isj62b6lufnyuvez2fzeppybbfk7qgnm
   rounds_info.py: bafybeifwcra5ytabjigrwei6t63ajjy54fe444pbwsvi4tf2copnxi5r2i
   states/__init__.py: bafybeie5h3g3ndkq4c7tnv6c25tp64fn3jwyaatsm4buwyz2qiakpecgoy
@@ -53,7 +53,7 @@ fingerprint:
   tests/behaviours/test_call_checkpoint.py: bafybeichc7rmi55lg5jo657x32zb443r3lstivhj4ijc534lgi2u33pkke
   tests/behaviours/test_check_staking_kpi_met.py: bafybeib2nmk66boi42cpotgnpxlbpdtov3oiua77wprb3x63qjve5zb4vq
   tests/behaviours/test_decision_making.py: bafybeif5bqpc267ptnsis63f2cwqjq4gcl6gday2adh4tr72ajsobsxpxm
-  tests/behaviours/test_evaluate_strategy.py: bafybeigddzx7awz4j5smgr6dfz3k6yviydst37so2nkctbsaye32bmh2me
+  tests/behaviours/test_evaluate_strategy.py: bafybeifdx2bjhuypz7har2rqbpsee4nv72y63jpybqhh7bwh242pkwt6rq
   tests/behaviours/test_fetch_strategies.py: bafybeig3axm7uvetdjjk5xci6c5ywkqbkceshcumpydeks4oy7xb3xwntu
   tests/behaviours/test_get_positions.py: bafybeial3qhqe6rwwspzvzp7xrw2upf7pjhtvgmtmomwz5zhjcd3q5nrmy
   tests/behaviours/test_post_tx_settlement.py: bafybeiariqcbvwh4rw3s2pzhbzqmagyq6irv7muytafvlue4jqgqsn3nt4
@@ -337,6 +337,9 @@ models:
       velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8"}'
       velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81"}'
       stoploss_threshold_multiplier: 0.43
+      strategy_backoff_base_seconds: 1800
+      strategy_backoff_max_seconds: 14400
+      strategy_price_cache_ttl: 1800
     class_name: Params
   coingecko:
     args:

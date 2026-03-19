@@ -3618,7 +3618,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")
             self.context.logger.info(
-                f"APR: {effective_apr*100:.2f}%, Principal: ${principal:.6f}, Entry Cost: ${entry_cost:.6f}"
+                f"APR: {effective_apr * 100:.2f}%, Principal: ${principal:.6f}, Entry Cost: ${entry_cost:.6f}"
             )
             self.context.logger.info(
                 f"CT: {CT:.4f}%, Vy: {Vy:.6f} (daily), MPT: {mpt_days:.6f} days, Final: {result:.1f} days"

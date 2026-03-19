@@ -73,9 +73,9 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             # Log position details for debugging
             for i, pos in enumerate(positions):
                 self.context.logger.info(
-                    f"Position {i+1}: {pos.get('pool_address', 'N/A')} - {pos.get('dex_type', 'N/A')} - Status: {pos.get('status', 'N/A')}"
+                    f"Position {i + 1}: {pos.get('pool_address', 'N/A')} - {pos.get('dex_type', 'N/A')} - Status: {pos.get('status', 'N/A')}"
                 )
-                self.context.logger.info(f"Position {i+1} full data: {pos}")
+                self.context.logger.info(f"Position {i + 1} full data: {pos}")
 
             # Read withdrawal data to get target address
             self.context.logger.info("Reading withdrawal data...")
@@ -294,7 +294,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Positions data: {positions}")
 
         for i, position in enumerate(positions):
-            self.context.logger.info(f"Processing position {i+1}: {position}")
+            self.context.logger.info(f"Processing position {i + 1}: {position}")
             status = position.get("status")
 
             if status == PositionStatus.OPEN.value:
@@ -327,15 +327,15 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Positions data: {positions}")
 
         for i, position in enumerate(positions):
-            self.context.logger.info(f"Processing position {i+1}: {position}")
-            self.context.logger.info(f"Position {i+1} keys: {list(position.keys())}")
+            self.context.logger.info(f"Processing position {i + 1}: {position}")
+            self.context.logger.info(f"Position {i + 1} keys: {list(position.keys())}")
             status = position.get("status")
             self.context.logger.info(
-                f"Position {i+1} status: {status} (type: {type(status)})"
+                f"Position {i + 1} status: {status} (type: {type(status)})"
             )
 
             if status == "OPEN" or status == "open":
-                self.context.logger.info(f"Creating exit action for position {i+1}")
+                self.context.logger.info(f"Creating exit action for position {i + 1}")
 
                 # Use base class method to build exit action
                 action = self._build_exit_pool_action_base(position)
@@ -363,11 +363,11 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                     actions.append(action)
                 else:
                     self.context.logger.error(
-                        f"Failed to create exit action for position {i+1}"
+                        f"Failed to create exit action for position {i + 1}"
                     )
             else:
                 self.context.logger.info(
-                    f"Skipping position {i+1} with status: {status}"
+                    f"Skipping position {i + 1} with status: {status}"
                 )
 
         self.context.logger.info(f"Total exit actions prepared: {len(actions)}")

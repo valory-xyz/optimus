@@ -65,6 +65,11 @@ class SharedState(BaseSharedState):
         self.agent_reasoning: str = ""
         self._token_price_cache = {}
         self._token_price_cache_ttl = 600
+        # Strategy evaluation backoff state
+        self.consecutive_no_action_count: int = 0
+        self.last_strategy_evaluation_time: float = 0.0
+        # Shared price cache passed to strategies via kwargs
+        self.strategy_coingecko_price_cache: Dict[str, Any] = {}
 
     def setup(self) -> None:
         """Set up the model."""
@@ -444,6 +449,15 @@ class Params(BaseParams):
         )
         self.stoploss_threshold_multiplier = kwargs.get(
             "stoploss_threshold_multiplier", 0.43
+        )
+        self.strategy_backoff_base_seconds: int = kwargs.pop(
+            "strategy_backoff_base_seconds", 1800
+        )
+        self.strategy_backoff_max_seconds: int = kwargs.pop(
+            "strategy_backoff_max_seconds", 14400
+        )
+        self.strategy_price_cache_ttl: int = kwargs.pop(
+            "strategy_price_cache_ttl", 1800
         )
         super().__init__(*args, **kwargs)
 

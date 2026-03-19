@@ -58,6 +58,7 @@ from packages.valory.customs.velodrome_pools_search.velodrome_pools_search impor
     fetch_token_name_from_contract,
     format_velodrome_pool_data,
     get_cached_data,
+    get_cached_price,
     get_coin_id_from_address,
     get_coin_id_from_symbol,
     get_current_pool_price,
@@ -81,6 +82,7 @@ from packages.valory.customs.velodrome_pools_search.velodrome_pools_search impor
     run,
     run_monte_carlo_level,
     set_cached_data,
+    set_cached_price,
     standardize_metrics,
     _reset_x402_adapter,
 )
@@ -4250,3 +4252,84 @@ class TestOperatorPrecedenceBug:
         )
         # Pool with <2 tokens is skipped entirely (continue)
         assert len(result) == 0
+
+
+class TestGetCachedPriceVelodrome:
+    """Tests for velodrome get_cached_price function."""
+
+    def test_cache_miss_returns_none(self):
+        """Test that missing cache key returns None."""
+        assert get_cached_price("token", 90, {}, 1800) is None
+
+    def test_cache_hit_returns_data(self):
+        """Test that valid (non-expired) cache entry returns data."""
+        cache = {}
+        set_cached_price("token", 90, {"prices": [[0, 100]]}, cache)
+        result = get_cached_price("token", 90, cache, 1800)
+        assert result == {"prices": [[0, 100]]}
+
+    def test_cache_expired_returns_none(self):
+        """Test that expired cache entry returns None."""
+        cache = {
+            "il_range_token_90": {
+                "data": {"prices": [[0, 100]]},
+                "timestamp": time.time() - 3600,
+            }
+        }
+        result = get_cached_price("token", 90, cache, 1800)
+        assert result is None
+
+
+class TestCalculateVelodromeIlRiskScoreMultiWithCache:
+    """Tests for calculate_velodrome_il_risk_score_multi with cache."""
+
+    def test_all_tokens_cached(self):
+        """Test that cached price data skips CoinGeckoAPI calls."""
+        prices_t0 = {"prices": [[i, 100 + i * 0.5] for i in range(50)]}
+        prices_t1 = {"prices": [[i, 200 + i * 0.3] for i in range(50)]}
+        cache = {}
+        set_cached_price("t0", 90, prices_t0, cache)
+        set_cached_price("t1", 90, prices_t1, cache)
+        result = calculate_velodrome_il_risk_score_multi(
+            ["t0", "t1"], "key", price_cache=cache
+        )
+        assert isinstance(result, float)
+
+    def test_price_cache_none_defaults_to_empty_dict(self):
+        """Test that passing price_cache=None does not crash."""
+        result = calculate_velodrome_il_risk_score_multi(
+            ["t0", None], "key", price_cache=None
+        )
+        assert result is None
+
+
+class TestGetHistoricalMarketDataWithCache:
+    """Tests for get_historical_market_data with cache."""
+
+    def test_cache_hit_returns_cached_data(self):
+        """Test that cached data is returned without API call."""
+        cached_data = {
+            "prices": [[1000000, 50000], [1000001, 50100]],
+            "market_caps": [],
+            "total_volumes": [],
+        }
+        cache = {}
+        set_cached_price("bitcoin", 90, cached_data, cache, prefix="velo_hist")
+        result = get_historical_market_data(
+            "bitcoin", 90, coingecko_api_key="key", price_cache=cache
+        )
+        assert result == cached_data
+
+    def test_price_cache_none_defaults_to_empty_dict(self):
+        """Test that passing price_cache=None does not crash."""
+        result = get_historical_market_data("bitcoin", 90, price_cache=None)
+        assert result is None
+
+
+class TestRunWithPriceCacheVelodrome:
+    """Tests for run() with explicit price_cache dict."""
+
+    def test_run_with_explicit_price_cache(self):
+        """Test that run() accepts a non-None price_cache without error."""
+        result = run(price_cache={}, price_cache_ttl=600)
+        assert "error" in result

@@ -25,9 +25,9 @@ warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import json
 import logging
-import time
-import threading
 import statistics
+import threading
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -81,6 +81,44 @@ LP = "lp"
 
 # Thread-local storage for errors
 _thread_local = threading.local()
+
+# CoinGecko price cache with per-key timestamps
+COINGECKO_PRICE_CACHE: Dict[str, Any] = {}
+COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwargs
+
+
+def get_cached_price(
+    token_id: str,
+    time_period: int,
+    cache: Dict[str, Any],
+    ttl: int,
+    prefix: str = "il_range",
+) -> Optional[Any]:
+    """Get cached CoinGecko price data if it exists and is not expired."""
+    cache_key = f"{prefix}_{token_id}_{time_period}"
+    entry = cache.get(cache_key)
+    if entry is None:
+        return None
+    elapsed = time.time() - entry["timestamp"]
+    if elapsed > ttl:
+        return None
+    logger.info(f"CoinGecko price cache hit for {token_id} (age {elapsed:.0f}s)")
+    return entry["data"]
+
+
+def set_cached_price(
+    token_id: str,
+    time_period: int,
+    data: Any,
+    cache: Dict[str, Any],
+    prefix: str = "il_range",
+) -> None:
+    """Cache CoinGecko price data with current timestamp."""
+    cache_key = f"{prefix}_{token_id}_{time_period}"
+    cache[cache_key] = {
+        "data": data,
+        "timestamp": time.time(),
+    }
 
 
 def get_errors():
@@ -470,36 +508,58 @@ def calculate_il_risk_score(
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
     time_period: int = 90,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
 ) -> float:
+    if price_cache is None:
+        price_cache = {}
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
     try:
-        cg = CoinGeckoAPI()
-        if x402_session is not None and x402_proxy is not None:
-            logger.info("Using x402 signer for CoinGecko API requests")
-            _reset_x402_adapter(x402_session)
-            cg.session = x402_session
-            cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+        # Check price cache for both tokens
+        cached_1 = get_cached_price(token_0, time_period, price_cache, price_cache_ttl)
+        cached_2 = get_cached_price(token_1, time_period, price_cache, price_cache_ttl)
+
+        if cached_1 is not None and cached_2 is not None:
+            prices_1 = cached_1
+            prices_2 = cached_2
         else:
-            if not coingecko_api_key:
-                return None
-            is_pro = is_pro_api_key(coingecko_api_key)
-            if is_pro:
-                cg = CoinGeckoAPI(api_key=coingecko_api_key)
+            cg = CoinGeckoAPI()
+            if x402_session is not None and x402_proxy is not None:
+                logger.info("Using x402 signer for CoinGecko API requests")
+                _reset_x402_adapter(x402_session)
+                cg.session = x402_session
+                cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
             else:
-                cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
-        prices_1 = cg.get_coin_market_chart_range_by_id(
-            id=token_0,
-            vs_currency="usd",
-            from_timestamp=from_timestamp,
-            to_timestamp=to_timestamp,
-        )
-        prices_2 = cg.get_coin_market_chart_range_by_id(
-            id=token_1,
-            vs_currency="usd",
-            from_timestamp=from_timestamp,
-            to_timestamp=to_timestamp,
-        )
+                if not coingecko_api_key:
+                    return None
+                is_pro = is_pro_api_key(coingecko_api_key)
+                if is_pro:
+                    cg = CoinGeckoAPI(api_key=coingecko_api_key)
+                else:
+                    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+
+            if cached_1 is None:
+                prices_1 = cg.get_coin_market_chart_range_by_id(
+                    id=token_0,
+                    vs_currency="usd",
+                    from_timestamp=from_timestamp,
+                    to_timestamp=to_timestamp,
+                )
+                set_cached_price(token_0, time_period, prices_1, price_cache)
+            else:
+                prices_1 = cached_1
+
+            if cached_2 is None:
+                prices_2 = cg.get_coin_market_chart_range_by_id(
+                    id=token_1,
+                    vs_currency="usd",
+                    from_timestamp=from_timestamp,
+                    to_timestamp=to_timestamp,
+                )
+                set_cached_price(token_1, time_period, prices_2, price_cache)
+            else:
+                prices_2 = cached_2
     except Exception as e:
         get_errors().append(f"Error fetching price data: {e}")
         return None
@@ -530,8 +590,7 @@ def calculate_il_risk_score(
 
 
 def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]:
-    query = {
-        "query": f"""
+    query = {"query": f"""
         {{
           pool(id: "{pool_id.lower()}") {{
             id
@@ -551,8 +610,7 @@ def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]
             totalValueLockedToken1
           }}
         }}
-        """
-    }
+        """}
     try:
         response = requests.post(
             SUBGRAPH_URL,
@@ -623,6 +681,8 @@ def get_opportunities_for_uniswap(
     coin_id_mapping,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
     **kwargs,
 ) -> List[Dict[str, Any]]:
     logger.info(f"Getting Uniswap opportunities for chains: {chains}")
@@ -681,7 +741,13 @@ def get_opportunities_for_uniswap(
                 f"Calculating IL risk score for {token_0_symbol}/{token_1_symbol}"
             )
             pool["il_risk_score"] = calculate_il_risk_score(
-                token_0_id, token_1_id, coingecko_api_key, x402_session, x402_proxy
+                token_0_id,
+                token_1_id,
+                coingecko_api_key,
+                x402_session,
+                x402_proxy,
+                price_cache=price_cache,
+                price_cache_ttl=price_cache_ttl,
             )
         else:
             logger.warning(
@@ -715,6 +781,8 @@ def calculate_metrics(
     coin_id_mapping,
     x402_session,
     x402_proxy,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
     token_0_id = get_coin_id_from_symbol(
@@ -725,7 +793,13 @@ def calculate_metrics(
     )
     il_risk_score = (
         calculate_il_risk_score(
-            token_0_id, token_1_id, coingecko_api_key, x402_session, x402_proxy
+            token_0_id,
+            token_1_id,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
+            price_cache_ttl=price_cache_ttl,
         )
         if token_0_id and token_1_id
         else None
@@ -750,6 +824,12 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     logger.info("Starting Uniswap pools search strategy execution")
     logger.info(f"Received kwargs: {list(kwargs.keys())}")
 
+    # Extract price cache config as local variables
+    price_cache_ttl_val = int(kwargs.pop("price_cache_ttl", 1800))
+    price_cache_val = kwargs.pop("price_cache", None)
+    if price_cache_val is None:
+        price_cache_val = {}
+
     missing = check_missing_fields(kwargs)
     if missing:
         logger.error(f"Required kwargs {missing} were not provided")
@@ -765,14 +845,22 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
 
     if get_metrics:
         logger.info("Calculating metrics for existing position")
-        metrics = calculate_metrics(**kwargs)
+        metrics = calculate_metrics(
+            price_cache=price_cache_val,
+            price_cache_ttl=price_cache_ttl_val,
+            **kwargs,
+        )
         if metrics is None:
             logger.error("Failed to calculate metrics")
             get_errors().append("Failed to calculate metrics.")
         return {"error": get_errors()} if get_errors() else metrics
     else:
         logger.info("Finding best Uniswap opportunities")
-        result = get_opportunities_for_uniswap(**kwargs)
+        result = get_opportunities_for_uniswap(
+            price_cache=price_cache_val,
+            price_cache_ttl=price_cache_ttl_val,
+            **kwargs,
+        )
         if isinstance(result, dict) and "error" in result:
             logger.error(f"Error in get_opportunities_for_uniswap: {result['error']}")
             get_errors().append(result["error"])

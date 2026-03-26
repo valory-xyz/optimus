@@ -218,21 +218,21 @@ Once you have configured the environment variables:
     autonomy fetch --local --service valory/optimus && cd optimus
     ```
 
-2. Build the Docker image:
+2. Run as a local agent (development):
 
     ```bash
-    autonomy build-image
+    pip install aea-helpers
+    aea-helpers run-agent \
+      --name valory/optimus \
+      --config-replace \
+      --config-mapping config-mapping.json \
+      --connection-key
     ```
 
-3. Copy your `keys.json` file to the current directory:
+    To run multiple agents on the same machine, add `--free-ports`.
+
+3. Run as a service (Docker deployment):
 
     ```bash
-    cp path/to/keys.json .
-    ```
-
-4. Build the deployment with a single agent and run:
-
-    ```bash
-    autonomy deploy build --n 1 -ltm
-    autonomy deploy run --build-dir abci_build/
+    aea-helpers run-service --name valory/optimus --env-file .env
     ```

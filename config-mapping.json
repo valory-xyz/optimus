@@ -1,0 +1,10 @@
+{
+  "config/ledger_apis/mode/address": "MODE_LEDGER_RPC",
+  "models/params/args/setup/all_participants": "ALL_PARTICIPANTS",
+  "models/params/args/safe_contract_addresses": "SAFE_CONTRACT_ADDRESSES",
+  "models/coingecko/args/api_key": "COINGECKO_API_KEY",
+  "models/params/args/target_investment_chains": "TARGET_INVESTMENT_CHAINS",
+  "models/params/args/store_path": "STORE_PATH",
+  "models/benchmark_tool/args/log_dir": "LOG_DIR",
+  "config/store_path": "STORE_PATH"
+}

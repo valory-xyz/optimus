@@ -222,6 +222,13 @@ Once you have configured the environment variables:
 
     ```bash
     pip install aea-helpers
+
+    # Create data directory and set environment variables
+    mkdir -p data
+    export STORE_PATH=$(pwd)/data
+    export LOG_DIR=$(pwd)/data
+
+    # Run the agent
     aea-helpers run-agent \
       --name valory/optimus \
       --config-replace \
@@ -230,6 +237,8 @@ Once you have configured the environment variables:
     ```
 
     To run multiple agents on the same machine, add `--free-ports`.
+
+    > **Note:** `STORE_PATH` and `LOG_DIR` must be set to an absolute path before running. The `config-replace` step substitutes these into the agent config. You can also set them in your `.env` file.
 
 3. Run as a service (Docker deployment):
 

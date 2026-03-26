@@ -114,7 +114,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
-- dvilela/genai:0.1.0:bafybeic3ydvjmb33addd5ye3et3xl4enhmoug4n4agmutz6xgan7rvpqiq
+- dvilela/genai:0.1.0:bafybeieuwwoww4scfzs7ljzlmotldu5jp24o4h235qy54ovliwxf6zjxai
 - dvilela/kv_store:0.1.0:bafybeihmppbeo5gh3w7gnr3vff6u4qlurt3dhxd4cn4mnrzyhnrxdr336u
 contracts: []
 protocols:
@@ -122,13 +122,13 @@ protocols:
 - valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
 - dvilela/kv_store:0.1.0:bafybeib3hyj6om7bdsqqhsc4ro3xdxijp2mk5da7ks4ipfgxiovtc3aqfm
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeia4gzaxgykfkcerb3cublmei7bmozqn36tzfbnmzkrg2xdrrjfnfa
-- valory/registration_abci:0.1.0:bafybeicaxkyzvqokzne42b2ijgvlnjshowdijakrantdhnvfagbgp4lyym
-- valory/reset_pause_abci:0.1.0:bafybeicwt35bzw43ujjrbztjloeg424zbqxsro5vufsnhfmmvxu4h3dpva
-- valory/termination_abci:0.1.0:bafybeic7eeg5aw322ahs6ukvivwnzusqkejmmdep7raurhtn4r5wgv534u
-- valory/liquidity_trader_abci:0.1.0:bafybeibqhl45sbo3lqm3l7umqszbaviasa6wbyklorpnhij3jran7vwukm
-- valory/transaction_settlement_abci:0.1.0:bafybeig5qnrsryhean563pxhrfkcfs6qssi5edzm656oieupvcci7ftbvy
-- valory/funds_manager:0.1.0:bafybeiebnc77j6tdh45kkksvz6disn6kbmji63trxgtz2ksz6v2slcmzdm
+- valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
+- valory/registration_abci:0.1.0:bafybeif3gpewppz5wr5mmgyvaowsamjufyons3oif7cb4x5ubvvfb6rtda
+- valory/reset_pause_abci:0.1.0:bafybeidcnf77bc3o7pssa5zesilpbm4ley2k45taii5j5rrvvty7uhu3lq
+- valory/termination_abci:0.1.0:bafybeihicbavdutixjlp3dpumke7nlnsstmwuleynghrgr4prrlvt44q2i
+- valory/liquidity_trader_abci:0.1.0:bafybeiayc6fyqhtzgkalld2hcsipzigvpyh34t7sqcdgxkjwe4xyxrzrde
+- valory/transaction_settlement_abci:0.1.0:bafybeiccacdtddwqjdcdwwsf6hyo35y2owjwnbmtge6niyumekjwjr6nbe
+- valory/funds_manager:0.1.0:bafybeihxaharfszjutbrl5a2i76co22suhdt5bfsryv76ikkltisugqbjm
 behaviours:
   main:
     args: {}

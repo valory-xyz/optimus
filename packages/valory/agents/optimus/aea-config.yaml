@@ -19,8 +19,8 @@ connections:
 - valory/mirror_db:0.1.0:bafybeickaytigebxoabjmcrxibktwwm5zdzxvqhl7bp4sqx6wpacmueoe4
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:
-- valory/gnosis_safe:0.1.0:bafybeih3uparznz427cy7djs5eo5lqaww3fcasbkrnckerkad6jslipgge
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeid33okhawyrjq3khiaqeufdg46ypayquefhj5ckfabo7wtvw4yadu
+- valory/gnosis_safe:0.1.0:bafybeice337zvg3ol4cwpw2iikxcukmthwmw32ytwtdnkcju222qfc323y
+- valory/gnosis_safe_proxy_factory:0.1.0:bafybeieonbkuskzg2rwgbqwmouusnfdd4npow2pzasimetiebo3jhwjh7m
 - valory/multisend:0.1.0:bafybeihx7c3xj6c5v4tgvu3ipnj7seyc4dkmovoyzu4isgbwdrhj2oo6uq
 - valory/service_registry:0.1.0:bafybeigefenwg3lj4nvwc3cs5zxyhv4nvwnwbw5x7afwyijkjbbgbf2l7e
 - valory/balancer_weighted_pool:0.1.0:bafybeihimvc35lsyeagzjc3mafx4wy2bkqc5yxxkmwbdwmdxtoganjccpy
@@ -52,12 +52,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeict6h3wfmddpvam5gmmanqzuokup6ppoev3t4j5uyl7xxahjaols4
 - valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
 - valory/funds_manager:0.1.0:bafybeihxaharfszjutbrl5a2i76co22suhdt5bfsryv76ikkltisugqbjm
-- valory/liquidity_trader_abci:0.1.0:bafybeiayc6fyqhtzgkalld2hcsipzigvpyh34t7sqcdgxkjwe4xyxrzrde
-- valory/optimus_abci:0.1.0:bafybeiemwhntqge3heccglz7ic5n3lv7lx44bh2b36p4tzcj2lxe5tiagq
+- valory/liquidity_trader_abci:0.1.0:bafybeifeeswbqurkokkyhl56z2lrccntoyie5rxkawr625lpfg4idbb6km
+- valory/optimus_abci:0.1.0:bafybeiapek6ciwklbb3jo2ry3gdu76ezsgpxao7fupog3x3zdoasx27c4a
 - valory/registration_abci:0.1.0:bafybeif3gpewppz5wr5mmgyvaowsamjufyons3oif7cb4x5ubvvfb6rtda
 - valory/reset_pause_abci:0.1.0:bafybeidcnf77bc3o7pssa5zesilpbm4ley2k45taii5j5rrvvty7uhu3lq
-- valory/termination_abci:0.1.0:bafybeihicbavdutixjlp3dpumke7nlnsstmwuleynghrgr4prrlvt44q2i
-- valory/transaction_settlement_abci:0.1.0:bafybeiccacdtddwqjdcdwwsf6hyo35y2owjwnbmtge6niyumekjwjr6nbe
+- valory/termination_abci:0.1.0:bafybeia33hlouukdpwaxctunauudv5gpfdxndimra7yqiof4a3skcwdqkq
+- valory/transaction_settlement_abci:0.1.0:bafybeiajyrszyyo6z4lxogutv4ougiaeoxak6xkq5gtrbey32gbgnirznq
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeia3sgiwgziklshidalvex5f2h5osee6te7kp7vxicnqkq773vvkjy
 - valory/max_apr_selection:0.1.0:bafybeibktrritn4yv44dz3yxnzhyhfuqvzkjc6yis7idk54egc6q3y4wcm

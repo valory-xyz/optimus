@@ -16,8 +16,9 @@ include = "packages"
 
 [tool.poetry.dependencies]
 python = "<3.15,>=3.10"
-open-autonomy = "==0.21.13"
-open-aea-test-autonomy = "==0.21.13"
+open-autonomy = "==0.21.16"
+open-aea-test-autonomy = "==0.21.16"
+aea-helpers = "==0.21.16"
 open-aea = "==2.1.0"
 open-aea-ledger-ethereum = "==2.1.0"
 open-aea-ledger-cosmos = "==2.1.0"

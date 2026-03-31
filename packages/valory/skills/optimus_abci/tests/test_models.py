@@ -44,10 +44,11 @@ class TestParams:
         """Test Params __init__ extracts service_endpoint_base."""
         mock_context = MagicMock()
         mock_context.skill_id = "test_skill/test:0.1.0"
-        with patch.object(
-            Params, "_ensure", return_value="http://localhost:8000"
-        ) as mock_ensure, patch.object(
-            Params.__bases__[0], "__init__", return_value=None
+        with (
+            patch.object(
+                Params, "_ensure", return_value="http://localhost:8000"
+            ) as mock_ensure,
+            patch.object(Params.__bases__[0], "__init__", return_value=None),
         ):
             params = Params.__new__(Params)
             params.__init__(

@@ -77,7 +77,7 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **payload.get("updates", {}),
-                actions=serialized_actions
+                actions=serialized_actions,
             )
             return synchronized_data, event
 

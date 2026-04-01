@@ -149,11 +149,13 @@ class TestPoolBehaviour:
         obj.context.data_dir = "/tmp/test_data"
 
         fake_key = "0x" + "a" * 64
-        with patch.object(
-            PoolBehaviour, "_get_password_from_args", return_value=None
-        ), patch.object(Path, "open", mock_open(read_data=fake_key)), patch(
-            "packages.valory.skills.liquidity_trader_abci.pool_behaviour.Account"
-        ) as mock_account:
+        with (
+            patch.object(PoolBehaviour, "_get_password_from_args", return_value=None),
+            patch.object(Path, "open", mock_open(read_data=fake_key)),
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.pool_behaviour.Account"
+            ) as mock_account,
+        ):
             mock_account.from_key.return_value = MagicMock()
             result = obj.eoa_account
         assert result is not None
@@ -165,9 +167,10 @@ class TestPoolBehaviour:
         obj.context.default_ledger_id = "ethereum"
         obj.context.data_dir = "/tmp/test_data"
 
-        with patch.object(
-            PoolBehaviour, "_get_password_from_args", return_value=None
-        ), patch("builtins.open", side_effect=Exception("file not found")):
+        with (
+            patch.object(PoolBehaviour, "_get_password_from_args", return_value=None),
+            patch("builtins.open", side_effect=Exception("file not found")),
+        ):
             result = obj.eoa_account
         assert result is None
         obj.context.logger.error.assert_called_once()
@@ -178,13 +181,17 @@ class TestPoolBehaviour:
         obj.context.default_ledger_id = "ethereum"
         obj.context.data_dir = "/tmp/test_data"
 
-        with patch.object(
-            PoolBehaviour, "_get_password_from_args", return_value="mypass"
-        ), patch(
-            "packages.valory.skills.liquidity_trader_abci.pool_behaviour.EthereumCrypto"
-        ) as mock_crypto_cls, patch(
-            "packages.valory.skills.liquidity_trader_abci.pool_behaviour.Account"
-        ) as mock_account:
+        with (
+            patch.object(
+                PoolBehaviour, "_get_password_from_args", return_value="mypass"
+            ),
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.pool_behaviour.EthereumCrypto"
+            ) as mock_crypto_cls,
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.pool_behaviour.Account"
+            ) as mock_account,
+        ):
             mock_crypto = MagicMock()
             mock_crypto.private_key = "0x" + "b" * 64
             mock_crypto_cls.return_value = mock_crypto
@@ -198,11 +205,14 @@ class TestPoolBehaviour:
         obj.context.default_ledger_id = "ethereum"
         obj.context.data_dir = "/tmp/test_data"
 
-        with patch.object(
-            PoolBehaviour, "_get_password_from_args", return_value="badpass"
-        ), patch(
-            "packages.valory.skills.liquidity_trader_abci.pool_behaviour.EthereumCrypto",
-            side_effect=Exception("bad password"),
+        with (
+            patch.object(
+                PoolBehaviour, "_get_password_from_args", return_value="badpass"
+            ),
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.pool_behaviour.EthereumCrypto",
+                side_effect=Exception("bad password"),
+            ),
         ):
             result = obj.eoa_account
         assert result is None

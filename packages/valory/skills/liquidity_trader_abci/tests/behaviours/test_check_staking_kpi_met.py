@@ -52,13 +52,16 @@ class TestCheckStakingKPIMetBehaviour:
     """Tests for CheckStakingKPIMetBehaviour."""
 
     def _run_async_act(self, obj, params_mock, synced_mock):
-        with patch.object(
-            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
-        ), patch.object(
-            type(obj),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
+        with (
+            patch.object(
+                type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+            ),
+            patch.object(
+                type(obj),
+                "synchronized_data",
+                new_callable=PropertyMock,
+                return_value=synced_mock,
+            ),
         ):
             benchmark_mock = MagicMock()
             obj.context.benchmark_tool.measure.return_value = benchmark_mock

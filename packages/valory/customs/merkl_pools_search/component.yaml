@@ -9,6 +9,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeie7iwdt5re7i7lxal5wrzy4yxxi4v3te6tgp7j7aantyyihib7fpi
   merkl_pools_search.py: bafybeiehio355ohbj55bqjpna4hs4qrhy5bocre7zh3zsnyuiiqpmaoyne
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/conftest.py: bafybeicwpsszach65mqn2ift26nnm6g5ikhryerccapa2szlcehg5tkt24
+  tests/test_merkl_pools_search.py: bafybeifpejftuwih5ugsgipfsudfwwtbmq5t2u7mpxppw3tufwfvcs4p3e
 fingerprint_ignore_patterns: []
 entry_point: merkl_pools_search.py
 callable: run

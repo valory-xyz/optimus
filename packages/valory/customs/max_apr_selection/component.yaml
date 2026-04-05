@@ -8,6 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiebxffqdqb67sa4w2xmmo5q3bnjflr2xeu4xsx3ynrsepf5js2cja
   max_apr_selection.py: bafybeidhhjcmjf2mjadzrjgs2dsjxuq7dbu4gix6by77zftlnusqxjnt5u
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/conftest.py: bafybeicwpsszach65mqn2ift26nnm6g5ikhryerccapa2szlcehg5tkt24
+  tests/test_max_apr_selection.py: bafybeicbsemr4oyjuwr32hjshl4vfbifyxmo6lhoqienismghena6npzwm
 fingerprint_ignore_patterns: []
 entry_point: max_apr_selection.py
 callable: run

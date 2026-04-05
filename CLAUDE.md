@@ -61,7 +61,7 @@ The system uses two composed FSMs:
 ### Package Layout under `packages/valory/`
 - **skills/** — ABCI skill FSMs (the core logic). Each skill has `rounds.py`, `behaviours.py`, `payloads.py`, `models.py`, and an `fsm_specification.yaml`.
 - **contracts/** — Python wrappers around smart contract ABIs for each protocol (balancer_*, uniswap_v3_*, velodrome_*, merkl_*).
-- **customs/** — Standalone utility libraries for pool searching (balancer, uniswap, velodrome, merkl), asset lending, and APR selection. Tests for customs live in `tests/customs/`.
+- **customs/** — Standalone utility libraries for pool searching (balancer, uniswap, velodrome, merkl), asset lending, and APR selection. Tests for customs live in `tests/customs/` (NOT inside the package directories — customs packages are downloaded from IPFS at runtime by `ComponentPackageLoader`, and including `tests/` directories causes `IsADirectoryError` during IPFS deserialization).
 - **connections/** — `mirror_db` connection using Peewee ORM.
 - **agents/optimus/** and **services/optimus/** — Agent and service configuration (aea-config.yaml, service.yaml).
 

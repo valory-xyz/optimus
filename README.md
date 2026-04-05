@@ -231,14 +231,12 @@ Once you have configured the environment variables:
     # Run the agent
     aea-helpers run-agent \
       --name valory/optimus \
-      --config-replace \
-      --config-mapping config-mapping.json \
       --connection-key
     ```
 
     To run multiple agents on the same machine, add `--free-ports`.
 
-    > **Note:** `STORE_PATH` and `LOG_DIR` must be set to an absolute path before running. The `config-replace` step substitutes these into the agent config. You can also set them in your `.env` file.
+    > **Note:** `STORE_PATH` and `LOG_DIR` must be set to an absolute path before running. Set them in your `.env` file or as environment variables.
 
 3. Run as a service (Docker deployment):
 

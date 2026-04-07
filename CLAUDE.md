@@ -22,7 +22,7 @@ tox -e py3.10-darwin                   # macOS
 tox -e py3.10-linux                    # Linux
 
 # Run a single test directory
-pytest -rfE tests/customs/balancer_pools_search
+pytest -rfE packages/valory/customs/balancer_pools_search/tests
 pytest -rfE packages/valory/contracts/uniswap_v3_pool/tests
 pytest -rfE packages/valory/skills/liquidity_trader_abci/tests
 
@@ -61,7 +61,7 @@ The system uses two composed FSMs:
 ### Package Layout under `packages/valory/`
 - **skills/** — ABCI skill FSMs (the core logic). Each skill has `rounds.py`, `behaviours.py`, `payloads.py`, `models.py`, and an `fsm_specification.yaml`.
 - **contracts/** — Python wrappers around smart contract ABIs for each protocol (balancer_*, uniswap_v3_*, velodrome_*, merkl_*).
-- **customs/** — Standalone utility libraries for pool searching (balancer, uniswap, velodrome, merkl), asset lending, and APR selection. Tests for customs live in `tests/customs/` (NOT inside the package directories — customs packages are downloaded from IPFS at runtime by `ComponentPackageLoader`, and including `tests/` directories causes `IsADirectoryError` during IPFS deserialization).
+- **customs/** — Standalone utility libraries for pool searching (balancer, uniswap, velodrome, merkl), asset lending, and APR selection. Tests are collocated inside each package under `packages/valory/customs/*/tests/`.
 - **connections/** — `mirror_db` connection using Peewee ORM.
 - **agents/optimus/** and **services/optimus/** — Agent and service configuration (aea-config.yaml, service.yaml).
 

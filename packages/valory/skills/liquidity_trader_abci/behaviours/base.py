@@ -86,7 +86,12 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
 MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
-_NOOP_RATE_LIMIT_CALLBACK: Callable = lambda: None  # For non-CoinGecko APIs
+
+
+def _noop_rate_limit_callback() -> None:
+    """No-op rate limit callback for non-CoinGecko APIs."""
+
+
 MAX_RETRIES_FOR_STATUS_CHECK = 5
 MAX_SWAP_CONFIRMATION_RETRIES = 60
 HTTP_OK = [200, 201]
@@ -461,12 +466,23 @@ class LiquidityTraderBaseBehaviour(
         )
 
         # Fetch all balances with pagination
-        all_balances = yield from self._fetch_safe_balances_with_pagination(
-            safe_address
+        api_success, all_balances = (
+            yield from self._fetch_safe_balances_with_pagination(safe_address)
         )
 
-        if not all_balances:
-            # Fallback to cached balances from last successful fetch
+        if api_success:
+            # Cache fresh data on successful API fetch
+            if all_balances:
+                try:
+                    yield from self._write_kv(
+                        {"safe_balances_optimism": json.dumps(all_balances)}
+                    )
+                except Exception:  # nosec B110
+                    self.context.logger.debug(
+                        "Failed to cache safe balances to KV store"
+                    )
+        else:
+            # API failed — fall back to cached balances
             try:
                 cached = yield from self._read_kv(("safe_balances_optimism",))
                 if cached and cached.get("safe_balances_optimism"):
@@ -478,15 +494,6 @@ class LiquidityTraderBaseBehaviour(
                 self.context.logger.warning(
                     "Failed to read cached balances from KV store"
                 )
-        else:
-            # Cache on success for future fallback
-            try:
-                yield from self._write_kv(
-                    {"safe_balances_optimism": json.dumps(all_balances)}
-                )
-            except Exception:  # nosec B110
-                # Non-critical: cache write failure shouldn't block balances
-                self.context.logger.debug("Failed to cache safe balances to KV store")
 
         balances = []
         for balance_data in all_balances:
@@ -539,11 +546,18 @@ class LiquidityTraderBaseBehaviour(
 
     def _fetch_safe_balances_with_pagination(
         self, safe_address: str
-    ) -> Generator[None, None, List[Dict]]:
-        """Fetch all balances from SafeApi with pagination support"""
-        all_balances = []
+    ) -> Generator[None, None, Tuple[bool, List[Dict]]]:
+        """Fetch all balances from SafeApi with pagination support.
+
+        :param safe_address: the Safe contract address.
+        :yield: None
+        :return: (api_success, balances) tuple. api_success is False only
+            when the HTTP request itself failed, not when the Safe is empty.
+        """
+        all_balances: List[Dict] = []
         offset = 0
         limit = 100  # Default page size
+        api_success = True
 
         while True:
             url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
@@ -563,7 +577,7 @@ class LiquidityTraderBaseBehaviour(
                     "Pragma": "no-cache",
                     "Expires": "0",
                 },
-                rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,  # No specific rate limit callback for SafeApi
+                rate_limited_callback=_noop_rate_limit_callback,
                 max_retries=MAX_RETRIES_FOR_API_CALL,
                 retry_wait=2,
             )
@@ -572,6 +586,7 @@ class LiquidityTraderBaseBehaviour(
                 self.context.logger.error(
                     f"Failed to fetch SafeApi data: {response_data}"
                 )
+                api_success = False
                 break
 
             results = response_data.get("results", [])
@@ -592,7 +607,7 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(
             f"Total balances fetched from SafeApi: {len(all_balances)}"
         )
-        return all_balances
+        return api_success, all_balances
 
     def _get_mode_balances_from_explorer_api(
         self,
@@ -750,7 +765,7 @@ class LiquidityTraderBaseBehaviour(
                     "Pragma": "no-cache",
                     "Expires": "0",
                 },
-                rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                rate_limited_callback=_noop_rate_limit_callback,
                 max_retries=MAX_RETRIES_FOR_API_CALL,
                 retry_wait=2,
             )
@@ -1498,11 +1513,12 @@ class LiquidityTraderBaseBehaviour(
                     )
                     return False, response_json
 
-                # Wait 60 seconds for rate limit to reset
+                # Wait before retrying rate-limited request
+                wait_time = retry_wait if retry_wait > 0 else 60
                 self.context.logger.info(
-                    "Waiting 60 seconds before retrying rate-limited request"
+                    f"Waiting {wait_time} seconds before retrying rate-limited request"
                 )
-                yield from self.sleep(60)
+                yield from self.sleep(wait_time)
                 continue
 
             # Handle HTTP 503 Service Unavailable with exponential backoff

@@ -64,7 +64,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     TradingType,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
-    _NOOP_RATE_LIMIT_CALLBACK,
+    _noop_rate_limit_callback,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
@@ -3362,7 +3362,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             endpoint=endpoint,
             headers={"Accept": "application/json"},
             rate_limited_code=429,
-            rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+            rate_limited_callback=_noop_rate_limit_callback,
             retry_wait=5,
             max_retries=2,
         )
@@ -3802,7 +3802,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                    rate_limited_callback=_noop_rate_limit_callback,
                     retry_wait=5,
                     max_retries=2,
                 )
@@ -4004,7 +4004,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
-                rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                rate_limited_callback=_noop_rate_limit_callback,
                 retry_wait=5,
                 max_retries=2,
             )
@@ -4025,7 +4025,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                    rate_limited_callback=_noop_rate_limit_callback,
                     retry_wait=5,
                     max_retries=2,
                 )
@@ -4085,7 +4085,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
-                rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                rate_limited_callback=_noop_rate_limit_callback,
                 retry_wait=5,
                 max_retries=2,
             )
@@ -4106,7 +4106,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                    rate_limited_callback=_noop_rate_limit_callback,
                     retry_wait=5,
                     max_retries=2,
                 )
@@ -4441,7 +4441,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                    rate_limited_callback=_noop_rate_limit_callback,
                     retry_wait=5,
                     max_retries=2,
                 )
@@ -4587,7 +4587,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
+                    rate_limited_callback=_noop_rate_limit_callback,
                     retry_wait=5,
                     max_retries=2,
                 )

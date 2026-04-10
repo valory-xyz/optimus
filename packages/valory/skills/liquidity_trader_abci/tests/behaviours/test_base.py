@@ -911,15 +911,19 @@ class TestGetOptimismBalances:
         b = _make_behaviour()
         token_addr = "0x" + "ab" * 20
         b._fetch_safe_balances_with_pagination = _make_gen(
-            [
-                {"tokenAddress": None, "balance": "1000"},
-                {
-                    "tokenAddress": token_addr,
-                    "token": {"symbol": "USDC"},
-                    "balance": "500",
-                },
-            ]
+            (
+                True,
+                [
+                    {"tokenAddress": None, "balance": "1000"},
+                    {
+                        "tokenAddress": token_addr,
+                        "token": {"symbol": "USDC"},
+                        "balance": "500",
+                    },
+                ],
+            )
         )
+        b._write_kv = _make_gen(True)
         b._fetch_reward_balances = _make_gen([])
         b._fetch_ousdt_balance = _make_gen(None)
         result = _exhaust(b._get_optimism_balances_from_safe_api())
@@ -930,14 +934,18 @@ class TestGetOptimismBalances:
     def test_skips_filtered_token(self) -> None:
         b = _make_behaviour()
         b._fetch_safe_balances_with_pagination = _make_gen(
-            [
-                {
-                    "tokenAddress": "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84",
-                    "token": {"symbol": "SKIP"},
-                    "balance": "100",
-                },
-            ]
+            (
+                True,
+                [
+                    {
+                        "tokenAddress": "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84",
+                        "token": {"symbol": "SKIP"},
+                        "balance": "100",
+                    },
+                ],
+            )
         )
+        b._write_kv = _make_gen(True)
         b._fetch_reward_balances = _make_gen([])
         b._fetch_ousdt_balance = _make_gen(None)
         result = _exhaust(b._get_optimism_balances_from_safe_api())
@@ -947,29 +955,43 @@ class TestGetOptimismBalances:
         """ERC-20 token with no token info is skipped."""
         b = _make_behaviour()
         b._fetch_safe_balances_with_pagination = _make_gen(
-            [
-                {
-                    "tokenAddress": "0x" + "ab" * 20,
-                    "token": None,
-                    "balance": "100",
-                },
-            ]
+            (
+                True,
+                [
+                    {
+                        "tokenAddress": "0x" + "ab" * 20,
+                        "token": None,
+                        "balance": "100",
+                    },
+                ],
+            )
         )
+        b._write_kv = _make_gen(True)
         b._fetch_reward_balances = _make_gen([])
         b._fetch_ousdt_balance = _make_gen(None)
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
-    def test_with_reward_and_ousdt(self) -> None:
+    def test_api_success_empty_no_cache_fallback(self) -> None:
+        """API succeeds but Safe is empty - must NOT fall back to cache."""
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen([])
+        b._fetch_safe_balances_with_pagination = _make_gen((True, []))
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert len(result) == 0
+
+    def test_api_success_empty_with_rewards(self) -> None:
+        """API succeeds, Safe empty, but reward tokens exist."""
+        b = _make_behaviour()
+        b._fetch_safe_balances_with_pagination = _make_gen((True, []))
         b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 100}])
         b._fetch_ousdt_balance = _make_gen({"asset_symbol": "oUSDT", "balance": 50})
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
 
-    def test_fallback_to_cached_balances(self) -> None:
-        """When SafeGlobal returns empty, fall back to KV-cached balances."""
+    def test_api_failure_falls_back_to_cache(self) -> None:
+        """API fails - fall back to KV-cached balances."""
         cached_data = [
             {"tokenAddress": None, "token": None, "balance": "1000000000000000"},
             {
@@ -979,9 +1001,8 @@ class TestGetOptimismBalances:
             },
         ]
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen([])
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))
         b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})
-        b._write_kv = _make_gen(True)
         b._fetch_reward_balances = _make_gen([])
         b._fetch_ousdt_balance = _make_gen(None)
         result = _exhaust(b._get_optimism_balances_from_safe_api())
@@ -989,11 +1010,45 @@ class TestGetOptimismBalances:
         assert result[0]["asset_symbol"] == "ETH"
         assert result[1]["asset_symbol"] == "USDC"
 
-    def test_fallback_cache_empty(self) -> None:
-        """When SafeGlobal returns empty and cache has no data, return empty."""
+    def test_api_failure_no_cache(self) -> None:
+        """API fails and cache has no data - return empty."""
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen([])
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))
         b._read_kv = _make_gen({"safe_balances_optimism": None})
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert len(result) == 0
+
+    def test_cache_write_failure(self) -> None:
+        """API succeeds but KV write fails - balances still returned."""
+
+        def _failing_write(data):  # type: ignore
+            if False:
+                yield  # noqa
+            raise ConnectionError("KV write failed")
+
+        b = _make_behaviour()
+        b._fetch_safe_balances_with_pagination = _make_gen(
+            (True, [{"tokenAddress": None, "balance": "1000"}])
+        )
+        b._write_kv = _failing_write
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert len(result) == 1
+
+    def test_cache_read_failure(self) -> None:
+        """API fails and KV read fails - return empty, no crash."""
+
+        def _failing_read(keys):  # type: ignore
+            if False:
+                yield  # noqa
+            raise ConnectionError("KV read failed")
+
+        b = _make_behaviour()
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))
+        b._read_kv = _failing_read
         b._fetch_reward_balances = _make_gen([])
         b._fetch_ousdt_balance = _make_gen(None)
         result = _exhaust(b._get_optimism_balances_from_safe_api())
@@ -2427,19 +2482,22 @@ class TestFetchSafeBalancesWithPagination:
         b = _make_behaviour()
         page_data = {"results": [{"tokenAddress": None}], "next": None}
         b._request_with_retries = _make_gen((True, page_data))
-        result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        assert success is True
         assert len(result) == 1
 
     def test_failure(self) -> None:
         b = _make_behaviour()
         b._request_with_retries = _make_gen((False, {"error": "fail"}))
-        result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        assert success is False
         assert result == []
 
     def test_empty_results(self) -> None:
         b = _make_behaviour()
         b._request_with_retries = _make_gen((True, {"results": []}))
-        result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        assert success is True
         assert result == []
 
 

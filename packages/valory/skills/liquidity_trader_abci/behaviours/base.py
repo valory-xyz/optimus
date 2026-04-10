@@ -464,6 +464,31 @@ class LiquidityTraderBaseBehaviour(
             safe_address
         )
 
+        if not all_balances:
+            # Fallback to cached balances from last successful fetch
+            try:
+                cached = yield from self._read_kv(("safe_balances_optimism",))
+                if cached and cached.get("safe_balances_optimism"):
+                    self.context.logger.warning(
+                        "SafeGlobal API failed, using cached balances"
+                    )
+                    all_balances = json.loads(cached["safe_balances_optimism"])
+            except Exception:
+                self.context.logger.warning(
+                    "Failed to read cached balances from KV store"
+                )
+        else:
+            # Cache on success for future fallback
+            try:
+                yield from self._write_kv(
+                    {"safe_balances_optimism": json.dumps(all_balances)}
+                )
+            except Exception:  # nosec B110
+                # Non-critical: cache write failure shouldn't block balances
+                self.context.logger.debug(
+                    "Failed to cache safe balances to KV store"
+                )
+
         balances = []
         for balance_data in all_balances:
             token_address = balance_data.get("tokenAddress")

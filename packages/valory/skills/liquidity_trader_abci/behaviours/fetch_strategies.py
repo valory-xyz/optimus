@@ -3361,8 +3361,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             endpoint=endpoint,
             headers={"Accept": "application/json"},
             rate_limited_code=429,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            rate_limited_callback=lambda: None,
+            retry_wait=5,
+            max_retries=1,
         )
 
         if not success:
@@ -3800,8 +3801,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                    retry_wait=self.params.sleep_time,
+                    rate_limited_callback=lambda: None,
+                    retry_wait=5,
+                    max_retries=1,
                 )
 
                 if not success:
@@ -4001,8 +4003,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
-                rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                retry_wait=self.params.sleep_time,
+                rate_limited_callback=lambda: None,
+                retry_wait=5,
+                max_retries=1,
             )
 
             if not success:
@@ -4021,8 +4024,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                    retry_wait=self.params.sleep_time,
+                    rate_limited_callback=lambda: None,
+                    retry_wait=5,
+                    max_retries=1,
                 )
                 is_eoa = success
 
@@ -4080,8 +4084,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
-                rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                retry_wait=self.params.sleep_time,
+                rate_limited_callback=lambda: None,
+                retry_wait=5,
+                max_retries=1,
             )
 
             if not success:
@@ -4100,8 +4105,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                    retry_wait=self.params.sleep_time,
+                    rate_limited_callback=lambda: None,
+                    retry_wait=5,
+                    max_retries=1,
                 )
                 is_eoa = success
 
@@ -4434,8 +4440,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                    retry_wait=self.params.sleep_time,
+                    rate_limited_callback=lambda: None,
+                    retry_wait=5,
+                    max_retries=1,
                 )
 
                 if not success:
@@ -4579,8 +4586,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                    retry_wait=self.params.sleep_time,
+                    rate_limited_callback=lambda: None,
+                    retry_wait=5,
+                    max_retries=1,
                 )
 
                 if not success:

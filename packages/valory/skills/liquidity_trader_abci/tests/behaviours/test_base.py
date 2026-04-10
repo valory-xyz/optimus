@@ -968,6 +968,39 @@ class TestGetOptimismBalances:
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
 
+    def test_fallback_to_cached_balances(self) -> None:
+        """When SafeGlobal returns empty, fall back to KV-cached balances."""
+        cached_data = [
+            {"tokenAddress": None, "token": None, "balance": "1000000000000000"},
+            {
+                "tokenAddress": "0x" + "cc" * 20,
+                "token": {"symbol": "USDC", "decimals": 6, "logoUri": ""},
+                "balance": "5000000",
+            },
+        ]
+        b = _make_behaviour()
+        b._fetch_safe_balances_with_pagination = _make_gen([])
+        b._read_kv = _make_gen(
+            {"safe_balances_optimism": json.dumps(cached_data)}
+        )
+        b._write_kv = _make_gen(True)
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert len(result) == 2
+        assert result[0]["asset_symbol"] == "ETH"
+        assert result[1]["asset_symbol"] == "USDC"
+
+    def test_fallback_cache_empty(self) -> None:
+        """When SafeGlobal returns empty and cache has no data, return empty."""
+        b = _make_behaviour()
+        b._fetch_safe_balances_with_pagination = _make_gen([])
+        b._read_kv = _make_gen({"safe_balances_optimism": None})
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert len(result) == 0
+
 
 class TestGetModeBalances:
     """Test _get_mode_balances_from_explorer_api."""

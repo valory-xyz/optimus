@@ -976,6 +976,7 @@ class TestGetOptimismBalances:
         """API succeeds but Safe is empty - must NOT fall back to cache."""
         b = _make_behaviour()
         b._fetch_safe_balances_with_pagination = _make_gen((True, []))
+        b._write_kv = _make_gen(True)
         b._fetch_reward_balances = _make_gen([])
         b._fetch_ousdt_balance = _make_gen(None)
         result = _exhaust(b._get_optimism_balances_from_safe_api())
@@ -985,6 +986,7 @@ class TestGetOptimismBalances:
         """API succeeds, Safe empty, but reward tokens exist."""
         b = _make_behaviour()
         b._fetch_safe_balances_with_pagination = _make_gen((True, []))
+        b._write_kv = _make_gen(True)
         b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 100}])
         b._fetch_ousdt_balance = _make_gen({"asset_symbol": "oUSDT", "balance": 50})
         result = _exhaust(b._get_optimism_balances_from_safe_api())

@@ -9,7 +9,7 @@ fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
   behaviours/apr_population.py: bafybeihbrgslrn5ks5sr7h6npswsdb6bcg4xjahtknw2sffevicxrwlq5i
-  behaviours/base.py: bafybeiexgpl4jzypcacqakmuqow5bygkwayju5p3svqystkg5y4vsbioya
+  behaviours/base.py: bafybeieslokjkvgf2av4yfhy76hp2cg33j4weke6aukrkxejdidvodz3ba
   behaviours/call_checkpoint.py: bafybeifo4us3o55gkrsfecxnuop7qdbsnaj4dfc4pj4soxfpx6qiztddeq
   behaviours/check_staking_kpi_met.py: bafybeigiala5rucuxthkmoirq3hfdrtd3um4uuwiavufs6k4xiw3kta35y
   behaviours/decision_making.py: bafybeidvpakmgzvufbfh7uajesek6n47pikmknj4z5ztzr6evgzfmfraha
@@ -49,7 +49,7 @@ fingerprint:
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihikbbl7r3jwq3np7nx4wz4eeymk3egvst2obu5hrq3l3s4ucp42e
   tests/behaviours/test_apr_population.py: bafybeiccqec5lpr6lpg62mbyqrxfp3eemszl6whjpl6sv3xkgqnxdbwdq4
-  tests/behaviours/test_base.py: bafybeidl63vacfjoulnfndjfz6pzjzajnyeojolenl7ksul6bbz5hl5bga
+  tests/behaviours/test_base.py: bafybeia7geahz4ipu7im2ta4xhobo7hzraouaha36n2dg6g3ybkp2ardj4
   tests/behaviours/test_call_checkpoint.py: bafybeichc7rmi55lg5jo657x32zb443r3lstivhj4ijc534lgi2u33pkke
   tests/behaviours/test_check_staking_kpi_met.py: bafybeig36k5z2entbi44qtk53tyk4be3r7kwhq7j5kbu5rccma7nlb2hba
   tests/behaviours/test_decision_making.py: bafybeif5bqpc267ptnsis63f2cwqjq4gcl6gday2adh4tr72ajsobsxpxm

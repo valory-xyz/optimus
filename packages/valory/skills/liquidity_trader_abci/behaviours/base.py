@@ -86,12 +86,6 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
 MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
-
-
-def _noop_rate_limit_callback() -> None:
-    """No-op rate limit callback for non-CoinGecko APIs."""
-
-
 MAX_RETRIES_FOR_STATUS_CHECK = 5
 MAX_SWAP_CONFIRMATION_RETRIES = 60
 HTTP_OK = [200, 201]
@@ -129,6 +123,11 @@ OLAS_ADDRESSES = {
 # Airdrop reward tracking constants
 AIRDROP_REWARDS_KEY_PREFIX = "airdrop_rewards_"
 AIRDROP_TOTAL_KEY = "total_airdrop_rewards"
+
+
+def _noop_rate_limit_callback() -> None:
+    """No-op rate limit callback for non-CoinGecko APIs."""
+
 
 # Round timeout constants for health check
 # These timeouts define how long specific rounds can run before being considered unhealthy
@@ -471,16 +470,13 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if api_success:
-            # Cache fresh data on successful API fetch
-            if all_balances:
-                try:
-                    yield from self._write_kv(
-                        {"safe_balances_optimism": json.dumps(all_balances)}
-                    )
-                except Exception:  # nosec B110
-                    self.context.logger.debug(
-                        "Failed to cache safe balances to KV store"
-                    )
+            # Cache fresh data on successful API fetch (including empty — clears stale cache)
+            try:
+                yield from self._write_kv(
+                    {"safe_balances_optimism": json.dumps(all_balances)}
+                )
+            except Exception:  # nosec B110
+                self.context.logger.debug("Failed to cache safe balances to KV store")
         else:
             # API failed — fall back to cached balances
             try:

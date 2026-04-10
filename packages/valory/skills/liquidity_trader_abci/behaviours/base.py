@@ -86,6 +86,7 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
 MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
+_NOOP_RATE_LIMIT_CALLBACK: Callable = lambda: None  # For non-CoinGecko APIs
 MAX_RETRIES_FOR_STATUS_CHECK = 5
 MAX_SWAP_CONFIRMATION_RETRIES = 60
 HTTP_OK = [200, 201]
@@ -485,9 +486,7 @@ class LiquidityTraderBaseBehaviour(
                 )
             except Exception:  # nosec B110
                 # Non-critical: cache write failure shouldn't block balances
-                self.context.logger.debug(
-                    "Failed to cache safe balances to KV store"
-                )
+                self.context.logger.debug("Failed to cache safe balances to KV store")
 
         balances = []
         for balance_data in all_balances:
@@ -564,7 +563,7 @@ class LiquidityTraderBaseBehaviour(
                     "Pragma": "no-cache",
                     "Expires": "0",
                 },
-                rate_limited_callback=lambda: None,  # No specific rate limit callback for SafeApi
+                rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,  # No specific rate limit callback for SafeApi
                 max_retries=MAX_RETRIES_FOR_API_CALL,
                 retry_wait=2,
             )
@@ -751,7 +750,7 @@ class LiquidityTraderBaseBehaviour(
                     "Pragma": "no-cache",
                     "Expires": "0",
                 },
-                rate_limited_callback=lambda: None,
+                rate_limited_callback=_NOOP_RATE_LIMIT_CALLBACK,
                 max_retries=MAX_RETRIES_FOR_API_CALL,
                 retry_wait=2,
             )

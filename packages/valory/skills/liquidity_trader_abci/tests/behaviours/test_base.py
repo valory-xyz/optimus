@@ -980,9 +980,7 @@ class TestGetOptimismBalances:
         ]
         b = _make_behaviour()
         b._fetch_safe_balances_with_pagination = _make_gen([])
-        b._read_kv = _make_gen(
-            {"safe_balances_optimism": json.dumps(cached_data)}
-        )
+        b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})
         b._write_kv = _make_gen(True)
         b._fetch_reward_balances = _make_gen([])
         b._fetch_ousdt_balance = _make_gen(None)

@@ -59,6 +59,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PositionStatus,
     REWARD_TOKEN_ADDRESSES,
     THRESHOLDS,
+    TradingMode,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
@@ -92,6 +93,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Check if investing is paused due to withdrawal (read from KV store)
             investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                # Withdrawal takes priority over trading-mode pause
+                pass
+            else:
+                trading_mode = getattr(
+                    self.shared_state, "trading_mode", TradingMode.FULL
+                )
+                if trading_mode == TradingMode.PAUSED:
+                    self.context.logger.warning(
+                        "Trading paused: balance data unavailable. "
+                        "Skipping strategy evaluation."
+                    )
+                    yield from self.send_actions()
+                    return
+
             if investing_paused:
                 self.context.logger.info(
                     "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."

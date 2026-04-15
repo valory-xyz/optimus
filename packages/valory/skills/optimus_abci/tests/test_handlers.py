@@ -1761,6 +1761,59 @@ class TestHttpHandlerMethods:
             with patch("json.load", return_value=portfolio):
                 handler._handle_get_portfolio(MagicMock(), MagicMock())
 
+    def test_compute_balance_freshness_fresh(self) -> None:
+        """Age under 2hr returns 'fresh'."""
+        import time as _time
+
+        handler, _ = _make_http_handler()
+        now = int(_time.time())
+        handler._read_kv = MagicMock(
+            return_value={"safe_balances_optimism_ts": str(now - 60)}
+        )
+        assert handler._compute_balance_freshness() == "fresh"
+
+    def test_compute_balance_freshness_stale_2h(self) -> None:
+        """Age 2–24hr returns 'stale_2h'."""
+        import time as _time
+
+        handler, _ = _make_http_handler()
+        now = int(_time.time())
+        handler._read_kv = MagicMock(
+            return_value={"safe_balances_optimism_ts": str(now - 3 * 3600)}
+        )
+        assert handler._compute_balance_freshness() == "stale_2h"
+
+    def test_compute_balance_freshness_stale_24h(self) -> None:
+        """Age > 24hr returns 'stale_24h'."""
+        import time as _time
+
+        handler, _ = _make_http_handler()
+        now = int(_time.time())
+        handler._read_kv = MagicMock(
+            return_value={"safe_balances_optimism_ts": str(now - 48 * 3600)}
+        )
+        assert handler._compute_balance_freshness() == "stale_24h"
+
+    def test_compute_balance_freshness_unknown_no_ts(self) -> None:
+        """No timestamp in KV returns 'unknown'."""
+        handler, _ = _make_http_handler()
+        handler._read_kv = MagicMock(return_value={"safe_balances_optimism_ts": None})
+        assert handler._compute_balance_freshness() == "unknown"
+
+    def test_compute_balance_freshness_unknown_no_data(self) -> None:
+        """Empty KV data returns 'unknown'."""
+        handler, _ = _make_http_handler()
+        handler._read_kv = MagicMock(return_value=None)
+        assert handler._compute_balance_freshness() == "unknown"
+
+    def test_compute_balance_freshness_unknown_invalid_ts(self) -> None:
+        """Non-integer timestamp returns 'unknown'."""
+        handler, _ = _make_http_handler()
+        handler._read_kv = MagicMock(
+            return_value={"safe_balances_optimism_ts": "not-a-number"}
+        )
+        assert handler._compute_balance_freshness() == "unknown"
+
     def test_handle_get_health(self) -> None:
         """Test _handle_get_health returns health data."""
         from datetime import datetime

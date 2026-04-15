@@ -124,6 +124,35 @@ OLAS_ADDRESSES = {
 AIRDROP_REWARDS_KEY_PREFIX = "airdrop_rewards_"
 AIRDROP_TOTAL_KEY = "total_airdrop_rewards"
 
+# Balance cache TTLs for graceful degradation when SafeGlobal is unavailable.
+# Trading decisions require stricter freshness than UI display.
+BALANCE_CACHE_TRADE_TTL_SECONDS = 900  # 15 min — freshness for trading
+BALANCE_CACHE_DISPLAY_TTL_SECONDS = 3600  # 1 hr — freshness for UI
+STALE_WARN_THRESHOLD_SECONDS = 7200  # 2 hr — surface warning in /portfolio
+STALE_CRITICAL_THRESHOLD_SECONDS = 86400  # 24 hr — critical staleness
+
+# KV keys for balance caching and freshness tracking
+SAFE_BALANCES_CACHE_KEY = "safe_balances_optimism"
+SAFE_BALANCES_TS_KEY = "safe_balances_optimism_ts"
+KNOWN_SAFE_TOKENS_KEY = "known_safe_tokens_optimism"
+LAST_NON_VANITY_TX_TS_KEY = "last_non_vanity_tx_ts"
+
+
+class TradingMode(Enum):
+    """Trading mode driven by balance data freshness.
+
+    FULL: balances verified fresh. All strategy actions allowed.
+    EXIT_ONLY: balances stale but positions known. Only exit-chain actions
+        allowed (exit_pool, unstake, claim_rewards, swap, transfer).
+        No new pool entries.
+    PAUSED: balances unknown and no positions to exit. Skip strategy
+        evaluation entirely.
+    """
+
+    FULL = "FULL"
+    EXIT_ONLY = "EXIT_ONLY"
+    PAUSED = "PAUSED"
+
 
 def _noop_rate_limit_callback() -> None:
     """No-op rate limit callback for non-CoinGecko APIs."""
@@ -451,6 +480,217 @@ class LiquidityTraderBaseBehaviour(
 
         return positions
 
+    def _get_balance_cache_age_seconds(self) -> Generator[None, None, Optional[int]]:
+        """Return seconds since last successful SafeGlobal balance fetch.
+
+        :yield: None
+        :return: Age in seconds, or None if no cached timestamp exists.
+        """
+        try:
+            data = yield from self._read_kv((SAFE_BALANCES_TS_KEY,))
+        except Exception:
+            return None
+        try:
+            if not data or not data.get(SAFE_BALANCES_TS_KEY):
+                return None
+            last_ts = int(data[SAFE_BALANCES_TS_KEY])
+            return max(0, int(time.time()) - last_ts)
+        except (ValueError, TypeError):
+            return None
+
+    def _non_vanity_tx_happened_since_fetch(self) -> Generator[None, None, bool]:
+        """Check if a non-vanity tx settled after the last balance fetch.
+
+        :yield: None
+        :return: True if last_non_vanity_tx_ts > safe_balances_optimism_ts.
+        """
+        try:
+            data = yield from self._read_kv(
+                (LAST_NON_VANITY_TX_TS_KEY, SAFE_BALANCES_TS_KEY)
+            )
+        except Exception:
+            return False
+        try:
+            if not data:
+                return False
+            last_tx = int(data.get(LAST_NON_VANITY_TX_TS_KEY) or 0)
+            last_fetch = int(data.get(SAFE_BALANCES_TS_KEY) or 0)
+            return last_tx > last_fetch
+        except (ValueError, TypeError):
+            return False
+
+    def _update_known_safe_tokens(
+        self, balances: List[Dict]
+    ) -> Generator[None, None, None]:
+        """Merge token addresses from a fresh SafeGlobal response into known_tokens.
+
+        :param balances: SafeGlobal raw balance entries (with tokenAddress field).
+        :yield: None
+        """
+        new_tokens = {
+            b["tokenAddress"].lower() for b in balances if b.get("tokenAddress")
+        }
+        if not new_tokens:
+            return
+        try:
+            data = yield from self._read_kv((KNOWN_SAFE_TOKENS_KEY,))
+            existing_raw = data.get(KNOWN_SAFE_TOKENS_KEY) if data else None
+            existing = set(json.loads(existing_raw)) if existing_raw else set()
+            merged = sorted(existing | new_tokens)
+            yield from self._write_kv({KNOWN_SAFE_TOKENS_KEY: json.dumps(merged)})
+        except Exception:  # nosec B110
+            self.context.logger.debug("Failed to update known_safe_tokens in KV")
+
+    def _get_known_safe_tokens(self) -> Generator[None, None, List[str]]:
+        """Read known token addresses from KV, falling back to position tokens.
+
+        :yield: None
+        :return: List of token addresses we have seen in this safe before.
+        """
+        try:
+            data = yield from self._read_kv((KNOWN_SAFE_TOKENS_KEY,))
+            raw = data.get(KNOWN_SAFE_TOKENS_KEY) if data else None
+            if raw:
+                return list(json.loads(raw))
+        except Exception:
+            self.context.logger.debug("Failed to read known_safe_tokens from KV")
+        # Fallback: derive from stored positions
+        tokens: set = set()
+        for position in self.current_positions or []:
+            for key in ("token0", "token1"):
+                addr = position.get(key)
+                if addr:
+                    tokens.add(addr.lower())
+        return list(tokens)
+
+    def _fetch_balances_via_multicall(
+        self, chain: str, safe_address: str, token_addresses: List[str]
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch ERC-20 balances for a known token list directly from chain.
+
+        Used as a fallback when SafeGlobal API is unavailable.
+
+        :param chain: chain name (e.g. "optimism").
+        :param safe_address: Safe address to query balances for.
+        :param token_addresses: token addresses to fetch balanceOf for.
+        :yield: None
+        :return: Balance dicts in the same shape as SafeGlobal parsed output.
+        """
+        balances: List[Dict[str, Any]] = []
+        for token_address in token_addresses:
+            try:
+                token_balance = yield from self._get_token_balance(
+                    chain, safe_address, token_address
+                )
+                if token_balance and token_balance > 0:
+                    symbol = yield from self._get_token_symbol(chain, token_address)
+                    balances.append(
+                        {
+                            "asset_symbol": symbol or "UNKNOWN",
+                            "asset_type": "erc_20",
+                            "address": to_checksum_address(token_address),
+                            "balance": int(token_balance),
+                        }
+                    )
+            except Exception as exc:
+                self.context.logger.warning(
+                    f"Multicall fallback: failed to fetch balance for {token_address}: {exc}"
+                )
+        return balances
+
+    def _set_trading_mode(self, mode: TradingMode) -> None:
+        """Store trading mode in shared_state for consumers to read."""
+        prev = getattr(self.shared_state, "trading_mode", None)
+        if prev != mode:
+            self.context.logger.warning(
+                f"Trading mode transition: {prev} → {mode.value}"
+            )
+        self.shared_state.trading_mode = mode
+
+    def _handle_degraded_mode(self) -> None:
+        """Set trading mode to PAUSED when SafeGlobal fetch has failed.
+
+        Balances are not trustworthy, so trading decisions are suspended.
+        Display of stale cached balances (with on-chain multicall refreshes
+        where possible) is still provided for UI via _degraded_mode_balances.
+
+        EXIT_ONLY (partial trading) is a future enhancement; it requires
+        decoupling exit decisions from opportunity search.
+        """
+        self._set_trading_mode(TradingMode.PAUSED)
+        self.context.logger.warning(
+            "SafeGlobal unavailable → PAUSED mode (trading suspended)"
+        )
+
+    def _degraded_mode_balances(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Best-effort balance list when SafeGlobal fetch is unavailable.
+
+        Serves stale cached balances (if any) merged with on-chain multicall
+        results for known token addresses. Reward tokens and OUSDT are still
+        fetched fresh from chain via existing helpers.
+
+        :param safe_address: the Safe address to multicall balances for.
+        :yield: None
+        :return: List of balance dicts (may be stale).
+        """
+        balances: List[Dict[str, Any]] = []
+
+        # Start with stale cached balances for tokens we can't multicall
+        try:
+            cached = yield from self._read_kv((SAFE_BALANCES_CACHE_KEY,))
+            raw = cached.get(SAFE_BALANCES_CACHE_KEY) if cached else None
+            if raw:
+                stale = json.loads(raw)
+                for item in stale:
+                    token_address = item.get("tokenAddress")
+                    token_info = item.get("token")
+                    balance = item.get("balance", "0")
+                    if token_address is None:
+                        balances.append(
+                            {
+                                "asset_symbol": "ETH",
+                                "asset_type": "native",
+                                "address": to_checksum_address(ZERO_ADDRESS),
+                                "balance": int(balance),
+                            }
+                        )
+                    elif token_info and token_address != (
+                        "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84"  # nosec B105
+                    ):
+                        balances.append(
+                            {
+                                "asset_symbol": token_info.get("symbol", "UNKNOWN"),
+                                "asset_type": "erc_20",
+                                "address": to_checksum_address(token_address),
+                                "balance": int(balance),
+                            }
+                        )
+        except Exception:
+            self.context.logger.debug("Failed to read stale balance cache")
+
+        # Refresh known tokens via on-chain multicall; they supersede stale cache
+        known_tokens = yield from self._get_known_safe_tokens()
+        if known_tokens:
+            fresh = yield from self._fetch_balances_via_multicall(
+                "optimism", safe_address, known_tokens
+            )
+            fresh_addrs = {b["address"].lower() for b in fresh}
+            balances = [b for b in balances if b["address"].lower() not in fresh_addrs]
+            balances.extend(fresh)
+
+        # Reward tokens and OUSDT are always fetched on-chain — unaffected by SafeGlobal
+        reward_balances = yield from self._fetch_reward_balances("optimism")
+        if reward_balances:
+            balances.extend(reward_balances)
+        ousdt_balance = yield from self._fetch_ousdt_balance("optimism")
+        if ousdt_balance:
+            balances.append(ousdt_balance)
+
+        self.context.logger.info(f"Degraded-mode balances: {len(balances)} entries")
+        return balances
+
     def _get_optimism_balances_from_safe_api(
         self,
     ) -> Generator[None, None, List[Dict[str, Any]]]:
@@ -458,38 +698,72 @@ class LiquidityTraderBaseBehaviour(
         safe_address = self.params.safe_contract_addresses.get("optimism")
         if not safe_address:
             self.context.logger.error("No safe address set for Optimism chain")
+            self._set_trading_mode(TradingMode.PAUSED)
             return []
 
-        self.context.logger.info(
-            f"Fetching Optimism balances from SafeApi for safe: {safe_address}"
+        # Decide whether we can serve cached balances or need a fresh fetch.
+        cache_age = yield from self._get_balance_cache_age_seconds()
+        tx_happened = yield from self._non_vanity_tx_happened_since_fetch()
+
+        all_balances: List[Dict] = []
+        api_success = False
+
+        serve_from_cache = (
+            cache_age is not None
+            and cache_age < BALANCE_CACHE_TRADE_TTL_SECONDS
+            and not tx_happened
         )
 
-        # Fetch all balances with pagination
-        api_success, all_balances = (
-            yield from self._fetch_safe_balances_with_pagination(safe_address)
-        )
-
-        if api_success:
-            # Cache fresh data on successful API fetch (including empty — clears stale cache)
+        if serve_from_cache:
+            self.context.logger.info(
+                f"Using cached balances (age={cache_age}s, within trade TTL)"
+            )
             try:
-                yield from self._write_kv(
-                    {"safe_balances_optimism": json.dumps(all_balances)}
-                )
-            except Exception:  # nosec B110
-                self.context.logger.debug("Failed to cache safe balances to KV store")
-        else:
-            # API failed — fall back to cached balances
-            try:
-                cached = yield from self._read_kv(("safe_balances_optimism",))
-                if cached and cached.get("safe_balances_optimism"):
-                    self.context.logger.warning(
-                        "SafeGlobal API failed, using cached balances"
-                    )
-                    all_balances = json.loads(cached["safe_balances_optimism"])
+                cached = yield from self._read_kv((SAFE_BALANCES_CACHE_KEY,))
+                raw = cached.get(SAFE_BALANCES_CACHE_KEY) if cached else None
+                if raw is not None:
+                    all_balances = json.loads(raw)
+                    api_success = True
+                else:
+                    # Cache TS is fresh but body missing — fall through to API
+                    serve_from_cache = False
             except Exception:
                 self.context.logger.warning(
                     "Failed to read cached balances from KV store"
                 )
+                serve_from_cache = False
+
+        if not serve_from_cache:
+            self.context.logger.info(
+                f"Fetching Optimism balances from SafeApi for safe: {safe_address}"
+            )
+            # Fetch all balances with pagination
+            api_success, all_balances = (
+                yield from self._fetch_safe_balances_with_pagination(safe_address)
+            )
+
+            if api_success:
+                # Cache fresh data + update freshness timestamp + known tokens list
+                try:
+                    yield from self._write_kv(
+                        {
+                            SAFE_BALANCES_CACHE_KEY: json.dumps(all_balances),
+                            SAFE_BALANCES_TS_KEY: str(int(time.time())),
+                        }
+                    )
+                except Exception:  # nosec B110
+                    self.context.logger.debug(
+                        "Failed to cache safe balances to KV store"
+                    )
+                yield from self._update_known_safe_tokens(all_balances)
+
+        # If API still failed (fresh fetch attempted and failed), enter degraded mode.
+        if not api_success:
+            self._handle_degraded_mode()
+            return (yield from self._degraded_mode_balances(safe_address))
+
+        # SafeGlobal data available (fresh or cached): trade fully.
+        self._set_trading_mode(TradingMode.FULL)
 
         balances = []
         for balance_data in all_balances:

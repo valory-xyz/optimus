@@ -134,6 +134,11 @@ NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
 ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
+
+# Freshness thresholds for /portfolio response (seconds)
+STALE_WARN_THRESHOLD_SECONDS = 7200  # 2 hr
+STALE_CRITICAL_THRESHOLD_SECONDS = 86400  # 24 hr
+SAFE_BALANCES_TS_KEY = "safe_balances_optimism_ts"
 USDC_ADDRESSES = {
     "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
 }
@@ -1296,10 +1301,35 @@ class HttpHandler(BaseHttpHandler):
         portfolio_data["selected_protocols"] = selected_protocol_names
         portfolio_data["trading_type"] = trading_type
 
+        # Compute balance data freshness for UI staleness indicator
+        portfolio_data["freshness"] = self._compute_balance_freshness()
+
         portfolio_data_json = json.dumps(portfolio_data, ensure_ascii=True)
         self.context.logger.info(f"Portfolio Response - {portfolio_data}")
         # Send the portfolio data as a response
         self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
+
+    def _compute_balance_freshness(self) -> str:
+        """Return a freshness category for cached Safe balance data.
+
+        Reads the last-successful-fetch timestamp from KV and compares to now.
+
+        :return: "fresh" | "stale_2h" | "stale_24h" | "unknown"
+        """
+        try:
+            data = self._read_kv((SAFE_BALANCES_TS_KEY,))
+            raw = data.get(SAFE_BALANCES_TS_KEY) if data else None
+            if not raw:
+                return "unknown"
+            age_seconds = max(0, int(time.time()) - int(raw))
+        except (ValueError, TypeError):
+            return "unknown"
+
+        if age_seconds < STALE_WARN_THRESHOLD_SECONDS:
+            return "fresh"
+        if age_seconds < STALE_CRITICAL_THRESHOLD_SECONDS:
+            return "stale_2h"
+        return "stale_24h"
 
     def _handle_get_health(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

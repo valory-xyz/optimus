@@ -19,9 +19,11 @@
 
 """This module contains the behaviour for deciding the next round post transaction settlement for the 'liquidity_trader_abci' skill."""
 
+import time
 from typing import Generator
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    LAST_NON_VANITY_TX_TS_KEY,
     LiquidityTraderBaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
@@ -42,11 +44,21 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             msg = f"The transaction submitted by {self.synchronized_data.tx_submitter} was successfully settled."
             self.context.logger.info(msg)
             # we do not want to track the gas costs for vanity tx
-            if (
-                not self.synchronized_data.tx_submitter
+            is_vanity_tx = (
+                self.synchronized_data.tx_submitter
                 == CheckStakingKPIMetRound.auto_round_id()
-            ):
+            )
+            if not is_vanity_tx:
                 yield from self.fetch_and_log_gas_details()
+                # Invalidate balance cache: balances may have changed
+                try:
+                    yield from self._write_kv(
+                        {LAST_NON_VANITY_TX_TS_KEY: str(int(time.time()))}
+                    )
+                except Exception:  # nosec B110
+                    self.context.logger.debug(
+                        "Failed to write last_non_vanity_tx_ts to KV"
+                    )
 
             payload = PostTxSettlementPayload(
                 sender=self.context.agent_address, content="Transaction settled"

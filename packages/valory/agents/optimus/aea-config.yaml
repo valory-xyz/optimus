@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeict6h3wfmddpvam5gmmanqzuokup6ppoev3t4j5uyl7xxahjaols4
 - valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
 - valory/funds_manager:0.1.0:bafybeihxaharfszjutbrl5a2i76co22suhdt5bfsryv76ikkltisugqbjm
-- valory/liquidity_trader_abci:0.1.0:bafybeih5r4uypo7jo3st7ythcpxhydjbje2b6bx4npsewjk4fxhqbowus4
-- valory/optimus_abci:0.1.0:bafybeihcwej65hh4ocekgwvxnm6dz7uyjp5v5b5w2wmxigoxqw6hreljpu
+- valory/liquidity_trader_abci:0.1.0:bafybeibcpe3qneesrpd4qgs5ark4ldd56amtu3eua6rm4w7tzj6q6u7zge
+- valory/optimus_abci:0.1.0:bafybeictqgxqqn7cl2rr3je6sijzxhdl4altxebvfhpzs765tatzki2y5i
 - valory/registration_abci:0.1.0:bafybeif3gpewppz5wr5mmgyvaowsamjufyons3oif7cb4x5ubvvfb6rtda
 - valory/reset_pause_abci:0.1.0:bafybeidcnf77bc3o7pssa5zesilpbm4ley2k45taii5j5rrvvty7uhu3lq
 - valory/termination_abci:0.1.0:bafybeia33hlouukdpwaxctunauudv5gpfdxndimra7yqiof4a3skcwdqkq

@@ -5093,6 +5093,34 @@ class TestGetClStakedBalance:
         assert result == 7777
 
 
+class TestGetClPositionOwner:
+    """Tests for get_cl_position_owner generator."""
+
+    def test_missing_position_manager(self) -> None:
+        b = make_behaviour()
+        b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
+        result = exhaust_generator(b.get_cl_position_owner(1, "optimism"))
+        assert result is None
+
+    def test_owner_empty(self) -> None:
+        b = make_behaviour()
+        b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPosMgr"
+        }
+        b.contract_interact = make_contract_interact([None])
+        result = exhaust_generator(b.get_cl_position_owner(1, "optimism"))
+        assert result is None
+
+    def test_success(self) -> None:
+        b = make_behaviour()
+        b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPosMgr"
+        }
+        b.contract_interact = make_contract_interact(["0xOwner"])
+        result = exhaust_generator(b.get_cl_position_owner(1, "optimism"))
+        assert result == "0xOwner"
+
+
 class TestIsClTokenStaked:
     """Tests for is_cl_token_staked generator."""
 

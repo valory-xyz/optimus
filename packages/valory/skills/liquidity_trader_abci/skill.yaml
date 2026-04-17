@@ -49,10 +49,10 @@ fingerprint:
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihikbbl7r3jwq3np7nx4wz4eeymk3egvst2obu5hrq3l3s4ucp42e
   tests/behaviours/test_apr_population.py: bafybeiccqec5lpr6lpg62mbyqrxfp3eemszl6whjpl6sv3xkgqnxdbwdq4
-  tests/behaviours/test_base.py: bafybeieogpne4yylbvkf3grw2jb6fq4ghp5i4p22fum3kfe4r6wth43ql4
+  tests/behaviours/test_base.py: bafybeibejlotc325xnb5osknlbhvsa5wleyj73pdwj63h3qeryvz6iyfau
   tests/behaviours/test_call_checkpoint.py: bafybeichc7rmi55lg5jo657x32zb443r3lstivhj4ijc534lgi2u33pkke
   tests/behaviours/test_check_staking_kpi_met.py: bafybeig36k5z2entbi44qtk53tyk4be3r7kwhq7j5kbu5rccma7nlb2hba
-  tests/behaviours/test_decision_making.py: bafybeif5bqpc267ptnsis63f2cwqjq4gcl6gday2adh4tr72ajsobsxpxm
+  tests/behaviours/test_decision_making.py: bafybeicdymdyjy7gfyp5xr4dmmm2pdzlgea7lj22xqbrr7vjxliwrtt7ju
   tests/behaviours/test_evaluate_strategy.py: bafybeieml5yybvrrwt7zmd3hukcz5nxnnsb6ftgkt3kh6tpvs2mfsrbhqe
   tests/behaviours/test_fetch_strategies.py: bafybeig3axm7uvetdjjk5xci6c5ywkqbkceshcumpydeks4oy7xb3xwntu
   tests/behaviours/test_get_positions.py: bafybeial3qhqe6rwwspzvzp7xrw2upf7pjhtvgmtmomwz5zhjcd3q5nrmy
@@ -63,8 +63,8 @@ fingerprint:
   tests/io_/test_loader.py: bafybeidcy2l6fpipq5jg7kc5afccnad7pywwobm3qskhpgk37nbsbaw7om
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/pools/test_balancer.py: bafybeicfm4wqyb5ycmji3wxej4cs2iedggnrzexmevzt3u43h6q6avb5fu
-  tests/pools/test_uniswap.py: bafybeiex34an4272tx4o4rfbzeedf4ddyx5ong7ag72jr3st66g7ncc4ja
-  tests/pools/test_velodrome.py: bafybeic4sxtjn54epqd2vndeggno6puovsjpwye5grpvzlnnfjydulae6m
+  tests/pools/test_uniswap.py: bafybeicobmay7jatmz75hytipcyr7wyqrabynjqavbw6rpozsxmwvg2l6e
+  tests/pools/test_velodrome.py: bafybeigaq7r757dg4roturuau3hd7aw2iqigxfivacn2gipclagidbfx7y
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/states/test_apr_population.py: bafybeigangckuw2cpdxelxqc3adlpccekr2halqypraizermtjhvzzm7i4
   tests/states/test_base.py: bafybeihhpz74uoqqz4ltd75ms6rvtnqr3zuqbcf4sdzoelm56yg2pohjw4

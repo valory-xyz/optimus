@@ -2299,3 +2299,4 @@ fb9a0678812d66b5c0b32494d05331de12c9ab5b:packages/valory/skills/liquidity_trader
 fb9a0678812d66b5c0b32494d05331de12c9ab5b:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_evaluate_strategy.py:generic-api-key:5857
 f1467b991fd6dc09e24e6b18cab1d0c7ed66f43d:packages/valory/skills/liquidity_trader_abci/tests/test_evaluate_strategy_behaviour.py:generic-api-key:2967
 20420b69937ce51190b75b4add063f56f61da19e:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_base.py:generic-api-key:941
+c0db80c20cf20b2c548d2260b41f415e3a207684:packages/valory/skills/liquidity_trader_abci/tests/behaviours/test_base.py:generic-api-key:1376

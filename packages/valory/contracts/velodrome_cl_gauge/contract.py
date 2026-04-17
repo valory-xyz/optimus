@@ -143,12 +143,31 @@ class VelodromeCLGaugeContract(Contract):
     ) -> JSONLike:
         """Get the staked balance of an account in the CL gauge."""
         _logger.debug(f"Getting CL staked balance for account: {account}")
-        
+
         checksumed_account = ledger_api.api.to_checksum_address(account)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(checksumed_account).call()
         _logger.debug(f"CL staked balance for {account}: {balance}")
         return dict(balance=balance)
+
+    @classmethod
+    def staked_contains(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Check whether ``token_id`` is currently staked by ``account`` in the CL gauge."""
+        # Source of truth for "is this NFT actually in the gauge for this account"
+        # Used before emitting unstake actions so we do not attempt to withdraw
+        # a token the gauge has no record of (which would revert with "NA").
+        checksumed_account = ledger_api.api.to_checksum_address(account)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        is_staked = contract_instance.functions.stakedContains(
+            checksumed_account, token_id
+        ).call()
+        return dict(is_staked=bool(is_staked))
 
     @classmethod
     def total_supply(

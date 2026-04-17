@@ -4985,6 +4985,63 @@ class TestGetClStakedBalance:
         assert result == 7777
 
 
+class TestIsClTokenStaked:
+    """Tests for is_cl_token_staked generator (ZD #950 fix)."""
+
+    def test_missing_params(self) -> None:
+        """Missing chain/gauge/token_id returns None (cannot verify)."""
+        b = make_behaviour()
+        result = exhaust_generator(b.is_cl_token_staked("0xAccount", 1))
+        assert result is None
+
+    def test_missing_gauge_address(self) -> None:
+        b = make_behaviour()
+        result = exhaust_generator(
+            b.is_cl_token_staked("0xAccount", 1, chain="optimism")
+        )
+        assert result is None
+
+    def test_missing_token_id(self) -> None:
+        b = make_behaviour()
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", None, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is None
+
+    def test_contract_returns_none(self) -> None:
+        """RPC failure bubbles up as None so callers can fall back."""
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([None])
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is None
+
+    def test_true(self) -> None:
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([True])
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is True
+
+    def test_false(self) -> None:
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([False])
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is False
+
+
 class TestGetClGaugeTotalSupply:
     """Tests for get_cl_gauge_total_supply generator."""
 

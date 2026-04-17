@@ -3294,6 +3294,126 @@ class TestBuildUnstakeActionFull:
         assert result is None
 
 
+class TestBuildUnstakeActionVerified:
+    """Tests for _build_unstake_lp_tokens_action_verified.
+
+    Covers the on-chain staked-state reconciliation added to fix ZD #950, where
+    a stale local ``staked=True`` flag caused the agent to submit a gauge
+    withdraw() that reverted with "NA" (wrapped by the Safe as GS013).
+    """
+
+    @staticmethod
+    def _cl_position(**overrides):
+        pos = {
+            "dex_type": "velodrome",
+            "chain": "optimism",
+            "pool_address": "0xPool",
+            "is_cl_pool": True,
+            "gauge_address": "0xGauge",
+            "positions": [{"token_id": 1}, {"token_id": 2}],
+        }
+        pos.update(overrides)
+        return pos
+
+    @staticmethod
+    def _pool_stub(is_staked_map, gauge_address="0xGauge"):
+        """Fake VelodromePoolBehaviour for stake verification tests."""
+        # is_staked_map maps token_id -> True/False/None (None = RPC failure).
+
+        class _Pool:
+            @staticmethod
+            def get_gauge_address(behaviour, pool_address, **kwargs):
+                yield
+                return gauge_address
+
+            @staticmethod
+            def is_cl_token_staked(behaviour, account, token_id, **kwargs):
+                yield
+                return is_staked_map.get(token_id)
+
+        return _Pool
+
+    def test_falls_through_for_non_velodrome_pools(self) -> None:
+        """Uniswap positions go straight to the sync builder."""
+        b = _make_behaviour()
+        pos = {"dex_type": "UniswapV3"}
+        result = _exhaust(b._build_unstake_lp_tokens_action_verified(pos))
+        assert result is None
+
+    def test_falls_through_for_non_cl_velodrome(self) -> None:
+        """Stable/volatile Velodrome positions are unaffected by the CL check."""
+        b = _make_behaviour()
+        pos = {
+            "dex_type": "velodrome",
+            "chain": "optimism",
+            "pool_address": "0xPool",
+            "is_cl_pool": False,
+        }
+        result = _exhaust(b._build_unstake_lp_tokens_action_verified(pos))
+        assert result["is_cl_pool"] is False
+        assert result["action"] == "UnstakeLpTokens"
+
+    def test_all_tokens_staked_on_chain_emits_full_action(self) -> None:
+        b = _make_behaviour()
+        b.pools = {"velodrome": self._pool_stub({1: True, 2: True})}
+        result = _exhaust(
+            b._build_unstake_lp_tokens_action_verified(self._cl_position())
+        )
+        assert result is not None
+        assert result["token_ids"] == [1, 2]
+        assert result["gauge_address"] == "0xGauge"
+
+    def test_no_tokens_staked_on_chain_skips_action(self) -> None:
+        """This is the ZD #950 case: local says staked, gauge says no."""
+        b = _make_behaviour()
+        b.pools = {"velodrome": self._pool_stub({1: False, 2: False})}
+        result = _exhaust(
+            b._build_unstake_lp_tokens_action_verified(self._cl_position())
+        )
+        assert result is None
+
+    def test_partial_staked_filters_token_ids(self) -> None:
+        b = _make_behaviour()
+        b.pools = {"velodrome": self._pool_stub({1: True, 2: False})}
+        result = _exhaust(
+            b._build_unstake_lp_tokens_action_verified(self._cl_position())
+        )
+        assert result is not None
+        assert result["token_ids"] == [1]
+
+    def test_rpc_failure_falls_back_to_local_state(self) -> None:
+        """If we can't verify on-chain, preserve prior behaviour."""
+        b = _make_behaviour()
+        b.pools = {"velodrome": self._pool_stub({1: None, 2: True})}
+        result = _exhaust(
+            b._build_unstake_lp_tokens_action_verified(self._cl_position())
+        )
+        assert result is not None
+        # Original token list is preserved since we couldn't verify.
+        assert result["token_ids"] == [1, 2]
+
+    def test_resolves_missing_gauge_via_voter(self) -> None:
+        b = _make_behaviour()
+        b.pools = {"velodrome": self._pool_stub({1: True, 2: True})}
+        pos = self._cl_position()
+        pos.pop("gauge_address")
+        result = _exhaust(b._build_unstake_lp_tokens_action_verified(pos))
+        assert result is not None
+        assert result["gauge_address"] == "0xGauge"
+
+    def test_falls_back_when_gauge_unresolvable(self) -> None:
+        b = _make_behaviour()
+        b.pools = {"velodrome": self._pool_stub({1: True, 2: True}, gauge_address=None)}
+        pos = self._cl_position()
+        pos.pop("gauge_address")
+        result = _exhaust(b._build_unstake_lp_tokens_action_verified(pos))
+        # Unresolved gauge => can't verify => fall back to local-state builder,
+        # which also requires a gauge_address, so it still returns an action
+        # (gauge_address is optional in the sync builder).
+        assert result is not None
+        assert "gauge_address" not in result
+
+
 class TestAgentRegistryMethods:
     """Test MirrorDB agent registry generator methods."""
 

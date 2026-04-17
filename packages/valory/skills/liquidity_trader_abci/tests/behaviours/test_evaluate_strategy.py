@@ -3220,8 +3220,8 @@ class TestGetOrderOfTransactions:
             "gauge_address": "0xgauge",
         }
         b._has_staking_metadata = MagicMock(return_value=True)
-        b._build_unstake_lp_tokens_action = MagicMock(
-            return_value={"action": "UnstakeLpTokens"}
+        b._build_unstake_lp_tokens_action_verified = _gen_return(
+            {"action": "UnstakeLpTokens"}
         )
         b._build_exit_pool_action_base = MagicMock(return_value={"action": "ExitPool"})
         b.get_velodrome_position_requirements = _gen_return({})
@@ -5662,8 +5662,8 @@ class TestGetOrderOfTransactionsBranches:
             "pool_address": "0x1",
         }
         b._has_staking_metadata = MagicMock(return_value=True)
-        b._build_unstake_lp_tokens_action = MagicMock(
-            return_value={"action": "UnstakeLPTokens"}
+        b._build_unstake_lp_tokens_action_verified = _gen_return(
+            {"action": "UnstakeLPTokens"}
         )
         b._build_exit_pool_action = MagicMock(return_value={"action": "ExitPool"})
         b._prepare_tokens_for_investment = _gen_return(
@@ -5821,7 +5821,7 @@ class TestGetOrderOfTransactionsBranches:
         ]
         b.position_to_exit = {"dex_type": "velodrome"}
         b._has_staking_metadata = MagicMock(return_value=True)
-        b._build_unstake_lp_tokens_action = MagicMock(return_value=None)
+        b._build_unstake_lp_tokens_action_verified = _gen_return(None)
         b._build_exit_pool_action = MagicMock(return_value={"action": "ExitPool"})
         b._prepare_tokens_for_investment = _gen_return([])
         b._build_bridge_swap_actions = MagicMock(return_value=[])

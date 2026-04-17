@@ -3462,6 +3462,41 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(f"CL staked balance for {account}: {staked_amount}")
         return staked_amount
 
+    def is_cl_token_staked(
+        self, account: str, token_id: int, **kwargs: Any
+    ) -> Generator[None, None, Optional[bool]]:
+        """Return True/False if the gauge's stake set can be read, else None."""
+        # None signals "could not verify" (RPC error) so callers can fall back
+        # instead of conflating transient failures with a real "not staked".
+        chain = kwargs.get("chain")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not all([chain, gauge_address, token_id is not None]):
+            self.context.logger.error(
+                "Chain, gauge_address and token_id are required for is_cl_token_staked"
+            )
+            return None
+
+        result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="staked_contains",
+            data_key="is_staked",
+            account=account,
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if result is None:
+            self.context.logger.warning(
+                f"Could not verify on-chain staked state for token {token_id} "
+                f"on gauge {gauge_address}"
+            )
+            return None
+
+        return bool(result)
+
     def get_cl_gauge_total_supply(self, **kwargs: Any) -> Generator[None, None, int]:
         """Get the total supply of staked tokens in CL gauge."""
         chain = kwargs.get("chain")

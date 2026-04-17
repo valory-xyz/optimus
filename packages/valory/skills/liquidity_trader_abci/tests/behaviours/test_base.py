@@ -33,14 +33,20 @@ import pytest
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     AIRDROP_TOTAL_KEY,
     Action,
+    BALANCE_CACHE_TRADE_TTL_SECONDS,
     ETH_REMAINING_KEY,
     GasCostTracker,
+    KNOWN_SAFE_TOKENS_KEY,
+    LAST_NON_VANITY_TX_TS_KEY,
     LiquidityTraderBaseBehaviour,
     MIN_TIME_IN_POSITION,
     OLAS_ADDRESSES,
     PRICE_CACHE_KEY_PREFIX,
     REWARD_UPDATE_INTERVAL,
     REWARD_UPDATE_KEY_PREFIX,
+    SAFE_BALANCES_CACHE_KEY,
+    SAFE_BALANCES_TS_KEY,
+    TradingMode,
     ZERO_ADDRESS,
     execute_strategy,
 )
@@ -1055,6 +1061,495 @@ class TestGetOptimismBalances:
         b._fetch_ousdt_balance = _make_gen(None)
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
+
+
+class TestBalanceCacheAge:
+    """Test _get_balance_cache_age_seconds."""
+
+    def test_returns_age_when_timestamp_present(self) -> None:
+        b = _make_behaviour()
+        now = int(time.time())
+        b._read_kv = _make_gen({SAFE_BALANCES_TS_KEY: str(now - 100)})
+        result = _exhaust(b._get_balance_cache_age_seconds())
+        assert result is not None
+        assert 99 <= result <= 101
+
+    def test_returns_none_when_no_timestamp(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen({SAFE_BALANCES_TS_KEY: None})
+        result = _exhaust(b._get_balance_cache_age_seconds())
+        assert result is None
+
+    def test_returns_none_when_no_data(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen(None)
+        result = _exhaust(b._get_balance_cache_age_seconds())
+        assert result is None
+
+    def test_returns_none_on_invalid_timestamp(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen({SAFE_BALANCES_TS_KEY: "not-a-number"})
+        result = _exhaust(b._get_balance_cache_age_seconds())
+        assert result is None
+
+    def test_returns_none_on_kv_exception(self) -> None:
+        def _failing(keys):  # type: ignore
+            if False:
+                yield
+            raise ConnectionError("down")
+
+        b = _make_behaviour()
+        b._read_kv = _failing
+        result = _exhaust(b._get_balance_cache_age_seconds())
+        assert result is None
+
+
+class TestNonVanityTxHappenedSinceFetch:
+    """Test _non_vanity_tx_happened_since_fetch."""
+
+    def test_true_when_tx_after_fetch(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen(
+            {
+                LAST_NON_VANITY_TX_TS_KEY: "200",
+                SAFE_BALANCES_TS_KEY: "100",
+            }
+        )
+        result = _exhaust(b._non_vanity_tx_happened_since_fetch())
+        assert result is True
+
+    def test_false_when_fetch_after_tx(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen(
+            {
+                LAST_NON_VANITY_TX_TS_KEY: "100",
+                SAFE_BALANCES_TS_KEY: "200",
+            }
+        )
+        result = _exhaust(b._non_vanity_tx_happened_since_fetch())
+        assert result is False
+
+    def test_false_when_no_data(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen(None)
+        result = _exhaust(b._non_vanity_tx_happened_since_fetch())
+        assert result is False
+
+    def test_false_on_invalid_values(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen(
+            {
+                LAST_NON_VANITY_TX_TS_KEY: "xx",
+                SAFE_BALANCES_TS_KEY: "100",
+            }
+        )
+        result = _exhaust(b._non_vanity_tx_happened_since_fetch())
+        assert result is False
+
+    def test_false_on_kv_exception(self) -> None:
+        def _failing(keys):  # type: ignore
+            if False:
+                yield
+            raise ConnectionError("down")
+
+        b = _make_behaviour()
+        b._read_kv = _failing
+        result = _exhaust(b._non_vanity_tx_happened_since_fetch())
+        assert result is False
+
+
+class TestUpdateKnownSafeTokens:
+    """Test _update_known_safe_tokens."""
+
+    def test_merges_new_tokens_with_existing(self) -> None:
+        b = _make_behaviour()
+        existing = ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+        b._read_kv = _make_gen({KNOWN_SAFE_TOKENS_KEY: json.dumps(existing)})
+        writes: Dict[str, str] = {}
+
+        def _write(data):  # type: ignore
+            if False:
+                yield
+            writes.update(data)
+            return True
+
+        b._write_kv = _write
+        new_token = "0x" + "cc" * 20
+        balances = [{"tokenAddress": new_token}]
+        _exhaust(b._update_known_safe_tokens(balances))
+        merged = json.loads(writes[KNOWN_SAFE_TOKENS_KEY])
+        assert new_token.lower() in merged
+        assert existing[0].lower() in merged
+
+    def test_noop_when_no_tokens(self) -> None:
+        b = _make_behaviour()
+        b._read_kv = _make_gen(None)
+        b._write_kv = _make_gen(True)
+        _exhaust(b._update_known_safe_tokens([{"tokenAddress": None}]))
+        # Should early-return; no assertion besides no crash
+
+    def test_handles_kv_exception(self) -> None:
+        def _failing(keys):  # type: ignore
+            if False:
+                yield
+            raise ConnectionError("down")
+
+        b = _make_behaviour()
+        b._read_kv = _failing
+        _exhaust(b._update_known_safe_tokens([{"tokenAddress": "0x" + "ab" * 20}]))
+
+
+class TestGetKnownSafeTokens:
+    """Test _get_known_safe_tokens."""
+
+    def test_returns_from_kv_when_present(self) -> None:
+        b = _make_behaviour()
+        stored = ["0x" + "aa" * 20, "0x" + "bb" * 20]
+        b._read_kv = _make_gen({KNOWN_SAFE_TOKENS_KEY: json.dumps(stored)})
+        result = _exhaust(b._get_known_safe_tokens())
+        assert set(result) == set(stored)
+
+    def test_falls_back_to_positions_when_kv_empty(self) -> None:
+        b = _make_behaviour()
+        b.current_positions = [{"token0": "0x" + "aa" * 20, "token1": "0x" + "bb" * 20}]
+        b._read_kv = _make_gen({KNOWN_SAFE_TOKENS_KEY: None})
+        result = _exhaust(b._get_known_safe_tokens())
+        assert set(result) == {"0x" + "aa" * 20, "0x" + "bb" * 20}
+
+    def test_falls_back_to_positions_on_kv_exception(self) -> None:
+        def _failing(keys):  # type: ignore
+            if False:
+                yield
+            raise ConnectionError("down")
+
+        b = _make_behaviour()
+        b.current_positions = [{"token0": "0x" + "aa" * 20}]
+        b._read_kv = _failing
+        result = _exhaust(b._get_known_safe_tokens())
+        assert result == ["0x" + "aa" * 20]
+
+    def test_empty_when_no_kv_and_no_positions(self) -> None:
+        b = _make_behaviour()
+        b.current_positions = []
+        b._read_kv = _make_gen(None)
+        result = _exhaust(b._get_known_safe_tokens())
+        assert result == []
+
+
+class TestFetchBalancesViaMulticall:
+    """Test _fetch_balances_via_multicall."""
+
+    def test_returns_balances_for_tokens(self) -> None:
+        b = _make_behaviour()
+        b._get_token_balance = _make_gen(1000)
+        b._get_token_symbol = _make_gen("USDC")
+        result = _exhaust(
+            b._fetch_balances_via_multicall(
+                "optimism", "0x" + "aa" * 20, ["0x" + "bb" * 20]
+            )
+        )
+        assert len(result) == 1
+        assert result[0]["asset_symbol"] == "USDC"
+        assert result[0]["balance"] == 1000
+
+    def test_skips_zero_balances(self) -> None:
+        b = _make_behaviour()
+        b._get_token_balance = _make_gen(0)
+        b._get_token_symbol = _make_gen("USDC")
+        result = _exhaust(
+            b._fetch_balances_via_multicall(
+                "optimism", "0x" + "aa" * 20, ["0x" + "bb" * 20]
+            )
+        )
+        assert result == []
+
+    def test_unknown_symbol_defaults(self) -> None:
+        b = _make_behaviour()
+        b._get_token_balance = _make_gen(500)
+        b._get_token_symbol = _make_gen(None)
+        result = _exhaust(
+            b._fetch_balances_via_multicall(
+                "optimism", "0x" + "aa" * 20, ["0x" + "bb" * 20]
+            )
+        )
+        assert result[0]["asset_symbol"] == "UNKNOWN"
+
+    def test_handles_per_token_exception(self) -> None:
+        def _failing(chain, safe, token):  # type: ignore
+            if False:
+                yield
+            raise ConnectionError("RPC down")
+
+        b = _make_behaviour()
+        b._get_token_balance = _failing
+        result = _exhaust(
+            b._fetch_balances_via_multicall(
+                "optimism", "0x" + "aa" * 20, ["0x" + "bb" * 20]
+            )
+        )
+        assert result == []
+
+
+class TestSetTradingMode:
+    """Test _set_trading_mode."""
+
+    def test_logs_transition(self) -> None:
+        b = _make_behaviour()
+        b.shared_state.trading_mode = TradingMode.FULL
+        b._set_trading_mode(TradingMode.PAUSED)
+        assert b.shared_state.trading_mode == TradingMode.PAUSED
+
+    def test_no_log_when_same_mode(self) -> None:
+        b = _make_behaviour()
+        b.shared_state.trading_mode = TradingMode.FULL
+        b._set_trading_mode(TradingMode.FULL)
+        assert b.shared_state.trading_mode == TradingMode.FULL
+
+
+class TestHandleDegradedMode:
+    """Test _handle_degraded_mode."""
+
+    def test_sets_paused(self) -> None:
+        b = _make_behaviour()
+        b._handle_degraded_mode()
+        assert b.shared_state.trading_mode == TradingMode.PAUSED
+
+
+class TestDegradedModeBalances:
+    """Test _degraded_mode_balances."""
+
+    def test_merges_cache_and_multicall(self) -> None:
+        b = _make_behaviour()
+        cached = [
+            {"tokenAddress": None, "balance": "100"},  # ETH
+            {
+                "tokenAddress": "0x" + "dd" * 20,
+                "token": {"symbol": "DAI"},
+                "balance": "200",
+            },
+        ]
+
+        read_calls = {"n": 0}
+
+        def _read(keys):  # type: ignore
+            read_calls["n"] += 1
+            if False:
+                yield
+            if SAFE_BALANCES_CACHE_KEY in keys:
+                return {SAFE_BALANCES_CACHE_KEY: json.dumps(cached)}
+            if KNOWN_SAFE_TOKENS_KEY in keys:
+                return {KNOWN_SAFE_TOKENS_KEY: json.dumps(["0x" + "dd" * 20])}
+            return None
+
+        b._read_kv = _read
+        # Multicall returns fresh DAI balance (overrides cached)
+        b._get_token_balance = _make_gen(999)
+        b._get_token_symbol = _make_gen("DAI")
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._degraded_mode_balances("0x" + "aa" * 20))
+        # ETH from cache + DAI fresh from multicall
+        symbols = [r["asset_symbol"] for r in result]
+        assert "ETH" in symbols
+        assert "DAI" in symbols
+        dai = next(r for r in result if r["asset_symbol"] == "DAI")
+        assert dai["balance"] == 999  # fresh from multicall
+
+    def test_handles_cache_read_failure(self) -> None:
+        def _failing(keys):  # type: ignore
+            if False:
+                yield
+            raise ConnectionError("down")
+
+        b = _make_behaviour()
+        b._read_kv = _failing
+        b.current_positions = []
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._degraded_mode_balances("0x" + "aa" * 20))
+        assert result == []
+
+    def test_skips_filtered_token_in_stale_cache(self) -> None:
+        b = _make_behaviour()
+        cached = [
+            {
+                "tokenAddress": "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84",
+                "token": {"symbol": "SKIP"},
+                "balance": "100",
+            }
+        ]
+        b._read_kv = _make_gen({SAFE_BALANCES_CACHE_KEY: json.dumps(cached)})
+        b.current_positions = []
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._degraded_mode_balances("0x" + "aa" * 20))
+        assert result == []
+
+    def test_includes_reward_and_ousdt(self) -> None:
+        """Reward tokens and OUSDT are always on-chain, unaffected by SafeGlobal."""
+        b = _make_behaviour()
+        b._read_kv = _make_gen({SAFE_BALANCES_CACHE_KEY: None})
+        b.current_positions = []
+        b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 50}])
+        b._fetch_ousdt_balance = _make_gen({"asset_symbol": "oUSDT", "balance": 25})
+        result = _exhaust(b._degraded_mode_balances("0x" + "aa" * 20))
+        symbols = [r["asset_symbol"] for r in result]
+        assert "VELO" in symbols
+        assert "oUSDT" in symbols
+
+
+class TestOptimismBalancesWithTTL:
+    """Test the refactored _get_optimism_balances_from_safe_api TTL + mode logic."""
+
+    def test_serves_from_cache_within_trade_ttl(self) -> None:
+        b = _make_behaviour()
+        now = int(time.time())
+        cached_balances = [{"tokenAddress": None, "balance": "100"}]
+
+        def _read(keys):  # type: ignore
+            if False:
+                yield
+            if SAFE_BALANCES_TS_KEY in keys and LAST_NON_VANITY_TX_TS_KEY in keys:
+                return {
+                    SAFE_BALANCES_TS_KEY: str(now - 60),
+                    LAST_NON_VANITY_TX_TS_KEY: "0",
+                }
+            if SAFE_BALANCES_TS_KEY in keys:
+                return {SAFE_BALANCES_TS_KEY: str(now - 60)}
+            if SAFE_BALANCES_CACHE_KEY in keys:
+                return {SAFE_BALANCES_CACHE_KEY: json.dumps(cached_balances)}
+            return None
+
+        b._read_kv = _read
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        # Should never call fetch_safe_balances_with_pagination since cache is fresh
+        call_log = []
+
+        def _should_not_call(safe):  # type: ignore
+            call_log.append(safe)
+            if False:
+                yield
+            return (True, [])
+
+        b._fetch_safe_balances_with_pagination = _should_not_call
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert call_log == []
+        assert b.shared_state.trading_mode == TradingMode.FULL
+        assert len(result) == 1  # ETH from cache
+
+    def test_forces_refresh_after_non_vanity_tx(self) -> None:
+        b = _make_behaviour()
+        now = int(time.time())
+
+        def _read(keys):  # type: ignore
+            if False:
+                yield
+            if LAST_NON_VANITY_TX_TS_KEY in keys:
+                return {
+                    SAFE_BALANCES_TS_KEY: str(now - 60),
+                    LAST_NON_VANITY_TX_TS_KEY: str(now - 30),  # tx after fetch
+                }
+            if SAFE_BALANCES_TS_KEY in keys:
+                return {SAFE_BALANCES_TS_KEY: str(now - 60)}
+            return None
+
+        b._read_kv = _read
+        b._write_kv = _make_gen(True)
+        b._update_known_safe_tokens = _make_gen(None)
+        b._fetch_safe_balances_with_pagination = _make_gen(
+            (True, [{"tokenAddress": None, "balance": "500"}])
+        )
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert b.shared_state.trading_mode == TradingMode.FULL
+        assert len(result) == 1
+        assert result[0]["balance"] == 500  # fresh data
+
+    def test_paused_mode_when_api_fails_and_no_positions(self) -> None:
+        b = _make_behaviour()
+        b.current_positions = []
+
+        def _read(keys):  # type: ignore
+            if False:
+                yield
+            return None  # no cache, no TS
+
+        b._read_kv = _read
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert b.shared_state.trading_mode == TradingMode.PAUSED
+        assert result == []
+
+    def test_cache_read_exception_falls_through_to_api(self) -> None:
+        b = _make_behaviour()
+        now = int(time.time())
+        read_counter = {"n": 0}
+
+        def _read(keys):  # type: ignore
+            read_counter["n"] += 1
+            if False:
+                yield
+            # First calls (age + tx check) return "fresh cache"
+            if read_counter["n"] <= 2:
+                return {
+                    SAFE_BALANCES_TS_KEY: str(now - 60),
+                    LAST_NON_VANITY_TX_TS_KEY: "0",
+                }
+            # Third call (reading cache content) raises
+            raise ConnectionError("down")
+
+        b._read_kv = _read
+        b._write_kv = _make_gen(True)
+        b._update_known_safe_tokens = _make_gen(None)
+        b._fetch_safe_balances_with_pagination = _make_gen(
+            (True, [{"tokenAddress": None, "balance": "300"}])
+        )
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert b.shared_state.trading_mode == TradingMode.FULL
+        assert len(result) == 1
+
+    def test_no_safe_address_sets_paused(self) -> None:
+        b = _make_behaviour()
+        b.params.safe_contract_addresses = {}
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert b.shared_state.trading_mode == TradingMode.PAUSED
+        assert result == []
+
+    def test_cache_fresh_but_empty_content_falls_through_to_api(self) -> None:
+        """TS is fresh but cache body missing: fall through to SafeGlobal fetch."""
+        b = _make_behaviour()
+        now = int(time.time())
+        read_counter = {"n": 0}
+
+        def _read(keys):  # type: ignore
+            read_counter["n"] += 1
+            if False:
+                yield
+            if read_counter["n"] <= 2:
+                return {
+                    SAFE_BALANCES_TS_KEY: str(now - 60),
+                    LAST_NON_VANITY_TX_TS_KEY: "0",
+                }
+            # Cache body is None — should fall through to API
+            return {SAFE_BALANCES_CACHE_KEY: None}
+
+        b._read_kv = _read
+        b._write_kv = _make_gen(True)
+        b._update_known_safe_tokens = _make_gen(None)
+        b._fetch_safe_balances_with_pagination = _make_gen(
+            (True, [{"tokenAddress": None, "balance": "42"}])
+        )
+        b._fetch_reward_balances = _make_gen([])
+        b._fetch_ousdt_balance = _make_gen(None)
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        assert len(result) == 1
+        assert result[0]["balance"] == 42
 
 
 class TestGetModeBalances:

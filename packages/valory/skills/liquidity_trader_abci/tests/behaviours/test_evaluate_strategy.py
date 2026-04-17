@@ -2467,6 +2467,22 @@ class TestAsyncAct:
         _drive(b.async_act(), sends=[None] * 10)
         b.set_done.assert_called_once()
 
+    def test_trading_mode_paused_skips_evaluation(self):
+        """When trading_mode is PAUSED, evaluate_strategy returns early."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            TradingMode,
+        )
+
+        b = _mk()
+        b._read_investing_paused = _gen_return(False)
+        b.shared_state.trading_mode = TradingMode.PAUSED
+        send_actions, calls = self._make_send_actions()
+        b.send_actions = send_actions
+        _drive(b.async_act(), sends=[None] * 5)
+        # send_actions called exactly once (empty early return)
+        assert len(calls) == 1
+        assert calls[0] is None
+
     def test_non_whitelisted_swaps_with_full_flow(self):
         """When non-whitelisted swaps return actions, send_actions is called, then flow continues."""
         b = _mk()

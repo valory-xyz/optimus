@@ -397,12 +397,26 @@ class TestGetLiquidityForToken:
             assert result is None
 
     def test_success(self) -> None:
-        """Test successful liquidity retrieval (index 7)."""
+        """Contract wrapper returns a dict keyed by field name; helper must
+        index into it by key."""
         obj = _make_behaviour()
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        position_data = [0, 0, 0, 0, 0, 0, 0, 5000, 0, 0, 0, 0]
+        position_data = {
+            "nonce": 0,
+            "operator": "0x0",
+            "token0": "0xa",
+            "token1": "0xb",
+            "fee": 3000,
+            "tickLower": -1,
+            "tickUpper": 1,
+            "liquidity": 5000,
+            "feeGrowthInside0LastX128": 0,
+            "feeGrowthInside1LastX128": 0,
+            "tokensOwed0": 0,
+            "tokensOwed1": 0,
+        }
 
         def fake_contract_interact(**kwargs):
             yield

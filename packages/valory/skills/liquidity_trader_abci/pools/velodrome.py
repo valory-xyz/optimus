@@ -1150,12 +1150,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # liquidity is returned from positions mapping at the appropriate index
-        # Typically liquidity is at a specific index in the struct
-        liquidity = position[
-            2
-        ]  # This should match the index where liquidity is stored in the positions struct
-        return liquidity
+        # The contract wrapper returns a dict keyed by field name (see
+        # VelodromeNonFungiblePositionManagerContract.get_position), so
+        # index into it by key. The previous ``position[2]`` silently
+        # masked the error because this helper was only invoked on a
+        # falsy cached-liquidity fallback that never fired in practice.
+        return position.get("liquidity")
 
     def decrease_liquidity_velodrome(
         self,

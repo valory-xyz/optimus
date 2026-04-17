@@ -1429,12 +1429,27 @@ class TestGetLiquidityForTokenVelodrome:
         result = exhaust(b.get_liquidity_for_token_velodrome(42, "optimism"))
         assert result is None
 
-    def test_returns_liquidity_at_index_2(self) -> None:
+    def test_returns_liquidity_from_dict(self) -> None:
+        """The contract wrapper returns a dict keyed by field name; helper
+        must index into it by key, not by position."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
         }
-        b.contract_interact = MagicMock(return_value=_gen_return([0, 0, 500000, 0]))
+        b.contract_interact = MagicMock(
+            return_value=_gen_return(
+                {
+                    "nonce": 0,
+                    "operator": "0x0",
+                    "token0": "0xa",
+                    "token1": "0xb",
+                    "tickSpacing": 1,
+                    "tickLower": -2,
+                    "tickUpper": 3,
+                    "liquidity": 500000,
+                }
+            )
+        )
         result = exhaust(b.get_liquidity_for_token_velodrome(42, "optimism"))
         assert result == 500000
 

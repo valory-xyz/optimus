@@ -441,9 +441,11 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # liquidity is returned at the 7th index from contract
-        liquidity = position[7]
-        return liquidity
+        # The contract wrapper returns a dict keyed by field name (see
+        # UniswapV3NonfungiblePositionManagerContract.get_position), so
+        # index into it by key. The previous ``position[7]`` was dead
+        # code until the exit path started always calling this helper.
+        return position.get("liquidity")
 
     def _get_tokens(
         self, pool_address: str, chain: str

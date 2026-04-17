@@ -1199,7 +1199,7 @@ class TestExit:
 
 
 class TestExitOwnerOfCheck:
-    """Exit must skip when the Safe does not own the NFT (ZD #950-class bug)."""
+    """Exit must skip when the Safe does not own the NFT."""
 
     def test_exit_skipped_when_owner_is_not_safe(self) -> None:
         obj = _make_behaviour()

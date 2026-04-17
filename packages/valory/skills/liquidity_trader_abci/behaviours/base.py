@@ -2690,11 +2690,6 @@ class LiquidityTraderBaseBehaviour(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Build an UnstakeLpTokens action after on-chain stake verification for CL pools."""
-        # For Velodrome CL pools, query the gauge's stakedContains(account, tokenId)
-        # for each token_id and only include those actually staked. Prevents us from
-        # submitting a gauge.withdraw(tokenId) that reverts because the NFT is not in
-        # the gauge (ZD #950: local staked=True became stale, Safe tx reverted with
-        # GS013). Falls back to the sync builder on RPC error or for non-CL paths.
         is_cl_pool = position.get("is_cl_pool", False)
         dex_type = position.get("dex_type")
 

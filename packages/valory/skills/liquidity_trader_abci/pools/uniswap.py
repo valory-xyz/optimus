@@ -188,11 +188,6 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # Skip if the Safe does not own the position NFT. Uniswap V3 does not
-        # have the gauge-staking indirection Velodrome has, so ownerOf should
-        # always be the Safe at exit time; if not, the NFT was moved out of
-        # the Safe and decreaseLiquidity would revert with "Not approved".
-        # None from the helper = RPC failure; attempt the call anyway.
         owner = yield from self.get_uniswap_position_owner(token_id, chain)
         if owner is not None and owner.lower() != safe_address.lower():
             self.context.logger.warning(
@@ -201,10 +196,6 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None, None
 
-        # Always read liquidity from the position manager. Cached values go
-        # stale when fees accrue, the position is partially exited, or the NFT
-        # was touched outside the agent; passing a stale value to
-        # decreaseLiquidity reverts with "Price slippage check" / underflow.
         cached_liquidity = liquidity
         liquidity = yield from self.get_liquidity_for_token(token_id, chain)
         if not liquidity:
@@ -388,8 +379,6 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[str]]:
         """Return the on-chain owner of a Uniswap V3 position NFT, or None on failure."""
-        # None signals "could not verify" so callers fall back instead of
-        # dropping a valid exit on a transient RPC error.
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
         )
@@ -441,10 +430,6 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # The contract wrapper returns a dict keyed by field name (see
-        # UniswapV3NonfungiblePositionManagerContract.get_position), so
-        # index into it by key. The previous ``position[7]`` was dead
-        # code until the exit path started always calling this helper.
         return position.get("liquidity")
 
     def _get_tokens(

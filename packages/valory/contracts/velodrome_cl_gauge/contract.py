@@ -159,9 +159,6 @@ class VelodromeCLGaugeContract(Contract):
         token_id: int,
     ) -> JSONLike:
         """Check whether ``token_id`` is currently staked by ``account`` in the CL gauge."""
-        # Source of truth for "is this NFT actually in the gauge for this account"
-        # Used before emitting unstake actions so we do not attempt to withdraw
-        # a token the gauge has no record of (which would revert with "NA").
         checksumed_account = ledger_api.api.to_checksum_address(account)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         is_staked = contract_instance.functions.stakedContains(

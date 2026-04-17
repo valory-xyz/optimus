@@ -3295,12 +3295,7 @@ class TestBuildUnstakeActionFull:
 
 
 class TestBuildUnstakeActionVerified:
-    """Tests for _build_unstake_lp_tokens_action_verified.
-
-    Covers the on-chain staked-state reconciliation added to fix ZD #950, where
-    a stale local ``staked=True`` flag caused the agent to submit a gauge
-    withdraw() that reverted with "NA" (wrapped by the Safe as GS013).
-    """
+    """Tests for _build_unstake_lp_tokens_action_verified."""
 
     @staticmethod
     def _cl_position(**overrides):
@@ -3364,7 +3359,7 @@ class TestBuildUnstakeActionVerified:
         assert result["gauge_address"] == "0xGauge"
 
     def test_no_tokens_staked_on_chain_skips_action(self) -> None:
-        """This is the ZD #950 case: local says staked, gauge says no."""
+        """Local state says staked but gauge says no."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: False, 2: False})}
         result = _exhaust(

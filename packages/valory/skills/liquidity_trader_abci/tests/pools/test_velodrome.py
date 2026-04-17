@@ -2345,7 +2345,7 @@ class TestExitClPool:
         assert result[2] is True
 
     def test_always_reads_liquidity_even_when_cached_nonzero(self) -> None:
-        """Fresh liquidity from contract must override cached value (ZD #950-class)."""
+        """Fresh liquidity from contract must override the cached value."""
         b = self._make_b()
         # Cached liquidity is 999; real on-chain is 500 (partial exit happened).
         b.get_liquidity_for_token_velodrome = _mock_gen(500)
@@ -5094,7 +5094,7 @@ class TestGetClStakedBalance:
 
 
 class TestIsClTokenStaked:
-    """Tests for is_cl_token_staked generator (ZD #950 fix)."""
+    """Tests for is_cl_token_staked generator."""
 
     def test_missing_params(self) -> None:
         """Missing chain/gauge/token_id returns None (cannot verify)."""

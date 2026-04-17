@@ -4186,10 +4186,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     return None, None, None
 
-                # Filter token_ids to those actually staked in the gauge. If
-                # the local state drifted (ZD #950), getReward(tokenId) on an
-                # un-staked token reverts with "NA". On RPC failure we keep
-                # the original list to preserve prior behaviour.
+                # On RPC failure keep the original list.
                 staked_token_ids: List[int] = []
                 verification_failed = False
                 for token_id in token_ids:

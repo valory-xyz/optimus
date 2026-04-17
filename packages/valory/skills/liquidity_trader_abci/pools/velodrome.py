@@ -970,12 +970,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Process each position
         for index, position_token_id in enumerate(token_ids):
-            # Skip tokens the Safe does not own. The unstake step should have
-            # transferred staked NFTs back to the Safe before this point; if
-            # ownerOf still reports something else (NFT transferred externally,
-            # unstake never settled), decreaseLiquidity reverts with
-            # "Not approved". None from the helper = RPC failure; fall through
-            # and attempt the call rather than drop a valid exit.
             owner = yield from self.get_cl_position_owner(position_token_id, chain)
             if owner is not None and owner.lower() != safe_address.lower():
                 self.context.logger.warning(
@@ -984,11 +978,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 )
                 continue
 
-            # Always read liquidity from the position manager: cached values go
-            # stale when fees accrue, the position is partially exited, or the
-            # NFT was touched outside the agent. Passing a stale liquidity to
-            # decreaseLiquidity reverts with "Price slippage check" or underflow
-            # (same class of failure as ZD #950's GS013).
             cached_liquidity = liquidities[index] if index < len(liquidities) else None
             position_liquidity = yield from self.get_liquidity_for_token_velodrome(
                 position_token_id, chain
@@ -1093,8 +1082,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[str]]:
         """Return the on-chain owner of a Velodrome CL position NFT, or None on failure."""
-        # None signals "could not verify" (RPC error, missing config) so callers
-        # can fall back instead of treating a transient failure as "not owned".
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain, ""
@@ -1150,11 +1137,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # The contract wrapper returns a dict keyed by field name (see
-        # VelodromeNonFungiblePositionManagerContract.get_position), so
-        # index into it by key. The previous ``position[2]`` silently
-        # masked the error because this helper was only invoked on a
-        # falsy cached-liquidity fallback that never fired in practice.
         return position.get("liquidity")
 
     def decrease_liquidity_velodrome(
@@ -3153,11 +3135,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # Stake each NFT position
         staked_positions = []
         for token_id in token_ids:
-            # Skip tokens already in the gauge's stake set. Re-staking an NFT
-            # the gauge already holds would revert on deposit. None from the
-            # check means we could not verify on-chain; in that case fall back
-            # to attempting the deposit so a transient RPC error does not block
-            # a fresh stake.
             is_staked = yield from self.is_cl_token_staked(
                 safe_address,
                 token_id,
@@ -3540,8 +3517,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, account: str, token_id: int, **kwargs: Any
     ) -> Generator[None, None, Optional[bool]]:
         """Return True/False if the gauge's stake set can be read, else None."""
-        # None signals "could not verify" (RPC error) so callers can fall back
-        # instead of conflating transient failures with a real "not staked".
         chain = kwargs.get("chain")
         gauge_address = kwargs.get("gauge_address")
 

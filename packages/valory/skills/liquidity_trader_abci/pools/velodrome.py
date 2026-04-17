@@ -970,17 +970,40 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Process each position
         for index, position_token_id in enumerate(token_ids):
-            # Get liquidity for this position from the corresponding index
-            position_liquidity = liquidities[index]
-            if not position_liquidity:
-                position_liquidity = yield from self.get_liquidity_for_token_velodrome(
-                    position_token_id, chain
+            # Skip tokens the Safe does not own. The unstake step should have
+            # transferred staked NFTs back to the Safe before this point; if
+            # ownerOf still reports something else (NFT transferred externally,
+            # unstake never settled), decreaseLiquidity reverts with
+            # "Not approved". None from the helper = RPC failure; fall through
+            # and attempt the call rather than drop a valid exit.
+            owner = yield from self.get_cl_position_owner(position_token_id, chain)
+            if owner is not None and owner.lower() != safe_address.lower():
+                self.context.logger.warning(
+                    f"Skipping exit for token {position_token_id}: owner "
+                    f"{owner} is not the Safe {safe_address}"
                 )
-                if not position_liquidity:
-                    self.context.logger.warning(
-                        f"Could not get liquidity for token ID {position_token_id}, skipping"
-                    )
-                    continue
+                continue
+
+            # Always read liquidity from the position manager: cached values go
+            # stale when fees accrue, the position is partially exited, or the
+            # NFT was touched outside the agent. Passing a stale liquidity to
+            # decreaseLiquidity reverts with "Price slippage check" or underflow
+            # (same class of failure as ZD #950's GS013).
+            cached_liquidity = liquidities[index] if index < len(liquidities) else None
+            position_liquidity = yield from self.get_liquidity_for_token_velodrome(
+                position_token_id, chain
+            )
+            if not position_liquidity:
+                self.context.logger.warning(
+                    f"Could not get liquidity for token ID {position_token_id}, skipping"
+                )
+                continue
+            if cached_liquidity and cached_liquidity != position_liquidity:
+                self.context.logger.info(
+                    f"Cached liquidity for token {position_token_id} "
+                    f"({cached_liquidity}) diverged from on-chain "
+                    f"({position_liquidity}); using on-chain value"
+                )
 
             # Calculate slippage protection for this specific position
             (
@@ -1065,6 +1088,39 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
+
+    def get_cl_position_owner(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Return the on-chain owner of a Velodrome CL position NFT, or None on failure."""
+        # None signals "could not verify" (RPC error, missing config) so callers
+        # can fall back instead of treating a transient failure as "not owned".
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain, ""
+            )
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return None
+
+        owner = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+            contract_callable="ownerOf",
+            data_key="owner",
+            token_id=token_id,
+            chain_id=chain,
+        )
+        if not owner:
+            self.context.logger.warning(
+                f"Could not read owner of velodrome CL position {token_id}"
+            )
+            return None
+        return owner
 
     def get_liquidity_for_token_velodrome(
         self, token_id: int, chain: str
@@ -3097,6 +3153,24 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # Stake each NFT position
         staked_positions = []
         for token_id in token_ids:
+            # Skip tokens already in the gauge's stake set. Re-staking an NFT
+            # the gauge already holds would revert on deposit. None from the
+            # check means we could not verify on-chain; in that case fall back
+            # to attempting the deposit so a transient RPC error does not block
+            # a fresh stake.
+            is_staked = yield from self.is_cl_token_staked(
+                safe_address,
+                token_id,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            if is_staked is True:
+                self.context.logger.info(
+                    f"Token {token_id} is already staked in gauge "
+                    f"{gauge_address}; skipping deposit"
+                )
+                continue
+
             # Create stake transaction for this NFT
             stake_tx_hash = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,

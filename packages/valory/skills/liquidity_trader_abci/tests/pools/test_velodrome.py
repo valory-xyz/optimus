@@ -2189,6 +2189,10 @@ class TestExitClPool:
         mock_rs = MagicMock()
         mock_rs.last_round_transition_timestamp = mock_ts
         b.context.state.round_sequence = mock_rs
+        # Default stubs for on-chain verification helpers added in the
+        # ownerOf / fresh-liquidity hardening. Tests override per-case.
+        b.get_cl_position_owner = _mock_gen("0xSafe")
+        b.get_liquidity_for_token_velodrome = _mock_gen(100)
         return b
 
     def test_no_position_manager(self) -> None:
@@ -2290,6 +2294,60 @@ class TestExitClPool:
         assert result is not None
         assert result[1] == "0xMulti"
         assert result[2] is True
+
+    def test_skips_tokens_not_owned_by_safe(self) -> None:
+        """Tokens whose ownerOf is not the Safe must be skipped."""
+        b = self._make_b()
+        # Token 2 is not owned by the Safe (e.g. transferred externally).
+        owners = {1: "0xSafe", 2: "0xOther", 3: "0xSafe"}
+
+        def owner_stub(token_id, chain):
+            yield
+            return owners[token_id]
+
+        b.get_cl_position_owner = owner_stub
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        b.decrease_liquidity_velodrome = _mock_gen("0xDec")
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(
+            b._exit_cl_pool("optimism", "0xSafe", [1, 2, 3], [100, 200, 300], "0xPool")
+        )
+        # Multisend still produced from tokens 1 and 3; token 2 skipped.
+        assert result is not None
+        assert result[1] == "0xMulti"
+
+    def test_owner_unreadable_attempts_exit_anyway(self) -> None:
+        """None from ownerOf must not drop a valid exit (RPC failure fallback)."""
+        b = self._make_b()
+        b.get_cl_position_owner = _mock_gen(None)
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        b.decrease_liquidity_velodrome = _mock_gen("0xDec")
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
+        assert result is not None
+        assert result[2] is True
+
+    def test_always_reads_liquidity_even_when_cached_nonzero(self) -> None:
+        """Fresh liquidity from contract must override cached value (ZD #950-class)."""
+        b = self._make_b()
+        # Cached liquidity is 999; real on-chain is 500 (partial exit happened).
+        b.get_liquidity_for_token_velodrome = _mock_gen(500)
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        captured = {}
+
+        def decrease_stub(token_id, liquidity, *a, **k):
+            captured["liquidity"] = liquidity
+            yield
+            return "0xDec"
+
+        b.decrease_liquidity_velodrome = decrease_stub
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [999], "0xPool"))
+        assert result is not None
+        assert captured["liquidity"] == 500
 
 
 class TestCalculateTickLowerAndUpperVelodrome:
@@ -4583,6 +4641,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake -> ok
         b.contract_interact = make_contract_interact([True, "0xStakeData"])
         result = exhaust_generator(
@@ -4599,6 +4658,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake -> ok, 3: multisend -> None
         b.contract_interact = make_contract_interact([True, "0xStakeData", None])
         result = exhaust_generator(
@@ -4615,6 +4675,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake1, 3: stake2, 4: multisend
         b.contract_interact = make_contract_interact(
             [True, "0xStake1", "0xStake2", "0xaabbccdd"]
@@ -4635,6 +4696,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> False, 2: approve -> ok, 3: stake1, 4: multisend
         b.contract_interact = make_contract_interact(
             [False, "0xApproveAll", "0xStake1", "0xaabbccdd"]
@@ -4653,6 +4715,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake token1 -> None (fail), 3: stake token2 -> ok, 4: multisend
         b.contract_interact = make_contract_interact(
             [True, None, "0xStake2", "0xaabbccdd"]
@@ -4665,6 +4728,36 @@ class TestStakeClLpTokens:
         assert result["success"] is True
         assert len(result["staked_positions"]) == 1
         assert result["staked_positions"][0]["token_id"] == 2
+
+    def test_skips_already_staked_token(self) -> None:
+        """Already-staked tokens should be skipped before deposit is called.
+
+        Prevents re-staking an NFT the gauge already holds (would revert on deposit).
+        """
+        b = make_behaviour()
+        b.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPM"
+        }
+        b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+
+        staked_map = {1: True, 2: False}
+
+        def is_staked_stub(account, token_id, **kwargs):
+            yield
+            return staked_map[token_id]
+
+        b.is_cl_token_staked = is_staked_stub
+        # token 1 is already staked; its deposit is not called. Sequence is:
+        # is_approved -> True, stake token2, multisend
+        b.contract_interact = make_contract_interact([True, "0xStake2", "0xaabbccdd"])
+        result = exhaust_generator(
+            b.stake_cl_lp_tokens(
+                [1, 2], "0xGauge", chain="optimism", safe_address="0xSafe"
+            )
+        )
+        assert result["success"] is True
+        staked_ids = {p["token_id"] for p in result["staked_positions"]}
+        assert staked_ids == {2}
 
 
 class TestUnstakeClLpTokens:

@@ -188,11 +188,32 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # fetch liquidity from contract
+        # Skip if the Safe does not own the position NFT. Uniswap V3 does not
+        # have the gauge-staking indirection Velodrome has, so ownerOf should
+        # always be the Safe at exit time; if not, the NFT was moved out of
+        # the Safe and decreaseLiquidity would revert with "Not approved".
+        # None from the helper = RPC failure; attempt the call anyway.
+        owner = yield from self.get_uniswap_position_owner(token_id, chain)
+        if owner is not None and owner.lower() != safe_address.lower():
+            self.context.logger.warning(
+                f"Skipping exit for uniswap token {token_id}: owner {owner} "
+                f"is not the Safe {safe_address}"
+            )
+            return None, None, None
+
+        # Always read liquidity from the position manager. Cached values go
+        # stale when fees accrue, the position is partially exited, or the NFT
+        # was touched outside the agent; passing a stale value to
+        # decreaseLiquidity reverts with "Price slippage check" / underflow.
+        cached_liquidity = liquidity
+        liquidity = yield from self.get_liquidity_for_token(token_id, chain)
         if not liquidity:
-            liquidity = yield from self.get_liquidity_for_token(token_id, chain)
-            if not liquidity:
-                return None, None, None
+            return None, None, None
+        if cached_liquidity and cached_liquidity != liquidity:
+            self.context.logger.info(
+                f"Cached liquidity for token {token_id} ({cached_liquidity}) "
+                f"diverged from on-chain ({liquidity}); using on-chain value"
+            )
 
         # Calculate slippage protection for decrease liquidity
         (
@@ -362,6 +383,37 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
 
         return tx_hash
+
+    def get_uniswap_position_owner(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Return the on-chain owner of a Uniswap V3 position NFT, or None on failure."""
+        # None signals "could not verify" so callers fall back instead of
+        # dropping a valid exit on a transient RPC error.
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None
+
+        owner = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="ownerOf",
+            data_key="owner",
+            token_id=token_id,
+            chain_id=chain,
+        )
+        if not owner:
+            self.context.logger.warning(
+                f"Could not read owner of uniswap V3 position {token_id}"
+            )
+            return None
+        return owner
 
     def get_liquidity_for_token(
         self, token_id: int, chain: str

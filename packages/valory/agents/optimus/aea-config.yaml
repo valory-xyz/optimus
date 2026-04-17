@@ -35,7 +35,7 @@ contracts:
 - valory/velodrome_sugar:0.1.0:bafybeiagvhkybfnati2iuuutdshbch5gsptam4ojpojgpfezazmd4fmf5a
 - valory/velodrome_gauge:0.1.0:bafybeigmhn77cclr33vhvfobvhlwzteiemiifzj5aqsjf5k6zyp3zvyuue
 - valory/velodrome_voter:0.1.0:bafybeifqrkiwhg4vovfmy7ucb7hugcyiovp7rfbx5noix4zr7qc53a774q
-- valory/velodrome_cl_gauge:0.1.0:bafybeihewjhyzpmw6u33oor3jd3mtzlgnlqsbprxgbyz5me4dszuqokgvq
+- valory/velodrome_cl_gauge:0.1.0:bafybeiggekbwzser5544hucuotcdz43g5tlawuoztt7czm7cwj3npdxtbq
 - valory/balancer_queries:0.1.0:bafybeibl5g4optfrcbcemk3qngxrodkh3r7mi4xzalkljrn2g7w6qvysje
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeict6h3wfmddpvam5gmmanqzuokup6ppoev3t4j5uyl7xxahjaols4
 - valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
 - valory/funds_manager:0.1.0:bafybeihxaharfszjutbrl5a2i76co22suhdt5bfsryv76ikkltisugqbjm
-- valory/liquidity_trader_abci:0.1.0:bafybeidj5pvy46rj4lkwqteenagqfve6wnkeck75bh3bkzieuv5hd65xpu
-- valory/optimus_abci:0.1.0:bafybeiayvh5rdytulqjoq4qfh27z4yxgosknm4qjbslkmxojmewtzyyvve
+- valory/liquidity_trader_abci:0.1.0:bafybeibcpe3qneesrpd4qgs5ark4ldd56amtu3eua6rm4w7tzj6q6u7zge
+- valory/optimus_abci:0.1.0:bafybeictqgxqqn7cl2rr3je6sijzxhdl4altxebvfhpzs765tatzki2y5i
 - valory/registration_abci:0.1.0:bafybeif3gpewppz5wr5mmgyvaowsamjufyons3oif7cb4x5ubvvfb6rtda
 - valory/reset_pause_abci:0.1.0:bafybeidcnf77bc3o7pssa5zesilpbm4ley2k45taii5j5rrvvty7uhu3lq
 - valory/termination_abci:0.1.0:bafybeia33hlouukdpwaxctunauudv5gpfdxndimra7yqiof4a3skcwdqkq

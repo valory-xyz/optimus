@@ -188,11 +188,23 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # fetch liquidity from contract
+        owner = yield from self.get_uniswap_position_owner(token_id, chain)
+        if owner is not None and owner.lower() != safe_address.lower():
+            self.context.logger.warning(
+                f"Skipping exit for uniswap token {token_id}: owner {owner} "
+                f"is not the Safe {safe_address}"
+            )
+            return None, None, None
+
+        cached_liquidity = liquidity
+        liquidity = yield from self.get_liquidity_for_token(token_id, chain)
         if not liquidity:
-            liquidity = yield from self.get_liquidity_for_token(token_id, chain)
-            if not liquidity:
-                return None, None, None
+            return None, None, None
+        if cached_liquidity and cached_liquidity != liquidity:
+            self.context.logger.info(
+                f"Cached liquidity for token {token_id} ({cached_liquidity}) "
+                f"diverged from on-chain ({liquidity}); using on-chain value"
+            )
 
         # Calculate slippage protection for decrease liquidity
         (
@@ -363,6 +375,35 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         return tx_hash
 
+    def get_uniswap_position_owner(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Return the on-chain owner of a Uniswap V3 position NFT, or None on failure."""
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None
+
+        owner = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="ownerOf",
+            data_key="owner",
+            token_id=token_id,
+            chain_id=chain,
+        )
+        if not owner:
+            self.context.logger.warning(
+                f"Could not read owner of uniswap V3 position {token_id}"
+            )
+            return None
+        return owner
+
     def get_liquidity_for_token(
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[str]]:
@@ -389,9 +430,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # liquidity is returned at the 7th index from contract
-        liquidity = position[7]
-        return liquidity
+        return position.get("liquidity")
 
     def _get_tokens(
         self, pool_address: str, chain: str

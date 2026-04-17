@@ -218,7 +218,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Step 1: Check for open positions and create unstaking and exit actions
         self.context.logger.info("=== STEP 1: CHECKING FOR OPEN POSITIONS ===")
-        unstake_actions = self._prepare_unstaking_actions(positions)
+        unstake_actions = yield from self._prepare_unstaking_actions(positions)
         if unstake_actions:
             self.context.logger.info(
                 f"Found {len(unstake_actions)} open positions to unstake"
@@ -281,11 +281,12 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
     def _prepare_unstaking_actions(
         self, positions: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
         """
         Prepare unstaking actions in standard action format.
 
         :param positions: current positions
+        :yield: while awaiting on-chain stake-state verification
         :return: list of unstaking positions actions in standard format
         """
         actions = []
@@ -299,7 +300,11 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
             if status == PositionStatus.OPEN.value:
                 if self._has_staking_metadata(position):
-                    unstake_action = self._build_unstake_lp_tokens_action(position)
+                    unstake_action = (
+                        yield from self._build_unstake_lp_tokens_action_verified(
+                            position
+                        )
+                    )
                     if unstake_action:
                         actions.append(unstake_action)
                         self.context.logger.info(

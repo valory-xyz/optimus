@@ -2686,6 +2686,90 @@ class LiquidityTraderBaseBehaviour(
             )
             return None
 
+    def _build_unstake_lp_tokens_action_verified(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Build an UnstakeLpTokens action after on-chain stake verification for CL pools."""
+        is_cl_pool = position.get("is_cl_pool", False)
+        dex_type = position.get("dex_type")
+
+        if dex_type != "velodrome" or not is_cl_pool:
+            return self._build_unstake_lp_tokens_action(position)
+
+        chain = position.get("chain")
+        pool_address = position.get("pool_address")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        if not all([chain, pool_address, safe_address]):
+            return self._build_unstake_lp_tokens_action(position)
+
+        positions_data = position.get("positions", [])
+        token_ids = [p["token_id"] for p in positions_data if "token_id" in p]
+        if not token_ids:
+            token_id = position.get("token_id")
+            if token_id is not None:
+                token_ids = [token_id]
+        if not token_ids:
+            return self._build_unstake_lp_tokens_action(position)
+
+        pool = self.pools.get("velodrome")
+        if not pool:
+            return self._build_unstake_lp_tokens_action(position)
+
+        gauge_address = position.get("gauge_address")
+        if not gauge_address:
+            gauge_address = yield from pool.get_gauge_address(
+                self, pool_address, chain=chain
+            )
+        if not gauge_address:
+            self.context.logger.warning(
+                f"Could not resolve gauge for pool {pool_address}; "
+                f"falling back to local staked state"
+            )
+            return self._build_unstake_lp_tokens_action(position)
+
+        staked_token_ids: List[int] = []
+        verification_failed = False
+        for token_id in token_ids:
+            is_staked = yield from pool.is_cl_token_staked(
+                self,
+                safe_address,
+                token_id,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            if is_staked is None:
+                verification_failed = True
+                break
+            if is_staked:
+                staked_token_ids.append(token_id)
+
+        if verification_failed:
+            self.context.logger.warning(
+                f"On-chain stake verification failed for pool {pool_address}; "
+                f"falling back to local staked state"
+            )
+            return self._build_unstake_lp_tokens_action(position)
+
+        if not staked_token_ids:
+            self.context.logger.info(
+                f"Skipping unstake for pool {pool_address}: none of "
+                f"{token_ids} are staked in gauge {gauge_address}"
+            )
+            return None
+
+        filtered_position = dict(position)
+        filtered_position["positions"] = [
+            p for p in positions_data if p.get("token_id") in staked_token_ids
+        ]
+        if position.get("token_id") is not None and not filtered_position["positions"]:
+            filtered_position["token_id"] = (
+                position.get("token_id")
+                if position.get("token_id") in staked_token_ids
+                else None
+            )
+        filtered_position["gauge_address"] = gauge_address
+        return self._build_unstake_lp_tokens_action(filtered_position)
+
     def get_agent_type_by_name(
         self, type_name
     ) -> Generator[None, None, Optional[Dict]]:

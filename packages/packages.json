@@ -20,13 +20,13 @@
         "contract/valory/velodrome_sugar/0.1.0": "bafybeiagvhkybfnati2iuuutdshbch5gsptam4ojpojgpfezazmd4fmf5a",
         "contract/valory/velodrome_gauge/0.1.0": "bafybeigmhn77cclr33vhvfobvhlwzteiemiifzj5aqsjf5k6zyp3zvyuue",
         "contract/valory/velodrome_voter/0.1.0": "bafybeifqrkiwhg4vovfmy7ucb7hugcyiovp7rfbx5noix4zr7qc53a774q",
-        "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeihewjhyzpmw6u33oor3jd3mtzlgnlqsbprxgbyz5me4dszuqokgvq",
+        "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeiggekbwzser5544hucuotcdz43g5tlawuoztt7czm7cwj3npdxtbq",
         "contract/valory/balancer_queries/0.1.0": "bafybeibl5g4optfrcbcemk3qngxrodkh3r7mi4xzalkljrn2g7w6qvysje",
         "connection/valory/mirror_db/0.1.0": "bafybeickaytigebxoabjmcrxibktwwm5zdzxvqhl7bp4sqx6wpacmueoe4",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidj5pvy46rj4lkwqteenagqfve6wnkeck75bh3bkzieuv5hd65xpu",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiayvh5rdytulqjoq4qfh27z4yxgosknm4qjbslkmxojmewtzyyvve",
-        "agent/valory/optimus/0.1.0": "bafybeib3mk6b5wqf3ib636fla6hlgkapylqyu3w3drfsx2eiurbvft4cmi",
-        "service/valory/optimus/0.1.0": "bafybeibo4ppcgtavshncf2xlvd3mnhjbdd4gdd4dg5snyss3z3f5ghl7fu"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeibcpe3qneesrpd4qgs5ark4ldd56amtu3eua6rm4w7tzj6q6u7zge",
+        "skill/valory/optimus_abci/0.1.0": "bafybeictqgxqqn7cl2rr3je6sijzxhdl4altxebvfhpzs765tatzki2y5i",
+        "agent/valory/optimus/0.1.0": "bafybeihdbazqewcn6xm7elxkplmhsy55dns5bn7ugyf42iqgsr4fqcargy",
+        "service/valory/optimus/0.1.0": "bafybeig3qackhejcklmzpdamiqfuph6h4bpyfjdvwblvluqx2ltxbtwppe"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

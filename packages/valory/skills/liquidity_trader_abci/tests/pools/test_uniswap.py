@@ -361,6 +361,115 @@ class TestDecreaseLiquidity:
             assert result == "0xdecrease_hash"
 
 
+class TestGetUniswapPositionOwner:
+    """Tests for get_uniswap_position_owner."""
+
+    def test_no_position_manager(self) -> None:
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {}
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.get_uniswap_position_owner(1, "optimism")
+            assert _drive(gen) is None
+
+    def test_owner_empty(self) -> None:
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return None
+
+        obj.contract_interact = fake_contract_interact
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.get_uniswap_position_owner(1, "optimism")
+            assert _drive(gen) is None
+
+    def test_success(self) -> None:
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return "0xOwner"
+
+        obj.contract_interact = fake_contract_interact
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.get_uniswap_position_owner(1, "optimism")
+            assert _drive(gen) == "0xOwner"
+
+
+class TestExitCachedLiquidityDivergenceLog:
+    """Exit logs when cached liquidity diverges from on-chain."""
+
+    def test_divergence_logs_and_uses_onchain(self) -> None:
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+        params_mock.multisend_contract_addresses = {"optimism": "0xmulti"}
+
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 1000  # diverges from cached below
+
+        captured = {}
+
+        def fake_slippage(tid, liq, chain, pool):
+            captured["liq_for_slippage"] = liq
+            yield
+            return 0, 0
+
+        def fake_decrease(tid, liq, a0, a1, dl, chain):
+            captured["liq_for_decrease"] = liq
+            yield
+            return "0xdec"
+
+        def fake_collect(*a, **k):
+            yield
+            return "0xcol"
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return "0x" + "ab" * 32
+
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
+
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
+        obj._calculate_slippage_protection_for_decrease = fake_slippage
+        obj.decrease_liquidity = fake_decrease
+        obj.collect_tokens = fake_collect
+        obj.contract_interact = fake_contract_interact
+        obj.context.state.round_sequence = rs
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=1,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=9999,  # cached, will diverge
+                pool_address="0xpool",
+            )
+            _drive(gen)
+
+        assert captured["liq_for_decrease"] == 1000
+
+
 class TestGetLiquidityForToken:
     """Tests for get_liquidity_for_token."""
 
@@ -397,12 +506,26 @@ class TestGetLiquidityForToken:
             assert result is None
 
     def test_success(self) -> None:
-        """Test successful liquidity retrieval (index 7)."""
+        """Contract wrapper returns a dict keyed by field name; helper must
+        index into it by key."""
         obj = _make_behaviour()
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        position_data = [0, 0, 0, 0, 0, 0, 0, 5000, 0, 0, 0, 0]
+        position_data = {
+            "nonce": 0,
+            "operator": "0x0",
+            "token0": "0xa",
+            "token1": "0xb",
+            "fee": 3000,
+            "tickLower": -1,
+            "tickUpper": 1,
+            "liquidity": 5000,
+            "feeGrowthInside0LastX128": 0,
+            "feeGrowthInside1LastX128": 0,
+            "tokensOwed0": 0,
+            "tokensOwed1": 0,
+        }
 
         def fake_contract_interact(**kwargs):
             yield
@@ -825,7 +948,12 @@ class TestExit:
             yield
             return None
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
         obj.get_liquidity_for_token = fake_get_liquidity
+        obj.get_uniswap_position_owner = fake_owner
 
         with patch.object(
             type(obj), "params", new_callable=PropertyMock, return_value=params_mock
@@ -844,7 +972,17 @@ class TestExit:
             yield
             return None, None
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 5000
+
         obj._calculate_slippage_protection_for_decrease = fake_slippage_for_decrease
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
 
         with patch.object(
             type(obj), "params", new_callable=PropertyMock, return_value=params_mock
@@ -873,11 +1011,21 @@ class TestExit:
             yield
             return None
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 5000
+
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
 
         obj._calculate_slippage_protection_for_decrease = fake_slippage_for_decrease
         obj.decrease_liquidity = fake_decrease
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
         obj.context.state.round_sequence = rs
 
         with patch.object(
@@ -911,12 +1059,22 @@ class TestExit:
             yield
             return None
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 5000
+
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
 
         obj._calculate_slippage_protection_for_decrease = fake_slippage_for_decrease
         obj.decrease_liquidity = fake_decrease
         obj.collect_tokens = fake_collect
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
         obj.context.state.round_sequence = rs
 
         with patch.object(
@@ -951,12 +1109,22 @@ class TestExit:
             yield
             return "0xcollect"
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 5000
+
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
 
         obj._calculate_slippage_protection_for_decrease = fake_slippage_for_decrease
         obj.decrease_liquidity = fake_decrease
         obj.collect_tokens = fake_collect
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
         obj.context.state.round_sequence = rs
 
         with patch.object(
@@ -995,6 +1163,14 @@ class TestExit:
             yield
             return None
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 5000
+
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
 
@@ -1002,6 +1178,8 @@ class TestExit:
         obj.decrease_liquidity = fake_decrease
         obj.collect_tokens = fake_collect
         obj.contract_interact = fake_contract_interact
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
         obj.context.state.round_sequence = rs
 
         with patch.object(
@@ -1040,6 +1218,14 @@ class TestExit:
             yield
             return "0xabcdef1234567890"
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 5000
+
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
 
@@ -1047,6 +1233,8 @@ class TestExit:
         obj.decrease_liquidity = fake_decrease
         obj.collect_tokens = fake_collect
         obj.contract_interact = fake_contract_interact
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
         obj.context.state.round_sequence = rs
 
         with patch.object(
@@ -1091,9 +1279,98 @@ class TestExit:
             yield
             return "0xabcdef1234567890"
 
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
         rs = MagicMock()
         rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
 
+        obj.get_liquidity_for_token = fake_get_liquidity
+        obj._calculate_slippage_protection_for_decrease = fake_slippage_for_decrease
+        obj.decrease_liquidity = fake_decrease
+        obj.collect_tokens = fake_collect
+        obj.contract_interact = fake_contract_interact
+        obj.get_uniswap_position_owner = fake_owner
+        obj.context.state.round_sequence = rs
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                pool_address="0xpool",
+            )
+            result = _drive(gen)
+            assert result[2] is True
+
+
+class TestExitOwnerOfCheck:
+    """Exit must skip when the Safe does not own the NFT."""
+
+    def test_exit_skipped_when_owner_is_not_safe(self) -> None:
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+        params_mock.multisend_contract_addresses = {"optimism": "0xmultisend"}
+
+        def fake_owner(tid, chain):
+            yield
+            return "0xnotSafe"
+
+        obj.get_uniswap_position_owner = fake_owner
+        # Anything later would explode; the guard must short-circuit first.
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=123,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=5000,
+                pool_address="0xpool",
+            )
+            result = _drive(gen)
+            assert result == (None, None, None)
+
+    def test_exit_continues_when_owner_unreadable(self) -> None:
+        """RPC failure on ownerOf must not drop a valid exit."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+        params_mock.multisend_contract_addresses = {"optimism": "0xmultisend"}
+
+        def fake_owner(tid, chain):
+            yield
+            return None
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 5000
+
+        def fake_slippage_for_decrease(tid, liq, chain, pool):
+            yield
+            return 0, 0
+
+        def fake_decrease(tid, liq, a0, a1, dl, chain):
+            yield
+            return "0xdecrease"
+
+        def fake_collect(token_id, recipient, amount0_max, amount1_max, chain):
+            yield
+            return "0xcollect"
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return "0xabcdef1234567890"
+
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
+
+        obj.get_uniswap_position_owner = fake_owner
         obj.get_liquidity_for_token = fake_get_liquidity
         obj._calculate_slippage_protection_for_decrease = fake_slippage_for_decrease
         obj.decrease_liquidity = fake_decrease
@@ -1108,6 +1385,7 @@ class TestExit:
                 token_id=123,
                 safe_address="0xsafe",
                 chain="optimism",
+                liquidity=5000,
                 pool_address="0xpool",
             )
             result = _drive(gen)

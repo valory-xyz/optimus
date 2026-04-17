@@ -2618,9 +2618,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if self.position_to_exit:
             # Step 1: Claim staking rewards before exit (if position has staking)
             if self._has_staking_metadata(self.position_to_exit):
-                # Step 2: Unstake LP tokens before exit
-                unstake_action = self._build_unstake_lp_tokens_action(
-                    self.position_to_exit
+                # Step 2: Unstake LP tokens before exit.
+                unstake_action = (
+                    yield from self._build_unstake_lp_tokens_action_verified(
+                        self.position_to_exit
+                    )
                 )
                 if unstake_action:
                     actions.append(unstake_action)

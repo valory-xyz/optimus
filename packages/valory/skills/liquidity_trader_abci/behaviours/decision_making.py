@@ -4186,6 +4186,31 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     return None, None, None
 
+                # On RPC failure keep the original list.
+                staked_token_ids: List[int] = []
+                verification_failed = False
+                for token_id in token_ids:
+                    is_staked = yield from pool.is_cl_token_staked(
+                        self,
+                        safe_address,
+                        token_id,
+                        chain=chain,
+                        gauge_address=gauge_address,
+                    )
+                    if is_staked is None:
+                        verification_failed = True
+                        break
+                    if is_staked:
+                        staked_token_ids.append(token_id)
+                if not verification_failed:
+                    if not staked_token_ids:
+                        self.context.logger.info(
+                            f"Skipping claim for pool {pool_address}: none of "
+                            f"{token_ids} are staked in gauge {gauge_address}"
+                        )
+                        return None, None, None
+                    token_ids = staked_token_ids
+
                 self.context.logger.info(
                     f"Claiming CL rewards for token IDs: {token_ids} from gauge: {gauge_address}"
                 )

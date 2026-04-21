@@ -126,11 +126,20 @@ tm:
 	tendermint init
 	tendermint node --proxy_app=tcp://127.0.0.1:26658 --rpc.laddr=tcp://127.0.0.1:26657 --p2p.laddr=tcp://0.0.0.0:26656 --p2p.seeds= --consensus.create_empty_blocks=true
 
-v := $(shell pip -V | grep virtualenvs)
-
 .PHONY: uv-install
 uv-install:
 	uv sync --all-groups
+
+.PHONY: run-agent
+run-agent:
+	mkdir -p ./logs && \
+	bash -c 'TIMESTAMP=$$(date +%d-%m-%y_%H-%M); \
+	LOG_FILE="./logs/agent_log_$$TIMESTAMP.log"; \
+	LATEST_LOG_FILE="./logs/agent_log_latest.log"; \
+	echo "Running agent and logging to $$LOG_FILE"; \
+	aea-helpers run-agent \
+	--name valory/optimus \
+	--connection-key 2>&1 | tee $$LOG_FILE $$LATEST_LOG_FILE'
 
 ./agent:  uv-install ./hash_id
 	@if [ ! -d "agent" ]; then \

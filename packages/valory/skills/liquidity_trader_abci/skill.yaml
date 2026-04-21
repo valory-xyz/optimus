@@ -96,39 +96,39 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/mirror_db:0.1.0:bafybeickaytigebxoabjmcrxibktwwm5zdzxvqhl7bp4sqx6wpacmueoe4
-- dvilela/kv_store:0.1.0:bafybeihmppbeo5gh3w7gnr3vff6u4qlurt3dhxd4cn4mnrzyhnrxdr336u
+- dvilela/kv_store:0.1.0:bafybeihw7ykqq3m3mi4kti6sy3x5btfpw22tdpnhrpty2b7qwwocmma53y
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:
-- valory/gnosis_safe:0.1.0:bafybeice337zvg3ol4cwpw2iikxcukmthwmw32ytwtdnkcju222qfc323y
-- valory/balancer_weighted_pool:0.1.0:bafybeihimvc35lsyeagzjc3mafx4wy2bkqc5yxxkmwbdwmdxtoganjccpy
-- valory/balancer_vault:0.1.0:bafybeibvs3hskfosmobuqyy3hx2oqahn6kyi6c4u5nt44dcpgoofjrchsu
-- valory/balancer_queries:0.1.0:bafybeibl5g4optfrcbcemk3qngxrodkh3r7mi4xzalkljrn2g7w6qvysje
-- valory/erc20:0.1.0:bafybeifq6zn2p5nafi6bmtf4xo3ctgymazr2udtlwyiwjf5g5mpndsthfy
+- valory/gnosis_safe:0.1.0:bafybeicm3rxjpqc4kcjmxoj5ixqfzu6jn4alalyn3xuqxa5y2g22kpp72m
+- valory/balancer_weighted_pool:0.1.0:bafybeifnloblgjhfyui74ojt4qpcnw4xidvj2s2kanf6lg5chaouie5dmm
+- valory/balancer_vault:0.1.0:bafybeicm7mxsbuivql6oy3mjbv5lcai2pj5ez4h457gf2h6g27wbzui4qe
+- valory/balancer_queries:0.1.0:bafybeidgwlwpmd5bkce7rln7fbdrclpbx367ehg2bdik55vx5hyfy4bkb4
+- valory/erc20:0.1.0:bafybeic3epzrwrcqgrtj7vom5kdldugnuvk6lvh437ped4ciktqbtdy5em
 - valory/multisend:0.1.0:bafybeihx7c3xj6c5v4tgvu3ipnj7seyc4dkmovoyzu4isgbwdrhj2oo6uq
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeihuyxt5krmftwlatyr4k2tyrwy7g6olilsbk6y52sxodscg7z5hfq
-- valory/uniswap_v3_pool:0.1.0:bafybeicofhqihvuu5dczt6q7zfzpkg3d6343dinxvkd6pdvyhvrvx3pe5m
-- valory/merkl_distributor:0.1.0:bafybeihtsrjmamig26dnadal446mwl2ve5z4bgsdjpdm5zjb3xmvhini24
-- valory/staking_token:0.1.0:bafybeicze2hv5vybey2mtvw65dkshgpofxxcfphqya2euemhho36hbqa7q
-- valory/staking_activity_checker:0.1.0:bafybeidclig5gxlkkp56ar6fio4unc7j6k77chdxh6oygz2s3r72m2ufe4
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeihcxndtguvz72dueszv42bt6i3yfdtscb4sayvu6z2og2t2jxuf5a
-- valory/velodrome_router:0.1.0:bafybeigeaclpkvjawpull4y6ay3bwr5kxkkqjympewneaxfwvwp3by3ksi
-- valory/velodrome_cl_pool:0.1.0:bafybeihrz7qq5b2aem6u7hcn467x2hjhvp3j2phivpptpdfvqjh36ojklq
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeiay3zmnc5nyxbw7em76vprhocglv3fki4tyotepbzdrlxna7rbzt4
-- valory/velodrome_pool:0.1.0:bafybeigxjtwenybsvbw42h2cctbe2qzopkii7doatn6aiaptna6eitxi54
-- valory/service_registry:0.1.0:bafybeigefenwg3lj4nvwc3cs5zxyhv4nvwnwbw5x7afwyijkjbbgbf2l7e
-- valory/velodrome_gauge:0.1.0:bafybeigmhn77cclr33vhvfobvhlwzteiemiifzj5aqsjf5k6zyp3zvyuue
-- valory/velodrome_voter:0.1.0:bafybeifqrkiwhg4vovfmy7ucb7hugcyiovp7rfbx5noix4zr7qc53a774q
-- valory/velodrome_cl_gauge:0.1.0:bafybeihewjhyzpmw6u33oor3jd3mtzlgnlqsbprxgbyz5me4dszuqokgvq
-- valory/velodrome_slipstream_helper:0.1.0:bafybeigy6kqgvmbgc7uce52w7t6if2i5alx4lrcbfwnxt664mpf6yv7wu4
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeib2kbqjfl7b75earwbkv3vzwz4n32uuw3jvum72e4i2gye4b2qacu
+- valory/uniswap_v3_pool:0.1.0:bafybeiekt7uc3prpldey6wlydyrzyirchzmbbuspwqc7hggscbbddfdzyi
+- valory/merkl_distributor:0.1.0:bafybeibrxlbe64gglt5cajfyknlkjydf2cnb7snixodkxjunza5s6quxmq
+- valory/staking_token:0.1.0:bafybeid7uy64tzowfhl3dvcwphyfvb7fozwnmk4fg4ny3tndqubbsedmvi
+- valory/staking_activity_checker:0.1.0:bafybeibe35idywez44a2jbnl5t5gkk7rde7nzklw2oubtsy6sddcnh575m
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeibilu4g7o3jnl6mcgrymw5lurcbqk6pypwiwxfycidtkjf65y77pm
+- valory/velodrome_router:0.1.0:bafybeia36xapv6wkd6txd5al43mbzr3x3gmyxd43engt3bfwxan77xdyjy
+- valory/velodrome_cl_pool:0.1.0:bafybeiexypegtsb2e2auaussrm3s66qmzfx4nckrlec67uobotmskcqv3a
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeiae5lxb5fotq2dmdo4oy347hftdieyylikuiunmawivo4envdexxu
+- valory/velodrome_pool:0.1.0:bafybeicb4h4djbeitzztsqhgnk3jtxjgsqin2i7cc7qrw6ep5dkgzyflpu
+- valory/service_registry:0.1.0:bafybeib6lrxpbhsrg32bueif53vnb3xecyjxzk6rhd2t2xot27qtbeyvjm
+- valory/velodrome_gauge:0.1.0:bafybeifrvdun3fv6ct7yvlxqad4uhe5hfh3yma5horo7jmxrw23su6rnjm
+- valory/velodrome_voter:0.1.0:bafybeiahwmuw6oo6qy2gqedec2dgb2hkbhpce7gwthywjwkg4kcura75zq
+- valory/velodrome_cl_gauge:0.1.0:bafybeibntzkjafoic6ckwhqu7cmrfgmem6h5f2nwz6nclpoweyyyqduy7y
+- valory/velodrome_slipstream_helper:0.1.0:bafybeiggf6ae7rxq6clwaynwsjn6vhdixplwdvpvyyifprvnb6joep6ucm
 protocols:
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
 - valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
-- dvilela/kv_store:0.1.0:bafybeib3hyj6om7bdsqqhsc4ro3xdxijp2mk5da7ks4ipfgxiovtc3aqfm
+- dvilela/kv_store:0.1.0:bafybeifkwdlyhp2z3ts7yvuvgqsvmuufmx63bjvp4bj6ujg5gzncjni2ay
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
-- valory/transaction_settlement_abci:0.1.0:bafybeiajyrszyyo6z4lxogutv4ougiaeoxak6xkq5gtrbey32gbgnirznq
+- valory/abstract_round_abci:0.1.0:bafybeihgbc5geup3ljdfgyontr2p5e4myxjkthaplm5ei727uw2pawstcy
+- valory/transaction_settlement_abci:0.1.0:bafybeic6f4ujckiutqxueagohb5iv7kgzpamhuhiq7shn6fmiwbkt3cqny
 behaviours:
   main:
     args: {}

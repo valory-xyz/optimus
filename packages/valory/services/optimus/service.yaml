@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeifywc6zopl3h2uvwougloliqidckd35zcuwry5r352ixp7wusqpwa
+agent: valory/optimus:0.1.0:bafybeie3u4dviohycxttdkve3zypemxcps5kgctgy7bfd5ovzdvyhicrve
 number_of_agents: 1
 deployment:
   agent:
@@ -184,7 +184,7 @@ cert_requests:
   save_path: .certs/acn_cosmos_11000.txt
 is_abstract: true
 ---
-public_id: dvilela/genai:0.1.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
+public_id: valory/genai:0.1.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection
 config:
   genai_api_key: ${GENAI_API_KEY:str:""}
@@ -200,7 +200,7 @@ config:
   ssl_key: ${SSL_KEY_PATH:str:}
   timeout: ${TIMEOUT:int:30}
 ---
-public_id: dvilela/kv_store:0.1.0
+public_id: valory/kv_store:0.1.0
 type: connection
 config:
   store_path: ${STORE_PATH:str:null}

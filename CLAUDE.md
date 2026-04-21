@@ -10,7 +10,7 @@ Optimus is an autonomous agent service built on the **Open Autonomy** framework 
 
 ### Development Setup
 ```bash
-make poetry-install                    # Install dependencies (includes keyring fix)
+make uv-install                        # Install dependencies via uv sync --all-groups
 autonomy init --reset --author valory --remote --ipfs
 autonomy packages sync --update-packages
 ```

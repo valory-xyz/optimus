@@ -14,8 +14,8 @@ connections:
 - valory/ipfs:0.1.0:bafybeiddxbjccmzkknny5pbfupxgexp4w4pwiu2rny4a6vnlxwqs3mmfo4
 - valory/ledger:0.19.0:bafybeidqf5dmueqm655z3bkw36mviobpcpuek4bhha7iq2nnz6sfu32kva
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
-- dvilela/genai:0.1.0:bafybeifjtwmabid2tarptzislpohvt4ip3ql65kehtkugjv6fsrhwc6mb4
-- dvilela/kv_store:0.1.0:bafybeihw7ykqq3m3mi4kti6sy3x5btfpw22tdpnhrpty2b7qwwocmma53y
+- valory/genai:0.1.0:bafybeif37mudnpbd4yhvi2kvqfvlnnp6klhudbrncws5vsha72jydj5raq
+- valory/kv_store:0.1.0:bafybeigtbb7qch5et2wked5h7riozxfw2rui3yp47lfdkhin7zcmpsosbi
 - valory/mirror_db:0.1.0:bafybeickaytigebxoabjmcrxibktwwm5zdzxvqhl7bp4sqx6wpacmueoe4
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:
@@ -46,14 +46,14 @@ protocols:
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 - valory/tendermint:0.1.0:bafybeihzb7e32f7jcrzvubilqaxzmyk7ea6ss3pg3tliatdlrr76qeknyq
-- dvilela/kv_store:0.1.0:bafybeifkwdlyhp2z3ts7yvuvgqsvmuufmx63bjvp4bj6ujg5gzncjni2ay
+- valory/kv_store:0.1.0:bafybeia5olmoljxmwymwdlw6egrjcsbm3r2olayycz3dpbg57bqtij75mq
 - valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
 skills:
 - valory/abstract_abci:0.1.0:bafybeif4jcv22xrmkwiaecyyli7iknmdhtkg6dmzqmwpqekmvxyr7ba3xy
 - valory/abstract_round_abci:0.1.0:bafybeihgbc5geup3ljdfgyontr2p5e4myxjkthaplm5ei727uw2pawstcy
 - valory/funds_manager:0.1.0:bafybeignvgpt36ph6bui47qmygwad6ii7qz6cdfz5ungy2egg4iicj7ym4
-- valory/liquidity_trader_abci:0.1.0:bafybeidkda2ijjascusdagcpebeewrwpr4i6zpwkxrubeszoq6jy5hzm2a
-- valory/optimus_abci:0.1.0:bafybeifbuzaxzwwltv7g65dpkp5dkmsefe2sny7cjsygrfbofcqj2zgdmm
+- valory/liquidity_trader_abci:0.1.0:bafybeieesrpgluxxaaxdlr4ensatwjmp6or3qvspcmatrrij6oopemz27y
+- valory/optimus_abci:0.1.0:bafybeif53hbgclapxakq6kjphbdznr4eijdliwqzo3v4lipflq2pqbtebe
 - valory/registration_abci:0.1.0:bafybeib7midws7obgz34tqsebowa73z46pm34hhsssa3rjet2npp5ekvwm
 - valory/reset_pause_abci:0.1.0:bafybeiezqq76bdcrlgshyo2e544sm3u57amerpwla3sacosle5zivaij24
 - valory/termination_abci:0.1.0:bafybeigp6mrueymod7a7arxn2p5mvvz2klvhhda3pls32z4fyxibqjisqu
@@ -101,7 +101,7 @@ dependencies:
     version: ==2.2.1
 default_connection: null
 ---
-public_id: dvilela/kv_store:0.1.0
+public_id: valory/kv_store:0.1.0
 type: connection
 config:
   store_path: ${STORE_PATH:str:/data}
@@ -168,7 +168,7 @@ cert_requests:
   save_path: .certs/acn_cosmos_11000.txt
 is_abstract: true
 ---
-public_id: dvilela/genai:0.1.0
+public_id: valory/genai:0.1.0
 type: connection
 config:
   genai_api_key: ${str:""}

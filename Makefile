@@ -160,7 +160,7 @@ build-agent-runner: uv-install agent
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
 	$(shell uv run aea-helpers build-binary-deps ./agent) \
-	--onefile $(shell uv run aea-helpers bin-template-path) \
+	--onefile $(shell uv run python -c "import aea_helpers, os; print(os.path.join(os.path.dirname(aea_helpers.__file__), 'bin_template.py'))") \
 	--name agent_runner_bin
 	./dist/agent_runner_bin --version
 
@@ -178,7 +178,7 @@ build-agent-runner-mac: uv-install  agent
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
 	$(shell uv run aea-helpers build-binary-deps ./agent) \
-	--onefile $(shell uv run aea-helpers bin-template-path) \
+	--onefile $(shell uv run python -c "import aea_helpers, os; print(os.path.join(os.path.dirname(aea_helpers.__file__), 'bin_template.py'))") \
 	--codesign-identity "${SIGN_ID}" \
 	--name agent_runner_bin
 	./dist/agent_runner_bin --version
@@ -202,6 +202,12 @@ build-agent-runner-mac: uv-install  agent
 
 .PHONY: check-agent-runner
 check-agent-runner:
+	# aea-config.yaml uses named env-var templates (${STORE_PATH:str:/data})
+	# for both the kv_store connection and the optimus_abci skill params,
+	# so a single STORE_PATH override drives both. Path-based env vars
+	# like SKILL_..._STORE_PATH / CONNECTION_..._STORE_PATH are the
+	# fallback when the template has no explicit var name and are
+	# silently ignored here — with the old target, /data (template
+	# default) bubbled through and mkdir'd on read-only FS on macOS.
 	uv run aea-helpers check-binary ./dist/agent_runner_bin ./agent \
-	--env-var SKILL_OPTIMUS_ABCI_MODELS_PARAMS_ARGS_STORE_PATH=/tmp \
-	--env-var CONNECTION_KV_STORE_CONFIG_STORE_PATH=/tmp
+	--env-var STORE_PATH=/tmp

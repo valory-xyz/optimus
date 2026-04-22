@@ -10,7 +10,6 @@ clean-build:
 	find . -name '*.egg-info' -exec rm -fr {} +
 	find . -name '*.egg' -exec rm -fr {} +
 	find . -type d -name __pycache__ -exec rm -rv {} +
-	rm -fr Pipfile.lock
 	rm -rf plugins/*/build
 	rm -rf plugins/*/dist
 
@@ -127,11 +126,20 @@ tm:
 	tendermint init
 	tendermint node --proxy_app=tcp://127.0.0.1:26658 --rpc.laddr=tcp://127.0.0.1:26657 --p2p.laddr=tcp://0.0.0.0:26656 --p2p.seeds= --consensus.create_empty_blocks=true
 
-v := $(shell pip -V | grep virtualenvs)
-
 .PHONY: uv-install
 uv-install:
 	uv sync --all-groups
+
+.PHONY: run-agent
+run-agent:
+	mkdir -p ./logs && \
+	bash -c 'TIMESTAMP=$$(date +%d-%m-%y_%H-%M); \
+	LOG_FILE="./logs/agent_log_$$TIMESTAMP.log"; \
+	LATEST_LOG_FILE="./logs/agent_log_latest.log"; \
+	echo "Running agent and logging to $$LOG_FILE"; \
+	aea-helpers run-agent \
+	--name valory/optimus \
+	--connection-key 2>&1 | tee $$LOG_FILE $$LATEST_LOG_FILE'
 
 ./agent:  uv-install ./hash_id
 	@if [ ! -d "agent" ]; then \
@@ -151,8 +159,8 @@ build-agent-runner: uv-install agent
 	--hidden-import aea_ledger_ethereum \
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
-	$(shell uv run python get_pyinstaller_dependencies.py) \
-	--onefile pyinstaller/optimus_bin.py \
+	$(shell uv run aea-helpers build-binary-deps ./agent) \
+	--onefile $(shell uv run aea-helpers bin-template-path) \
 	--name agent_runner_bin
 	./dist/agent_runner_bin --version
 
@@ -169,8 +177,8 @@ build-agent-runner-mac: uv-install  agent
 	--hidden-import aea_ledger_ethereum \
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
-	$(shell uv run python get_pyinstaller_dependencies.py) \
-	--onefile pyinstaller/optimus_bin.py \
+	$(shell uv run aea-helpers build-binary-deps ./agent) \
+	--onefile $(shell uv run aea-helpers bin-template-path) \
 	--codesign-identity "${SIGN_ID}" \
 	--name agent_runner_bin
 	./dist/agent_runner_bin --version
@@ -192,25 +200,8 @@ build-agent-runner-mac: uv-install  agent
 	uv run bash -c "cd ./agent; autonomy  -s generate-key ethereum; autonomy  -s add-key ethereum ethereum_private_key.txt; autonomy add-key ethereum ethereum_private_key.txt --connection; autonomy -s issue-certificates;"
 
 
-# Configuration
-TIMEOUT := 20
-COMMAND := cd ./agent && SKILL_TRADER_ABCI_MODELS_PARAMS_ARGS_STORE_PATH=/tmp ../dist/agent_runner_bin -s run
-SEARCH_STRING := Starting AEA
-
-
-# Determine OS and set appropriate options
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-    # macOS specific settings
-    MKTEMP = mktemp -t tmp
-else ifeq ($(OS),Windows_NT)
-    # Windows specific settings
-    MKTEMP = echo $$(cygpath -m "$$(mktemp -t tmp.XXXXXX)")
-else
-    # Linux and other Unix-like systems
-    MKTEMP = mktemp
-endif
-
 .PHONY: check-agent-runner
 check-agent-runner:
-	python check_agent_runner.py
+	uv run aea-helpers check-binary ./dist/agent_runner_bin ./agent \
+	--env-var SKILL_OPTIMUS_ABCI_MODELS_PARAMS_ARGS_STORE_PATH=/tmp \
+	--env-var CONNECTION_KV_STORE_CONFIG_STORE_PATH=/tmp

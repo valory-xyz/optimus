@@ -23,7 +23,7 @@
 
 from unittest.mock import MagicMock
 
-from packages.dvilela.protocols.kv_store.dialogues import (
+from packages.valory.protocols.kv_store.dialogues import (
     KvStoreDialogues as BaseKvStoreDialogues,
 )
 from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
@@ -68,7 +68,7 @@ class TestKvStoreDialogues:
         assert isinstance(dialogues, KvStoreDialogues)
         assert isinstance(dialogues, BaseKvStoreDialogues)
         # Call the role_from_first_message to cover the inner function
-        from packages.dvilela.protocols.kv_store.dialogues import (
+        from packages.valory.protocols.kv_store.dialogues import (
             KvStoreDialogue as _KvStoreDialogue,
         )
 

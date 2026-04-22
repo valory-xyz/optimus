@@ -10,7 +10,6 @@ fingerprint:
   __init__.py: bafybeievwo2yoa6vekod333ttto66vpc27lm6wepspnhwyrqxtjx7djzw4
   balancer_pools_search.py: bafybeicmrhnbfpchgt7ltijrdvyjyrxqyr6qqmcunx6uodekwknsdpdu7u
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/conftest.py: bafybeicwpsszach65mqn2ift26nnm6g5ikhryerccapa2szlcehg5tkt24
   tests/test_balancer_pools_search.py: bafybeifh3s7eeupvyvtnrbupbn4pobrtit7zkl37itdax5omfl4g2h6nka
 fingerprint_ignore_patterns: []
 entry_point: balancer_pools_search.py

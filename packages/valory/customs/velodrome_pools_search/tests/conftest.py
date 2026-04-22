@@ -17,28 +17,20 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Shared fixtures for customs tests."""
+"""Fixtures for velodrome_pools_search tests."""
 
 import pytest
 
+import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as velo
+
 
 @pytest.fixture(autouse=True)
-def _clear_coingecko_price_caches():
-    """Reset CoinGecko price caches before each test.
+def _clear_coingecko_price_cache():
+    """Reset the module-level COINGECKO_PRICE_CACHE between tests.
 
-    Strategies use module-level COINGECKO_PRICE_CACHE dicts that can be
-    reassigned by run(price_cache=shared_dict).  Importing the name only
-    captures the reference at import time, so we reset the attribute on
-    the module directly to guarantee isolation regardless of reassignment.
+    `run(price_cache=shared_dict)` can rebind the module attribute, so
+    reset via setattr to keep isolation regardless of reassignment.
     """
-    import packages.valory.customs.balancer_pools_search.balancer_pools_search as bal
-    import packages.valory.customs.uniswap_pools_search.uniswap_pools_search as uni
-    import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as velo
-
-    bal.COINGECKO_PRICE_CACHE = {}
-    uni.COINGECKO_PRICE_CACHE = {}
     velo.COINGECKO_PRICE_CACHE = {}
     yield
-    bal.COINGECKO_PRICE_CACHE = {}
-    uni.COINGECKO_PRICE_CACHE = {}
     velo.COINGECKO_PRICE_CACHE = {}

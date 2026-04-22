@@ -99,6 +99,9 @@ regexes = [
 ]
 paths = [
     '''(.*?)(jpg|gif|doc|pdf|bin|svg|socket)$''',
-    '''\.env$''',
+    # Allowlist sample env templates only; `.env` itself is gitignored but
+    # keeping it un-allowlisted means a force-added leak would still fire.
+    '''(^|.*/)sample\.env$''',
+    '''(^|.*/)\.env\.(sample|example|template)$''',
     '''(.*?)tests\/(.*)$''',
 ]

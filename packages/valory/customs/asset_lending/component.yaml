@@ -10,7 +10,6 @@ fingerprint:
   __init__.py: bafybeiguqxojq5hkgi55jqdl5p3rvz62jwxxw6ygorkym7ol3ps5qhh7rq
   asset_lending.py: bafybeihfepg5c66qbktdqj5cxtanf47b6mmnsuitfpjk4sabcelo55owni
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/conftest.py: bafybeicwpsszach65mqn2ift26nnm6g5ikhryerccapa2szlcehg5tkt24
   tests/test_asset_lending.py: bafybeie3fixoepxrhrmvfh6xhyurvrkdct4nefdiipqihlzhr5th6j6baa
 fingerprint_ignore_patterns: []
 entry_point: asset_lending.py

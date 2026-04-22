@@ -59,12 +59,12 @@ skills:
 - valory/termination_abci:0.1.0:bafybeigp6mrueymod7a7arxn2p5mvvz2klvhhda3pls32z4fyxibqjisqu
 - valory/transaction_settlement_abci:0.1.0:bafybeic6f4ujckiutqxueagohb5iv7kgzpamhuhiq7shn6fmiwbkt3cqny
 customs:
-- valory/merkl_pools_search:0.1.0:bafybeihagqopwmh3ywqulv7xk3slbhdysulep3e5yhz54cbugjst5f3aai
-- valory/max_apr_selection:0.1.0:bafybeiaa5tgx4a26375jv3wa4eirj43dvycz3xdxdyqtbt4ft3cag6nv24
-- valory/balancer_pools_search:0.1.0:bafybeicwuk2knwd66qorahp7z64hlqceruxp3obk3rxsbehkfgi6krpdoq
-- valory/uniswap_pools_search:0.1.0:bafybeifyzdkxn3z7kx2wqj7t6hni64klaqgtfcrnsnkl34oswsd23wqatm
-- valory/asset_lending:0.1.0:bafybeifzu7v4rsy333zlv4mkrjbeyo7hjdujjgusob4rcefrtxyihenium
-- valory/velodrome_pools_search:0.1.0:bafybeie5vof35wxkuiycrkowteifzi4o2qkvefyawbs6kkcn2qsuwyrdaa
+- valory/merkl_pools_search:0.1.0:bafybeid7vmeeh6eeagyoa3nysq5oijyabous2eaw3gnm6yt5pnloimvbza
+- valory/max_apr_selection:0.1.0:bafybeigtvue23h2mtdm4ox7nwwyl6o6ycdbmkxfrnpanitmiqjbjna6uii
+- valory/balancer_pools_search:0.1.0:bafybeihyet6c4ldrqubxfmpmqpebnzc7nsc77jpg47mnwbzsxwva66zgdu
+- valory/uniswap_pools_search:0.1.0:bafybeihmije32ytda2x3ho7eenh6zufvo7envr3jrvmx3uxtgrxb4dmxhi
+- valory/asset_lending:0.1.0:bafybeid5letpa42maohco3bhib54dspsmdowxvhgatwfw36t73rsktylte
+- valory/velodrome_pools_search:0.1.0:bafybeia4trflwdkgxdysspawywbhyidgzdkjojn2p2fr4jajjtf4jncltu
 default_ledger: ethereum
 required_ledgers:
 - ethereum

@@ -10,38 +10,42 @@ requires-python = "<3.15,>=3.10"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    "open-autonomy[cli]==0.21.18",
-    "open-aea-test-autonomy==0.21.18",
-    "open-aea-helpers==0.21.18",
+    # OA / open-aea / plugins — pinned exactly (framework contract).
+    "open-autonomy[cli]==0.21.19",
+    "open-aea-test-autonomy==0.21.19",
+    "open-aea-helpers==0.21.19",
     "open-aea==2.2.1",
     "open-aea-ledger-ethereum==2.2.1",
     "open-aea-ledger-cosmos==2.2.1",
-    "typing_extensions<=4.15.0,>=3.10.0.2",
-    "toml==0.10.2",
+    # App-repo: all other deps pinned exactly. The few ranges below mirror the
+    # ranges declared on third-party YAMLs synced into this repo, where the
+    # check-dependencies AEA helper requires the pyproject form to satisfy
+    # the YAML range (aiohttp/py-ecc/ecdsa/jsonschema/asn1crypto/protobuf).
+    "typing_extensions==4.15.0",
     "gql==3.5.0",
     "grpcio==1.78.0",
     "asn1crypto<1.5.0,>=1.4.0",
     "py-ecc==8.0.0",
     "pytz==2022.2.1",
     "openapi-core==0.22.0",
-    "openapi-spec-validator<0.8.0,>=0.7.0",
+    "openapi-spec-validator==0.7.2",
     "jsonschema<5.0.0,>=4.23.0",
     "hypothesis==6.21.6",
-    "requests<2.33.0,>=2.28.1",
+    "requests==2.32.5",
     "pyinstaller==6.19.0",
     "pycoingecko==3.2.0",
-    "numpy>=2.2.6",
-    "pandas>=2.2.3",
+    "numpy==2.2.6",
+    "pandas==2.3.3",
     "peewee==3.17.5",
     "google-generativeai==0.8.2",
-    "w3multicall>=0.3.1",
-    "pydantic<3,>=2.11.9",
+    "w3multicall==0.3.1",
+    "pydantic==2.13.0b3",
     "multiaddr==0.0.9",
     "protobuf<6,>=5",
     "pycryptodome==3.20.0",
-    "certifi>=2025.1.31",
-    "hexbytes",
-    "pip>=24.0",
+    "certifi==2026.2.25",
+    "hexbytes==2.0.0b1",
+    "pip==26.0.1",
 ]
 
 [project.urls]

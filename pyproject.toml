@@ -22,7 +22,7 @@ dependencies = [
     # check-dependencies AEA helper requires the pyproject form to satisfy
     # the YAML range (aiohttp/py-ecc/ecdsa/jsonschema/asn1crypto/protobuf).
     "typing_extensions==4.15.0",
-    "gql==3.5.0",
+    "gql[requests]==3.5.0",
     "grpcio==1.78.0",
     "asn1crypto<1.5.0,>=1.4.0",
     "py-ecc==8.0.0",

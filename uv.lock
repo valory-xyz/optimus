@@ -2277,7 +2277,7 @@ requires-dist = [
     { name = "hypothesis", specifier = "==6.21.6" },
     { name = "jsonschema", specifier = ">=4.23.0,<5.0.0" },
     { name = "multiaddr", specifier = "==0.0.9" },
-    { name = "numpy", specifier = "==2.2.6" },
+    { name = "numpy", specifier = ">=2.2.6" },
     { name = "open-aea", specifier = "==2.2.1" },
     { name = "open-aea-helpers", specifier = "==0.21.19" },
     { name = "open-aea-ledger-cosmos", specifier = "==2.2.1" },

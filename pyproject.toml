@@ -34,7 +34,12 @@ dependencies = [
     "requests==2.32.5",
     "pyinstaller==6.19.0",
     "pycoingecko==3.2.0",
-    "numpy==2.2.6",
+    # numpy: range exception (not exact-pinned). Locking to a single numpy
+    # release breaks the Windows + Python 3.14 matrix because each py3.14
+    # micro-version on the GH runners drops MINGW-W64 ABI compat with older
+    # numpy wheels (access violation 0xC0000005 on import). Letting the
+    # resolver pick the latest numpy keeps the Windows wheel current.
+    "numpy>=2.2.6",
     "pandas==2.3.3",
     "peewee==3.17.5",
     "google-generativeai==0.8.2",

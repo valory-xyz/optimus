@@ -17,10 +17,12 @@ dependencies = [
     "open-aea==2.2.1",
     "open-aea-ledger-ethereum==2.2.1",
     "open-aea-ledger-cosmos==2.2.1",
-    # App-repo: all other deps pinned exactly. The few ranges below mirror the
-    # ranges declared on third-party YAMLs synced into this repo, where the
-    # check-dependencies AEA helper requires the pyproject form to satisfy
-    # the YAML range (aiohttp/py-ecc/ecdsa/jsonschema/asn1crypto/protobuf).
+    # App-repo: all other deps exact-pinned per @DavidMinarsch's #436 rule
+    # (no silent supply chain). The bounded ranges below have a strict upper
+    # bound — they're declared as ranges by the third-party skill YAMLs synced
+    # into this repo, and `aea-helpers check-dependencies` requires the
+    # pyproject form to satisfy the YAML form (asn1crypto / jsonschema /
+    # protobuf). Each still has a hard upper cap on the major bump.
     "typing_extensions==4.15.0",
     "gql[requests]==3.5.0",
     "grpcio==1.78.0",
@@ -32,25 +34,25 @@ dependencies = [
     "jsonschema<5.0.0,>=4.23.0",
     "hypothesis==6.21.6",
     "requests==2.32.5",
-    "pyinstaller==6.19.0",
     "pycoingecko==3.2.0",
     # numpy: range exception (not exact-pinned). Locking to a single numpy
     # release breaks the Windows + Python 3.14 matrix because each py3.14
     # micro-version on the GH runners drops MINGW-W64 ABI compat with older
     # numpy wheels (access violation 0xC0000005 on import). Letting the
     # resolver pick the latest numpy keeps the Windows wheel current.
-    "numpy>=2.2.6",
+    "numpy>=2.2.6,<3",
     "pandas==2.3.3",
     "peewee==3.17.5",
     "google-generativeai==0.8.2",
     "w3multicall==0.3.1",
-    "pydantic==2.13.0b3",
+    "pydantic==2.13.0",
     "multiaddr==0.0.9",
     "protobuf<6,>=5",
     "pycryptodome==3.20.0",
     "certifi==2026.2.25",
-    "hexbytes==2.0.0b1",
-    "pip==26.0.1",
+    "hexbytes==1.3.1",
+    # pyinstaller is a build tool, kept at runtime for the agent_runner_bin spec.
+    "pyinstaller==6.19.0",
 ]
 
 [project.urls]

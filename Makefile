@@ -130,6 +130,14 @@ tm:
 uv-install:
 	uv sync --all-groups
 
+# Cross-platform binary suffix (.exe on Windows, empty on Unix).
+EXE_SUFFIX := $(if $(filter Windows_NT,$(OS)),.exe,)
+
+# Writable scratch dir for the ``check-agent-runner`` smoke test. ``/tmp``
+# doesn't exist on native Windows, so fall back to ``%TEMP%`` (inherited
+# as ``$(TEMP)``) — both are absolute, writable, and guaranteed to exist.
+STORE_PATH_VALUE := $(if $(filter Windows_NT,$(OS)),$(TEMP),/tmp)
+
 .PHONY: run-agent
 run-agent:
 	mkdir -p ./logs && \
@@ -162,7 +170,8 @@ build-agent-runner: uv-install agent
 	$(shell uv run aea-helpers build-binary-deps ./agent) \
 	--onefile $(shell uv run python -c "import aea_helpers, os; print(os.path.join(os.path.dirname(aea_helpers.__file__), 'bin_template.py'))") \
 	--name agent_runner_bin
-	./dist/agent_runner_bin --version
+	./dist/agent_runner_bin$(EXE_SUFFIX) --help 1>/dev/null
+	./dist/agent_runner_bin$(EXE_SUFFIX) --version
 
 
 .PHONY: build-agent-runner-mac
@@ -181,7 +190,8 @@ build-agent-runner-mac: uv-install  agent
 	--onefile $(shell uv run python -c "import aea_helpers, os; print(os.path.join(os.path.dirname(aea_helpers.__file__), 'bin_template.py'))") \
 	--codesign-identity "${SIGN_ID}" \
 	--name agent_runner_bin
-	./dist/agent_runner_bin --version
+	./dist/agent_runner_bin$(EXE_SUFFIX) --help 1>/dev/null
+	./dist/agent_runner_bin$(EXE_SUFFIX) --version
 
 
 ./hash_id: ./packages/packages.json
@@ -204,10 +214,7 @@ build-agent-runner-mac: uv-install  agent
 check-agent-runner:
 	# aea-config.yaml uses named env-var templates (${STORE_PATH:str:/data})
 	# for both the kv_store connection and the optimus_abci skill params,
-	# so a single STORE_PATH override drives both. Path-based env vars
-	# like SKILL_..._STORE_PATH / CONNECTION_..._STORE_PATH are the
-	# fallback when the template has no explicit var name and are
-	# silently ignored here — with the old target, /data (template
-	# default) bubbled through and mkdir'd on read-only FS on macOS.
-	uv run aea-helpers check-binary ./dist/agent_runner_bin ./agent \
-	--env-var STORE_PATH=/tmp
+	# so a single STORE_PATH override drives both. ``/tmp`` doesn't exist
+	# on native Windows, so fall back to ``%TEMP%`` via $(STORE_PATH_VALUE).
+	uv run aea-helpers check-binary ./dist/agent_runner_bin$(EXE_SUFFIX) ./agent \
+	--env-var STORE_PATH=$(STORE_PATH_VALUE)

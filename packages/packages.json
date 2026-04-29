@@ -1,10 +1,10 @@
 {
     "dev": {
-        "custom/valory/merkl_pools_search/0.1.0": "bafybeid7vmeeh6eeagyoa3nysq5oijyabous2eaw3gnm6yt5pnloimvbza",
-        "custom/valory/asset_lending/0.1.0": "bafybeid5letpa42maohco3bhib54dspsmdowxvhgatwfw36t73rsktylte",
-        "custom/valory/max_apr_selection/0.1.0": "bafybeigtvue23h2mtdm4ox7nwwyl6o6ycdbmkxfrnpanitmiqjbjna6uii",
-        "custom/valory/balancer_pools_search/0.1.0": "bafybeihyet6c4ldrqubxfmpmqpebnzc7nsc77jpg47mnwbzsxwva66zgdu",
-        "custom/valory/uniswap_pools_search/0.1.0": "bafybeihmije32ytda2x3ho7eenh6zufvo7envr3jrvmx3uxtgrxb4dmxhi",
+        "custom/valory/merkl_pools_search/0.1.0": "bafybeidgrk67xdimmixmrof42qr5wcdzopkm543pevpln4dl37zk57rsby",
+        "custom/valory/asset_lending/0.1.0": "bafybeic74xaoypdx3npk6i5h7tadqcsxvdegtuebcic3kz5baqaddqt4vm",
+        "custom/valory/max_apr_selection/0.1.0": "bafybeie4sceuc3z52jqtnsn5knnsjeogu6gsnetvp325ao2tf4vv3dqcee",
+        "custom/valory/balancer_pools_search/0.1.0": "bafybeidwfgpnmdjtvy7iwgnt3uiweic3qndz3p5zqzx76zafp5yt55thqa",
+        "custom/valory/uniswap_pools_search/0.1.0": "bafybeihida2j22vumxowkg5hsz7a7ntkiwv25r3oefwfxecxdrvmsfv6hy",
         "custom/valory/velodrome_pools_search/0.1.0": "bafybeia4trflwdkgxdysspawywbhyidgzdkjojn2p2fr4jajjtf4jncltu",
         "contract/valory/velodrome_router/0.1.0": "bafybeiexggwe2mod7iamz3kcte2yj4itazllprluughntqc4u4pvpa47be",
         "contract/valory/velodrome_cl_pool/0.1.0": "bafybeih7tn7f7xfy3oxsarv567qz3z5ba3z4ziugqwtp6p6zklpcamqwcy",
@@ -23,10 +23,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeifvep2wr34v4puwponri2ti5otkbtup7rrfseybgrnlzeoktkapje",
         "contract/valory/balancer_queries/0.1.0": "bafybeidgwlwpmd5bkce7rln7fbdrclpbx367ehg2bdik55vx5hyfy4bkb4",
         "connection/valory/mirror_db/0.1.0": "bafybeickaytigebxoabjmcrxibktwwm5zdzxvqhl7bp4sqx6wpacmueoe4",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeih2mrp6oihn6zt6fern2n3vu24fwb3lry2wepkiylabbrymzyymqm",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiau3cokvlxamdxn74fokifgz3j3g5f665ge6gle22poubk2ldq2ey",
-        "agent/valory/optimus/0.1.0": "bafybeihtkwq5toncqf5doimo5jced5vauomeiqki7shrdxkoe5ljrl2w7q",
-        "service/valory/optimus/0.1.0": "bafybeig43i5scool4jppgisxpbulxo7kfh6iy2zd72t2g6oijoa7oz6r3i"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeihs3t6nhm3ocqqhgwl2gxcf6e4wmdsu2epphyjgo7zvedl44jlma4",
+        "skill/valory/optimus_abci/0.1.0": "bafybeia4fmclspozsphey6v2pjuwrztayh2fqp3otog6nbgrcja7a66e2q",
+        "agent/valory/optimus/0.1.0": "bafybeiareiy2sez6wcdgtcseidh2rxvr5jzzhkos4ia6mveknbpeh5n7w4",
+        "service/valory/optimus/0.1.0": "bafybeibo6cpq37zwjtjvhkw7p5ginyql7dzdluz5k3fduaqxb47c66a56i"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
@@ -43,7 +43,7 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeihpzvi2rxvdzujrqivnynsoqezklval6j3qeoxaitquktvwscqgra",
         "contract/valory/service_registry/0.1.0": "bafybeifuexvcj6w3j2lludzxi3rgu2nn2b3toyifxiy46hv726o2bxivjm",
         "contract/valory/gnosis_safe/0.1.0": "bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa",
-        "contract/valory/erc20/0.1.0": "bafybeibr5q2r3x46zin5ll3er2z5va4jpbz25ji4uvwzezttko4feycnke",
+        "contract/valory/erc20/0.1.0": "bafybeigjxwhx4li5hmyv3hrtatwq65gl4wihqysaq5pqlpmw5o4lymfv6y",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeihywzpoaxltgvgaazzh5sffpl57p5ptp5oyaz545ywpom2a4obyu4",
         "contract/valory/staking_token/0.1.0": "bafybeibdn7ntkijvsco224ehm3bk6i4r7zhlre4ns4mzlmohlqgnw325bu",
         "connection/valory/http_client/0.23.0": "bafybeihel6sg2yayxu7lqygaswdgciaxpqrgsbl5rwx74c6znu5qz2edd4",

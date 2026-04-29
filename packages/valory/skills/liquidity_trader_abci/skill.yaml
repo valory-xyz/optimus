@@ -103,7 +103,7 @@ contracts:
 - valory/balancer_weighted_pool:0.1.0:bafybeifnloblgjhfyui74ojt4qpcnw4xidvj2s2kanf6lg5chaouie5dmm
 - valory/balancer_vault:0.1.0:bafybeicm7mxsbuivql6oy3mjbv5lcai2pj5ez4h457gf2h6g27wbzui4qe
 - valory/balancer_queries:0.1.0:bafybeidgwlwpmd5bkce7rln7fbdrclpbx367ehg2bdik55vx5hyfy4bkb4
-- valory/erc20:0.1.0:bafybeibr5q2r3x46zin5ll3er2z5va4jpbz25ji4uvwzezttko4feycnke
+- valory/erc20:0.1.0:bafybeigjxwhx4li5hmyv3hrtatwq65gl4wihqysaq5pqlpmw5o4lymfv6y
 - valory/multisend:0.1.0:bafybeic4534fd4axozjmykpstgjynxzpkpfvnvyjt7hz32ajfe3fmwhn7m
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeia4zyfay7asfgdhcj62luvlhfu3f2m7arsab2lur24sftngqunslm
 - valory/uniswap_v3_pool:0.1.0:bafybeiekt7uc3prpldey6wlydyrzyirchzmbbuspwqc7hggscbbddfdzyi
@@ -306,7 +306,7 @@ models:
       - optimism
       - mode
       staking_chain: optimism
-      file_hash_to_strategies: '{"bafybeid7vmeeh6eeagyoa3nysq5oijyabous2eaw3gnm6yt5pnloimvbza":"merkl_pools_search","bafybeigtvue23h2mtdm4ox7nwwyl6o6ycdbmkxfrnpanitmiqjbjna6uii":"max_apr_selection"}'
+      file_hash_to_strategies: '{"bafybeid7vmeeh6eeagyoa3nysq5oijyabous2eaw3gnm6yt5pnloimvbza":"merkl_pools_search","bafybeie4sceuc3z52jqtnsn5knnsjeogu6gsnetvp325ao2tf4vv3dqcee":"max_apr_selection"}'
       strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
       available_protocols:
       - balancer

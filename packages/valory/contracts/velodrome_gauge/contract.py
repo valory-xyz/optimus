@@ -50,7 +50,7 @@ class VelodromeGaugeContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(method_name, args=args)
         _logger.debug(f"Encoded {method_name} call with args: {args}")
-        return dict(tx_hash=data)
+        return dict(tx_hash=bytes.fromhex(data[2:]))
 
     @classmethod
     def deposit(

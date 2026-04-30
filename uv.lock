@@ -2414,7 +2414,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "tomte", extras = ["cli", "tests"], git = "https://github.com/valory-xyz/tomte.git?rev=01ecfd5b2b68021bc94b76d9581eb3944bbd41b2" }]
+dev = [{ name = "tomte", extras = ["cli", "tests"], git = "https://github.com/valory-xyz/tomte.git?rev=92cb14f4696bf3eba3ceec36e1a915961d5c7992" }]
 
 [[package]]
 name = "packaging"
@@ -3599,7 +3599,7 @@ wheels = [
 [[package]]
 name = "tomte"
 version = "0.7.0"
-source = { git = "https://github.com/valory-xyz/tomte.git?rev=01ecfd5b2b68021bc94b76d9581eb3944bbd41b2#01ecfd5b2b68021bc94b76d9581eb3944bbd41b2" }
+source = { git = "https://github.com/valory-xyz/tomte.git?rev=92cb14f4696bf3eba3ceec36e1a915961d5c7992#92cb14f4696bf3eba3ceec36e1a915961d5c7992" }
 
 [package.optional-dependencies]
 cli = [

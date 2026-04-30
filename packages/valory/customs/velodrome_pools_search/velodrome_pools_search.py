@@ -2004,7 +2004,7 @@ def optimize_stablecoin_bands(
                 if verbose:
                     logger.info(">> Triggering next recursion level <<")
                     logger.info(
-                        f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "
+                        f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "  # type: ignore[operator]
                         f"(threshold: {level_config['trigger_threshold'] * 100:.1f}%)"  # type: ignore[operator]
                     )
                     logger.info(

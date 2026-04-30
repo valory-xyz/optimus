@@ -1608,7 +1608,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                             ">> Triggering next recursion level <<"
                         )
                         self.context.logger.info(
-                            f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "
+                            f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "  # type: ignore[operator]
                             f"(threshold: {level_config['trigger_threshold'] * 100:.1f}%)"  # type: ignore[operator]
                         )
                         self.context.logger.info(

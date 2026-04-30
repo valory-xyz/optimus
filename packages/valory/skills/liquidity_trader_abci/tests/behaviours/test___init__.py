@@ -23,16 +23,10 @@
 
 from packages.valory.skills.liquidity_trader_abci.behaviours import (
     Action,
-    CheckStakingKPIMetBehaviour,
     Decision,
-    DecisionMakingBehaviour,
     DexType,
-    EvaluateStrategyBehaviour,
     GasCostTracker,
-    GetPositionsBehaviour,
     PositionStatus,
-    PostTxSettlementBehaviour,
-    WithdrawFundsBehaviour,
     __all__,
 )
 

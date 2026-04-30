@@ -22,10 +22,8 @@
 # pylint: skip-file
 
 import json
-from contextlib import contextmanager
-from unittest.mock import MagicMock, PropertyMock, patch
-
-import pytest
+from typing import Any, Generator
+from unittest.mock import MagicMock
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.get_positions import (
     GetPositionsBehaviour,
@@ -35,7 +33,7 @@ from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
 )
 
 
-def _make_behaviour():
+def _make_behaviour() -> Any:
     """Create a GetPositionsBehaviour without __init__."""
     obj = object.__new__(GetPositionsBehaviour)
     ctx = MagicMock()
@@ -43,7 +41,7 @@ def _make_behaviour():
     return obj
 
 
-def _drive(gen, sends=None):
+def _drive(gen: Any, sends: Any = None) -> Any:
     """Drive a generator to completion, sending values from *sends*."""
     sends = sends or []
     idx = 0
@@ -73,18 +71,18 @@ class TestGetPositionsBehaviour:
         positions_data = [{"pool": "0x123", "value": 100}]
 
         # Stub generator methods
-        def fake_get_positions():
+        def fake_get_positions() -> Generator[Any, Any, Any]:
             yield
             return positions_data
 
-        def fake_adjust(*args, **kwargs):
+        def fake_adjust(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
-        def fake_send(*args, **kwargs):
+        def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_wait(*args, **kwargs):
+        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj.get_positions = fake_get_positions
@@ -107,21 +105,21 @@ class TestGetPositionsBehaviour:
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
-        def fake_get_positions():
+        def fake_get_positions() -> Generator[Any, Any, Any]:
             yield
             return None
 
-        def fake_adjust(*args, **kwargs):
+        def fake_adjust(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
         captured_payloads = []
 
-        def fake_send(payload):
+        def fake_send(payload: Any) -> Generator[Any, Any, Any]:
             captured_payloads.append(payload)
             yield
 
-        def fake_wait(*args, **kwargs):
+        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj.get_positions = fake_get_positions

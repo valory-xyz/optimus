@@ -18,6 +18,9 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the support resources for the Velodrome CL Gauge contract."""
-from packages.valory.contracts.velodrome_cl_gauge.contract import VelodromeCLGaugeContract
+
+from packages.valory.contracts.velodrome_cl_gauge.contract import (
+    VelodromeCLGaugeContract,
+)
 
 __all__ = ["VelodromeCLGaugeContract"]

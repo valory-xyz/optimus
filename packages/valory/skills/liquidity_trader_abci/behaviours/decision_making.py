@@ -84,7 +84,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round: Type[AbstractRound] = DecisionMakingRound
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Check if investing is paused due to withdrawal (read from KV store)
@@ -159,7 +159,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Read withdrawal_status from KV store."""
         try:
             result = yield from self._read_kv(("withdrawal_status",))
-            return result.get("withdrawal_status", "unknown")
+            return result.get("withdrawal_status", "unknown")  # type: ignore[union-attr]
         except Exception as e:
             self.context.logger.error(f"Error reading withdrawal_status: {str(e)}")
             return "unknown"
@@ -198,7 +198,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             res = yield from self._post_execute_step(
                 actions, last_executed_action_index
             )
-            return res
+            return res  # type: ignore[return-value]
 
         if last_executed_action_index is not None:
             if (
@@ -222,10 +222,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     actions, last_executed_action_index
                 )
             if self.synchronized_data.last_action == Action.CLAIM_REWARDS.value:
-                res = yield from self._post_execute_claim_rewards(
+                res = yield from self._post_execute_claim_rewards(  # type: ignore[assignment,func-returns-value,misc]
                     actions, last_executed_action_index
                 )
-                return res
+                return res  # type: ignore[return-value]
             if self.synchronized_data.last_action == Action.STAKE_LP_TOKENS.value:
                 self._post_execute_stake_lp_tokens(actions, last_executed_action_index)
             if self.synchronized_data.last_action == Action.UNSTAKE_LP_TOKENS.value:
@@ -249,14 +249,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             self.context.logger.info("Executing routes...")
             res = yield from self._process_route_execution(positions)
-            return res
+            return res  # type: ignore[return-value]
 
         res = yield from self._prepare_next_action(
             positions, actions, current_action_index, last_round_id
         )
-        return res
+        return res  # type: ignore[return-value]
 
-    def _get_portfolio_data(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def _get_portfolio_data(self) -> Any:
         """Get current portfolio data from the base behaviour's property."""
         if not self.portfolio_data:
             self.context.logger.error("Portfolio data is empty in base behaviour.")
@@ -321,7 +321,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error updating withdrawal status: {str(e)}")
 
     def _post_execute_step(
-        self, actions, last_executed_action_index
+        self, actions: Any, last_executed_action_index: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Handle the execution of a step."""
         self.context.logger.info("Checking the status of swap tx")
@@ -343,6 +343,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             yield from self._add_slippage_costs(self.synchronized_data.final_tx_hash)
             res = self._update_assets_after_swap(actions, last_executed_action_index)
             return res
+        return None, None
 
     def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
         """Wait for swap confirmation."""
@@ -352,7 +353,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             decision = yield from self.get_decision_on_swap()
             self.context.logger.info(f"Action to take {decision}")
             if decision != Decision.WAIT:
-                return decision
+                return decision  # type: ignore[return-value]
         self.context.logger.error(
             f"Swap confirmation retries exhausted after "
             f"{MAX_SWAP_CONFIRMATION_RETRIES} attempts"
@@ -360,7 +361,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return Decision.EXIT
 
     def _update_assets_after_swap(
-        self, actions, last_executed_action_index
+        self, actions: Any, last_executed_action_index: Any
     ) -> Tuple[Optional[str], Optional[Dict]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
@@ -384,7 +385,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def _post_execute_enter_pool(
-        self, actions, last_executed_action_index
+        self, actions: Any, last_executed_action_index: Any
     ) -> Generator[None, None, None]:
         """Handle entering a pool."""
         action = actions[last_executed_action_index]
@@ -577,7 +578,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
     def _post_execute_exit_pool(
-        self, actions, last_executed_action_index
+        self, actions: Any, last_executed_action_index: Any
     ) -> Generator[None, None, None]:
         """Handle exiting a pool."""
         action = actions[last_executed_action_index]
@@ -621,7 +622,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if action.get("description", "").startswith("Withdrawal"):
             self.context.logger.info("Withdrawal pool exit completed successfully.")
 
-    def _post_execute_transfer(self, actions, last_executed_action_index):
+    def _post_execute_transfer(
+        self, actions: Any, last_executed_action_index: Any
+    ) -> None:
         """Handle USDC transfer completion."""
         # Log bridge/swap completion
         action = actions[last_executed_action_index]
@@ -637,7 +640,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
     def _post_execute_withdraw(
-        self, actions, last_executed_action_index
+        self, actions: Any, last_executed_action_index: Any
     ) -> Generator[None, None, None]:
         """Handle withdrawal transfer completion."""
         investing_paused = yield from self._read_investing_paused()
@@ -649,7 +652,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             yield from self._update_withdrawal_completion()
 
     def _post_execute_claim_rewards(
-        self, actions, last_executed_action_index
+        self, actions: Any, last_executed_action_index: Any
     ) -> Tuple[Optional[str], Optional[Dict]]:
         """Handle claiming rewards."""
         current_timestamp = cast(
@@ -662,7 +665,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def _process_route_execution(
-        self, positions
+        self, positions: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Handle route execution."""
         routes = self.synchronized_data.routes
@@ -707,7 +710,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return res
 
     def _execute_route_step(
-        self, positions, routes, to_execute_route_index, to_execute_step_index
+        self,
+        positions: Any,
+        routes: Any,
+        to_execute_route_index: Any,
+        to_execute_step_index: Any,
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Execute a step in the route."""
         steps = routes[to_execute_route_index].get("steps")
@@ -740,14 +747,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     "last_action": Action.SWITCH_ROUTE.value,
                 }
 
-            remaining_fee_allowance = total_fee
-            remaining_gas_allowance = total_gas_cost
+            remaining_fee_allowance = total_fee  # type: ignore[assignment]
+            remaining_gas_allowance = total_gas_cost  # type: ignore[assignment]
 
         else:
-            remaining_fee_allowance = self.synchronized_data.fee_details.get(
+            remaining_fee_allowance = self.synchronized_data.fee_details.get(  # type: ignore[assignment,union-attr]
                 "remaining_fee_allowance"
             )
-            remaining_gas_allowance = self.synchronized_data.fee_details.get(
+            remaining_gas_allowance = self.synchronized_data.fee_details.get(  # type: ignore[assignment,union-attr]
                 "remaining_gas_allowance"
             )
 
@@ -762,11 +769,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}
 
         self.context.logger.info(
-            f"Preparing bridge swap action for {step_data.get('source_token_symbol')}({step_data.get('from_chain')}) "
-            f"to {step_data.get('target_token_symbol')}({step_data.get('to_chain')}) using tool {step_data.get('tool')}"
+            f"Preparing bridge swap action for {step_data.get('source_token_symbol')}({step_data.get('from_chain')}) "  # type: ignore[union-attr]
+            f"to {step_data.get('target_token_symbol')}({step_data.get('to_chain')}) using tool {step_data.get('tool')}"  # type: ignore[union-attr]
         )
         bridge_swap_action = yield from self.prepare_bridge_swap_action(
-            positions, step_data, remaining_fee_allowance, remaining_gas_allowance
+            positions, step_data, remaining_fee_allowance, remaining_gas_allowance  # type: ignore[arg-type]
         )
         if not bridge_swap_action:
             return self._handle_failed_step(
@@ -779,7 +786,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def _handle_failed_step(
-        self, to_execute_step_index, to_execute_route_index, step_data, total_steps
+        self,
+        to_execute_step_index: Any,
+        to_execute_route_index: Any,
+        step_data: Any,
+        total_steps: Any,
     ) -> Tuple[Optional[str], Optional[Dict]]:
         """Handle a failed step in the route."""
         if to_execute_step_index == 0:
@@ -791,11 +802,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             }
 
         self.context.logger.error("Intermediate step failed. Fetching new routes..")
-        if self.synchronized_data.routes_retry_attempt > MAX_RETRIES_FOR_ROUTES:
+        if self.synchronized_data.routes_retry_attempt > MAX_RETRIES_FOR_ROUTES:  # type: ignore[operator]
             self.context.logger.error("Exceeded retry limit")
             return Event.DONE.value, {}
 
-        routes_retry_attempt = self.synchronized_data.routes_retry_attempt + 1
+        routes_retry_attempt = self.synchronized_data.routes_retry_attempt + 1  # type: ignore[operator]
         find_route_action = {
             "action": Action.FIND_BRIDGE_ROUTE.value,
             "from_chain": step_data["from_chain"],
@@ -818,7 +829,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def _prepare_next_action(
-        self, positions, actions, current_action_index, last_round_id
+        self,
+        positions: Any,
+        actions: Any,
+        current_action_index: Any,
+        last_round_id: Any,
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Prepare the next action."""
         next_action_details = actions[current_action_index]
@@ -994,11 +1009,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"final tx hash {tx_hash}")
         except Exception:
             self.context.logger.error("No tx-hash found")
-            return Decision.EXIT
+            return Decision.EXIT  # type: ignore[return-value]
 
-        status, sub_status = yield from self.get_swap_status(tx_hash)
+        status, sub_status = yield from self.get_swap_status(tx_hash)  # type: ignore[misc]
         if status is None or sub_status is None:
-            return Decision.EXIT
+            return Decision.EXIT  # type: ignore[return-value]
 
         self.context.logger.info(
             f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
@@ -1006,13 +1021,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if status == SwapStatus.DONE.value:
             # only continue if tx is fully completed
-            return Decision.CONTINUE
+            return Decision.CONTINUE  # type: ignore[return-value]
         # wait if it is pending
         elif status == SwapStatus.PENDING.value:
-            return Decision.WAIT
+            return Decision.WAIT  # type: ignore[return-value]
         # exit if it fails
         else:
-            return Decision.EXIT
+            return Decision.EXIT  # type: ignore[return-value]
 
     def get_swap_status(
         self, tx_hash: str
@@ -1036,19 +1051,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(
                         f"Max retries ({MAX_RETRIES_FOR_STATUS_CHECK}) exceeded "
                         f"for status check on tx {tx_hash}. "
-                        f"Last message: {response.body}"
+                        f"Last message: {response.body}"  # type: ignore[str-bytes-safe]
                     )
-                    return None, None
-                self.context.logger.warning(f"Message {response.body}. Retrying..")
+                    return None, None  # type: ignore[return-value]
+                self.context.logger.warning(f"Message {response.body}. Retrying..")  # type: ignore[str-bytes-safe]
                 yield from self.sleep(self.params.waiting_period_for_status_check)
                 continue
 
             if response.status_code not in HTTP_OK:
                 self.context.logger.error(
                     f"Received status code {response.status_code} from url {url}."
-                    f"Message {response.body}"
+                    f"Message {response.body}"  # type: ignore[str-bytes-safe]
                 )
-                return None, None
+                return None, None  # type: ignore[return-value]
 
             try:
                 tx_status = json.loads(response.body)
@@ -1057,14 +1072,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     f"Could not parse response from api, "
                     f"the following error was encountered {type(e).__name__}: {e}"
                 )
-                return None, None
+                return None, None  # type: ignore[return-value]
 
             status = tx_status.get("status")
             sub_status = tx_status.get("substatus")
 
             if not status and not sub_status:
                 self.context.logger.error("No status or sub_status found in response")
-                return None, None
+                return None, None  # type: ignore[return-value]
 
             return status, sub_status
 
@@ -1144,7 +1159,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return max_amounts_in
 
     def _calculate_investment_amounts_from_dollar_cap(
-        self, action, chain, assets
+        self, action: Any, chain: Any, assets: Any
     ) -> Generator[None, None, Optional[List[int]]]:
         """Calculate token amounts to invest based on a dollar value cap."""
         if not action.get("invested_amount", 0):
@@ -1225,7 +1240,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return max_amounts
 
     def _calculate_velodrome_investment_amounts(
-        self, action, chain, assets, positions, max_amounts
+        self, action: Any, chain: Any, assets: Any, positions: Any, max_amounts: Any
     ) -> Generator[None, None, Optional[List[int]]]:
         """Calculate investment amounts for Velodrome positions based on token percentages."""
         # Fetch balances and prices to compute total USD principal slice
@@ -1259,7 +1274,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         token_requirements = action.get("token_requirements", {}) or {}
         try:
             w0 = float(
-                token_requirements.get("overall_token0_ratio")
+                token_requirements.get("overall_token0_ratio")  # type: ignore[arg-type]
                 if token_requirements.get("overall_token0_ratio") is not None
                 else action.get("token0_percentage", 0) / 100.0
             )
@@ -1267,7 +1282,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             w0 = action.get("token0_percentage", 0) / 100.0
         try:
             w1 = float(
-                token_requirements.get("overall_token1_ratio")
+                token_requirements.get("overall_token1_ratio")  # type: ignore[arg-type]
                 if token_requirements.get("overall_token1_ratio") is not None
                 else action.get("token1_percentage", 0) / 100.0
             )
@@ -1402,7 +1417,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None
 
     def get_enter_pool_tx_hash(
-        self, positions, action
+        self, positions: Any, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
         self.context.logger.info(f"Processing enter pool action: {action}")
@@ -1436,12 +1451,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
         # Calculate investment amounts based on dex type
-        max_amounts_in = []
-        max_amounts = []
+        max_amounts_in: List[Any] = []
+        max_amounts: List[Any] = []
 
         # Calculate investment amounts based on dollar cap if needed
         if self.current_positions and action.get("invested_amount", 0) != 0:
-            max_amounts = yield from self._calculate_investment_amounts_from_dollar_cap(
+            max_amounts = yield from self._calculate_investment_amounts_from_dollar_cap(  # type: ignore[assignment]
                 action, chain, assets
             )
             self.context.logger.info(
@@ -1454,10 +1469,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if dex_type == DexType.VELODROME.value:
             if is_cl_pool:
                 # For CL pools, use the specialized method that requires token percentages
-                max_amounts_in = (
-                    yield from self._calculate_velodrome_investment_amounts(
-                        action, chain, assets, positions, max_amounts
-                    )
+                max_amounts_in = yield from self._calculate_velodrome_investment_amounts(  # type: ignore[assignment]
+                    action, chain, assets, positions, max_amounts
                 )
                 if max_amounts_in is None:
                     return None, None, None
@@ -1482,7 +1495,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     max_amounts_in,
                     token0_balance,
                     token1_balance,
-                ) = yield from self._get_token_balances_and_calculate_amounts(
+                ) = yield from self._get_token_balances_and_calculate_amounts(  # type: ignore[assignment]
                     chain=chain,
                     assets=assets,
                     positions=positions,
@@ -1526,7 +1539,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 max_amounts_in,
                 token0_balance,
                 token1_balance,
-            ) = yield from self._get_token_balances_and_calculate_amounts(
+            ) = yield from self._get_token_balances_and_calculate_amounts(  # type: ignore[assignment]
                 chain=chain,
                 assets=assets,
                 positions=positions,
@@ -1718,7 +1731,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_approval_tx_hash(
-        self, token_address, amount: int, spender: str, chain: str
+        self, token_address: Any, amount: int, spender: str, chain: str
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get approve token tx hashes"""
 
@@ -1744,7 +1757,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def get_exit_pool_tx_hash(
-        self, action
+        self, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get exit pool tx hash"""
         dex_type = action.get("dex_type")
@@ -1860,7 +1873,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_deposit_tx_hash(
-        self, action, positions
+        self, action: Any, positions: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get deposit tx hash"""
         chain = action.get("chain")
@@ -1964,7 +1977,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_withdraw_tx_hash(
-        self, action
+        self, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get withdraw tx hash"""
         chain = action.get("chain")
@@ -2078,7 +2091,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_token_transfer_tx_hash(
-        self, action
+        self, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get token transfer tx hash"""
         chain = action.get("chain")
@@ -2201,9 +2214,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "to_token_symbol": tx_info.get("target_token_symbol"),
             "payload": payload_string,
             "safe_address": self.params.safe_contract_addresses.get(from_chain),
-            "remaining_gas_allowance": remaining_gas_allowance
+            "remaining_gas_allowance": remaining_gas_allowance  # type: ignore[operator]
             - tx_info.get("gas_cost"),
-            "remaining_fee_allowance": remaining_fee_allowance - tx_info.get("fee"),
+            "remaining_fee_allowance": remaining_fee_allowance - tx_info.get("fee"),  # type: ignore[operator]
             "amount": tx_info.get(
                 "amount", 0
             ),  # Store the amount for later use in _update_assets_after_swap
@@ -2220,8 +2233,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         total_gas_cost = 0
         total_fee = 0
-        total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)
-        total_gas_cost += sum(
+        total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)  # type: ignore[assignment]
+        total_gas_cost += sum(  # type: ignore[assignment]
             float(tx_info.get("gas_cost", 0)) for tx_info in step_transactions
         )
         from_amount_usd = float(route.get("fromAmountUSD", 0))
@@ -2253,11 +2266,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def check_step_costs(
         self,
-        step,
-        remaining_fee_allowance,
-        remaining_gas_allowance,
-        step_index,
-        total_steps,
+        step: Any,
+        remaining_fee_allowance: Any,
+        remaining_gas_allowance: Any,
+        step_index: Any,
+        total_steps: Any,
     ) -> Generator[None, None, Tuple[Optional[bool], Optional[Dict[str, Any]]]]:
         """Check if the step costs are within the allowed range."""
         step = self._set_step_addresses(step)
@@ -2303,7 +2316,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return True, step_data
 
     def _build_safe_tx(
-        self, from_chain, multisend_tx_hash, multisend_address
+        self, from_chain: Any, multisend_tx_hash: Any, multisend_address: Any
     ) -> Generator[None, None, Optional[str]]:
         safe_address = self.params.safe_contract_addresses.get(from_chain)
         safe_tx_hash = yield from self.contract_interact(
@@ -2337,7 +2350,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string
 
     def _build_multisend_tx(
-        self, positions, tx_info
+        self, positions: Any, tx_info: Any
     ) -> Generator[None, None, Optional[str]]:
         multisend_txs = []
         amount = tx_info.get("amount")
@@ -2418,7 +2431,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
             except (ValueError, TypeError) as e:
                 self.context.logger.error(
-                    f"Could not parse error response from API: {e}\nResponse body: {response.body}"
+                    f"Could not parse error response from API: {e}\nResponse body: {response.body}"  # type: ignore[str-bytes-safe]
                 )
             return None
 
@@ -2485,8 +2498,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         gas_costs = estimate.get("gasCosts", [])
         fee = 0
         gas_cost = 0
-        fee += sum(float(fee_cost.get("amountUSD", 0)) for fee_cost in fee_costs)
-        gas_cost += sum(float(gas_cost.get("amountUSD", 0)) for gas_cost in gas_costs)
+        fee += sum(float(fee_cost.get("amountUSD", 0)) for fee_cost in fee_costs)  # type: ignore[assignment]
+        gas_cost += sum(float(gas_cost.get("amountUSD", 0)) for gas_cost in gas_costs)  # type: ignore[assignment]
 
         from_amount_usd = float(response.get("fromAmountUSD", 0))
         to_amount_usd = float(response.get("toAmountUSD", 0))
@@ -2537,7 +2550,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return step
 
     def fetch_routes(
-        self, positions, action
+        self, positions: Any, action: Any
     ) -> Generator[None, None, Optional[List[Any]]]:
         """Get transaction data for route from LiFi API"""
 
@@ -2615,7 +2628,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         token_decimals = ERC20_DECIMALS
         if from_token_address != ZERO_ADDRESS:
-            token_decimals = yield from self._get_token_decimals(
+            token_decimals = yield from self._get_token_decimals(  # type: ignore[assignment]
                 from_chain, from_token_address
             )
 
@@ -2664,7 +2677,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
             except (ValueError, TypeError):
                 error_msg = f"API returned status code {routes_response.status_code} with non-JSON response. "
-                error_msg += f"Response body: {routes_response.body}"
+                error_msg += f"Response body: {routes_response.body}"  # type: ignore[str-bytes-safe]
                 self.context.logger.error(error_msg)
             return None
 
@@ -2676,10 +2689,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         try:
             routes_response = json.loads(routes_response.body)
         except (ValueError, TypeError) as e:
-            self.context.logger.error(
+            self.context.logger.error(  # type: ignore[str-bytes-safe]
                 f"Could not parse response from api, "
                 f"the following error was encountered {type(e).__name__}: {e}. "
-                f"Response body: {routes_response.body[:500]}..."  # Log first 500 chars for debugging
+                f"Response body: {routes_response.body[:500]!r}..."  # Log first 500 chars for debugging
             )
             return None
 
@@ -2693,7 +2706,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return routes
 
     def get_claim_rewards_tx_hash(
-        self, action
+        self, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get claim rewards tx hash"""
         chain = action.get("chain")
@@ -3214,7 +3227,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Failed to fetch transaction receipt for {tx_hash}"
             )
-            return None, None, None
+            return None, None, None  # type: ignore[return-value]
 
         event_signature = "Deposit(address,address,uint256,uint256)"
         event_signature_hash = keccak(event_signature.encode()).hex()
@@ -3239,7 +3252,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(
                         "Block number not found in transaction receipt."
                     )
-                    return None, None, None
+                    return None, None, None  # type: ignore[return-value]
 
                 block = yield from self.get_block(
                     block_number=block_number,
@@ -3248,30 +3261,30 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
                 if block is None:
                     self.context.logger.error(f"Failed to fetch block {block_number}")
-                    return None, None, None
+                    return None, None, None  # type: ignore[return-value]
 
                 timestamp = block.get("timestamp")
                 if timestamp is None:
                     self.context.logger.error("Timestamp not found in block data.")
-                    return None, None, None
+                    return None, None, None  # type: ignore[return-value]
 
                 return assets, shares, timestamp
 
         self.context.logger.error("Deposit event not found in transaction receipt")
-        return None, None, None
+        return None, None, None  # type: ignore[return-value]
 
     def _accumulate_transaction_costs(
         self, tx_hash: str, position: Optional[Dict]
     ) -> Generator[None, None, None]:
         """Add gas costs from this transaction to running total using KV store"""
         try:
-            chain = position.get("chain")
-            pool_address = position.get("pool_address")
-            gas_cost_usd = yield from self._get_gas_cost_usd(tx_hash, chain)
+            chain = position.get("chain")  # type: ignore[union-attr]
+            pool_address = position.get("pool_address")  # type: ignore[union-attr]
+            gas_cost_usd = yield from self._get_gas_cost_usd(tx_hash, chain)  # type: ignore[arg-type]
 
             # Update entry costs in KV store
             updated_costs = yield from self._update_entry_costs(
-                chain, pool_address, gas_cost_usd
+                chain, pool_address, gas_cost_usd  # type: ignore[arg-type]
             )
 
             self.context.logger.info(
@@ -3290,7 +3303,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # Get the current action being executed to determine position ID
             enter_pool_actions = [
                 action
-                for action in self.synchronized_data.actions
+                for action in self.synchronized_data.actions  # type: ignore[union-attr]
                 if action.get("action") == "EnterPool"
             ]
 
@@ -3489,7 +3502,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
 
     def _convert_amounts_to_usd(
-        self, amount0, amount1, token0_addr, token1_addr, chain
+        self, amount0: Any, amount1: Any, token0_addr: Any, token1_addr: Any, chain: Any
     ) -> Generator[None, None, float]:
         """Convert token amounts to USD using existing price patterns"""
         try:
@@ -3744,12 +3757,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, None]:
         """Rename an entry costs key in the KV store"""
         try:
-            chain = current_position.get("chain")
-            pool_address = current_position.get("pool_address")
-            entry_timestamp = current_position.get("enter_timestamp")
-            old_key = self._get_entry_costs_key(chain, pool_address)
+            chain = current_position.get("chain")  # type: ignore[union-attr]
+            pool_address = current_position.get("pool_address")  # type: ignore[union-attr]
+            entry_timestamp = current_position.get("enter_timestamp")  # type: ignore[union-attr]
+            old_key = self._get_entry_costs_key(chain, pool_address)  # type: ignore[arg-type]
             new_key = self._get_updated_entry_costs_key(
-                chain, pool_address, entry_timestamp
+                chain, pool_address, entry_timestamp  # type: ignore[arg-type]
             )
 
             # Get all entry costs from KV store
@@ -3787,7 +3800,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error renaming entry costs key: {e}")
 
     def get_stake_lp_tokens_tx_hash(
-        self, action
+        self, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get stake LP tokens tx hash"""
         try:
@@ -3950,7 +3963,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
     def get_unstake_lp_tokens_tx_hash(
-        self, action
+        self, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get unstake LP tokens tx hash"""
         try:
@@ -4117,7 +4130,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
     def get_claim_staking_rewards_tx_hash(
-        self, action
+        self, action: Any
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get claim staking rewards tx hash"""
         try:
@@ -4275,7 +4288,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     # ==================== STAKING POST-EXECUTION HANDLERS ====================
 
-    def _post_execute_stake_lp_tokens(self, actions, last_executed_action_index):
+    def _post_execute_stake_lp_tokens(
+        self, actions: Any, last_executed_action_index: Any
+    ) -> None:
         """Handle staking LP tokens completion."""
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
@@ -4310,7 +4325,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.store_current_positions()
         self.context.logger.info("Staking LP tokens was successful!")
 
-    def _post_execute_unstake_lp_tokens(self, actions, last_executed_action_index):
+    def _post_execute_unstake_lp_tokens(
+        self, actions: Any, last_executed_action_index: Any
+    ) -> None:
         """Handle unstaking LP tokens completion."""
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
@@ -4342,7 +4359,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.store_current_positions()
         self.context.logger.info("Unstaking LP tokens was successful!")
 
-    def _post_execute_claim_staking_rewards(self, actions, last_executed_action_index):
+    def _post_execute_claim_staking_rewards(
+        self, actions: Any, last_executed_action_index: Any
+    ) -> None:
         """Handle claiming staking rewards completion."""
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")

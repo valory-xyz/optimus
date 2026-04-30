@@ -51,9 +51,9 @@ class TestFetchStrategiesRound:
 
         mock_synced = MagicMock(spec=SynchronizedData)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
 
         result = round_obj.end_block()
         assert result == (mock_synced, Event.WITHDRAWAL_INITIATED)
@@ -71,9 +71,9 @@ class TestFetchStrategiesRound:
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.update.return_value = mock_synced
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
 
         result = round_obj.end_block()
         assert result is not None
@@ -93,9 +93,9 @@ class TestFetchStrategiesRound:
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.update.return_value = mock_synced
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
 
         result = round_obj.end_block()
         assert result is not None
@@ -114,9 +114,9 @@ class TestFetchStrategiesRound:
 
         mock_synced = MagicMock(spec=SynchronizedData)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
 
         result = round_obj.end_block()
         assert result == (mock_synced, Event.WAIT)
@@ -133,9 +133,9 @@ class TestFetchStrategiesRound:
 
         mock_synced = MagicMock(spec=SynchronizedData)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
 
         result = round_obj.end_block()
         assert result == (mock_synced, Event.WAIT)
@@ -144,10 +144,10 @@ class TestFetchStrategiesRound:
         """Test end_block returns NO_MAJORITY."""
         round_obj = object.__new__(FetchStrategiesRound)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=False)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.nb_participants = 4
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         type(round_obj).collection = PropertyMock(return_value={})
 
         with patch.object(
@@ -162,10 +162,10 @@ class TestFetchStrategiesRound:
         """Test end_block returns None while waiting."""
         round_obj = object.__new__(FetchStrategiesRound)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=False)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.nb_participants = 4
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         type(round_obj).collection = PropertyMock(return_value={})
 
         with patch.object(

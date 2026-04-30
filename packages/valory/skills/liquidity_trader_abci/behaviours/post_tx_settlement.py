@@ -19,7 +19,7 @@
 
 """This module contains the behaviour for deciding the next round post transaction settlement for the 'liquidity_trader_abci' skill."""
 
-from typing import Generator
+from typing import Any, Generator
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
@@ -36,7 +36,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round = PostTxSettlementRound
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Simply log that a tx is settled and wait for the round end."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             msg = f"The transaction submitted by {self.synchronized_data.tx_submitter} was successfully settled."
@@ -57,7 +57,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
             self.set_done()
 
-    def fetch_and_log_gas_details(self):
+    def fetch_and_log_gas_details(self) -> Generator[Any, Any, Any]:
         """Fetch the transaction receipt and log the gas price and cost."""
         tx_hash = self.synchronized_data.final_tx_hash
         chain = self.synchronized_data.chain_id

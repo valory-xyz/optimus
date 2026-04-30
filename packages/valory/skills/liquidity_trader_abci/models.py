@@ -31,7 +31,9 @@ from aea.skills.base import Model, SkillContext
 from eth_account import Account
 
 from packages.valory.connections.x402.clients.requests import x402_requests
-from packages.valory.skills.abstract_round_abci.models import BaseParams
+from packages.valory.skills.abstract_round_abci.models import (
+    BaseParams,
+)
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
 )
@@ -39,7 +41,9 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
-from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
+from packages.valory.skills.abstract_round_abci.models import (
+    TypeCheckMixin,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
 HTTP_OK = [200, 201]
@@ -60,10 +64,10 @@ class SharedState(BaseSharedState):
         self.trading_type: str = ""
         self.selected_protocols: List[str] = []
         self.request_count: int = 0
-        self.request_queue = []
+        self.request_queue: List[Any] = []
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""
-        self._token_price_cache = {}
+        self._token_price_cache: Dict[Any, Any] = {}
         self._token_price_cache_ttl = 600
         # Strategy evaluation backoff state
         self.consecutive_no_action_count: int = 0

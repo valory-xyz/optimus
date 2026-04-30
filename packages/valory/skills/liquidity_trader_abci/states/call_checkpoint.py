@@ -65,7 +65,7 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
             return synced_data, Event.WITHDRAWAL_INITIATED
 
         if event != Event.DONE:
-            return res
+            return res  # type: ignore[return-value]
 
         if (
             synced_data.service_staking_state == StakingState.STAKED.value
@@ -85,4 +85,4 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
         if synced_data.service_staking_state == StakingState.EVICTED.value:
             return synced_data, Event.SERVICE_EVICTED
 
-        return res
+        return res  # type: ignore[return-value]

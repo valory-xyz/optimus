@@ -24,7 +24,6 @@
 import pickle  # nosec
 
 from packages.valory.skills.optimus_abci.prompts import (
-    ProtocolName,
     STRATEGY_PROMPT,
     StrategyConfig,
     TradingType,

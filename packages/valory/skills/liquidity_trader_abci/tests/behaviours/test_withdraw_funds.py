@@ -21,10 +21,8 @@
 
 # pylint: skip-file
 
-import json
-from unittest.mock import MagicMock, PropertyMock, patch
-
-import pytest
+from typing import Any, Generator
+from unittest.mock import MagicMock
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
@@ -35,7 +33,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.withdraw_funds impo
 )
 
 
-def _make_behaviour():
+def _make_behaviour() -> Any:
     """Create a WithdrawFundsBehaviour without __init__."""
     obj = object.__new__(WithdrawFundsBehaviour)
     ctx = MagicMock()
@@ -43,7 +41,7 @@ def _make_behaviour():
     return obj
 
 
-def _drive(gen):
+def _drive(gen: Any) -> Any:
     """Drive a generator to completion."""
     val = None
     while True:
@@ -58,41 +56,45 @@ class TestWithdrawFundsBehaviour:
 
     def _run_async_act(
         self,
-        obj,
-        investing_paused=False,
-        withdrawal_data=None,
-        target_address="",
-        positions=None,
-        portfolio_data=None,
-        withdrawal_actions=None,
-    ):
+        obj: Any,
+        investing_paused: Any = False,
+        withdrawal_data: Any = None,
+        target_address: Any = "",
+        positions: Any = None,
+        portfolio_data: Any = None,
+        withdrawal_actions: Any = None,
+    ) -> Any:
         """Helper to run async_act with various configurations."""
         benchmark_mock = MagicMock()
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
-        def fake_read_investing_paused():
+        def fake_read_investing_paused() -> Generator[Any, Any, Any]:
             yield
             return investing_paused
 
-        def fake_read_withdrawal_data():
+        def fake_read_withdrawal_data() -> Generator[Any, Any, Any]:
             yield
             return withdrawal_data
 
-        def fake_update_withdrawal_status(status, message):
+        def fake_update_withdrawal_status(
+            status: Any, message: Any
+        ) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_reset_withdrawal_flags():
+        def fake_reset_withdrawal_flags() -> Generator[Any, Any, Any]:
             yield
 
-        def fake_prepare_withdrawal_actions(positions_, target_addr_, portfolio_data_):
+        def fake_prepare_withdrawal_actions(
+            positions_: Any, target_addr_: Any, portfolio_data_: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return withdrawal_actions if withdrawal_actions is not None else []
 
-        def fake_send(*args, **kwargs):
+        def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_wait(*args, **kwargs):
+        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj._read_investing_paused = fake_read_investing_paused
@@ -194,7 +196,7 @@ class TestReadWithdrawalData:
         """Test successful read of withdrawal data."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"withdrawal_id": "123", "withdrawal_target_address": "0x1"}
 
@@ -207,7 +209,7 @@ class TestReadWithdrawalData:
         """Test when _read_kv returns None."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -220,7 +222,7 @@ class TestReadWithdrawalData:
         """Test when _read_kv raises an exception."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             raise ValueError("boom")
             yield  # noqa: unreachable
 
@@ -235,11 +237,11 @@ class TestPrepareWithdrawalActions:
 
     def _make_obj_with_stubs(
         self,
-        unstake_actions=None,
-        exit_actions=None,
-        swap_actions=None,
-        transfer_actions=None,
-    ):
+        unstake_actions: Any = None,
+        exit_actions: Any = None,
+        swap_actions: Any = None,
+        transfer_actions: Any = None,
+    ) -> Any:
         """Create a behaviour with stubbed sub-methods."""
         obj = _make_behaviour()
         obj._prepare_unstaking_actions = MagicMock(return_value=unstake_actions or [])
@@ -251,10 +253,10 @@ class TestPrepareWithdrawalActions:
             return_value=transfer_actions or []
         )
 
-        def fake_update_status(status, message):
+        def fake_update_status(status: Any, message: Any) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_reset_flags():
+        def fake_reset_flags() -> Generator[Any, Any, Any]:
             yield
 
         obj._update_withdrawal_status = fake_update_status
@@ -488,7 +490,7 @@ class TestPrepareExitPoolActions:
 class TestPrepareSwapToUsdcActionsStandard:
     """Tests for _prepare_swap_to_usdc_actions_standard."""
 
-    def _make_obj(self, usdc_addr="0xusdc", olas_addr="0xolas"):
+    def _make_obj(self, usdc_addr: Any = "0xusdc", olas_addr: Any = "0xolas") -> Any:
         """Create a behaviour with common stubs."""
         obj = _make_behaviour()
         params_mock = MagicMock()
@@ -563,7 +565,7 @@ class TestPrepareSwapToUsdcActionsStandard:
     def test_empty_portfolio(self) -> None:
         """Test empty portfolio breakdown."""
         obj = self._make_obj()
-        portfolio = {"portfolio_breakdown": []}
+        portfolio: Any = {"portfolio_breakdown": []}
         result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
         assert len(result) == 0
 
@@ -663,7 +665,7 @@ class TestUpdateWithdrawalStatus:
         obj = _make_behaviour()
         written = {}
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             written.update(data)
             yield
 
@@ -678,7 +680,7 @@ class TestUpdateWithdrawalStatus:
         obj = _make_behaviour()
         written = {}
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             written.update(data)
             yield
 
@@ -693,7 +695,7 @@ class TestUpdateWithdrawalStatus:
         obj = _make_behaviour()
         written = {}
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             written.update(data)
             yield
 
@@ -707,7 +709,7 @@ class TestUpdateWithdrawalStatus:
         """Test exception during _write_kv."""
         obj = _make_behaviour()
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             raise ValueError("write error")
             yield  # noqa: unreachable
 
@@ -725,7 +727,7 @@ class TestResetWithdrawalFlags:
         obj = _make_behaviour()
         written = {}
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             written.update(data)
             yield
 
@@ -738,7 +740,7 @@ class TestResetWithdrawalFlags:
         """Test exception during reset."""
         obj = _make_behaviour()
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             raise ValueError("write error")
             yield  # noqa: unreachable
 
@@ -755,7 +757,7 @@ class TestReadInvestingPaused:
         """Test returns True when investing_paused is 'true'."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"investing_paused": "true"}
 
@@ -768,7 +770,7 @@ class TestReadInvestingPaused:
         """Test returns False when investing_paused is 'false'."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"investing_paused": "false"}
 
@@ -781,7 +783,7 @@ class TestReadInvestingPaused:
         """Test returns True when investing_paused is 'True' (mixed case)."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"investing_paused": "True"}
 
@@ -794,7 +796,7 @@ class TestReadInvestingPaused:
         """Test returns False when result is None."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -807,7 +809,7 @@ class TestReadInvestingPaused:
         """Test returns False when investing_paused value is None."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"investing_paused": None}
 
@@ -820,7 +822,7 @@ class TestReadInvestingPaused:
         """Test returns False when exception occurs."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             raise ValueError("boom")
             yield  # noqa: unreachable
 

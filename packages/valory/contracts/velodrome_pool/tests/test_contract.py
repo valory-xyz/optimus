@@ -23,10 +23,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
-
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
 MOCK_ACCOUNT = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
@@ -37,10 +34,7 @@ class TestGetBalance:
     """Tests for the get_balance method."""
 
     def test_get_balance_returns_correct_balance(self) -> None:
-        """Test that get_balance returns a dict with the balance key.
-
-        :return: None
-        """
+        """Test that get_balance returns a dict with the balance key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.balanceOf.return_value.call.return_value = 1000
@@ -60,10 +54,7 @@ class TestBuildApprovalTx:
     """Tests for the build_approval_tx method."""
 
     def test_build_approval_tx_returns_tx_hash(self) -> None:
-        """Test that build_approval_tx returns a dict with a tx_hash key.
-
-        :return: None
-        """
+        """Test that build_approval_tx returns a dict with a tx_hash key."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_SPENDER
         mock_contract_instance = MagicMock()
@@ -80,10 +71,7 @@ class TestBuildApprovalTx:
         assert result == {"tx_hash": bytes.fromhex("abcdef1234")}
 
     def test_build_approval_tx_checksums_spender(self) -> None:
-        """Test that build_approval_tx checksums the spender address.
-
-        :return: None
-        """
+        """Test that build_approval_tx checksums the spender address."""
         mock_ledger_api = MagicMock()
         checksummed = "0x00000000000000000000000000000000DeaDBeef"
         mock_ledger_api.api.to_checksum_address.return_value = checksummed
@@ -107,10 +95,7 @@ class TestGetReserves:
     """Tests for the get_reserves method."""
 
     def test_get_reserves_returns_both_reserves(self) -> None:
-        """Test that get_reserves returns a dict with both reserve values.
-
-        :return: None
-        """
+        """Test that get_reserves returns a dict with both reserve values."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.reserve0.return_value.call.return_value = 5000

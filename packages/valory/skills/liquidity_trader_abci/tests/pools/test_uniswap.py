@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
@@ -67,7 +68,7 @@ class TestMintParams:
         assert params.deadline == 999999
 
 
-def _make_behaviour():
+def _make_behaviour() -> Any:
     """Create a UniswapPoolBehaviour without __init__."""
     obj = object.__new__(UniswapPoolBehaviour)
     ctx = MagicMock()
@@ -75,7 +76,7 @@ def _make_behaviour():
     return obj
 
 
-def _drive(gen):
+def _drive(gen: Any) -> Any:
     """Drive a generator to completion."""
     val = None
     while True:
@@ -104,7 +105,7 @@ class TestGetTokens:
         """Test successful token retrieval."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return ["0xtoken0", "0xtoken1"]
 
@@ -117,7 +118,7 @@ class TestGetTokens:
         """Test when contract returns None."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -134,7 +135,7 @@ class TestGetPoolFee:
         """Test successful fee retrieval."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return 3000
 
@@ -147,7 +148,7 @@ class TestGetPoolFee:
         """Test when contract returns None."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -164,7 +165,7 @@ class TestGetTickSpacing:
         """Test successful tick spacing retrieval."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return 60
 
@@ -177,7 +178,7 @@ class TestGetTickSpacing:
         """Test when contract returns None."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -194,7 +195,7 @@ class TestCalculateTickLowerAndUpper:
         """Test when tick spacing is None."""
         obj = _make_behaviour()
 
-        def fake_get_tick_spacing(addr, chain):
+        def fake_get_tick_spacing(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -207,7 +208,7 @@ class TestCalculateTickLowerAndUpper:
         """Test with tick spacing of 60."""
         obj = _make_behaviour()
 
-        def fake_get_tick_spacing(addr, chain):
+        def fake_get_tick_spacing(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 60
 
@@ -226,7 +227,7 @@ class TestCalculateTickLowerAndUpper:
         """Test with tick spacing of 1."""
         obj = _make_behaviour()
 
-        def fake_get_tick_spacing(addr, chain):
+        def fake_get_tick_spacing(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 1
 
@@ -241,7 +242,7 @@ class TestCalculateTickLowerAndUpper:
         """Test with tick spacing of 200."""
         obj = _make_behaviour()
 
-        def fake_get_tick_spacing(addr, chain):
+        def fake_get_tick_spacing(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 200
 
@@ -275,7 +276,7 @@ class TestBurnToken:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xburn_hash"
 
@@ -311,7 +312,7 @@ class TestCollectTokens:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xcollect_hash"
 
@@ -347,7 +348,7 @@ class TestDecreaseLiquidity:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xdecrease_hash"
 
@@ -383,7 +384,7 @@ class TestGetLiquidityForToken:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -404,7 +405,7 @@ class TestGetLiquidityForToken:
 
         position_data = [0, 0, 0, 0, 0, 0, 0, 5000, 0, 0, 0, 0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return position_data
 
@@ -459,7 +460,7 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_get_pool_fee(addr, chain):
+        def fake_get_pool_fee(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -484,7 +485,7 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None, None
 
@@ -510,15 +511,17 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 0, 887220
 
-        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+        def fake_slippage_for_mint(
+            addr: Any, tl: Any, tu: Any, amounts: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 90, 180
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xmint_hash"
 
@@ -550,15 +553,17 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return -887220, 0
 
-        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+        def fake_slippage_for_mint(
+            addr: Any, tl: Any, tu: Any, amounts: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 90, 180
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xmint_hash"
 
@@ -590,15 +595,17 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 0, 0
 
-        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+        def fake_slippage_for_mint(
+            addr: Any, tl: Any, tu: Any, amounts: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 90, 180
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xmint_hash"
 
@@ -630,7 +637,7 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None, 887220
 
@@ -656,7 +663,7 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return -887220, None
 
@@ -682,11 +689,13 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return -887220, 887220
 
-        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+        def fake_slippage_for_mint(
+            addr: Any, tl: Any, tu: Any, amounts: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return None, None
 
@@ -713,15 +722,17 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return -887220, 887220
 
-        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+        def fake_slippage_for_mint(
+            addr: Any, tl: Any, tu: Any, amounts: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 90, 180
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xmint_hash"
 
@@ -753,19 +764,21 @@ class TestEnter:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_get_pool_fee(addr, chain):
+        def fake_get_pool_fee(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 3000
 
-        def fake_calc_ticks(addr, chain):
+        def fake_calc_ticks(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return -887220, 887220
 
-        def fake_slippage_for_mint(addr, tl, tu, amounts, chain):
+        def fake_slippage_for_mint(
+            addr: Any, tl: Any, tu: Any, amounts: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 90, 180
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xmint_hash"
 
@@ -821,7 +834,7 @@ class TestExit:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_get_liquidity(tid, chain):
+        def fake_get_liquidity(tid: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -840,7 +853,9 @@ class TestExit:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_slippage_for_decrease(tid, liq, chain, pool):
+        def fake_slippage_for_decrease(
+            tid: Any, liq: Any, chain: Any, pool: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return None, None
 
@@ -865,11 +880,15 @@ class TestExit:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_slippage_for_decrease(tid, liq, chain, pool):
+        def fake_slippage_for_decrease(
+            tid: Any, liq: Any, chain: Any, pool: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 0, 0
 
-        def fake_decrease(tid, liq, a0, a1, dl, chain):
+        def fake_decrease(
+            tid: Any, liq: Any, a0: Any, a1: Any, dl: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -899,15 +918,25 @@ class TestExit:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_slippage_for_decrease(tid, liq, chain, pool):
+        def fake_slippage_for_decrease(
+            tid: Any, liq: Any, chain: Any, pool: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 0, 0
 
-        def fake_decrease(tid, liq, a0, a1, dl, chain):
+        def fake_decrease(
+            tid: Any, liq: Any, a0: Any, a1: Any, dl: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xdecrease"
 
-        def fake_collect(token_id, recipient, amount0_max, amount1_max, chain):
+        def fake_collect(
+            token_id: Any,
+            recipient: Any,
+            amount0_max: Any,
+            amount1_max: Any,
+            chain: Any,
+        ) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -939,15 +968,25 @@ class TestExit:
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
         params_mock.multisend_contract_addresses = {"optimism": ""}
 
-        def fake_slippage_for_decrease(tid, liq, chain, pool):
+        def fake_slippage_for_decrease(
+            tid: Any, liq: Any, chain: Any, pool: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 0, 0
 
-        def fake_decrease(tid, liq, a0, a1, dl, chain):
+        def fake_decrease(
+            tid: Any, liq: Any, a0: Any, a1: Any, dl: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xdecrease"
 
-        def fake_collect(token_id, recipient, amount0_max, amount1_max, chain):
+        def fake_collect(
+            token_id: Any,
+            recipient: Any,
+            amount0_max: Any,
+            amount1_max: Any,
+            chain: Any,
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xcollect"
 
@@ -979,19 +1018,29 @@ class TestExit:
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
         params_mock.multisend_contract_addresses = {"optimism": "0xmultisend"}
 
-        def fake_slippage_for_decrease(tid, liq, chain, pool):
+        def fake_slippage_for_decrease(
+            tid: Any, liq: Any, chain: Any, pool: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 0, 0
 
-        def fake_decrease(tid, liq, a0, a1, dl, chain):
+        def fake_decrease(
+            tid: Any, liq: Any, a0: Any, a1: Any, dl: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xdecrease"
 
-        def fake_collect(token_id, recipient, amount0_max, amount1_max, chain):
+        def fake_collect(
+            token_id: Any,
+            recipient: Any,
+            amount0_max: Any,
+            amount1_max: Any,
+            chain: Any,
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xcollect"
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -1024,19 +1073,29 @@ class TestExit:
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
         params_mock.multisend_contract_addresses = {"optimism": "0xmultisend"}
 
-        def fake_slippage_for_decrease(tid, liq, chain, pool):
+        def fake_slippage_for_decrease(
+            tid: Any, liq: Any, chain: Any, pool: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 0, 0
 
-        def fake_decrease(tid, liq, a0, a1, dl, chain):
+        def fake_decrease(
+            tid: Any, liq: Any, a0: Any, a1: Any, dl: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xdecrease"
 
-        def fake_collect(token_id, recipient, amount0_max, amount1_max, chain):
+        def fake_collect(
+            token_id: Any,
+            recipient: Any,
+            amount0_max: Any,
+            amount1_max: Any,
+            chain: Any,
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xcollect"
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xabcdef1234567890"
 
@@ -1071,23 +1130,33 @@ class TestExit:
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
         params_mock.multisend_contract_addresses = {"optimism": "0xmultisend"}
 
-        def fake_get_liquidity(tid, chain):
+        def fake_get_liquidity(tid: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 5000
 
-        def fake_slippage_for_decrease(tid, liq, chain, pool):
+        def fake_slippage_for_decrease(
+            tid: Any, liq: Any, chain: Any, pool: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return 0, 0
 
-        def fake_decrease(tid, liq, a0, a1, dl, chain):
+        def fake_decrease(
+            tid: Any, liq: Any, a0: Any, a1: Any, dl: Any, chain: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xdecrease"
 
-        def fake_collect(token_id, recipient, amount0_max, amount1_max, chain):
+        def fake_collect(
+            token_id: Any,
+            recipient: Any,
+            amount0_max: Any,
+            amount1_max: Any,
+            chain: Any,
+        ) -> Generator[Any, Any, Any]:
             yield
             return "0xcollect"
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xabcdef1234567890"
 
@@ -1121,7 +1190,7 @@ class TestCalculateSlippageProtectionForMint:
         """Test when slot0 data is None."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -1136,7 +1205,7 @@ class TestCalculateSlippageProtectionForMint:
         """Test when slot0 data is missing sqrt_price_x96."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return {"other_key": 123}
 
@@ -1153,7 +1222,7 @@ class TestCalculateSlippageProtectionForMint:
         params_mock = MagicMock()
         params_mock.slippage_tolerance = 0.01
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             # A reasonable sqrt_price_x96 value for 1:1 ratio
             return {"sqrt_price_x96": 79228162514264337593543950336}
@@ -1175,7 +1244,7 @@ class TestCalculateSlippageProtectionForMint:
         """Test when exception occurs."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             raise ValueError("error")
             yield  # noqa
 
@@ -1211,7 +1280,7 @@ class TestCalculateSlippageProtectionForDecrease:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -1234,7 +1303,7 @@ class TestCalculateSlippageProtectionForDecrease:
 
         call_count = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -1260,7 +1329,7 @@ class TestCalculateSlippageProtectionForDecrease:
 
         call_count = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -1287,7 +1356,7 @@ class TestCalculateSlippageProtectionForDecrease:
 
         call_count = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -1313,7 +1382,7 @@ class TestCalculateSlippageProtectionForDecrease:
         params_mock = MagicMock()
         params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             raise ValueError("error")
             yield  # noqa
 

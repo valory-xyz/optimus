@@ -47,3 +47,6 @@ data
 agent
 
 chec.md
+.tomte-tox.ini
+.darglint
+.gitleaks-merged.toml

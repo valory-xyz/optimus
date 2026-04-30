@@ -19,17 +19,17 @@
 
 """Tests for uniswap_pools_search custom component."""
 
-import json
 import time
+from typing import Any, Dict, Generator
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import packages.valory.customs.uniswap_pools_search.uniswap_pools_search as uni_mod
 from packages.valory.customs.uniswap_pools_search.uniswap_pools_search import (
     REQUIRED_FIELDS,
+    _reset_x402_adapter,
     apply_composite_pre_filter,
     assess_pool_liquidity,
     calculate_apr,
@@ -53,13 +53,15 @@ from packages.valory.customs.uniswap_pools_search.uniswap_pools_search import (
     run_query,
     set_cached_price,
     standardize_metrics,
-    _reset_x402_adapter,
 )
 
 
 @pytest.fixture(autouse=True)
-def reset_state():
-    """Reset module state before each test."""
+def reset_state() -> Generator[Any, Any, Any]:
+    """Reset module state before each test.
+
+    :yield: TODO
+    """
     if hasattr(uni_mod._thread_local, "errors"):
         uni_mod._thread_local.errors = []
     yield
@@ -70,13 +72,13 @@ def reset_state():
 class TestGetErrors:
     """Tests for get_errors function."""
 
-    def test_initializes_empty(self):
+    def test_initializes_empty(self) -> None:
         """Test initialization of errors list."""
         if hasattr(uni_mod._thread_local, "errors"):
-            delattr(uni_mod._thread_local, "errors")
+            del uni_mod._thread_local.errors
         assert get_errors() == []
 
-    def test_returns_existing(self):
+    def test_returns_existing(self) -> None:
         """Test returning existing errors."""
         uni_mod._thread_local.errors = ["err"]
         assert get_errors() == ["err"]
@@ -85,26 +87,26 @@ class TestGetErrors:
 class TestCheckMissingFields:
     """Tests for check_missing_fields function."""
 
-    def test_no_missing(self):
+    def test_no_missing(self) -> None:
         """Test with all fields present."""
         kwargs = {f: "v" for f in REQUIRED_FIELDS}
         assert check_missing_fields(kwargs) == []
 
-    def test_all_missing(self):
+    def test_all_missing(self) -> None:
         """Test with all fields missing."""
         assert len(check_missing_fields({})) == len(REQUIRED_FIELDS)
 
-    def test_none_value(self):
+    def test_none_value(self) -> None:
         """Test None value counts as missing."""
         kwargs = {f: "v" for f in REQUIRED_FIELDS}
-        kwargs["chains"] = None
+        kwargs["chains"] = None  # type: ignore[assignment]
         assert "chains" in check_missing_fields(kwargs)
 
 
 class TestRemoveIrrelevantFields:
     """Tests for remove_irrelevant_fields function."""
 
-    def test_removes_extras(self):
+    def test_removes_extras(self) -> None:
         """Test removing extra fields."""
         result = remove_irrelevant_fields({"a": 1, "b": 2}, ("a",))
         assert result == {"a": 1}
@@ -113,19 +115,19 @@ class TestRemoveIrrelevantFields:
 class TestGetCoinIdFromSymbol:
     """Tests for get_coin_id_from_symbol function."""
 
-    def test_found(self):
+    def test_found(self) -> None:
         """Test finding coin ID."""
         mapping = {"optimism": {"weth": "weth-id"}}
         assert get_coin_id_from_symbol(mapping, "WETH", "optimism") == "weth-id"
 
-    def test_not_found(self):
+    def test_not_found(self) -> None:
         """Test when coin ID is not found."""
         mapping = {"optimism": {"weth": "weth-id"}}
         assert get_coin_id_from_symbol(mapping, "unknown", "optimism") is None
 
-    def test_chain_not_in_mapping(self):
+    def test_chain_not_in_mapping(self) -> None:
         """Test when chain is not in mapping."""
-        mapping = {}
+        mapping: Dict[Any, Any] = {}
         assert get_coin_id_from_symbol(mapping, "weth", "optimism") is None
 
 
@@ -135,8 +137,11 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_successful_query(self, mock_post):
-        """Test successful GraphQL query."""
+    def test_successful_query(self, mock_post: MagicMock) -> None:
+        """Test successful GraphQL query.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": {"pools": []}}
@@ -147,8 +152,11 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_error_status(self, mock_post):
-        """Test error status code."""
+    def test_error_status(self, mock_post: MagicMock) -> None:
+        """Test error status code.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         mock_post.return_value = mock_resp
@@ -158,8 +166,11 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_graphql_errors(self, mock_post):
-        """Test GraphQL errors in response."""
+    def test_graphql_errors(self, mock_post: MagicMock) -> None:
+        """Test GraphQL errors in response.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"errors": [{"message": "bad"}]}
@@ -170,8 +181,11 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_null_data_response(self, mock_post):
-        """Test that {"data": null} response does not crash."""
+    def test_null_data_response(self, mock_post: MagicMock) -> None:
+        """Test that {"data": null} response does not crash.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": None}
@@ -182,8 +196,11 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_with_variables(self, mock_post):
-        """Test query with variables."""
+    def test_with_variables(self, mock_post: MagicMock) -> None:
+        """Test query with variables.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": {"result": "ok"}}
@@ -195,12 +212,12 @@ class TestRunQuery:
 class TestCalculateApr:
     """Tests for calculate_apr function."""
 
-    def test_normal_calculation(self):
+    def test_normal_calculation(self) -> None:
         """Test normal APR calculation."""
         result = calculate_apr(1000, 100000, 0.003)
         assert result > 0
 
-    def test_zero_tvl(self):
+    def test_zero_tvl(self) -> None:
         """Test zero TVL returns 0."""
         assert calculate_apr(1000, 0, 0.003) == 0
 
@@ -208,23 +225,23 @@ class TestCalculateApr:
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
 
-    def test_empty_pools(self):
+    def test_empty_pools(self) -> None:
         """Test with empty pools returns early."""
         assert standardize_metrics([]) == []
 
-    def test_single_pool(self):
+    def test_single_pool(self) -> None:
         """Test single pool (zero std dev)."""
         pools = [{"apr": 10, "tvl": 1000}]
         result = standardize_metrics(pools)
         assert "composite_score" in result[0]
 
-    def test_multiple_pools(self):
+    def test_multiple_pools(self) -> None:
         """Test multiple pools."""
         pools = [{"apr": 10, "tvl": 1000}, {"apr": 20, "tvl": 2000}]
         result = standardize_metrics(pools)
         assert result[1]["composite_score"] > result[0]["composite_score"]
 
-    def test_invalid_values(self):
+    def test_invalid_values(self) -> None:
         """Test with invalid apr/tvl values."""
         pools = [{"apr": "invalid", "tvl": "bad"}]
         result = standardize_metrics(pools)
@@ -234,33 +251,33 @@ class TestStandardizeMetrics:
 class TestApplyCompositePreFilter:
     """Tests for apply_composite_pre_filter function."""
 
-    def test_empty_pools(self):
+    def test_empty_pools(self) -> None:
         """Test with empty pools."""
         assert apply_composite_pre_filter([]) == []
 
-    def test_disabled_filter(self):
+    def test_disabled_filter(self) -> None:
         """Test with filter disabled."""
         pools = [{"tvl": 5000, "apr": 10}]
         result = apply_composite_pre_filter(pools, use_composite_filter=False)
         assert len(result) == 1
 
-    def test_disabled_filter_empty(self):
+    def test_disabled_filter_empty(self) -> None:
         """Test disabled filter with empty pools."""
         assert apply_composite_pre_filter([], use_composite_filter=False) == []
 
-    def test_below_tvl_threshold(self):
+    def test_below_tvl_threshold(self) -> None:
         """Test pools below TVL threshold."""
         pools = [{"tvl": 100, "apr": 10}]
         result = apply_composite_pre_filter(pools, min_tvl_threshold=1000)
         assert result == []
 
-    def test_invalid_tvl(self):
+    def test_invalid_tvl(self) -> None:
         """Test with invalid TVL."""
         pools = [{"tvl": "invalid", "apr": 10}]
         result = apply_composite_pre_filter(pools, min_tvl_threshold=0)
         assert result == []
 
-    def test_top_n(self):
+    def test_top_n(self) -> None:
         """Test top_n limit."""
         pools = [{"tvl": 5000, "apr": 10 + i} for i in range(5)]
         result = apply_composite_pre_filter(pools, top_n=2, min_tvl_threshold=0)
@@ -272,15 +289,25 @@ class TestGetFilteredPoolsForUniswap:
 
     def _make_pool(
         self,
-        pool_id="0x1234567890abcdef1234567890abcdef12345678",
-        chain="optimism",
-        fee_tier="3000",
-        tvl="100000",
-        volume="50000",
-        token0_id="0xtoken0",
-        token1_id="0xtoken1",
-    ):
-        """Create a test pool."""
+        pool_id: Any = "0x1234567890abcdef1234567890abcdef12345678",
+        chain: Any = "optimism",
+        fee_tier: Any = "3000",
+        tvl: Any = "100000",
+        volume: Any = "50000",
+        token0_id: Any = "0xtoken0",
+        token1_id: Any = "0xtoken1",
+    ) -> Any:
+        """Create a test pool.
+
+        :param chain: TODO
+        :param fee_tier: TODO
+        :param pool_id: TODO
+        :param token0_id: TODO
+        :param token1_id: TODO
+        :param tvl: TODO
+        :param volume: TODO
+        :return: TODO
+        """
         return {
             "id": pool_id,
             "chain": chain,
@@ -294,8 +321,11 @@ class TestGetFilteredPoolsForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
     )
-    def test_basic_filtering(self, mock_filter):
-        """Test basic pool filtering."""
+    def test_basic_filtering(self, mock_filter: MagicMock) -> None:
+        """Test basic pool filtering.
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool()]
         result = get_filtered_pools_for_uniswap(
@@ -306,8 +336,11 @@ class TestGetFilteredPoolsForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
     )
-    def test_excludes_current_positions(self, mock_filter):
-        """Test exclusion of current positions."""
+    def test_excludes_current_positions(self, mock_filter: MagicMock) -> None:
+        """Test exclusion of current positions.
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         from web3 import Web3
 
@@ -322,8 +355,11 @@ class TestGetFilteredPoolsForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
     )
-    def test_apr_threshold_filter(self, mock_filter):
-        """Test APR threshold filtering."""
+    def test_apr_threshold_filter(self, mock_filter: MagicMock) -> None:
+        """Test APR threshold filtering.
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool(volume="10000000")]  # High volume -> high APR
         result = get_filtered_pools_for_uniswap(
@@ -331,7 +367,7 @@ class TestGetFilteredPoolsForUniswap:
         )
         assert len(result) == 0
 
-    def test_empty_result(self):
+    def test_empty_result(self) -> None:
         """Test empty result when no pools qualify."""
         result = get_filtered_pools_for_uniswap([], [], {"optimism": {}})
         assert result == []
@@ -339,8 +375,11 @@ class TestGetFilteredPoolsForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
     )
-    def test_whitelisted_tokens_check(self, mock_filter):
-        """Test whitelisted tokens filtering."""
+    def test_whitelisted_tokens_check(self, mock_filter: MagicMock) -> None:
+        """Test whitelisted tokens filtering.
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool()]
         # Whitelist requires specific tokens
@@ -353,8 +392,11 @@ class TestGetFilteredPoolsForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.apply_composite_pre_filter"
     )
-    def test_chain_not_whitelisted(self, mock_filter):
-        """Test pool chain not in whitelisted assets."""
+    def test_chain_not_whitelisted(self, mock_filter: MagicMock) -> None:
+        """Test pool chain not in whitelisted assets.
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool(chain="base")]
         result = get_filtered_pools_for_uniswap(
@@ -369,20 +411,26 @@ class TestFetchGraphqlData:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query"
     )
-    def test_fetches_pools(self, mock_query):
-        """Test successful pool fetching."""
+    def test_fetches_pools(self, mock_query: MagicMock) -> None:
+        """Test successful pool fetching.
+
+        :param mock_query: TODO
+        """
         mock_query.return_value = {"pools": [{"id": "0x1"}]}
         result = fetch_graphql_data(
             ["optimism"], {"optimism": "https://api.example.com"}
         )
         assert len(result) == 1
-        assert result[0]["chain"] == "optimism"
+        assert result[0]["chain"] == "optimism"  # type: ignore[index]
 
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query"
     )
-    def test_no_endpoint_for_chain(self, mock_query):
-        """Test when no endpoint exists for chain."""
+    def test_no_endpoint_for_chain(self, mock_query: MagicMock) -> None:
+        """Test when no endpoint exists for chain.
+
+        :param mock_query: TODO
+        """
         result = fetch_graphql_data(["optimism"], {})
         assert result == []
         mock_query.assert_not_called()
@@ -390,8 +438,11 @@ class TestFetchGraphqlData:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.run_query"
     )
-    def test_query_error(self, mock_query):
-        """Test query error handling."""
+    def test_query_error(self, mock_query: MagicMock) -> None:
+        """Test query error handling.
+
+        :param mock_query: TODO
+        """
         mock_query.return_value = {"error": "query failed"}
         result = fetch_graphql_data(
             ["optimism"], {"optimism": "https://api.example.com"}
@@ -405,7 +456,7 @@ class TestGetUniswapPoolSharpeRatio:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_successful_calculation(self, mock_post):
+    def test_successful_calculation(self, mock_post: MagicMock) -> None:
         """Test successful Sharpe ratio calculation."""
         data = [
             {
@@ -424,8 +475,11 @@ class TestGetUniswapPoolSharpeRatio:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_no_data(self, mock_post):
-        """Test with no data."""
+    def test_no_data(self, mock_post: MagicMock) -> None:
+        """Test with no data.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"poolDayDatas": []}}
         mock_post.return_value = mock_resp
@@ -435,8 +489,11 @@ class TestGetUniswapPoolSharpeRatio:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_null_data_response(self, mock_post):
-        """Test that {"data": null} response does not crash."""
+    def test_null_data_response(self, mock_post: MagicMock) -> None:
+        """Test that {"data": null} response does not crash.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": None}
         mock_post.return_value = mock_resp
@@ -447,12 +504,12 @@ class TestGetUniswapPoolSharpeRatio:
 class TestCalculateIlImpact:
     """Tests for calculate_il_impact function."""
 
-    def test_equal_prices(self):
+    def test_equal_prices(self) -> None:
         """Test with equal initial and final prices."""
         result = calculate_il_impact(1.0, 1.0)
         assert abs(result) < 1e-10
 
-    def test_price_increase(self):
+    def test_price_increase(self) -> None:
         """Test with price increase."""
         result = calculate_il_impact(1.0, 4.0)
         assert result < 0
@@ -464,8 +521,11 @@ class TestIsProApiKey:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_pro_key(self, mock_cg):
-        """Test pro API key detection."""
+    def test_pro_key(self, mock_cg: MagicMock) -> None:
+        """Test pro API key detection.
+
+        :param mock_cg: TODO
+        """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {"prices": []}
         mock_cg.return_value = inst
@@ -474,8 +534,11 @@ class TestIsProApiKey:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_non_pro_key(self, mock_cg):
-        """Test non-pro API key."""
+    def test_non_pro_key(self, mock_cg: MagicMock) -> None:
+        """Test non-pro API key.
+
+        :param mock_cg: TODO
+        """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
         mock_cg.return_value = inst
@@ -484,8 +547,11 @@ class TestIsProApiKey:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_empty_response(self, mock_cg):
-        """Test empty response."""
+    def test_empty_response(self, mock_cg: MagicMock) -> None:
+        """Test empty response.
+
+        :param mock_cg: TODO
+        """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {}
         mock_cg.return_value = inst
@@ -501,7 +567,9 @@ class TestCalculateIlRiskScore:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_successful_calculation(self, mock_cg, mock_is_pro):
+    def test_successful_calculation(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
         """Test successful IL risk score calculation."""
         mock_is_pro.return_value = False
         inst = MagicMock()
@@ -516,8 +584,11 @@ class TestCalculateIlRiskScore:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_with_x402(self, mock_cg):
-        """Test with x402 session."""
+    def test_with_x402(self, mock_cg: MagicMock) -> None:
+        """Test with x402 session.
+
+        :param mock_cg: TODO
+        """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = [
             {"prices": [[i, 100 + i] for i in range(10)]},
@@ -529,7 +600,7 @@ class TestCalculateIlRiskScore:
         )
         assert isinstance(result, float)
 
-    def test_no_api_key_no_x402(self):
+    def test_no_api_key_no_x402(self) -> None:
         """Test with no API key and no x402."""
         result = calculate_il_risk_score("t0", "t1", "")
         assert result is None
@@ -537,7 +608,7 @@ class TestCalculateIlRiskScore:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_exception(self, mock_cg):
+    def test_exception(self, mock_cg: MagicMock) -> None:
         """Test exception handling."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
@@ -553,8 +624,14 @@ class TestCalculateIlRiskScore:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_insufficient_data(self, mock_cg, mock_is_pro):
-        """Test with insufficient data points."""
+    def test_insufficient_data(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test with insufficient data points.
+
+        :param mock_cg: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = [
@@ -571,8 +648,12 @@ class TestCalculateIlRiskScore:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_pro_api_key_used(self, mock_cg, mock_is_pro):
-        """Test with pro API key."""
+    def test_pro_api_key_used(self, mock_cg: MagicMock, mock_is_pro: MagicMock) -> None:
+        """Test with pro API key.
+
+        :param mock_cg: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = True
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = [
@@ -590,7 +671,7 @@ class TestFetchPoolData:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_successful(self, mock_post):
+    def test_successful(self, mock_post: MagicMock) -> None:
         """Test successful pool data fetch."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -602,8 +683,11 @@ class TestFetchPoolData:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_error_status(self, mock_post):
-        """Test error status code."""
+    def test_error_status(self, mock_post: MagicMock) -> None:
+        """Test error status code.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         mock_resp.json.return_value = {}
@@ -614,7 +698,7 @@ class TestFetchPoolData:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_exception(self, mock_post):
+    def test_exception(self, mock_post: MagicMock) -> None:
         """Test exception handling."""
         mock_post.side_effect = Exception("network error")
         result = fetch_pool_data("0x1", "https://api.example.com")
@@ -624,7 +708,7 @@ class TestFetchPoolData:
 class TestCalculateMetricsLiquidityRisk:
     """Tests for calculate_metrics_liquidity_risk function."""
 
-    def test_valid_data(self):
+    def test_valid_data(self) -> None:
         """Test with valid data."""
         pool_data = {
             "totalValueLockedUSD": "100000",
@@ -635,7 +719,7 @@ class TestCalculateMetricsLiquidityRisk:
         assert depth > 0
         assert max_pos > 0
 
-    def test_zero_tokens(self):
+    def test_zero_tokens(self) -> None:
         """Test with zero token values."""
         pool_data = {
             "totalValueLockedUSD": "100000",
@@ -645,7 +729,7 @@ class TestCalculateMetricsLiquidityRisk:
         depth, max_pos = calculate_metrics_liquidity_risk(pool_data)
         assert depth == 0
 
-    def test_exception(self):
+    def test_exception(self) -> None:
         """Test exception handling returns nan values."""
         pool_data = {
             "totalValueLockedUSD": "not_a_number",
@@ -663,8 +747,11 @@ class TestAssessPoolLiquidity:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data"
     )
-    def test_no_pool_data(self, mock_fetch):
-        """Test when pool data is None."""
+    def test_no_pool_data(self, mock_fetch: MagicMock) -> None:
+        """Test when pool data is None.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = None
         depth, max_pos = assess_pool_liquidity("0x1", "https://api.example.com")
         assert np.isnan(depth)
@@ -673,8 +760,11 @@ class TestAssessPoolLiquidity:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data"
     )
-    def test_with_pool_data(self, mock_fetch):
-        """Test with valid pool data."""
+    def test_with_pool_data(self, mock_fetch: MagicMock) -> None:
+        """Test with valid pool data.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = {
             "totalValueLockedUSD": "100000",
             "totalValueLockedToken0": "50000",
@@ -687,7 +777,7 @@ class TestAssessPoolLiquidity:
 class TestFormatPoolData:
     """Tests for format_pool_data function."""
 
-    def test_formats_correctly(self):
+    def test_formats_correctly(self) -> None:
         """Test correct formatting."""
         pool = {
             "chain": "optimism",
@@ -713,8 +803,11 @@ class TestGetOpportunitiesForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
     )
-    def test_graphql_error(self, mock_fetch):
-        """Test GraphQL error."""
+    def test_graphql_error(self, mock_fetch: MagicMock) -> None:
+        """Test GraphQL error.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = {"error": "query failed"}
         result = get_opportunities_for_uniswap(
             ["optimism"], {"optimism": "url"}, [], "key", {}, {}, None, None
@@ -727,8 +820,14 @@ class TestGetOpportunitiesForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
     )
-    def test_no_filtered_pools(self, mock_fetch, mock_filter):
-        """Test no pools after filtering."""
+    def test_no_filtered_pools(
+        self, mock_fetch: MagicMock, mock_filter: MagicMock
+    ) -> None:
+        """Test no pools after filtering.
+
+        :param mock_fetch: TODO
+        :param mock_filter: TODO
+        """
         mock_fetch.return_value = [{"id": "0x1"}]
         mock_filter.return_value = []
         result = get_opportunities_for_uniswap(
@@ -752,9 +851,21 @@ class TestGetOpportunitiesForUniswap:
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
     )
     def test_successful_flow(
-        self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity
-    ):
-        """Test successful end-to-end flow."""
+        self,
+        mock_fetch: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liquidity: MagicMock,
+    ) -> None:
+        """Test successful end-to-end flow.
+
+        :param mock_fetch: TODO
+        :param mock_filter: TODO
+        :param mock_il: TODO
+        :param mock_liquidity: TODO
+        :param mock_sharpe: TODO
+        """
         pool = {
             "id": "0x1",
             "chain": "optimism",
@@ -797,9 +908,21 @@ class TestGetOpportunitiesForUniswap:
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
     )
     def test_token_id_not_found(
-        self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity
-    ):
-        """Test when token IDs are not found in mapping."""
+        self,
+        mock_fetch: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liquidity: MagicMock,
+    ) -> None:
+        """Test when token IDs are not found in mapping.
+
+        :param mock_fetch: TODO
+        :param mock_filter: TODO
+        :param mock_il: TODO
+        :param mock_liquidity: TODO
+        :param mock_sharpe: TODO
+        """
         pool = {
             "id": "0x1",
             "chain": "optimism",
@@ -832,9 +955,21 @@ class TestGetOpportunitiesForUniswap:
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
     )
     def test_token_id_cache(
-        self, mock_fetch, mock_filter, mock_il, mock_sharpe, mock_liquidity
-    ):
-        """Test that token IDs are cached between pools."""
+        self,
+        mock_fetch: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liquidity: MagicMock,
+    ) -> None:
+        """Test that token IDs are cached between pools.
+
+        :param mock_fetch: TODO
+        :param mock_filter: TODO
+        :param mock_il: TODO
+        :param mock_liquidity: TODO
+        :param mock_sharpe: TODO
+        """
         pool1 = {
             "id": "0x1",
             "chain": "optimism",
@@ -880,7 +1015,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
     )
-    def test_successful(self, mock_il, mock_sharpe, mock_liquidity):
+    def test_successful(
+        self, mock_il: MagicMock, mock_sharpe: MagicMock, mock_liquidity: MagicMock
+    ) -> None:
         """Test successful metrics calculation."""
         mock_il.return_value = -0.05
         mock_sharpe.return_value = 1.5
@@ -899,7 +1036,7 @@ class TestCalculateMetrics:
             None,
             None,
         )
-        assert result["il_risk_score"] == -0.05
+        assert result["il_risk_score"] == -0.05  # type: ignore[index]
 
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
@@ -907,8 +1044,14 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
     )
-    def test_no_token_ids(self, mock_sharpe, mock_liquidity):
-        """Test when token IDs are not found."""
+    def test_no_token_ids(
+        self, mock_sharpe: MagicMock, mock_liquidity: MagicMock
+    ) -> None:
+        """Test when token IDs are not found.
+
+        :param mock_liquidity: TODO
+        :param mock_sharpe: TODO
+        """
         mock_sharpe.return_value = 1.5
         mock_liquidity.return_value = (100, 5000)
         position = {
@@ -918,13 +1061,13 @@ class TestCalculateMetrics:
             "pool_address": "0x1",
         }
         result = calculate_metrics(position, "key", {"optimism": "url"}, {}, None, None)
-        assert result["il_risk_score"] is None
+        assert result["il_risk_score"] is None  # type: ignore[index]
 
 
 class TestRun:
     """Tests for the run function."""
 
-    def test_missing_fields(self):
+    def test_missing_fields(self) -> None:
         """Test with missing fields."""
         result = run()
         assert "error" in result
@@ -932,8 +1075,11 @@ class TestRun:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_metrics"
     )
-    def test_get_metrics_mode(self, mock_calc):
-        """Test get_metrics mode."""
+    def test_get_metrics_mode(self, mock_calc: MagicMock) -> None:
+        """Test get_metrics mode.
+
+        :param mock_calc: TODO
+        """
         mock_calc.return_value = {"il_risk_score": -0.05}
         result = run(
             chains=["optimism"],
@@ -952,8 +1098,11 @@ class TestRun:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_metrics"
     )
-    def test_get_metrics_returns_none(self, mock_calc):
-        """Test get_metrics mode when metrics is None."""
+    def test_get_metrics_returns_none(self, mock_calc: MagicMock) -> None:
+        """Test get_metrics mode when metrics is None.
+
+        :param mock_calc: TODO
+        """
         mock_calc.return_value = None
         result = run(
             chains=["optimism"],
@@ -972,8 +1121,11 @@ class TestRun:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap"
     )
-    def test_opportunity_search(self, mock_opp):
-        """Test opportunity search mode."""
+    def test_opportunity_search(self, mock_opp: MagicMock) -> None:
+        """Test opportunity search mode.
+
+        :param mock_opp: TODO
+        """
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
             chains=["optimism"],
@@ -986,8 +1138,11 @@ class TestRun:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap"
     )
-    def test_opportunity_search_error(self, mock_opp):
-        """Test opportunity search error."""
+    def test_opportunity_search_error(self, mock_opp: MagicMock) -> None:
+        """Test opportunity search error.
+
+        :param mock_opp: TODO
+        """
         mock_opp.return_value = {"error": "no pools"}
         result = run(
             chains=["optimism"],
@@ -1000,8 +1155,11 @@ class TestRun:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_opportunities_for_uniswap"
     )
-    def test_opportunity_search_empty(self, mock_opp):
-        """Test empty opportunity search."""
+    def test_opportunity_search_empty(self, mock_opp: MagicMock) -> None:
+        """Test empty opportunity search.
+
+        :param mock_opp: TODO
+        """
         mock_opp.return_value = []
         result = run(
             chains=["optimism"],
@@ -1015,11 +1173,11 @@ class TestRun:
 class TestResetX402Adapter:
     """Tests for _reset_x402_adapter helper."""
 
-    def test_none_session(self):
+    def test_none_session(self) -> None:
         """No error when session is None."""
         _reset_x402_adapter(None)
 
-    def test_session_with_retry_flag(self):
+    def test_session_with_retry_flag(self) -> None:
         """Resets _is_retry on adapters that have it."""
         adapter = MagicMock()
         adapter._is_retry = True
@@ -1028,14 +1186,14 @@ class TestResetX402Adapter:
         _reset_x402_adapter(session)
         assert adapter._is_retry is False
 
-    def test_session_without_retry_flag(self):
+    def test_session_without_retry_flag(self) -> None:
         """No error when adapter lacks _is_retry."""
         adapter = object()
         session = MagicMock()
         session.adapters = {"https://": adapter}
         _reset_x402_adapter(session)
 
-    def test_empty_adapters(self):
+    def test_empty_adapters(self) -> None:
         """No error when session has no adapters."""
         session = MagicMock()
         session.adapters = {}
@@ -1048,8 +1206,11 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_connection_error(self, mock_post):
-        """Test that ConnectionError is caught and returns error dict."""
+    def test_connection_error(self, mock_post: MagicMock) -> None:
+        """Test that ConnectionError is caught and returns error dict.
+
+        :param mock_post: TODO
+        """
         import requests as req_lib
 
         mock_post.side_effect = req_lib.ConnectionError("connection refused")
@@ -1059,8 +1220,11 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_timeout_error(self, mock_post):
-        """Test that Timeout is caught and returns error dict."""
+    def test_timeout_error(self, mock_post: MagicMock) -> None:
+        """Test that Timeout is caught and returns error dict.
+
+        :param mock_post: TODO
+        """
         import requests as req_lib
 
         mock_post.side_effect = req_lib.Timeout("timed out")
@@ -1070,8 +1234,11 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_json_decode_error(self, mock_post):
-        """Test that JSONDecodeError from response.json() returns error dict."""
+    def test_json_decode_error(self, mock_post: MagicMock) -> None:
+        """Test that JSONDecodeError from response.json() returns error dict.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.side_effect = ValueError("No JSON")
@@ -1082,8 +1249,11 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_timeout_kwarg_passed(self, mock_post):
-        """Test that timeout=30 is passed to requests.post."""
+    def test_timeout_kwarg_passed(self, mock_post: MagicMock) -> None:
+        """Test that timeout=30 is passed to requests.post.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": {"pools": []}}
@@ -1095,8 +1265,11 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_data_null_returns_empty_dict(self, mock_post):
-        """Test that {"data": null} returns empty dict."""
+    def test_data_null_returns_empty_dict(self, mock_post: MagicMock) -> None:
+        """Test that {"data": null} returns empty dict.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": None}
@@ -1111,8 +1284,11 @@ class TestGetUniswapPoolSharpeRatioNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_connection_error(self, mock_post):
-        """Test that ConnectionError returns NaN."""
+    def test_connection_error(self, mock_post: MagicMock) -> None:
+        """Test that ConnectionError returns NaN.
+
+        :param mock_post: TODO
+        """
         import requests as req_lib
 
         mock_post.side_effect = req_lib.ConnectionError("refused")
@@ -1122,8 +1298,11 @@ class TestGetUniswapPoolSharpeRatioNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_timeout_kwarg_passed(self, mock_post):
-        """Test that timeout=30 is passed to requests.post."""
+    def test_timeout_kwarg_passed(self, mock_post: MagicMock) -> None:
+        """Test that timeout=30 is passed to requests.post.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"poolDayDatas": []}}
         mock_post.return_value = mock_resp
@@ -1138,8 +1317,11 @@ class TestFetchPoolDataNetworkResilience:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
     )
-    def test_timeout_kwarg_passed(self, mock_post):
-        """Test that timeout=30 is passed to requests.post."""
+    def test_timeout_kwarg_passed(self, mock_post: MagicMock) -> None:
+        """Test that timeout=30 is passed to requests.post.
+
+        :param mock_post: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": {"pool": {"id": "0x1"}}}
@@ -1158,8 +1340,14 @@ class TestCalculateIlRiskScoreMissingPricesKey:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_missing_prices_key_returns_none(self, mock_cg, mock_is_pro):
-        """Test that missing 'prices' key in response returns None."""
+    def test_missing_prices_key_returns_none(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test that missing 'prices' key in response returns None.
+
+        :param mock_cg: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         inst = MagicMock()
         # Response dict lacks "prices" key
@@ -1177,8 +1365,14 @@ class TestCalculateIlRiskScoreMissingPricesKey:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_none_response_returns_none(self, mock_cg, mock_is_pro):
-        """Test that None response (TypeError on key access) returns None."""
+    def test_none_response_returns_none(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test that None response (TypeError on key access) returns None.
+
+        :param mock_cg: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = [
@@ -1193,18 +1387,18 @@ class TestCalculateIlRiskScoreMissingPricesKey:
 class TestGetCachedPrice:
     """Tests for get_cached_price function."""
 
-    def test_cache_miss_returns_none(self):
+    def test_cache_miss_returns_none(self) -> None:
         """Test that missing cache key returns None."""
         assert get_cached_price("token", 90, {}, 1800) is None
 
-    def test_cache_hit_returns_data(self):
+    def test_cache_hit_returns_data(self) -> None:
         """Test that valid (non-expired) cache entry returns data."""
-        cache = {}
+        cache: Dict[Any, Any] = {}
         set_cached_price("token", 90, {"prices": [[0, 100]]}, cache)
         result = get_cached_price("token", 90, cache, 1800)
         assert result == {"prices": [[0, 100]]}
 
-    def test_cache_expired_returns_none(self):
+    def test_cache_expired_returns_none(self) -> None:
         """Test that expired cache entry returns None."""
         cache = {
             "il_range_token_90": {
@@ -1219,11 +1413,11 @@ class TestGetCachedPrice:
 class TestCalculateIlRiskScoreWithCache:
     """Tests for calculate_il_risk_score with pre-populated cache."""
 
-    def test_both_tokens_cached(self):
+    def test_both_tokens_cached(self) -> None:
         """Test that cached data is used for both tokens without calling API."""
         prices_t0 = {"prices": [[i, 100 + i * 0.5] for i in range(100)]}
         prices_t1 = {"prices": [[i, 200 + i * 0.3] for i in range(100)]}
-        cache = {}
+        cache: Dict[Any, Any] = {}
         set_cached_price("t0", 90, prices_t0, cache)
         set_cached_price("t1", 90, prices_t1, cache)
         result = calculate_il_risk_score("t0", "t1", "key", price_cache=cache)
@@ -1235,8 +1429,14 @@ class TestCalculateIlRiskScoreWithCache:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_one_token_cached_one_fetched(self, mock_cg, mock_is_pro):
-        """Test partial cache: one token cached, other fetched from API."""
+    def test_one_token_cached_one_fetched(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test partial cache: one token cached, other fetched from API.
+
+        :param mock_cg: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {
@@ -1244,7 +1444,7 @@ class TestCalculateIlRiskScoreWithCache:
         }
         mock_cg.return_value = inst
 
-        cache = {}
+        cache: Dict[Any, Any] = {}
         set_cached_price(
             "t0", 90, {"prices": [[i, 100 + i * 0.5] for i in range(100)]}, cache
         )
@@ -1259,8 +1459,14 @@ class TestCalculateIlRiskScoreWithCache:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
     )
-    def test_second_token_cached_first_fetched(self, mock_cg, mock_is_pro):
-        """Test partial cache: second token cached, first fetched from API."""
+    def test_second_token_cached_first_fetched(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test partial cache: second token cached, first fetched from API.
+
+        :param mock_cg: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {
@@ -1268,7 +1474,7 @@ class TestCalculateIlRiskScoreWithCache:
         }
         mock_cg.return_value = inst
 
-        cache = {}
+        cache: Dict[Any, Any] = {}
         set_cached_price(
             "t1", 90, {"prices": [[i, 200 + i * 0.3] for i in range(100)]}, cache
         )
@@ -1277,7 +1483,7 @@ class TestCalculateIlRiskScoreWithCache:
         # Only t0 should have been fetched
         assert inst.get_coin_market_chart_range_by_id.call_count == 1
 
-    def test_price_cache_none_defaults_to_empty_dict(self):
+    def test_price_cache_none_defaults_to_empty_dict(self) -> None:
         """Test that passing price_cache=None does not crash."""
         result = calculate_il_risk_score("t0", "t1", "", price_cache=None)
         assert result is None
@@ -1286,7 +1492,7 @@ class TestCalculateIlRiskScoreWithCache:
 class TestRunWithPriceCache:
     """Tests for run() with explicit price_cache dict."""
 
-    def test_run_with_explicit_price_cache(self):
+    def test_run_with_explicit_price_cache(self) -> None:
         """Test that run() accepts a non-None price_cache without error."""
         result = run(price_cache={}, price_cache_ttl=600)
         assert "error" in result

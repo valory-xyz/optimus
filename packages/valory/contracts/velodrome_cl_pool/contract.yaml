@@ -6,11 +6,11 @@ description: A wrapper for Velodrome's CLPool calls.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeifgiomsvwkahifuheasgczwwi7jp5cwhzm3yzgrlbulcacib2iqsi
+  __init__.py: bafybeicj52hozovwfj5a5zzvp2mfo2ck2j2q4ooixlbe56wx6aa6o2ubh4
   build/contract_interface.json: bafybeih264ikmebscydw6nsv5ldpwugatldqnflrxkij2gvirkcvkm3tpi
-  contract.py: bafybeicunxlzl6acknxqdpoqcclgc26xrk4vtuagdeblc3ja6uq66cyxdy
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeidu5zcederjngfjmjke6j4jjj5hjcw23cc6h3t3ya6mwvttgn2lji
+  contract.py: bafybeigwd73ttn3626ef2cbulste4dutysz2gj2jzrexy52djlohbsixgm
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeideduf3uwvbx3k57kmbd6co4lxc2aatnaaq2fvrrbqn64dccefyrq
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeCLPoolContract

@@ -23,10 +23,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.merkl_distributor.contract import DistributorContract
-
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
 
@@ -35,10 +32,7 @@ class TestClaimRewards:
     """Tests for the claim_rewards method."""
 
     def test_claim_rewards_returns_tx_hash(self) -> None:
-        """Test that claim_rewards returns a dict with a tx_hash key.
-
-        :return: None
-        """
+        """Test that claim_rewards returns a dict with a tx_hash key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         encoded_data = "0xaabbccdd"
@@ -61,10 +55,7 @@ class TestClaimRewards:
         assert result == {"tx_hash": bytes.fromhex("aabbccdd")}
 
     def test_claim_rewards_converts_proofs_to_bytes(self) -> None:
-        """Test that claim_rewards converts hex proof strings to bytes.
-
-        :return: None
-        """
+        """Test that claim_rewards converts hex proof strings to bytes."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.encode_abi.return_value = "0x00"
@@ -92,10 +83,7 @@ class TestClaimRewards:
         assert proofs_arg == [[expected_proof_bytes]]
 
     def test_claim_rewards_with_multiple_proofs(self) -> None:
-        """Test that claim_rewards correctly handles multiple proof lists.
-
-        :return: None
-        """
+        """Test that claim_rewards correctly handles multiple proof lists."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.encode_abi.return_value = "0xff"
@@ -126,10 +114,7 @@ class TestClaimRewards:
         assert proofs_converted[1][0] == bytes.fromhex(proof3[2:])
 
     def test_claim_rewards_with_empty_proof_lists(self) -> None:
-        """Test that claim_rewards handles empty inner proof lists correctly.
-
-        :return: None
-        """
+        """Test that claim_rewards handles empty inner proof lists correctly."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.encode_abi.return_value = "0xee"

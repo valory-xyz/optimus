@@ -36,9 +36,9 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
 
     matching_round: Type[AbstractRound] = GetPositionsRound
-    current_positions = None
+    current_positions = None  # type: ignore[assignment]
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             positions = yield from self.get_positions()

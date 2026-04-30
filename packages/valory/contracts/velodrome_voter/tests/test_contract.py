@@ -23,10 +23,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
-
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
 MOCK_POOL_ADDRESS = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
@@ -39,10 +36,7 @@ class TestGauges:
     """Tests for the gauges method."""
 
     def test_gauges_returns_gauge_address(self) -> None:
-        """Test that gauges returns a dict with the gauge key.
-
-        :return: None
-        """
+        """Test that gauges returns a dict with the gauge key."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_POOL
         mock_contract_instance = MagicMock()
@@ -63,10 +57,7 @@ class TestGauges:
         assert result == {"gauge": expected_gauge}
 
     def test_gauges_checksums_pool_address(self) -> None:
-        """Test that gauges checksums the pool address before querying.
-
-        :return: None
-        """
+        """Test that gauges checksums the pool address before querying."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_POOL
         mock_contract_instance = MagicMock()
@@ -88,10 +79,7 @@ class TestGauges:
         )
 
     def test_gauges_calls_contract_function_with_checksummed_pool(self) -> None:
-        """Test that gauges calls the contract function with the checksummed pool address.
-
-        :return: None
-        """
+        """Test that gauges calls the contract function with the checksummed pool address."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_POOL
         mock_contract_instance = MagicMock()
@@ -117,10 +105,7 @@ class TestIsGauge:
     """Tests for the is_gauge method."""
 
     def test_is_gauge_returns_true(self) -> None:
-        """Test that is_gauge returns is_gauge=True when address is a valid gauge.
-
-        :return: None
-        """
+        """Test that is_gauge returns is_gauge=True when address is a valid gauge."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -138,10 +123,7 @@ class TestIsGauge:
         assert result == {"is_gauge": True}
 
     def test_is_gauge_checksums_gauge_address(self) -> None:
-        """Test that is_gauge checksums the gauge address before querying.
-
-        :return: None
-        """
+        """Test that is_gauge checksums the gauge address before querying."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -161,10 +143,7 @@ class TestIsGauge:
         )
 
     def test_is_gauge_calls_contract_function_with_checksummed_gauge(self) -> None:
-        """Test that is_gauge calls the contract function with the checksummed gauge address.
-
-        :return: None
-        """
+        """Test that is_gauge calls the contract function with the checksummed gauge address."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -188,10 +167,7 @@ class TestPoolForGauge:
     """Tests for the pool_for_gauge method."""
 
     def test_pool_for_gauge_returns_pool_address(self) -> None:
-        """Test that pool_for_gauge returns a dict with the pool key.
-
-        :return: None
-        """
+        """Test that pool_for_gauge returns a dict with the pool key."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -212,10 +188,7 @@ class TestPoolForGauge:
         assert result == {"pool": expected_pool}
 
     def test_pool_for_gauge_checksums_gauge_address(self) -> None:
-        """Test that pool_for_gauge checksums the gauge address before querying.
-
-        :return: None
-        """
+        """Test that pool_for_gauge checksums the gauge address before querying."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -239,10 +212,7 @@ class TestPoolForGauge:
     def test_pool_for_gauge_calls_contract_function_with_checksummed_gauge(
         self,
     ) -> None:
-        """Test that pool_for_gauge calls the contract function with the checksummed gauge address.
-
-        :return: None
-        """
+        """Test that pool_for_gauge calls the contract function with the checksummed gauge address."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -268,10 +238,7 @@ class TestIsAlive:
     """Tests for the is_alive method."""
 
     def test_is_alive_returns_true(self) -> None:
-        """Test that is_alive returns is_alive=True when gauge is active.
-
-        :return: None
-        """
+        """Test that is_alive returns is_alive=True when gauge is active."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -289,10 +256,7 @@ class TestIsAlive:
         assert result == {"is_alive": True}
 
     def test_is_alive_checksums_gauge_address(self) -> None:
-        """Test that is_alive checksums the gauge address before querying.
-
-        :return: None
-        """
+        """Test that is_alive checksums the gauge address before querying."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -312,10 +276,7 @@ class TestIsAlive:
         )
 
     def test_is_alive_calls_contract_function_with_checksummed_gauge(self) -> None:
-        """Test that is_alive calls the contract function with the checksummed gauge address.
-
-        :return: None
-        """
+        """Test that is_alive calls the contract function with the checksummed gauge address."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
         mock_contract_instance = MagicMock()
@@ -339,20 +300,20 @@ class TestValidateGaugeAddress:
     """Tests for the validate_gauge_address method."""
 
     def test_validate_gauge_address_valid_and_alive(self) -> None:
-        """Test that validate_gauge_address returns is_valid=True when gauge is valid and alive.
-
-        :return: None
-        """
+        """Test that validate_gauge_address returns is_valid=True when gauge is valid and alive."""
         mock_ledger_api = MagicMock()
 
-        with patch.object(
-            VelodromeVoterContract,
-            "is_gauge",
-            return_value={"is_gauge": True},
-        ), patch.object(
-            VelodromeVoterContract,
-            "is_alive",
-            return_value={"is_alive": True},
+        with (
+            patch.object(
+                VelodromeVoterContract,
+                "is_gauge",
+                return_value={"is_gauge": True},
+            ),
+            patch.object(
+                VelodromeVoterContract,
+                "is_alive",
+                return_value={"is_alive": True},
+            ),
         ):
             result = VelodromeVoterContract.validate_gauge_address(
                 mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
@@ -361,20 +322,20 @@ class TestValidateGaugeAddress:
         assert result == {"is_valid": True, "is_gauge": True, "is_alive": True}
 
     def test_validate_gauge_address_valid_but_not_alive(self) -> None:
-        """Test that validate_gauge_address returns is_valid=False when gauge is valid but not alive.
-
-        :return: None
-        """
+        """Test that validate_gauge_address returns is_valid=False when gauge is valid but not alive."""
         mock_ledger_api = MagicMock()
 
-        with patch.object(
-            VelodromeVoterContract,
-            "is_gauge",
-            return_value={"is_gauge": True},
-        ), patch.object(
-            VelodromeVoterContract,
-            "is_alive",
-            return_value={"is_alive": False},
+        with (
+            patch.object(
+                VelodromeVoterContract,
+                "is_gauge",
+                return_value={"is_gauge": True},
+            ),
+            patch.object(
+                VelodromeVoterContract,
+                "is_alive",
+                return_value={"is_alive": False},
+            ),
         ):
             result = VelodromeVoterContract.validate_gauge_address(
                 mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
@@ -383,10 +344,7 @@ class TestValidateGaugeAddress:
         assert result == {"is_valid": False, "is_gauge": True, "is_alive": False}
 
     def test_validate_gauge_address_not_a_gauge(self) -> None:
-        """Test that validate_gauge_address returns error when address is not a gauge.
-
-        :return: None
-        """
+        """Test that validate_gauge_address returns error when address is not a gauge."""
         mock_ledger_api = MagicMock()
 
         with patch.object(
@@ -402,10 +360,7 @@ class TestValidateGaugeAddress:
         assert result["is_valid"] is False
 
     def test_validate_gauge_address_is_gauge_returns_error(self) -> None:
-        """Test that validate_gauge_address propagates error from is_gauge.
-
-        :return: None
-        """
+        """Test that validate_gauge_address propagates error from is_gauge."""
         mock_ledger_api = MagicMock()
         error_result = {"error": "Some contract error"}
 
@@ -421,21 +376,21 @@ class TestValidateGaugeAddress:
         assert result == error_result
 
     def test_validate_gauge_address_is_alive_returns_error(self) -> None:
-        """Test that validate_gauge_address propagates error from is_alive.
-
-        :return: None
-        """
+        """Test that validate_gauge_address propagates error from is_alive."""
         mock_ledger_api = MagicMock()
         error_result = {"error": "is_alive contract error"}
 
-        with patch.object(
-            VelodromeVoterContract,
-            "is_gauge",
-            return_value={"is_gauge": True},
-        ), patch.object(
-            VelodromeVoterContract,
-            "is_alive",
-            return_value=error_result,
+        with (
+            patch.object(
+                VelodromeVoterContract,
+                "is_gauge",
+                return_value={"is_gauge": True},
+            ),
+            patch.object(
+                VelodromeVoterContract,
+                "is_alive",
+                return_value=error_result,
+            ),
         ):
             result = VelodromeVoterContract.validate_gauge_address(
                 mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
@@ -444,20 +399,20 @@ class TestValidateGaugeAddress:
         assert result == error_result
 
     def test_validate_gauge_address_calls_is_gauge(self) -> None:
-        """Test that validate_gauge_address calls is_gauge with correct arguments.
-
-        :return: None
-        """
+        """Test that validate_gauge_address calls is_gauge with correct arguments."""
         mock_ledger_api = MagicMock()
 
-        with patch.object(
-            VelodromeVoterContract,
-            "is_gauge",
-            return_value={"is_gauge": True},
-        ) as mock_is_gauge, patch.object(
-            VelodromeVoterContract,
-            "is_alive",
-            return_value={"is_alive": True},
+        with (
+            patch.object(
+                VelodromeVoterContract,
+                "is_gauge",
+                return_value={"is_gauge": True},
+            ) as mock_is_gauge,
+            patch.object(
+                VelodromeVoterContract,
+                "is_alive",
+                return_value={"is_alive": True},
+            ),
         ):
             VelodromeVoterContract.validate_gauge_address(
                 mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
@@ -468,21 +423,21 @@ class TestValidateGaugeAddress:
         )
 
     def test_validate_gauge_address_calls_is_alive_when_gauge_valid(self) -> None:
-        """Test that validate_gauge_address calls is_alive when is_gauge returns True.
-
-        :return: None
-        """
+        """Test that validate_gauge_address calls is_alive when is_gauge returns True."""
         mock_ledger_api = MagicMock()
 
-        with patch.object(
-            VelodromeVoterContract,
-            "is_gauge",
-            return_value={"is_gauge": True},
-        ), patch.object(
-            VelodromeVoterContract,
-            "is_alive",
-            return_value={"is_alive": True},
-        ) as mock_is_alive:
+        with (
+            patch.object(
+                VelodromeVoterContract,
+                "is_gauge",
+                return_value={"is_gauge": True},
+            ),
+            patch.object(
+                VelodromeVoterContract,
+                "is_alive",
+                return_value={"is_alive": True},
+            ) as mock_is_alive,
+        ):
             VelodromeVoterContract.validate_gauge_address(
                 mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
             )
@@ -494,20 +449,20 @@ class TestValidateGaugeAddress:
     def test_validate_gauge_address_does_not_call_is_alive_when_not_gauge(
         self,
     ) -> None:
-        """Test that validate_gauge_address does not call is_alive when is_gauge returns False.
-
-        :return: None
-        """
+        """Test that validate_gauge_address does not call is_alive when is_gauge returns False."""
         mock_ledger_api = MagicMock()
 
-        with patch.object(
-            VelodromeVoterContract,
-            "is_gauge",
-            return_value={"is_gauge": False},
-        ), patch.object(
-            VelodromeVoterContract,
-            "is_alive",
-        ) as mock_is_alive:
+        with (
+            patch.object(
+                VelodromeVoterContract,
+                "is_gauge",
+                return_value={"is_gauge": False},
+            ),
+            patch.object(
+                VelodromeVoterContract,
+                "is_alive",
+            ) as mock_is_alive,
+        ):
             VelodromeVoterContract.validate_gauge_address(
                 mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
             )
@@ -517,20 +472,20 @@ class TestValidateGaugeAddress:
     def test_validate_gauge_address_does_not_call_is_alive_when_is_gauge_errors(
         self,
     ) -> None:
-        """Test that validate_gauge_address does not call is_alive when is_gauge returns an error.
-
-        :return: None
-        """
+        """Test that validate_gauge_address does not call is_alive when is_gauge returns an error."""
         mock_ledger_api = MagicMock()
 
-        with patch.object(
-            VelodromeVoterContract,
-            "is_gauge",
-            return_value={"error": "contract error"},
-        ), patch.object(
-            VelodromeVoterContract,
-            "is_alive",
-        ) as mock_is_alive:
+        with (
+            patch.object(
+                VelodromeVoterContract,
+                "is_gauge",
+                return_value={"error": "contract error"},
+            ),
+            patch.object(
+                VelodromeVoterContract,
+                "is_alive",
+            ) as mock_is_alive,
+        ):
             VelodromeVoterContract.validate_gauge_address(
                 mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
             )
@@ -542,10 +497,7 @@ class TestLength:
     """Tests for the length method."""
 
     def test_length_returns_total_pools(self) -> None:
-        """Test that length returns a dict with the length key.
-
-        :return: None
-        """
+        """Test that length returns a dict with the length key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.length.return_value.call.return_value = 42

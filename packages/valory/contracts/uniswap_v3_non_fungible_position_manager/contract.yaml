@@ -6,11 +6,11 @@ description: The contract package for the Uniswap V3 NonfungiblePositionManager 
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeia5xbpqapjbapq3rqdr7u737zajkpulsklp6mbo2ww7xdmgkhg5du
+  __init__.py: bafybeibk5dghxj6yc6vhe5rphruhozrhc5i3baqmduzr4wtolqjeisb3za
   build/NonfungiblePositionManager.json: bafybeih7zu2kctegndge6wdmnklrv6txsgy5hbmtcifdnbup3xcwz63foy
-  contract.py: bafybeibjd7f46pmgb2g3b6szb5akxowtgac64pfleftajibdaqhk6nttau
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeifpekqqdjmrpritxvmiad6r4w4nfnm5qchfcklt5p7cc2vmo54arm
+  contract.py: bafybeic7eblo5fsi3ujk3jt4khyvzqnucau7stmaeiojfxwbwegtz3c3nm
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeifl7x4avvwackrlqoj4fsvg2mak3xmk3atjoh67jtgy3iqt7ff43y
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3NonfungiblePositionManagerContract

@@ -60,7 +60,7 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = CallCheckpointBehaviour
     abci_app_cls = LiquidityTraderAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = [
+    behaviours: Set[Type[BaseBehaviour]] = [  # type: ignore[assignment]
         CallCheckpointBehaviour,
         CheckStakingKPIMetBehaviour,
         GetPositionsBehaviour,

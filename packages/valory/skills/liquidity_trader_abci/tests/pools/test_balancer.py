@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -83,7 +84,7 @@ class TestBalancerPoolBehaviourAdjustAmounts:
         obj = self._make_behaviour()
         with pytest.raises(ValueError, match="All assets must be strings or bytes"):
             obj.adjust_amounts(
-                assets=[123],
+                assets=[123],  # type: ignore[list-item]
                 assets_new=["0xa"],
                 max_amounts_in=[100],
             )
@@ -113,7 +114,7 @@ class TestBalancerPoolBehaviourInit:
             BalancerPoolBehaviour.__init__(obj, some_kwarg="test")
 
 
-def _make_behaviour():
+def _make_behaviour() -> Any:
     """Create a BalancerPoolBehaviour without __init__."""
     obj = object.__new__(BalancerPoolBehaviour)
     ctx = MagicMock()
@@ -121,7 +122,7 @@ def _make_behaviour():
     return obj
 
 
-def _drive(gen):
+def _drive(gen: Any) -> Any:
     """Drive a generator to completion."""
     val = None
     while True:
@@ -241,7 +242,7 @@ class TestGetPoolId:
         """Test successful pool id retrieval."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xpoolid123"
 
@@ -254,7 +255,7 @@ class TestGetPoolId:
         """Test pool id retrieval returns None."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -286,7 +287,7 @@ class TestGetTokens:
         params_mock = MagicMock()
         params_mock.balancer_vault_contract_addresses = {"optimism": "0xvault"}
 
-        def fake_get_pool_id(addr, chain):
+        def fake_get_pool_id(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -305,13 +306,11 @@ class TestGetTokens:
         params_mock = MagicMock()
         params_mock.balancer_vault_contract_addresses = {"optimism": "0xvault"}
 
-        call_count = [0]
-
-        def fake_get_pool_id(addr, chain):
+        def fake_get_pool_id(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xpoolid"
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -331,11 +330,11 @@ class TestGetTokens:
         params_mock = MagicMock()
         params_mock.balancer_vault_contract_addresses = {"optimism": "0xvault"}
 
-        def fake_get_pool_id(addr, chain):
+        def fake_get_pool_id(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xpoolid"
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return [["0xtoken0", "0xtoken1"], [1000, 2000]]
 
@@ -371,7 +370,7 @@ class TestUpdateValue:
         """Test with invalid pool_info from contract."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -390,7 +389,7 @@ class TestUpdateValue:
         """Test with pool_info where first element is empty."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return [[], [1000]]
 
@@ -409,7 +408,7 @@ class TestUpdateValue:
         """Test with pool_info that is not a list."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "not_a_list"
 
@@ -428,7 +427,7 @@ class TestUpdateValue:
         """Test successful update_value."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return [["0xa", "0xb"], [1000, 2000]]
 
@@ -448,7 +447,7 @@ class TestUpdateValue:
         """Test when contract_interact raises an exception."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             raise ValueError("contract error")
             yield  # noqa
 
@@ -469,13 +468,13 @@ class TestEnter:
 
     def _make_enter_obj(
         self,
-        vault_address="0xvault",
-        pool_id="0xpoolid",
-        new_assets=None,
-        new_max_amounts=None,
-        expected_bpt=None,
-        tx_hash="0xtxhash",
-    ):
+        vault_address: Any = "0xvault",
+        pool_id: Any = "0xpoolid",
+        new_assets: Any = None,
+        new_max_amounts: Any = None,
+        expected_bpt: Any = None,
+        tx_hash: Any = "0xtxhash",
+    ) -> Any:
         """Create a behaviour with stubs for enter method."""
         obj = _make_behaviour()
         params_mock = MagicMock()
@@ -484,21 +483,21 @@ class TestEnter:
         )
         params_mock.slippage_tolerance = 0.01
 
-        def fake_get_pool_id(addr, chain):
+        def fake_get_pool_id(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return pool_id
 
-        def fake_update_value(**kwargs):
+        def fake_update_value(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return (new_assets, new_max_amounts)
 
-        def fake_query_proportional_join(**kwargs):
+        def fake_query_proportional_join(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return expected_bpt
 
         call_idx = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_idx[0] += 1
             yield
             return tx_hash
@@ -641,12 +640,12 @@ class TestExit:
 
     def _make_exit_obj(
         self,
-        vault_address="0xvault",
-        pool_id="0xpoolid",
-        bpt_amount=1000,
-        expected_amounts=None,
-        tx_hash="0xtxhash",
-    ):
+        vault_address: Any = "0xvault",
+        pool_id: Any = "0xpoolid",
+        bpt_amount: Any = 1000,
+        expected_amounts: Any = None,
+        tx_hash: Any = "0xtxhash",
+    ) -> Any:
         """Create a behaviour with stubs for exit method."""
         obj = _make_behaviour()
         params_mock = MagicMock()
@@ -655,17 +654,17 @@ class TestExit:
         )
         params_mock.slippage_tolerance = 0.01
 
-        def fake_get_pool_id(addr, chain):
+        def fake_get_pool_id(addr: Any, chain: Any) -> Generator[Any, Any, Any]:
             yield
             return pool_id
 
-        def fake_query_proportional_exit(**kwargs):
+        def fake_query_proportional_exit(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return expected_amounts
 
         interact_calls = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             interact_calls[0] += 1
             yield
             if interact_calls[0] == 1:
@@ -812,7 +811,7 @@ class TestQueryProportionalExit:
         """Test when pool tokens info is None."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -831,7 +830,7 @@ class TestQueryProportionalExit:
         """Test when pool tokens info has less than 2 elements."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return [["0xa"]]
 
@@ -851,7 +850,7 @@ class TestQueryProportionalExit:
         obj = _make_behaviour()
         call_count = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -874,7 +873,7 @@ class TestQueryProportionalExit:
         obj = _make_behaviour()
         call_count = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -897,7 +896,7 @@ class TestQueryProportionalExit:
         """Test when an exception occurs during proportional exit."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             raise ValueError("error")
             yield  # noqa
 
@@ -920,7 +919,7 @@ class TestQueryProportionalJoin:
         """Test when pool tokens info is None."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -939,7 +938,7 @@ class TestQueryProportionalJoin:
         """Test when pool tokens info has less than 2 elements."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return [["0xa"]]
 
@@ -959,7 +958,7 @@ class TestQueryProportionalJoin:
         obj = _make_behaviour()
         call_count = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -982,7 +981,7 @@ class TestQueryProportionalJoin:
         obj = _make_behaviour()
         call_count = [0]
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -1004,7 +1003,7 @@ class TestQueryProportionalJoin:
         """Test when an exception occurs during proportional join."""
         obj = _make_behaviour()
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             raise ValueError("error")
             yield  # noqa
 
@@ -1050,7 +1049,7 @@ class TestQueryJoinBpt:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {"optimism": "0xqueries"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return {"bpt_out": 5000}
 
@@ -1077,7 +1076,7 @@ class TestQueryJoinBpt:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {"optimism": "0xqueries"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             raise ValueError("bad query")
             yield  # noqa
 
@@ -1129,7 +1128,7 @@ class TestQueryExitAmounts:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {"optimism": "0xqueries"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return {"amounts_out": [500, 600]}
 
@@ -1156,7 +1155,7 @@ class TestQueryExitAmounts:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {"optimism": "0xqueries"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return {"other_key": "value"}
 
@@ -1183,7 +1182,7 @@ class TestQueryExitAmounts:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {"optimism": "0xqueries"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -1210,7 +1209,7 @@ class TestQueryExitAmounts:
         params_mock = MagicMock()
         params_mock.balancer_queries_contract_addresses = {"optimism": "0xqueries"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             raise ValueError("bad query")
             yield  # noqa
 

@@ -22,8 +22,7 @@
 # pylint: skip-file
 
 import json
-import math
-from typing import Dict
+from typing import Any
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.optimus_abci.handlers import (
@@ -79,13 +78,13 @@ def test_load_fsm_spec() -> None:
     assert "alphabet_in" in spec
 
 
-def _make_concrete_base_handler():
+def _make_concrete_base_handler() -> Any:
     """Create a concrete subclass of BaseHandler for testing."""
 
     class ConcreteHandler(BaseHandler):
         SUPPORTED_PROTOCOL = None
 
-        def handle(self, message):
+        def handle(self, message: Any) -> None:
             pass
 
     handler = ConcreteHandler.__new__(ConcreteHandler)
@@ -344,7 +343,7 @@ class TestSrrHandler:
             mock_super_handle.assert_called_once()
 
 
-def _make_http_handler():
+def _make_http_handler() -> Any:
     """Create an HttpHandler instance with mocked dependencies."""
     handler = HttpHandler.__new__(HttpHandler)
     mock_context = MagicMock()
@@ -1198,7 +1197,7 @@ class TestHttpHandlerMethods:
 
         mock_fn = MagicMock()
         ctx.shared_state = {GET_FUNDS_STATUS_METHOD_NAME: mock_fn}
-        result = handler.funds_status
+        handler.funds_status
         mock_fn.assert_called_once()
 
     def test_read_kv(self) -> None:
@@ -1464,7 +1463,7 @@ class TestHttpHandlerMethods:
             ),
             patch("pathlib.Path.open", MagicMock()),
         ):
-            result = handler._get_eoa_account()
+            handler._get_eoa_account()
         # Returns mock_account on success
 
     def test_get_eoa_account_no_password_failure(self) -> None:
@@ -3282,9 +3281,6 @@ class TestHttpHandlerMethods:
         ctx.params.service_endpoint_base = "http://localhost:8000"
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.available_strategies = {"optimism": ["balancer_pools_search"]}
-        rounds_info_mock = {
-            "test_round": {"transitions": {}},
-        }
         with (
             patch(
                 "packages.valory.skills.optimus_abci.handlers.load_fsm_spec"
@@ -3362,7 +3358,7 @@ class TestHttpHandlerMethods:
         assert call_data["status"] == "unknown"
 
     def test_parse_llm_response_error_attribute_error(self) -> None:
-        """Test _parse_llm_response when error parsing triggers AttributeError.
+        r"""Test _parse_llm_response when error parsing triggers AttributeError.
 
         When error_details is a dict with 'message: \"' as a key, the `in` check passes
         but .split() raises AttributeError since dict has no split method.
@@ -3424,7 +3420,7 @@ class TestHttpHandlerMethods:
         assert "error" in call_args[2]
         assert "Failed to parse LLM response" in call_args[2]["error"]
 
-    def test_handle_llm_response_generic_exception(self) -> None:
+    def test_handle_llm_response_value_error_in_float(self) -> None:
         """Test _handle_llm_response when a non-JSON exception occurs (generic Exception path).
 
         The code at line 1662 does float(strategy_data.get("max_loss_percentage", 10)).

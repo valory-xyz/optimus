@@ -19,11 +19,18 @@
 # ------------------------------------------------------------------------------
 
 
+"""Max apr selection module."""
+
 import math
 from typing import Any, Dict, List, Union
 
 # Constants
-REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools", "composite_score_threshold")
+REQUIRED_FIELDS = (
+    "trading_opportunities",
+    "current_positions",
+    "max_pools",
+    "composite_score_threshold",
+)
 SHARPE_RATIO_THRESHOLD = 0
 DEPTH_SCORE_THRESHOLD = 0
 IL_RISK_SCORE_THRESHOLD = 0.5
@@ -36,8 +43,13 @@ MIN_COMPOSITE_SCORE_RATIO = 0.5
 
 logs = []
 
+
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    """Check for missing fields and return them, if any."""
+    """Check for missing fields and return them, if any.
+
+    :param kwargs: TODO
+    :return: TODO
+    """
     missing = []
     for field in REQUIRED_FIELDS:
         if kwargs.get(field, None) is None:
@@ -46,36 +58,49 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 
 
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove the irrelevant fields from the given kwargs."""
+    """Remove the irrelevant fields from the given kwargs.
+
+    :param kwargs: TODO
+    :return: TODO
+    """
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
 
-def calculate_composite_score(pool, max_values):
-    """Calculate the composite score for a given pool."""
+def calculate_composite_score(pool: Any, max_values: Any) -> Any:
+    """Calculate the composite score for a given pool.
+
+    :param max_values: TODO
+    :param pool: TODO
+    :return: TODO
+    """
     sharpe_ratio = pool.get("sharpe_ratio", math.nan)
     depth_score = pool.get("depth_score", math.nan)
     il_risk_score = pool.get("il_risk_score", math.nan)
 
     if any(metric is None for metric in [sharpe_ratio, depth_score, il_risk_score]):
         return 0
-    
+
     if math.isnan(depth_score) or math.isnan(il_risk_score) or math.isnan(sharpe_ratio):
         return 0
 
     # Normalize metrics
     normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"]
     normalized_depth_score = depth_score / max_values["depth_score"]
-    
+
     # FIXED: IL Risk normalization - lower (more negative) scores should get higher normalized values
     # since lower IL risk is better. We invert the normalization so that:
     # - Lowest risk (closest to 0) gets highest score (close to 1.0)
     # - Highest risk (most negative) gets lowest score (close to 0.0)
     if max_values["il_risk_score"] == 0:
-        normalized_il_risk_score = 1.0  # If all pools have zero IL risk, give them max score
+        normalized_il_risk_score = (
+            1.0  # If all pools have zero IL risk, give them max score
+        )
     else:
         # Invert the normalization: 1 - (current_risk / max_risk)
         # This ensures lower risk gets higher scores
-        normalized_il_risk_score = 1 - (abs(il_risk_score) / abs(max_values["il_risk_score"]))
+        normalized_il_risk_score = 1 - (
+            abs(il_risk_score) / abs(max_values["il_risk_score"])
+        )
         # Ensure the score is between 0 and 1
         normalized_il_risk_score = max(0.0, min(1.0, normalized_il_risk_score))
 
@@ -87,13 +112,17 @@ def calculate_composite_score(pool, max_values):
     )
 
 
-def get_max_values(pools):
-    """Get maximum values for normalization."""
+def get_max_values(pools: Any) -> Any:
+    """Get maximum values for normalization.
+
+    :param pools: TODO
+    :return: TODO
+    """
     # For IL risk score, we need the maximum absolute value (highest risk)
     # since IL risk scores are negative, and more negative = higher risk
     il_risk_scores = [pool.get("il_risk_score", 0) for pool in pools]
     max_il_risk = max(il_risk_scores, key=abs) if il_risk_scores else 0
-    
+
     return {
         "sharpe_ratio": max((pool.get("sharpe_ratio", 0) for pool in pools)),
         "depth_score": max((pool.get("depth_score", 0) for pool in pools)),
@@ -101,12 +130,16 @@ def get_max_values(pools):
     }
 
 
-def il_risk_descriptor(il_score):
-    """Map the IL risk score to a qualitative descriptor."""
+def il_risk_descriptor(il_score: Any) -> Any:
+    """Map the IL risk score to a qualitative descriptor.
+
+    :param il_score: TODO
+    :return: TODO
+    """
     # Handle None values
     if il_score is None:
         return "Unknown"
-    
+
     if il_score < -0.5:
         return "High"
     elif -0.5 <= il_score < -0.2:
@@ -115,17 +148,23 @@ def il_risk_descriptor(il_score):
         return "Low"
     else:
         return "Minimal"
-    
-def calculate_relative_percentages(percentages):
-    """
-    Calculate the relative percentages of a list of percentages.
+
+
+def calculate_relative_percentages(percentages: Any) -> Any:
+    """Calculate the relative percentages of a list of percentages.
+
     This function takes a list of percentages and calculates the relative
     percentage of each element with respect to the running total of the
     percentages encountered so far.
+
     Args:
         percentages (list of float): A list of percentages.
+
     Returns:
         list of float: A list of relative percentages.
+
+    :param percentages: TODO
+    :return: TODO
     """
     total_percentage = sum(percentages)
     dynamic_percentages = []
@@ -141,14 +180,23 @@ def calculate_relative_percentages(percentages):
 
     return dynamic_percentages
 
+
 def apply_risk_thresholds_and_select_optimal_strategy(
-    trading_opportunities,
-    composite_score_threshold,
-    current_positions=None,
-    improvement_threshold=0.1,
-    max_pools=1,
-):
-    """Apply risk thresholds and select the optimal strategy based on combined metrics."""
+    trading_opportunities: Any,
+    composite_score_threshold: Any,
+    current_positions: Any = None,
+    improvement_threshold: Any = 0.1,
+    max_pools: Any = 1,
+) -> Any:
+    """Apply risk thresholds and select the optimal strategy based on combined metrics.
+
+    :param composite_score_threshold: TODO
+    :param current_positions: TODO
+    :param improvement_threshold: TODO
+    :param max_pools: TODO
+    :param trading_opportunities: TODO
+    :return: TODO
+    """
     reasoning = []
     base_description = (
         "The agent evaluates opportunities based on risk-adjusted returns, market liquidity, "
@@ -161,10 +209,12 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         sharpe_ratio = opportunity.get("sharpe_ratio", 0)
         depth_score = opportunity.get("depth_score", 0)
         il_risk_score = opportunity.get("il_risk_score", float("inf"))
-        logs.append(f"Evaluating Opportunity- Dex:{opportunity.get('dex_type')} Pool:{opportunity.get('pool_address')}"
-                    f"Tokens:{opportunity.get('token0_symbol')}/{opportunity.get('token1_symbol')} "
-                    f"Advertised APR:{opportunity.get('advertised_apr')}% Adjusted APR:{opportunity.get('apr')}% "
-                    f"Sharpe:{sharpe_ratio} Depth:{depth_score} IL Risk:{il_risk_score}")
+        logs.append(
+            f"Evaluating Opportunity- Dex:{opportunity.get('dex_type')} Pool:{opportunity.get('pool_address')}"
+            f"Tokens:{opportunity.get('token0_symbol')}/{opportunity.get('token1_symbol')} "
+            f"Advertised APR:{opportunity.get('advertised_apr')}% Adjusted APR:{opportunity.get('apr')}% "
+            f"Sharpe:{sharpe_ratio} Depth:{depth_score} IL Risk:{il_risk_score}"
+        )
         if (
             not isinstance(sharpe_ratio, (int, float))
             or not isinstance(depth_score, (int, float))
@@ -174,15 +224,15 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             continue
 
         if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-            logs.append(f"Opportunity does not meet the SHARPE_RATIO_THRESHOLD")
+            logs.append("Opportunity does not meet the SHARPE_RATIO_THRESHOLD")
             continue
 
         if depth_score <= DEPTH_SCORE_THRESHOLD:
-            logs.append(f"Opportunity does not meet the DEPTH_SCORE_THRESHOLD")
+            logs.append("Opportunity does not meet the DEPTH_SCORE_THRESHOLD")
             continue
 
         if il_risk_score > IL_RISK_SCORE_THRESHOLD:
-            logs.append(f"Opportunity does not meet the IL_RISK_SCORE_THRESHOLD")
+            logs.append("Opportunity does not meet the IL_RISK_SCORE_THRESHOLD")
             continue
 
         logs.append("Opportunity meets all risk thresholds")
@@ -190,11 +240,13 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
     if not filtered_opportunities:
         logs.append("No opportunities meet the risk thresholds.")
-        reasoning.append("No opportunities currently meet our minimum requirements for safe and profitable trading.")
+        reasoning.append(
+            "No opportunities currently meet our minimum requirements for safe and profitable trading."
+        )
         return {
             "optimal_strategies": [],
             "position_to_exit": {},
-            "reasoning": base_description + " ".join(reasoning)
+            "reasoning": base_description + " ".join(reasoning),
         }
 
     # Calculate max values for normalization
@@ -206,7 +258,9 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             opportunity, max_values
         )
         # Calculate APR-weighted score for selection
-        opportunity["apr_weighted_score"] = opportunity["composite_score"] * opportunity.get("apr", 0)
+        opportunity["apr_weighted_score"] = opportunity[
+            "composite_score"
+        ] * opportunity.get("apr", 0)
 
     position_to_exit = {}
     optimal_opportunities = []
@@ -218,7 +272,9 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         ]
 
         # Identify the least performing current pool
-        least_performing_index = current_composite_scores.index(min(current_composite_scores))
+        least_performing_index = current_composite_scores.index(
+            min(current_composite_scores)
+        )
         least_performing_score = current_composite_scores[least_performing_index]
         position_to_exit = current_positions[least_performing_index]
 
@@ -230,7 +286,9 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         ]
 
         if better_opportunities:
-            better_opportunities.sort(key=lambda x: x["apr_weighted_score"], reverse=True)
+            better_opportunities.sort(
+                key=lambda x: x["apr_weighted_score"], reverse=True
+            )
             optimal_opportunities = [better_opportunities[0]]
             optimal_opportunities[0]["relative_funds_percentage"] = 1.0
             logs.append(
@@ -240,7 +298,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             # Add user-friendly reasoning with metric comparisons
             if position_to_exit:
                 exit_pool = position_to_exit
-                il_risk_exit = il_risk_descriptor(exit_pool.get('il_risk_score', 0))
+                il_risk_exit = il_risk_descriptor(exit_pool.get("il_risk_score", 0))
 
                 reasoning.append(
                     f"Currently invested in {exit_pool.get('dex_type', 'unknown')} pool {exit_pool.get('pool_address', 'unknown')} "
@@ -253,15 +311,19 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
             # Determine which metric is getting it over the line
             metrics_improved = []
-            if top_opp.get('sharpe_ratio', 0) > position_to_exit.get('sharpe_ratio', 0):
+            if top_opp.get("sharpe_ratio", 0) > position_to_exit.get("sharpe_ratio", 0):
                 metrics_improved.append("higher risk-adjusted returns")
-            if top_opp.get('depth_score', 0) > position_to_exit.get('depth_score', 0):
+            if top_opp.get("depth_score", 0) > position_to_exit.get("depth_score", 0):
                 metrics_improved.append("better market liquidity")
-            
+
             # Safe comparison for il_risk_score that handles None values
-            top_il_risk = top_opp.get('il_risk_score')
-            exit_il_risk = position_to_exit.get('il_risk_score')
-            if top_il_risk is not None and exit_il_risk is not None and top_il_risk > exit_il_risk:
+            top_il_risk = top_opp.get("il_risk_score")
+            exit_il_risk = position_to_exit.get("il_risk_score")
+            if (
+                top_il_risk is not None
+                and exit_il_risk is not None
+                and top_il_risk > exit_il_risk
+            ):
                 metrics_improved.append("lower impermanent loss risk")
 
             reasoning.append(
@@ -273,9 +335,10 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             )
         else:
             logs.append(
-                f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}")
+                f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}"
+            )
             current_pool = position_to_exit
-            il_risk_current = il_risk_descriptor(current_pool.get('il_risk_score', 0))
+            il_risk_current = il_risk_descriptor(current_pool.get("il_risk_score", 0))
 
             reasoning.append(
                 "Current position remains optimal. Current metrics: "
@@ -287,12 +350,12 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             return {
                 "optimal_strategies": [],
                 "position_to_exit": {},
-                "reasoning": base_description + " ".join(reasoning)
+                "reasoning": base_description + " ".join(reasoning),
             }
     else:
         # For new entries without current positions
         filtered_opportunities.sort(key=lambda x: x["apr_weighted_score"], reverse=True)
-        top_composite_score = filtered_opportunities[0]["composite_score"]
+        filtered_opportunities[0]["composite_score"]
 
         optimal_opportunities = [
             opp
@@ -302,11 +365,13 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
         if not optimal_opportunities:
             logs.append(f"No opportunities meet the {composite_score_threshold=}")
-            reasoning.append("No opportunities currently meet our minimum requirements for safe and profitable trading.")
+            reasoning.append(
+                "No opportunities currently meet our minimum requirements for safe and profitable trading."
+            )
             return {
                 "optimal_strategies": [],
                 "position_to_exit": {},
-                "reasoning": base_description + " ".join(reasoning)
+                "reasoning": base_description + " ".join(reasoning),
             }
 
         # Calculate total composite score for optimal opportunities
@@ -327,12 +392,14 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         relative_percentages = calculate_relative_percentages(funds_percentages)
 
         # Update opportunities with relative percentages
-        for opportunity, relative_percentage in zip(optimal_opportunities, relative_percentages):
-            opportunity["relative_funds_percentage"] = round(relative_percentage, 10) 
+        for opportunity, relative_percentage in zip(
+            optimal_opportunities, relative_percentages
+        ):
+            opportunity["relative_funds_percentage"] = round(relative_percentage, 10)
 
         # Add user-friendly reasoning for new entries
         for opp in optimal_opportunities:
-            il_risk_new = il_risk_descriptor(opp.get('il_risk_score', 0))
+            il_risk_new = il_risk_descriptor(opp.get("il_risk_score", 0))
 
             reasoning.append(
                 f"Identified promising opportunity in {opp.get('dex_type', 'unknown')} pool "
@@ -345,17 +412,22 @@ def apply_risk_thresholds_and_select_optimal_strategy(
     return {
         "optimal_strategies": optimal_opportunities,
         "position_to_exit": position_to_exit,
-        "reasoning": base_description + " ".join(reasoning)
+        "reasoning": base_description + " ".join(reasoning),
     }
 
 
-def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
-    """Run the strategy."""
+def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str]]:
+    """Run the strategy.
+
+    :param **kwargs: TODO
+    :param *_args: TODO
+    :return: TODO
+    """
     missing = check_missing_fields(kwargs)
     if len(missing) > 0:
         return {"error": f"Required kwargs {missing} were not provided."}
 
     kwargs = remove_irrelevant_fields(kwargs)
     optimal_strategies = apply_risk_thresholds_and_select_optimal_strategy(**kwargs)
-    optimal_strategies['logs'] = logs
+    optimal_strategies["logs"] = logs
     return optimal_strategies

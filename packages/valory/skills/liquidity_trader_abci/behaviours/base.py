@@ -31,7 +31,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
-from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
 from eth_utils import to_checksum_address
 
@@ -316,24 +315,24 @@ class LiquidityTraderBaseBehaviour(
         store_path = Path(self.params.store_path)
 
         self.current_positions_filepath: str = (
-            store_path / self.params.pool_info_filename
+            store_path / self.params.pool_info_filename  # type: ignore[assignment]
         )
         self.portfolio_data: Dict[str, Any] = {}
         self.portfolio_data_filepath: str = (
-            store_path / self.params.portfolio_info_filename
+            store_path / self.params.portfolio_info_filename  # type: ignore[assignment]
         )
         self.assets: Dict[str, Any] = {}
         self.whitelisted_assets: Dict[str, Any] = {}
         self.whitelisted_assets_filepath: str = (
-            store_path / self.params.whitelisted_assets_filename
+            store_path / self.params.whitelisted_assets_filename  # type: ignore[assignment]
         )
         self.funding_events: Dict[str, Any] = {}
         self.funding_events_filepath: str = (
-            store_path / self.params.funding_events_filename
+            store_path / self.params.funding_events_filename  # type: ignore[assignment]
         )
         self.agent_performance: Dict[str, Any] = {}
         self.agent_performance_filepath: str = (
-            store_path / self.params.agent_performance_filename
+            store_path / self.params.agent_performance_filename  # type: ignore[assignment]
         )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
@@ -344,7 +343,7 @@ class LiquidityTraderBaseBehaviour(
         self.gas_cost_tracker = GasCostTracker(
             file_path=store_path / self.params.gas_cost_info_filename
         )
-        self.initial_investment_values_per_pool = {}
+        self.initial_investment_values_per_pool: Dict[Any, Any] = {}
         self._current_entry_costs = 0.0
 
         # Read the current pool and other data
@@ -392,9 +391,9 @@ class LiquidityTraderBaseBehaviour(
 
     def contract_interact(
         self,
-        performative: ContractApiMessage.Performative,
+        performative: Any,
         contract_address: str,
-        contract_public_id: PublicId,
+        contract_public_id: Any,
         contract_callable: str,
         data_key: str,
         **kwargs: Any,
@@ -873,7 +872,7 @@ class LiquidityTraderBaseBehaviour(
                     err = f"Error decoding {attribute} from {filepath!r}: {str(e)}"
         except FileNotFoundError:
             # Create the file if it doesn't exist
-            initial_data = [] if attribute == "current_positions" else {}
+            initial_data: Any = [] if attribute == "current_positions" else {}
             with open(filepath, WRITE_MODE) as file:
                 json.dump(initial_data, file)
             return
@@ -1051,7 +1050,7 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, Optional[int]]:
         """Get native balance"""
         ledger_api_response = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,
+            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore[arg-type]
             ledger_callable="get_balance",
             block_identifier="latest",
             account=account,
@@ -1095,7 +1094,7 @@ class LiquidityTraderBaseBehaviour(
         )
 
         last_ts_checkpoint = yield from self._get_ts_checkpoint(
-            chain=self.params.staking_chain
+            chain=self.params.staking_chain  # type: ignore[arg-type]
         )
         if last_ts_checkpoint is None:
             return None
@@ -1183,7 +1182,7 @@ class LiquidityTraderBaseBehaviour(
 
         multisig_nonces_since_last_cp = (
             yield from self._get_multisig_nonces_since_last_cp(
-                chain=self.params.staking_chain,
+                chain=self.params.staking_chain,  # type: ignore[arg-type]
                 multisig=self.params.safe_contract_addresses.get(
                     self.params.staking_chain
                 ),
@@ -1719,7 +1718,7 @@ class LiquidityTraderBaseBehaviour(
 
         if success:
             try:
-                token_data = next(iter(response_json.values()), {})
+                token_data: Any = next(iter(response_json.values()), {})
                 price = token_data.get("usd", 0)
                 if price:
                     self.context.logger.info(
@@ -1759,7 +1758,7 @@ class LiquidityTraderBaseBehaviour(
             )
             return None
 
-        token0_decimals = yield from self._get_token_decimals(chain, token0)
+        token0_decimals = yield from self._get_token_decimals(chain, token0)  # type: ignore[arg-type]
         if not token0_decimals:
             return None
 
@@ -1767,13 +1766,13 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(f"initial_amount0 : {initial_amount0}")
 
         if token1 is not None and amount1 is not None:
-            token1_decimals = yield from self._get_token_decimals(chain, token1)
+            token1_decimals = yield from self._get_token_decimals(chain, token1)  # type: ignore[arg-type]
             if not token1_decimals:
                 return None
             initial_amount1 = amount1 / (10**token1_decimals)
             self.context.logger.info(f"initial_amount1 : {initial_amount1}")
 
-        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")  # type: ignore[arg-type]
         tokens = []
         # Fetch historical prices
         tokens.append([position.get("token0_symbol"), position.get("token0")])
@@ -1781,7 +1780,7 @@ class LiquidityTraderBaseBehaviour(
             tokens.append([position.get("token1_symbol"), position.get("token1")])
 
         historical_prices = yield from self._fetch_historical_token_prices(
-            tokens, date_str, chain
+            tokens, date_str, chain  # type: ignore[arg-type]
         )
 
         if not historical_prices:
@@ -1789,7 +1788,7 @@ class LiquidityTraderBaseBehaviour(
             return None
 
         # Get the price for token0
-        initial_price0 = historical_prices.get(position.get("token0"))
+        initial_price0 = historical_prices.get(position.get("token0"))  # type: ignore[arg-type]
         if initial_price0 is None:
             self.context.logger.error("Historical price not found for token0.")
             return None
@@ -1800,7 +1799,7 @@ class LiquidityTraderBaseBehaviour(
 
         # If token1 exists, include it in the calculations
         if position.get("token1") is not None and initial_amount1 is not None:
-            initial_price1 = historical_prices.get(position.get("token1"))
+            initial_price1 = historical_prices.get(position.get("token1"))  # type: ignore[arg-type]
             if initial_price1 is None:
                 self.context.logger.error("Historical price not found for token1.")
                 return None
@@ -1863,7 +1862,7 @@ class LiquidityTraderBaseBehaviour(
         return historical_prices
 
     def _fetch_historical_token_price(
-        self, coingecko_id, date_str
+        self, coingecko_id: Any, date_str: Any
     ) -> Generator[None, None, Optional[float]]:
         self.context.logger.info(
             f"Fetching historical price for token {coingecko_id} on date {date_str}"
@@ -2045,7 +2044,7 @@ class LiquidityTraderBaseBehaviour(
         )
         return token_name
 
-    def get_coin_id_from_symbol(self, symbol, chain_name) -> Optional[str]:
+    def get_coin_id_from_symbol(self, symbol: Any, chain_name: Any) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
         symbol = symbol.lower()
@@ -2113,7 +2112,7 @@ class LiquidityTraderBaseBehaviour(
         return amount
 
     def should_update_rewards_from_subgraph(
-        self, chain: str, period: int = None
+        self, chain: str, period: int = None  # type: ignore[assignment]
     ) -> Generator[None, None, bool]:
         """Check if rewards should be updated from subgraph (period == 0 or 24-hour interval)"""
         # Update immediately if period == 0
@@ -2197,7 +2196,7 @@ class LiquidityTraderBaseBehaviour(
                 return None
 
         self.context.logger.error(
-            f"Failed to query subgraph: {response.status_code} - {response.body}"
+            f"Failed to query subgraph: {response.status_code} - {response.body}"  # type: ignore[str-bytes-safe]
         )
         return None
 
@@ -2324,7 +2323,7 @@ class LiquidityTraderBaseBehaviour(
             return {}
 
     def _build_exit_pool_action_base(
-        self, position: Dict[str, Any], tokens: List[Dict[str, Any]] = None
+        self, position: Dict[str, Any], tokens: List[Dict[str, Any]] = None  # type: ignore[assignment]
     ) -> Optional[Dict[str, Any]]:
         """
         Build action for exiting a pool position.
@@ -2395,7 +2394,7 @@ class LiquidityTraderBaseBehaviour(
         from_token_address: str,
         from_token_symbol: str,
         funds_percentage: float = 1.0,
-        description: str = None,
+        description: str = None,  # type: ignore[assignment]
     ) -> Optional[Dict[str, Any]]:
         """
         Build action for swapping a token to USDC.
@@ -2687,7 +2686,7 @@ class LiquidityTraderBaseBehaviour(
             return None
 
     def get_agent_type_by_name(
-        self, type_name
+        self, type_name: Any
     ) -> Generator[None, None, Optional[Dict]]:
         """Get agent type by name."""
         response = yield from self._call_mirrordb(
@@ -2697,7 +2696,9 @@ class LiquidityTraderBaseBehaviour(
         )
         return response
 
-    def create_agent_type(self, type_name, description) -> Generator[None, None, Dict]:
+    def create_agent_type(
+        self, type_name: Any, description: Any
+    ) -> Generator[None, None, Dict]:
         """Create a new agent type."""
         # Prepare agent type data
         agent_type_data = {"type_name": type_name, "description": description}
@@ -2714,7 +2715,9 @@ class LiquidityTraderBaseBehaviour(
 
         return response
 
-    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
+    def get_attr_def_by_name(
+        self, attr_name: Any
+    ) -> Generator[None, None, Optional[Dict]]:
         """Get agent type by name."""
         response = yield from self._call_mirrordb(
             method="read_",
@@ -2724,7 +2727,13 @@ class LiquidityTraderBaseBehaviour(
         return response
 
     def create_attribute_definition(
-        self, type_id, attr_name, data_type, is_required, default_value, agent_id
+        self,
+        type_id: Any,
+        attr_name: Any,
+        data_type: Any,
+        is_required: Any,
+        default_value: Any,
+        agent_id: Any,
     ) -> Generator[None, None, Dict]:
         """Create a new attribute definition for a specific agent type."""
         # Prepare attribute definition data
@@ -2742,7 +2751,7 @@ class LiquidityTraderBaseBehaviour(
         message = f"timestamp:{timestamp},endpoint:{endpoint}"
         signature = yield from self.sign_message(message)
         if not signature:
-            return None
+            return None  # type: ignore[return-value]
 
         # Prepare authentication data
         auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
@@ -2758,7 +2767,7 @@ class LiquidityTraderBaseBehaviour(
         return response
 
     def get_agent_registry_by_address(
-        self, eth_address
+        self, eth_address: Any
     ) -> Generator[None, None, Optional[Dict]]:
         """Get agent registry by Ethereum address."""
         response = yield from self._call_mirrordb(
@@ -2769,7 +2778,7 @@ class LiquidityTraderBaseBehaviour(
         return response
 
     def create_agent_registry(
-        self, agent_name, type_id, eth_address
+        self, agent_name: Any, type_id: Any, eth_address: Any
     ) -> Generator[None, None, Dict]:
         """Create a new agent registry."""
         # Prepare agent registry data
@@ -2791,9 +2800,9 @@ class LiquidityTraderBaseBehaviour(
 
     def create_agent_attribute(
         self,
-        agent_id,
-        attr_def_id,
-        json_value=None,
+        agent_id: Any,
+        attr_def_id: Any,
+        json_value: Any = None,
     ) -> Generator[None, None, Dict]:
         """Create a new attribute value for a specific agent."""
         # Prepare the agent attribute data with all values set to None initially
@@ -2814,7 +2823,7 @@ class LiquidityTraderBaseBehaviour(
         message = f"timestamp:{timestamp},endpoint:{endpoint}"
         signature = yield from self.sign_message(message)
         if not signature:
-            return None
+            return None  # type: ignore[return-value]
 
         # Prepare authentication data
         auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
@@ -2833,19 +2842,19 @@ class LiquidityTraderBaseBehaviour(
         self, eth_address: str
     ) -> Generator[Dict[str, Any], None, None]:
         """Get or create agent type."""
-        data = yield from self._read_kv(keys=("agent_type",))
+        data = yield from self._read_kv(keys=("agent_type",))  # type: ignore[misc]
         if not data or not data.get("agent_type"):
             type_name = AGENT_TYPE.get(self.params.target_investment_chains[0])
-            agent_type = yield from self.get_agent_type_by_name(type_name)
+            agent_type = yield from self.get_agent_type_by_name(type_name)  # type: ignore[misc]
             if not agent_type:
-                agent_type = yield from self.create_agent_type(
+                agent_type = yield from self.create_agent_type(  # type: ignore[misc]
                     type_name,
                     "An agent for DeFi liquidity management and APR tracking",
                 )
                 if not agent_type:
                     raise Exception("Failed to create agent type.")
-                yield from self._write_kv({"agent_type": json.dumps(agent_type)})
-            return agent_type
+                yield from self._write_kv({"agent_type": json.dumps(agent_type)})  # type: ignore[misc]
+            return agent_type  # type: ignore[return-value]
 
         return json.loads(data["agent_type"])
 
@@ -2853,11 +2862,11 @@ class LiquidityTraderBaseBehaviour(
         self, type_id: str, agent_id: str
     ) -> Generator[Dict[str, Any], None, None]:
         """Get or create APR attribute definition."""
-        data = yield from self._read_kv(keys=("attr_def",))
+        data = yield from self._read_kv(keys=("attr_def",))  # type: ignore[misc]
         if not data or not data.get("attr_def"):
-            attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+            attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)  # type: ignore[misc]
             if not attr_def:
-                attr_def = yield from self.create_attribute_definition(
+                attr_def = yield from self.create_attribute_definition(  # type: ignore[misc]
                     type_id,
                     METRICS_NAME,
                     METRICS_TYPE,
@@ -2867,8 +2876,8 @@ class LiquidityTraderBaseBehaviour(
                 )
                 if not attr_def:
                     raise Exception("Failed to create attribute definition.")
-                yield from self._write_kv({"attr_def": json.dumps(attr_def)})
-            return attr_def
+                yield from self._write_kv({"attr_def": json.dumps(attr_def)})  # type: ignore[misc]
+            return attr_def  # type: ignore[return-value]
 
         return json.loads(data["attr_def"])
 
@@ -2881,7 +2890,7 @@ class LiquidityTraderBaseBehaviour(
             if not data or not data.get("agent_registry"):
                 # Get or create agent type first
                 eth_address = self.context.agent_address
-                agent_type = yield from self._get_or_create_agent_type(eth_address)
+                agent_type = yield from self._get_or_create_agent_type(eth_address)  # type: ignore[func-returns-value]
                 if not agent_type:
                     self.context.logger.error("Failed to get or create agent type")
                     return None
@@ -2914,7 +2923,7 @@ class LiquidityTraderBaseBehaviour(
             )
             return None
 
-    def generate_phonetic_syllable(self, seed):
+    def generate_phonetic_syllable(self, seed: Any) -> Any:
         """Generates phonetic syllable"""
         phonetic_syllables = [
             "ba",
@@ -3133,7 +3142,9 @@ class LiquidityTraderBaseBehaviour(
         ]
         return phonetic_syllables[seed % len(phonetic_syllables)]
 
-    def generate_phonetic_name(self, address, start_index, syllables):
+    def generate_phonetic_name(
+        self, address: Any, start_index: Any, syllables: Any
+    ) -> Any:
         """Generates phonetic name"""
         return "".join(
             self.generate_phonetic_syllable(
@@ -3142,14 +3153,14 @@ class LiquidityTraderBaseBehaviour(
             for i in range(syllables)
         ).lower()
 
-    def generate_name(self, address):
+    def generate_name(self, address: Any) -> Any:
         """Generates name from address"""
         first_name = self.generate_phonetic_name(address, 2, 2)
         last_name_prefix = self.generate_phonetic_name(address, 18, 2)
         last_name_number = int(address[-4:], 16) % 100
         return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
 
-    def sign_message(self, message) -> Generator[None, None, Optional[str]]:
+    def sign_message(self, message: Any) -> Generator[None, None, Optional[str]]:
         """Sign a message."""
         message_bytes = message.encode("utf-8")
         signature = yield from self.get_signature(message_bytes)
@@ -3159,7 +3170,7 @@ class LiquidityTraderBaseBehaviour(
         return None
 
     def _update_airdrop_rewards(
-        self, new_amount: int, chain: str, tx_hash: str = None
+        self, new_amount: int, chain: str, tx_hash: str = None  # type: ignore[assignment]
     ) -> Generator[None, None, None]:
         """Update total airdrop rewards in KV store with deduplication."""
         try:
@@ -3221,7 +3232,7 @@ class LiquidityTraderBaseBehaviour(
         self, chain: str
     ) -> Generator[None, None, List[Dict[str, Any]]]:
         """Fetch reward token balances separately."""
-        reward_balances = []
+        reward_balances: List[Any] = []
 
         try:
             safe_address = self.params.safe_contract_addresses.get(chain)
@@ -3403,7 +3414,7 @@ def execute_strategy(
     # Use an isolated namespace to prevent race conditions when strategies
     # run in parallel — each strategy gets its own dict so identically-named
     # functions (e.g. apply_composite_pre_filter) don't overwrite each other.
-    namespace = {}
+    namespace: Dict[Any, Any] = {}
     exec(strategy_exec, namespace)  # pylint: disable=W0122  # nosec
     method = namespace.get(callable_method, None)
     if method is None:
@@ -3424,12 +3435,14 @@ class GasCostTracker:
 
     MAX_RECORDS = 20  # Maximum number of records to keep per chain
 
-    def __init__(self, file_path):
+    def __init__(self, file_path: Any) -> None:
         """Initialize GasCostTracker"""
         self.file_path = file_path
-        self.data = {}
+        self.data: Dict[Any, Any] = {}
 
-    def log_gas_usage(self, chain, timestamp, tx_hash, gas_used, gas_price):
+    def log_gas_usage(
+        self, chain: Any, timestamp: Any, tx_hash: Any, gas_used: Any, gas_price: Any
+    ) -> None:
         """Log the gas cost for a transaction."""
         gas_cost_entry = {
             "timestamp": timestamp,
@@ -3445,6 +3458,6 @@ class GasCostTracker:
         if len(self.data[chain]) > self.MAX_RECORDS:
             self.data[chain] = self.data[chain][-self.MAX_RECORDS :]
 
-    def update_data(self, new_data: dict):
+    def update_data(self, new_data: dict) -> None:
         """Update the internal data with new data."""
         self.data = new_data

@@ -19,14 +19,12 @@
 # ------------------------------------------------------------------------------
 
 
-import warnings
+"""Asset lending module."""
 
-warnings.filterwarnings("ignore")
-
-import json
 import logging
 import threading
 import time
+import warnings
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -36,6 +34,8 @@ import requests
 from aea.helpers.logging import setup_logger
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
+
+warnings.filterwarnings("ignore")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -66,7 +66,7 @@ coingecko_name_to_id = {
 
 # Thread-safe global caches with locks
 _coin_list_cache = None
-_aggregators_cache = None
+_aggregators_cache: Any = None
 _historical_data_cache = None
 _coin_list_lock = threading.Lock()
 _aggregators_lock = threading.Lock()
@@ -76,19 +76,27 @@ _historical_data_lock = threading.Lock()
 _thread_local = threading.local()
 
 # Request throttling
-_last_request_time = {}
+_last_request_time: Dict[Any, Any] = {}
 _request_lock = threading.Lock()
 
 
-def get_errors():
-    """Get thread-local error list."""
+def get_errors() -> Any:
+    """Get thread-local error list.
+
+    :return: TODO
+    """
     if not hasattr(_thread_local, "errors"):
         _thread_local.errors = []
     return _thread_local.errors
 
 
-def throttled_request(url, min_interval=0.1):
-    """Make a throttled HTTP request to prevent rate limiting."""
+def throttled_request(url: Any, min_interval: Any = 0.1) -> Any:
+    """Make a throttled HTTP request to prevent rate limiting.
+
+    :param min_interval: TODO
+    :param url: TODO
+    :return: TODO
+    """
     with _request_lock:
         now = time.time()
         if url in _last_request_time:
@@ -100,7 +108,11 @@ def throttled_request(url, min_interval=0.1):
     return requests.get(url, timeout=30)
 
 
-def get_coin_list():
+def get_coin_list() -> Any:
+    """Get coin list.
+
+    :return: TODO
+    """
     global _coin_list_cache
     logger.info("Fetching coin list from CoinGecko")
 
@@ -121,7 +133,12 @@ def get_coin_list():
         return _coin_list_cache
 
 
-def fetch_token_id(symbol):
+def fetch_token_id(symbol: Any) -> Any:
+    """Fetch token id.
+
+    :param symbol: TODO
+    :return: TODO
+    """
     logger.info(f"Fetching token ID for symbol: {symbol}")
     symbol = symbol.lower()
     # First check known mappings
@@ -142,7 +159,12 @@ def fetch_token_id(symbol):
     return None
 
 
-def fetch_historical_data(limit: int = 720):
+def fetch_historical_data(limit: int = 720) -> Any:
+    """Fetch historical data.
+
+    :param limit: TODO
+    :return: TODO
+    """
     global _historical_data_cache
     logger.info(f"Fetching historical data with limit: {limit}")
 
@@ -183,15 +205,25 @@ def fetch_historical_data(limit: int = 720):
         return _historical_data_cache
 
 
-def calculate_daily_returns(base_apy, reward_apy=0):
+def calculate_daily_returns(base_apy: Any, reward_apy: Any = 0) -> Any:
+    """Calculate daily returns.
+
+    :param base_apy: TODO
+    :param reward_apy: TODO
+    :return: TODO
+    """
     annual_return = base_apy + reward_apy
     return (1 + annual_return) ** (1 / 365) - 1
 
 
-def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
-    """
-    Calculate the Sharpe Ratio.
+def calculate_sharpe_ratio(returns: Any, risk_free_rate: Any = 0.0003) -> Any:
+    """Calculate the Sharpe Ratio.
+
     Sharpe = (mean(returns) - risk_free_rate) / std(returns)
+
+    :param returns: TODO
+    :param risk_free_rate: TODO
+    :return: TODO
     """
     if len(returns) < 2:
         return np.nan  # Not enough data
@@ -200,7 +232,13 @@ def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
     return excess_returns.mean() / excess_returns.std(ddof=1)
 
 
-def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
+def get_sharpe_ratio_for_address(historical_data: Any, address: str) -> float:
+    """Get sharpe ratio for address.
+
+    :param address: TODO
+    :param historical_data: TODO
+    :return: TODO
+    """
     logger.info(f"Calculating Sharpe ratio for address: {address}")
     records = []
     for _, entry in enumerate(historical_data):
@@ -243,6 +281,11 @@ def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
+    """Check missing fields.
+
+    :param kwargs: TODO
+    :return: TODO
+    """
     missing = [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
     if missing:
         logger.warning(f"Missing required fields: {missing}")
@@ -252,10 +295,20 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
+    """Remove irrelevant fields.
+
+    :param kwargs: TODO
+    :param required_fields: TODO
+    :return: TODO
+    """
     return {key: value for key, value in kwargs.items() if key in required_fields}
 
 
 def fetch_aggregators() -> List[Dict[str, Any]]:
+    """Fetch aggregators.
+
+    :return: TODO
+    """
     global _aggregators_cache
     logger.info("Fetching aggregators from STURDY API")
 
@@ -285,7 +338,9 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
         return _aggregators_cache
 
 
-def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
+def standardize_metrics(
+    pools: Any, apr_weight: Any = 0.7, tvl_weight: Any = 0.3
+) -> Any:
     """
     Standardize APR and TVL using Z-score normalization and calculate composite scores.
 
@@ -296,6 +351,11 @@ def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
 
     Returns:
         List of pools with added standardized metrics and composite scores
+
+    :param apr_weight: TODO
+    :param pools: TODO
+    :param tvl_weight: TODO
+    :return: TODO
     """
     if not pools:
         return pools
@@ -335,13 +395,13 @@ def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
 
 
 def apply_composite_pre_filter(
-    pools,
-    top_n=10,
-    apr_weight=0.7,
-    tvl_weight=0.3,
-    min_tvl_threshold=1000,
-    use_composite_filter=True,
-):
+    pools: Any,
+    top_n: Any = 10,
+    apr_weight: Any = 0.7,
+    tvl_weight: Any = 0.3,
+    min_tvl_threshold: Any = 1000,
+    use_composite_filter: Any = True,
+) -> Any:
     """
     Apply composite pre-filtering to select top pools based on standardized APR and TVL.
 
@@ -355,6 +415,14 @@ def apply_composite_pre_filter(
 
     Returns:
         List of filtered and ranked pools
+
+    :param apr_weight: TODO
+    :param min_tvl_threshold: TODO
+    :param pools: TODO
+    :param top_n: TODO
+    :param tvl_weight: TODO
+    :param use_composite_filter: TODO
+    :return: TODO
     """
     if not pools or not use_composite_filter:
         logger.info("Skipping composite pre-filter")
@@ -404,7 +472,7 @@ def apply_composite_pre_filter(
         pool_address = pool.get("address", "N/A")
 
         logger.info(
-            f"Pool #{i+1}: {pool_address} - APR: {apr:.2f}%, TVL: ${tvl:,.0f}, Composite Score: {composite_score:.3f}"
+            f"Pool #{i + 1}: {pool_address} - APR: {apr:.2f}%, TVL: ${tvl:,.0f}, Composite Score: {composite_score:.3f}"
         )
 
     logger.info("Applied composite pre-filter")
@@ -412,8 +480,21 @@ def apply_composite_pre_filter(
 
 
 def filter_aggregators(
-    chains, aggregators, lending_asset, current_positions, **kwargs
+    chains: Any,
+    aggregators: Any,
+    lending_asset: Any,
+    current_positions: Any,
+    **kwargs: Any,
 ) -> List[Dict[str, Any]]:
+    """Filter aggregators.
+
+    :param **kwargs: TODO
+    :param aggregators: TODO
+    :param chains: TODO
+    :param current_positions: TODO
+    :param lending_asset: TODO
+    :return: TODO
+    """
     logger.info(
         f"Filtering aggregators for chains: {chains}, lending_asset: {lending_asset}"
     )
@@ -468,7 +549,15 @@ def calculate_il_risk_score_for_lending(
     asset_token_2: str,
     coingecko_api_key: str,
     time_period: int = 90,
-) -> float:
+) -> Optional[float]:
+    """Calculate il risk score for lending.
+
+    :param asset_token_1: TODO
+    :param asset_token_2: TODO
+    :param coingecko_api_key: TODO
+    :param time_period: TODO
+    :return: TODO
+    """
     logger.info(
         f"Calculating IL risk score for tokens: {asset_token_1}, {asset_token_2}"
     )
@@ -543,14 +632,23 @@ def calculate_il_risk_score_for_lending(
     return float(il_risk_score)
 
 
-def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
+def calculate_il_risk_score_for_silos(
+    token0_symbol: Any, silos: Any, coingecko_api_key: Any
+) -> Any:
+    """Calculate il risk score for silos.
+
+    :param coingecko_api_key: TODO
+    :param silos: TODO
+    :param token0_symbol: TODO
+    :return: TODO
+    """
     logger.info(f"Calculating IL risk score for silos with token0: {token0_symbol}")
     logger.info(f"Number of silos: {len(silos)}")
 
     il_risk_scores = []
-    token_id_cache = {}
+    token_id_cache: Dict[Any, Any] = {}
 
-    def get_token_id(symbol):
+    def get_token_id(symbol: Any) -> Any:
         symbol = symbol.lower()
         if symbol in token_id_cache:
             return token_id_cache[symbol]
@@ -595,7 +693,12 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
     return avg_il_risk
 
 
-def analyze_vault_liquidity(aggregator):
+def analyze_vault_liquidity(aggregator: Any) -> Any:
+    """Analyze vault liquidity.
+
+    :param aggregator: TODO
+    :return: TODO
+    """
     logger.info(
         f"Analyzing vault liquidity for aggregator: {aggregator.get('address')}"
     )
@@ -637,7 +740,12 @@ def analyze_vault_liquidity(aggregator):
     return depth_score, max_position_size
 
 
-def format_aggregator(aggregator) -> Dict[str, Any]:
+def format_aggregator(aggregator: Any) -> Dict[str, Any]:
+    """Format aggregator.
+
+    :param aggregator: TODO
+    :return: TODO
+    """
     logger.info(f"Formatting aggregator: {aggregator.get('address')}")
     return {
         "chain": aggregator["chainName"],
@@ -656,8 +764,21 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
 
 
 def get_best_opportunities(
-    chains, lending_asset, current_positions, coingecko_api_key, **kwargs
+    chains: Any,
+    lending_asset: Any,
+    current_positions: Any,
+    coingecko_api_key: Any,
+    **kwargs: Any,
 ) -> List[Dict[str, Any]]:
+    """Get best opportunities.
+
+    :param **kwargs: TODO
+    :param chains: TODO
+    :param coingecko_api_key: TODO
+    :param current_positions: TODO
+    :param lending_asset: TODO
+    :return: TODO
+    """
     logger.info(
         f"Getting best opportunities for chains: {chains}, lending_asset: {lending_asset}"
     )
@@ -666,7 +787,7 @@ def get_best_opportunities(
     if not data:
         logger.error("Failed to fetch aggregators")
         get_errors().append("Failed to fetch aggregators.")
-        return {"error": get_errors()}
+        return {"error": get_errors()}  # type: ignore[return-value]
 
     filtered_aggregators = filter_aggregators(
         chains, data, lending_asset, current_positions, **kwargs
@@ -674,19 +795,19 @@ def get_best_opportunities(
     if not filtered_aggregators:
         logger.warning("No suitable aggregators found after filtering")
         get_errors().append("No suitable aggregators found.")
-        return {"error": get_errors()}
+        return {"error": get_errors()}  # type: ignore[return-value]
 
     historical_data = fetch_historical_data()
     if historical_data is None:
         logger.error("Failed to fetch historical data")
-        return {"error": get_errors()}
+        return {"error": get_errors()}  # type: ignore[return-value]
 
     logger.info(
         f"Processing {len(filtered_aggregators)} aggregators for metrics calculation"
     )
     for i, aggregator in enumerate(filtered_aggregators):
         logger.info(
-            f"Processing aggregator {i+1}/{len(filtered_aggregators)}: {aggregator.get('address')}"
+            f"Processing aggregator {i + 1}/{len(filtered_aggregators)}: {aggregator.get('address')}"
         )
 
         silos = aggregator.get("whitelistedSilos", [])
@@ -710,8 +831,15 @@ def get_best_opportunities(
 
 
 def calculate_metrics(
-    position: Dict[str, Any], coingecko_api_key: str, **kwargs
+    position: Dict[str, Any], coingecko_api_key: str, **kwargs: Any
 ) -> Optional[Dict[str, Any]]:
+    """Calculate metrics.
+
+    :param **kwargs: TODO
+    :param coingecko_api_key: TODO
+    :param position: TODO
+    :return: TODO
+    """
     logger.info(f"Calculating metrics for position: {position.get('pool_address')}")
 
     il_risk_score = calculate_il_risk_score_for_silos(
@@ -740,8 +868,10 @@ def calculate_metrics(
 
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:
-    """
-    Check if the provided CoinGecko API key is a pro key.
+    """Check if the provided CoinGecko API key is a pro key.
+
+    :param coingecko_api_key: TODO
+    :return: TODO
     """
     logger.info("Checking if CoinGecko API key is pro")
     # Try using the key as a pro API key
@@ -760,7 +890,13 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
     return False
 
 
-def run(*_args, **kwargs) -> Any:
+def run(*_args: Any, **kwargs: Any) -> Any:
+    """Run.
+
+    :param **kwargs: TODO
+    :param *_args: TODO
+    :return: TODO
+    """
     logger.info("Starting asset lending strategy execution")
     logger.info(f"Received kwargs: {list(kwargs.keys())}")
 
@@ -780,7 +916,7 @@ def run(*_args, **kwargs) -> Any:
     if get_metrics:
         required_fields.append("position")
 
-    kwargs = remove_irrelevant_fields(kwargs, required_fields)
+    kwargs = remove_irrelevant_fields(kwargs, required_fields)  # type: ignore[arg-type]
 
     if get_metrics:
         logger.info("Calculating metrics for existing position")

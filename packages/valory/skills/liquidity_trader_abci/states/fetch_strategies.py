@@ -20,7 +20,7 @@
 """This module contains the FetchStrategiesRound of LiquidityTraderAbciApp."""
 
 import json
-from typing import Optional, Tuple, cast
+from typing import Any, Dict, Optional, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
@@ -46,7 +46,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
     collection_key = get_name(SynchronizedData.participant_to_strategies_round)
     selection_key = (get_name(SynchronizedData.chain_id),)
 
-    ERROR_PAYLOAD = {}
+    ERROR_PAYLOAD: Dict[Any, Any] = {}
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
@@ -62,7 +62,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
             # Check if this is an ETH transfer settlement event
             if payload.get("event") == Event.SETTLE.value:
                 updates = payload.get("updates", {})
-                synchronized_data = synchronized_data.update(
+                synchronized_data = synchronized_data.update(  # type: ignore[assignment]
                     synchronized_data_class=SynchronizedData, **updates
                 )
                 return synchronized_data, Event.SETTLE
@@ -77,7 +77,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
                 serialized_selected_protocols = json.dumps(
                     selected_protocols, ensure_ascii=True
                 )
-                synchronized_data = synchronized_data.update(
+                synchronized_data = synchronized_data.update(  # type: ignore[assignment]
                     synchronized_data_class=SynchronizedData,
                     selected_protocols=serialized_selected_protocols,
                     trading_type=trading_type,

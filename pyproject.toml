@@ -60,12 +60,44 @@ Repository = "https://github.com/valory-xyz/optimus"
 
 [dependency-groups]
 dev = [
-    "tomte[cli, tests]>=0.6.5",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@01ecfd5b2b68021bc94b76d9581eb3944bbd41b2",
 ]
 
 [tool.uv]
 default-groups = "all"
 prerelease = "allow"
+
+[tool.tomte]
+# Third-party packages on disk are synced from open-autonomy + open-aea
+# (auto-prepended) plus mech-interact, genai, kv-store, funds-manager.
+upstream_pins = [
+    "valory-xyz/mech-interact@v0.28.0",
+    "valory-xyz/genai@v6.1.0",
+    "valory-xyz/kv-store@v0.4.0",
+    "valory-xyz/funds-manager@v2.3.0",
+]
+# Vite UI bundle outputs (modius-ui-build/, optimus-ui-build/) trip
+# generic-api-key on every rebuild. Pattern matches both the current
+# location (packages/valory/skills/optimus_abci/<name>-ui-build/) and
+# the historical top-level location.
+gitleaks_extra_paths = [
+    ".*-ui-build/.*",
+    ".*-ui/assets/.*",
+    "packages/valory/skills/.*_abci/behaviours\\.py",
+]
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@01ecfd5b2b68021bc94b76d9581eb3944bbd41b2"
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "DEBUG"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+asyncio_mode = "strict"
+markers = [
+    "integration: marks integration tests which require other network services",
+    "e2e: marks end-to-end agent tests",
+]
+filterwarnings = ["ignore::DeprecationWarning:aea.*:"]
 
 [tool.uv.build-backend]
 module-name = ["packages"]

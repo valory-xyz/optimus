@@ -6,11 +6,11 @@ description: The contract package for the Sturdy's YearnV3Vault interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeieqv76p4zz2wggoxap3jzr5vub3pyklpvwhmmkka7ky5cfdt5ydfq
+  __init__.py: bafybeiati3dbslgjaweigzkdhn3pz7h6cyfp2fcsl6haxw5dqfoopub67e
   build/YearnV3Vault.json: bafybeifk34657pbpihpoxkelea2pf6ho2z56lum7bxegunclmakvypuc3m
-  contract.py: bafybeiazfvdoes5fn4zikg7aryx6bdvhh2vdc5qtwtyg37vw7j54mgxgvq
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeibcvln2j5272jdqvkb6amtmhjkdh3uvpvrc7mnffqees4f7fnyvjm
+  contract.py: bafybeifddzdcpfdlpyjce3j4lsp22h43fxelf2bquks5szjl23u7cql5z4
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeictd4t4zyvpslqyufbjalngacmul4r5wfbieakyhpkbscfn6t44cu
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: YearnV3VaultContract

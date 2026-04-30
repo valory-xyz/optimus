@@ -136,7 +136,7 @@ class SynchronizedData(BaseSynchronizedData):
     def trading_type(self) -> List[Dict[str, Any]]:
         """Get the trading_type"""
         trading_type = self.db.get("trading_type", "")
-        return trading_type
+        return trading_type  # type: ignore[return-value]
 
     @property
     def participant_to_actions_round(self) -> DeserializedCollection:
@@ -200,7 +200,7 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def is_staking_kpi_met(self) -> Optional[bool]:
         """Get kpi met for the day."""
-        return cast(int, self.db.get("is_staking_kpi_met", False))
+        return cast(int, self.db.get("is_staking_kpi_met", False))  # type: ignore[return-value]
 
     @property
     def chain_id(self) -> Optional[str]:

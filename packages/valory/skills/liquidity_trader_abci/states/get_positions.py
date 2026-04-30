@@ -19,6 +19,8 @@
 
 """This module contains the GetPositionsRound of LiquidityTraderAbciApp."""
 
+from typing import Any, Dict
+
 from packages.valory.skills.abstract_round_abci.base import (
     CollectSameUntilThresholdRound,
     get_name,
@@ -42,6 +44,6 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
     selection_key = get_name(SynchronizedData.positions)
 
-    ERROR_PAYLOAD = {}
+    ERROR_PAYLOAD: Dict[Any, Any] = {}
 
     # Event.ROUND_TIMEOUT

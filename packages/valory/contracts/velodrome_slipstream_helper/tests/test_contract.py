@@ -23,12 +23,9 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.velodrome_slipstream_helper.contract import (
     VelodromeSlipstreamHelperContract,
 )
-
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
 MOCK_POSITION_MANAGER = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
@@ -45,10 +42,7 @@ class TestPrincipal:
     """Tests for the principal method."""
 
     def test_principal_returns_amounts(self) -> None:
-        """Test that principal returns a dict with the amounts key.
-
-        :return: None
-        """
+        """Test that principal returns a dict with the amounts key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.principal.return_value.call.return_value = (
@@ -72,10 +66,7 @@ class TestPrincipal:
         assert result == {"amounts": (100, 200)}
 
     def test_principal_calls_contract_function_with_correct_args(self) -> None:
-        """Test that principal calls the contract function with the correct arguments.
-
-        :return: None
-        """
+        """Test that principal calls the contract function with the correct arguments."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.principal.return_value.call.return_value = (
@@ -105,10 +96,7 @@ class TestGetAmountsForLiquidity:
     """Tests for the get_amounts_for_liquidity method."""
 
     def test_get_amounts_for_liquidity_returns_amounts(self) -> None:
-        """Test that get_amounts_for_liquidity returns a dict with the amounts key.
-
-        :return: None
-        """
+        """Test that get_amounts_for_liquidity returns a dict with the amounts key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.getAmountsForLiquidity.return_value.call.return_value = (
@@ -135,10 +123,7 @@ class TestGetAmountsForLiquidity:
     def test_get_amounts_for_liquidity_calls_contract_function_with_correct_args(
         self,
     ) -> None:
-        """Test that get_amounts_for_liquidity calls the contract function with the correct arguments.
-
-        :return: None
-        """
+        """Test that get_amounts_for_liquidity calls the contract function with the correct arguments."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.getAmountsForLiquidity.return_value.call.return_value = (
@@ -172,10 +157,7 @@ class TestGetSqrtRatioAtTick:
     """Tests for the get_sqrt_ratio_at_tick method."""
 
     def test_get_sqrt_ratio_at_tick_returns_sqrt_ratio(self) -> None:
-        """Test that get_sqrt_ratio_at_tick returns a dict with the sqrt_ratio key.
-
-        :return: None
-        """
+        """Test that get_sqrt_ratio_at_tick returns a dict with the sqrt_ratio key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         expected_ratio = 79228162514264337593543950336
@@ -197,10 +179,7 @@ class TestGetSqrtRatioAtTick:
     def test_get_sqrt_ratio_at_tick_calls_contract_function_with_correct_args(
         self,
     ) -> None:
-        """Test that get_sqrt_ratio_at_tick calls the contract function with the correct tick.
-
-        :return: None
-        """
+        """Test that get_sqrt_ratio_at_tick calls the contract function with the correct tick."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.getSqrtRatioAtTick.return_value.call.return_value = (
@@ -225,10 +204,7 @@ class TestGetAmount0Delta:
     """Tests for the get_amount0_delta method."""
 
     def test_get_amount0_delta_returns_delta(self) -> None:
-        """Test that get_amount0_delta returns a dict with the amount0_delta key.
-
-        :return: None
-        """
+        """Test that get_amount0_delta returns a dict with the amount0_delta key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = (
@@ -253,10 +229,7 @@ class TestGetAmount0Delta:
     def test_get_amount0_delta_calls_contract_function_with_correct_args(
         self,
     ) -> None:
-        """Test that get_amount0_delta calls the contract function with the correct arguments.
-
-        :return: None
-        """
+        """Test that get_amount0_delta calls the contract function with the correct arguments."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = (
@@ -285,10 +258,7 @@ class TestGetAmount1Delta:
     """Tests for the get_amount1_delta method."""
 
     def test_get_amount1_delta_returns_delta(self) -> None:
-        """Test that get_amount1_delta returns a dict with the amount1_delta key.
-
-        :return: None
-        """
+        """Test that get_amount1_delta returns a dict with the amount1_delta key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = (
@@ -313,10 +283,7 @@ class TestGetAmount1Delta:
     def test_get_amount1_delta_calls_contract_function_with_correct_args(
         self,
     ) -> None:
-        """Test that get_amount1_delta calls the contract function with the correct arguments.
-
-        :return: None
-        """
+        """Test that get_amount1_delta calls the contract function with the correct arguments."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = (

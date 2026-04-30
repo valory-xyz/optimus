@@ -22,6 +22,7 @@
 # pylint: skip-file
 
 import json
+from typing import Any
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.liquidity_trader_abci.states.base import SynchronizedData
@@ -32,7 +33,7 @@ def test_import() -> None:
     import packages.valory.skills.liquidity_trader_abci.states.base  # noqa
 
 
-def _make_synced_data(**kwargs) -> SynchronizedData:
+def _make_synced_data(**kwargs: Any) -> SynchronizedData:
     """Create SynchronizedData with given db values."""
     setup_data = {k: [v] for k, v in kwargs.items()}
     db = AbciAppDB(setup_data=setup_data)

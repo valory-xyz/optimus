@@ -19,9 +19,9 @@
 
 """Tests for asset_lending custom component."""
 
-import threading
 import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from typing import Any, Generator
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -30,6 +30,7 @@ import pytest
 import packages.valory.customs.asset_lending.asset_lending as al_module
 from packages.valory.customs.asset_lending.asset_lending import (
     REQUIRED_FIELDS,
+    analyze_vault_liquidity,
     apply_composite_pre_filter,
     calculate_daily_returns,
     calculate_il_risk_score_for_lending,
@@ -51,22 +52,24 @@ from packages.valory.customs.asset_lending.asset_lending import (
     run,
     standardize_metrics,
     throttled_request,
-    analyze_vault_liquidity,
 )
 
 
 @pytest.fixture(autouse=True)
-def reset_module_state():
-    """Reset module-level caches and thread-local state before each test."""
+def reset_module_state() -> Generator[Any, Any, Any]:
+    """Reset module-level caches and thread-local state before each test.
+
+    :yield: TODO
+    """
     al_module._coin_list_cache = None
-    al_module._aggregators_cache = None
+    al_module._aggregators_cache = None  # type: ignore[assignment]
     al_module._historical_data_cache = None
     al_module._last_request_time.clear()
     if hasattr(al_module._thread_local, "errors"):
         al_module._thread_local.errors = []
     yield
     al_module._coin_list_cache = None
-    al_module._aggregators_cache = None
+    al_module._aggregators_cache = None  # type: ignore[assignment]
     al_module._historical_data_cache = None
     al_module._last_request_time.clear()
     if hasattr(al_module._thread_local, "errors"):
@@ -76,14 +79,14 @@ def reset_module_state():
 class TestGetErrors:
     """Tests for get_errors function."""
 
-    def test_initializes_empty_list(self):
+    def test_initializes_empty_list(self) -> None:
         """Test that get_errors initializes empty list on first call."""
         if hasattr(al_module._thread_local, "errors"):
-            delattr(al_module._thread_local, "errors")
+            del al_module._thread_local.errors
         result = get_errors()
         assert result == []
 
-    def test_returns_existing_list(self):
+    def test_returns_existing_list(self) -> None:
         """Test that get_errors returns existing errors list."""
         al_module._thread_local.errors = ["error1"]
         result = get_errors()
@@ -94,16 +97,25 @@ class TestThrottledRequest:
     """Tests for throttled_request function."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.requests.get")
-    def test_first_request_no_throttle(self, mock_get):
-        """Test that first request is not throttled."""
+    def test_first_request_no_throttle(self, mock_get: MagicMock) -> None:
+        """Test that first request is not throttled.
+
+        :param mock_get: TODO
+        """
         mock_get.return_value = MagicMock()
         throttled_request("https://example.com")
         mock_get.assert_called_once_with("https://example.com", timeout=30)
 
     @patch("packages.valory.customs.asset_lending.asset_lending.requests.get")
     @patch("packages.valory.customs.asset_lending.asset_lending.time.sleep")
-    def test_rapid_requests_are_throttled(self, mock_sleep, mock_get):
-        """Test that rapid requests are throttled when elapsed < min_interval."""
+    def test_rapid_requests_are_throttled(
+        self, mock_sleep: MagicMock, mock_get: MagicMock
+    ) -> None:
+        """Test that rapid requests are throttled when elapsed < min_interval.
+
+        :param mock_get: TODO
+        :param mock_sleep: TODO
+        """
         mock_get.return_value = MagicMock()
         # Set last request time to now so elapsed ~0 < min_interval
         al_module._last_request_time["https://example.com"] = time.time()
@@ -112,8 +124,11 @@ class TestThrottledRequest:
         mock_sleep.assert_called_once()
 
     @patch("packages.valory.customs.asset_lending.asset_lending.requests.get")
-    def test_request_after_interval_elapsed(self, mock_get):
-        """Test that no throttle occurs when enough time has elapsed (73->75 False branch)."""
+    def test_request_after_interval_elapsed(self, mock_get: MagicMock) -> None:
+        """Test that no throttle occurs when enough time has elapsed (73->75 False branch).
+
+        :param mock_get: TODO
+        """
         mock_get.return_value = MagicMock()
         # Set last request time far in the past so elapsed > min_interval
         al_module._last_request_time["https://example.com"] = time.time() - 100
@@ -125,8 +140,11 @@ class TestGetCoinList:
     """Tests for get_coin_list function."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_fetches_and_caches(self, mock_req):
-        """Test that coin list is fetched and cached."""
+    def test_fetches_and_caches(self, mock_req: MagicMock) -> None:
+        """Test that coin list is fetched and cached.
+
+        :param mock_req: TODO
+        """
         mock_response = MagicMock()
         mock_response.json.return_value = [{"id": "bitcoin", "symbol": "btc"}]
         mock_response.raise_for_status = MagicMock()
@@ -136,16 +154,22 @@ class TestGetCoinList:
         assert result[0]["id"] == "bitcoin"
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_returns_cache_on_second_call(self, mock_req):
-        """Test that second call returns cached data."""
+    def test_returns_cache_on_second_call(self, mock_req: MagicMock) -> None:
+        """Test that second call returns cached data.
+
+        :param mock_req: TODO
+        """
         al_module._coin_list_cache = [{"id": "cached"}]
         result = get_coin_list()
         assert result[0]["id"] == "cached"
         mock_req.assert_not_called()
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_error_returns_empty_list(self, mock_req):
-        """Test that request error returns empty list."""
+    def test_error_returns_empty_list(self, mock_req: MagicMock) -> None:
+        """Test that request error returns empty list.
+
+        :param mock_req: TODO
+        """
         import requests as req_lib
 
         mock_req.side_effect = req_lib.RequestException("fail")
@@ -153,8 +177,11 @@ class TestGetCoinList:
         assert result == []
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_json_decode_error_returns_empty_list(self, mock_req):
-        """Test that ValueError from response.json() returns empty list."""
+    def test_json_decode_error_returns_empty_list(self, mock_req: MagicMock) -> None:
+        """Test that ValueError from response.json() returns empty list.
+
+        :param mock_req: TODO
+        """
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.side_effect = ValueError("No JSON object")
@@ -163,8 +190,13 @@ class TestGetCoinList:
         assert result == []
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_error_does_not_permanently_cache_empty_list(self, mock_req):
-        """Test that a failed fetch does not poison the cache permanently."""
+    def test_error_does_not_permanently_cache_empty_list(
+        self, mock_req: MagicMock
+    ) -> None:
+        """Test that a failed fetch does not poison the cache permanently.
+
+        :param mock_req: TODO
+        """
         import requests as req_lib
 
         # First call fails
@@ -186,20 +218,26 @@ class TestGetCoinList:
 class TestFetchTokenId:
     """Tests for fetch_token_id function."""
 
-    def test_known_mapping(self):
+    def test_known_mapping(self) -> None:
         """Test that known mappings are returned directly."""
         assert fetch_token_id("weth") == "weth"
         assert fetch_token_id("WETH") == "weth"
 
     @patch("packages.valory.customs.asset_lending.asset_lending.get_coin_list")
-    def test_found_in_coin_list(self, mock_list):
-        """Test that symbol is found in coin list."""
+    def test_found_in_coin_list(self, mock_list: MagicMock) -> None:
+        """Test that symbol is found in coin list.
+
+        :param mock_list: TODO
+        """
         mock_list.return_value = [{"id": "bitcoin", "symbol": "btc"}]
         assert fetch_token_id("btc") == "bitcoin"
 
     @patch("packages.valory.customs.asset_lending.asset_lending.get_coin_list")
-    def test_not_found(self, mock_list):
-        """Test that None is returned when symbol is not found."""
+    def test_not_found(self, mock_list: MagicMock) -> None:
+        """Test that None is returned when symbol is not found.
+
+        :param mock_list: TODO
+        """
         mock_list.return_value = [{"id": "bitcoin", "symbol": "btc"}]
         result = fetch_token_id("unknown_coin")
         assert result is None
@@ -209,8 +247,11 @@ class TestFetchHistoricalData:
     """Tests for fetch_historical_data function."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_fetches_data(self, mock_req):
-        """Test that historical data is fetched."""
+    def test_fetches_data(self, mock_req: MagicMock) -> None:
+        """Test that historical data is fetched.
+
+        :param mock_req: TODO
+        """
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = [{"timestamp": 1}]
@@ -219,16 +260,22 @@ class TestFetchHistoricalData:
         assert result == [{"timestamp": 1}]
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_returns_cache(self, mock_req):
-        """Test that cached data is returned."""
+    def test_returns_cache(self, mock_req: MagicMock) -> None:
+        """Test that cached data is returned.
+
+        :param mock_req: TODO
+        """
         al_module._historical_data_cache = [{"cached": True}]
         result = fetch_historical_data()
         assert result == [{"cached": True}]
         mock_req.assert_not_called()
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_error_returns_none(self, mock_req):
-        """Test that error returns None."""
+    def test_error_returns_none(self, mock_req: MagicMock) -> None:
+        """Test that error returns None.
+
+        :param mock_req: TODO
+        """
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_req.return_value = mock_response
@@ -239,12 +286,12 @@ class TestFetchHistoricalData:
 class TestCalculateDailyReturns:
     """Tests for calculate_daily_returns function."""
 
-    def test_basic_calculation(self):
+    def test_basic_calculation(self) -> None:
         """Test basic daily returns calculation."""
         result = calculate_daily_returns(0.10)
         assert result > 0
 
-    def test_with_reward_apy(self):
+    def test_with_reward_apy(self) -> None:
         """Test with reward APY."""
         result = calculate_daily_returns(0.10, reward_apy=0.05)
         assert result > calculate_daily_returns(0.10)
@@ -253,13 +300,13 @@ class TestCalculateDailyReturns:
 class TestCalculateSharpeRatio:
     """Tests for calculate_sharpe_ratio function."""
 
-    def test_with_valid_data(self):
+    def test_with_valid_data(self) -> None:
         """Test Sharpe ratio with valid returns data."""
         returns = pd.Series([0.01, 0.02, -0.005, 0.015, 0.01])
         result = calculate_sharpe_ratio(returns)
         assert not np.isnan(result)
 
-    def test_insufficient_data(self):
+    def test_insufficient_data(self) -> None:
         """Test that insufficient data returns NaN."""
         returns = pd.Series([0.01])
         result = calculate_sharpe_ratio(returns)
@@ -269,13 +316,13 @@ class TestCalculateSharpeRatio:
 class TestGetSharpeRatioForAddress:
     """Tests for get_sharpe_ratio_for_address function."""
 
-    def test_no_records(self):
+    def test_no_records(self) -> None:
         """Test with no matching records."""
         historical = [{"timestamp": 1000, "doc": {"key_0x123": {"baseAPY": 0.1}}}]
         result = get_sharpe_ratio_for_address(historical, "0xnotfound")
         assert np.isnan(result)
 
-    def test_with_matching_records(self):
+    def test_with_matching_records(self) -> None:
         """Test with matching records."""
         ts = 1704067200000  # 2024-01-01 in ms
         historical = []
@@ -284,7 +331,6 @@ class TestGetSharpeRatioForAddress:
                 {
                     "timestamp": ts + i * 86400000,
                     "doc": {
-                        f"data_0xaddr": {"baseAPY": 0.1 + i * 0.01, "rewardsAPY": 0.02},
                         "data_0xaddr": {"baseAPY": 0.1 + i * 0.01, "rewardsAPY": 0.02},
                     },
                 }
@@ -292,7 +338,7 @@ class TestGetSharpeRatioForAddress:
         result = get_sharpe_ratio_for_address(historical, "0xaddr")
         assert isinstance(result, float)
 
-    def test_entry_split_less_than_2(self):
+    def test_entry_split_less_than_2(self) -> None:
         """Test that entries with less than 2 parts after split are skipped."""
         historical = [{"timestamp": 1000, "doc": {"badkey": {"baseAPY": 0.1}}}]
         result = get_sharpe_ratio_for_address(historical, "0xaddr")
@@ -302,12 +348,12 @@ class TestGetSharpeRatioForAddress:
 class TestCheckMissingFields:
     """Tests for check_missing_fields function."""
 
-    def test_no_missing(self):
+    def test_no_missing(self) -> None:
         """Test with all fields present."""
         kwargs = {f: "v" for f in REQUIRED_FIELDS}
         assert check_missing_fields(kwargs) == []
 
-    def test_all_missing(self):
+    def test_all_missing(self) -> None:
         """Test with all fields missing."""
         assert len(check_missing_fields({})) == len(REQUIRED_FIELDS)
 
@@ -315,7 +361,7 @@ class TestCheckMissingFields:
 class TestRemoveIrrelevantFields:
     """Tests for remove_irrelevant_fields function."""
 
-    def test_removes_extras(self):
+    def test_removes_extras(self) -> None:
         """Test that extra fields are removed."""
         result = remove_irrelevant_fields({"a": 1, "b": 2}, ("a",))
         assert result == {"a": 1}
@@ -325,8 +371,11 @@ class TestFetchAggregators:
     """Tests for fetch_aggregators function."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_fetches_successfully(self, mock_req):
-        """Test successful fetch."""
+    def test_fetches_successfully(self, mock_req: MagicMock) -> None:
+        """Test successful fetch.
+
+        :param mock_req: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.json.return_value = [{"address": "0x1"}]
         mock_resp.raise_for_status = MagicMock()
@@ -335,16 +384,22 @@ class TestFetchAggregators:
         assert len(result) == 1
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_returns_cache(self, mock_req):
-        """Test that cached data is returned."""
+    def test_returns_cache(self, mock_req: MagicMock) -> None:
+        """Test that cached data is returned.
+
+        :param mock_req: TODO
+        """
         al_module._aggregators_cache = [{"cached": True}]
         result = fetch_aggregators()
         assert result[0]["cached"]
         mock_req.assert_not_called()
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_api_errors_in_result(self, mock_req):
-        """Test when API returns errors field."""
+    def test_api_errors_in_result(self, mock_req: MagicMock) -> None:
+        """Test when API returns errors field.
+
+        :param mock_req: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"errors": ["bad"]}
         mock_resp.raise_for_status = MagicMock()
@@ -353,8 +408,11 @@ class TestFetchAggregators:
         assert result == []
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_request_exception(self, mock_req):
-        """Test request exception handling."""
+    def test_request_exception(self, mock_req: MagicMock) -> None:
+        """Test request exception handling.
+
+        :param mock_req: TODO
+        """
         import requests as req_lib
 
         mock_req.side_effect = req_lib.RequestException("fail")
@@ -365,17 +423,17 @@ class TestFetchAggregators:
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
 
-    def test_empty_pools(self):
+    def test_empty_pools(self) -> None:
         """Test with empty pools returns early."""
         assert standardize_metrics([]) == []
 
-    def test_single_pool(self):
+    def test_single_pool(self) -> None:
         """Test with single pool (std dev = 0)."""
         pools = [{"total_apr": 10, "tvl": 1000}]
         result = standardize_metrics(pools)
         assert "composite_score" in result[0]
 
-    def test_multiple_pools(self):
+    def test_multiple_pools(self) -> None:
         """Test with multiple pools."""
         pools = [
             {"total_apr": 10, "tvl": 1000},
@@ -388,34 +446,34 @@ class TestStandardizeMetrics:
 class TestApplyCompositePreFilter:
     """Tests for apply_composite_pre_filter function."""
 
-    def test_empty_pools(self):
+    def test_empty_pools(self) -> None:
         """Test with empty pools."""
         assert apply_composite_pre_filter([]) == []
 
-    def test_disabled_filter(self):
+    def test_disabled_filter(self) -> None:
         """Test with composite filter disabled."""
         pools = [{"tvl": 5000, "total_apr": 10}]
         result = apply_composite_pre_filter(pools, use_composite_filter=False)
         assert len(result) == 1
 
-    def test_disabled_filter_empty_pools(self):
+    def test_disabled_filter_empty_pools(self) -> None:
         """Test with disabled filter and empty pools."""
         result = apply_composite_pre_filter([], use_composite_filter=False)
         assert result == []
 
-    def test_below_tvl_threshold(self):
+    def test_below_tvl_threshold(self) -> None:
         """Test that pools below TVL threshold are excluded."""
         pools = [{"tvl": 100, "total_apr": 10, "address": "0x1"}]
         result = apply_composite_pre_filter(pools, min_tvl_threshold=1000)
         assert result == []
 
-    def test_invalid_tvl_values(self):
+    def test_invalid_tvl_values(self) -> None:
         """Test with invalid TVL values."""
         pools = [{"tvl": "invalid", "total_apr": 10, "address": "0x1"}]
         result = apply_composite_pre_filter(pools, min_tvl_threshold=0)
         assert result == []
 
-    def test_top_n_limit(self):
+    def test_top_n_limit(self) -> None:
         """Test top_n limit."""
         pools = [{"tvl": 5000, "total_apr": 10 + i} for i in range(5)]
         result = apply_composite_pre_filter(pools, top_n=2, min_tvl_threshold=0)
@@ -428,8 +486,11 @@ class TestFilterAggregators:
     @patch(
         "packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter"
     )
-    def test_filters_by_chain_and_asset(self, mock_filter):
-        """Test filtering by chain and asset."""
+    def test_filters_by_chain_and_asset(self, mock_filter: MagicMock) -> None:
+        """Test filtering by chain and asset.
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         aggs = [
             {
@@ -446,8 +507,11 @@ class TestFilterAggregators:
     @patch(
         "packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter"
     )
-    def test_excludes_current_positions(self, mock_filter):
-        """Test that current positions are excluded."""
+    def test_excludes_current_positions(self, mock_filter: MagicMock) -> None:
+        """Test that current positions are excluded.
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         addr = "0x1234567890abcDEF1234567890abcDEF12345678"
         from web3 import Web3
@@ -465,7 +529,7 @@ class TestFilterAggregators:
         result = filter_aggregators(["optimism"], aggs, "0xasset", [checksum])
         assert len(result) == 0
 
-    def test_empty_result(self):
+    def test_empty_result(self) -> None:
         """Test with no matching aggregators."""
         result = filter_aggregators(["optimism"], [], "0xasset", [])
         assert result == []
@@ -474,19 +538,21 @@ class TestFilterAggregators:
 class TestCalculateIlRiskScoreForLending:
     """Tests for calculate_il_risk_score_for_lending function."""
 
-    def test_missing_tokens(self):
+    def test_missing_tokens(self) -> None:
         """Test with missing tokens."""
         result = calculate_il_risk_score_for_lending("", "token2", "key")
         assert result is None
 
-    def test_missing_token2(self):
+    def test_missing_token2(self) -> None:
         """Test with missing second token."""
         result = calculate_il_risk_score_for_lending("token1", "", "key")
         assert result is None
 
     @patch("packages.valory.customs.asset_lending.asset_lending.is_pro_api_key")
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_successful_calculation(self, mock_cg_class, mock_is_pro):
+    def test_successful_calculation(
+        self, mock_cg_class: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
         """Test successful IL risk score calculation."""
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
@@ -500,8 +566,14 @@ class TestCalculateIlRiskScoreForLending:
 
     @patch("packages.valory.customs.asset_lending.asset_lending.is_pro_api_key")
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_api_exception(self, mock_cg_class, mock_is_pro):
-        """Test API exception handling."""
+    def test_api_exception(
+        self, mock_cg_class: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test API exception handling.
+
+        :param mock_cg_class: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_range_by_id.side_effect = Exception("API error")
@@ -511,8 +583,14 @@ class TestCalculateIlRiskScoreForLending:
 
     @patch("packages.valory.customs.asset_lending.asset_lending.is_pro_api_key")
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_empty_prices(self, mock_cg_class, mock_is_pro):
-        """Test with empty price data."""
+    def test_empty_prices(
+        self, mock_cg_class: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test with empty price data.
+
+        :param mock_cg_class: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_range_by_id.side_effect = [
@@ -525,8 +603,14 @@ class TestCalculateIlRiskScoreForLending:
 
     @patch("packages.valory.customs.asset_lending.asset_lending.is_pro_api_key")
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_pro_api_key(self, mock_cg_class, mock_is_pro):
-        """Test with pro API key."""
+    def test_pro_api_key(
+        self, mock_cg_class: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test with pro API key.
+
+        :param mock_cg_class: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = True
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_range_by_id.side_effect = [
@@ -542,8 +626,11 @@ class TestCalculateIlRiskScoreForSilos:
     """Tests for calculate_il_risk_score_for_silos function."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
-    def test_no_token0_id(self, mock_fetch):
-        """Test when token0 id is not found."""
+    def test_no_token0_id(self, mock_fetch: MagicMock) -> None:
+        """Test when token0 id is not found.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = None
         result = calculate_il_risk_score_for_silos("unknown", [], "key")
         assert result is None
@@ -552,7 +639,9 @@ class TestCalculateIlRiskScoreForSilos:
         "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
     )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
-    def test_successful_calculation(self, mock_fetch, mock_il):
+    def test_successful_calculation(
+        self, mock_fetch: MagicMock, mock_il: MagicMock
+    ) -> None:
         """Test successful silo IL risk calculation."""
         mock_fetch.side_effect = lambda s: f"id_{s.lower()}"
         mock_il.return_value = -0.05
@@ -564,10 +653,16 @@ class TestCalculateIlRiskScoreForSilos:
         "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
     )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
-    def test_silo_token_not_found(self, mock_fetch, mock_il):
-        """Test when silo collateral token is not found."""
+    def test_silo_token_not_found(
+        self, mock_fetch: MagicMock, mock_il: MagicMock
+    ) -> Any:
+        """Test when silo collateral token is not found.
 
-        def side_effect(s):
+        :param mock_fetch: TODO
+        :param mock_il: TODO
+        """
+
+        def side_effect(s: Any) -> Any:
             return "id_weth" if s.lower() == "weth" else None
 
         mock_fetch.side_effect = side_effect
@@ -579,8 +674,14 @@ class TestCalculateIlRiskScoreForSilos:
         "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
     )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
-    def test_il_risk_score_returns_none(self, mock_fetch, mock_il):
-        """Test when IL risk score calculation returns None."""
+    def test_il_risk_score_returns_none(
+        self, mock_fetch: MagicMock, mock_il: MagicMock
+    ) -> None:
+        """Test when IL risk score calculation returns None.
+
+        :param mock_fetch: TODO
+        :param mock_il: TODO
+        """
         mock_fetch.side_effect = lambda s: f"id_{s.lower()}"
         mock_il.return_value = None
         silos = [{"collateral": "TOKEN1"}]
@@ -591,8 +692,14 @@ class TestCalculateIlRiskScoreForSilos:
         "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
     )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
-    def test_il_risk_score_returns_zero(self, mock_fetch, mock_il):
-        """Test when IL risk score returns 0 (falsy but valid)."""
+    def test_il_risk_score_returns_zero(
+        self, mock_fetch: MagicMock, mock_il: MagicMock
+    ) -> None:
+        """Test when IL risk score returns 0 (falsy but valid).
+
+        :param mock_fetch: TODO
+        :param mock_il: TODO
+        """
         mock_fetch.side_effect = lambda s: f"id_{s.lower()}"
         mock_il.return_value = 0  # Falsy
         silos = [{"collateral": "TOKEN1"}]
@@ -604,7 +711,7 @@ class TestCalculateIlRiskScoreForSilos:
 class TestAnalyzeVaultLiquidity:
     """Tests for analyze_vault_liquidity function."""
 
-    def test_with_valid_data(self):
+    def test_with_valid_data(self) -> None:
         """Test with valid TVL and total assets."""
         agg = {"tvl": 1000000, "totalAssets": 500000, "address": "0x1"}
         depth, max_pos = analyze_vault_liquidity(agg)
@@ -612,8 +719,11 @@ class TestAnalyzeVaultLiquidity:
         assert max_pos > 0
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_missing_data_fetches_from_aggregators(self, mock_fetch):
-        """Test that missing TVL/totalAssets triggers re-fetch."""
+    def test_missing_data_fetches_from_aggregators(self, mock_fetch: MagicMock) -> None:
+        """Test that missing TVL/totalAssets triggers re-fetch.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = [
             {"address": "0x1", "tvl": 1000000, "totalAssets": 500000}
         ]
@@ -622,8 +732,11 @@ class TestAnalyzeVaultLiquidity:
         assert depth > 0
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_missing_data_not_found_in_aggregators(self, mock_fetch):
-        """Test when data is not found in aggregators either."""
+    def test_missing_data_not_found_in_aggregators(self, mock_fetch: MagicMock) -> None:
+        """Test when data is not found in aggregators either.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = []
         agg = {"tvl": 0, "totalAssets": 0, "address": "0x1"}
         depth, max_pos = analyze_vault_liquidity(agg)
@@ -631,8 +744,11 @@ class TestAnalyzeVaultLiquidity:
         assert np.isnan(max_pos)
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_pool_address_match(self, mock_fetch):
-        """Test matching by pool_address field."""
+    def test_pool_address_match(self, mock_fetch: MagicMock) -> None:
+        """Test matching by pool_address field.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = [
             {"address": "0x2", "tvl": 1000000, "totalAssets": 500000}
         ]
@@ -644,7 +760,7 @@ class TestAnalyzeVaultLiquidity:
 class TestFormatAggregator:
     """Tests for format_aggregator function."""
 
-    def test_formats_correctly(self):
+    def test_formats_correctly(self) -> None:
         """Test correct formatting."""
         agg = {
             "chainName": "optimism",
@@ -668,16 +784,22 @@ class TestIsProApiKey:
     """Tests for is_pro_api_key function."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_pro_key(self, mock_cg_class):
-        """Test that a pro key returns True."""
+    def test_pro_key(self, mock_cg_class: MagicMock) -> None:
+        """Test that a pro key returns True.
+
+        :param mock_cg_class: TODO
+        """
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_range_by_id.return_value = {"prices": []}
         mock_cg_class.return_value = mock_cg
         assert is_pro_api_key("pro_key") is True
 
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_non_pro_key(self, mock_cg_class):
-        """Test that a non-pro key returns False."""
+    def test_non_pro_key(self, mock_cg_class: MagicMock) -> None:
+        """Test that a non-pro key returns False.
+
+        :param mock_cg_class: TODO
+        """
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_range_by_id.side_effect = Exception(
             "unauthorized"
@@ -686,8 +808,11 @@ class TestIsProApiKey:
         assert is_pro_api_key("bad_key") is False
 
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_empty_response(self, mock_cg_class):
-        """Test that an empty/falsy response returns False."""
+    def test_empty_response(self, mock_cg_class: MagicMock) -> None:
+        """Test that an empty/falsy response returns False.
+
+        :param mock_cg_class: TODO
+        """
         mock_cg = MagicMock()
         mock_cg.get_coin_market_chart_range_by_id.return_value = {}
         mock_cg_class.return_value = mock_cg
@@ -698,16 +823,25 @@ class TestGetBestOpportunities:
     """Tests for get_best_opportunities function."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_no_aggregators(self, mock_fetch):
-        """Test when no aggregators are available."""
+    def test_no_aggregators(self, mock_fetch: MagicMock) -> None:
+        """Test when no aggregators are available.
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = []
         result = get_best_opportunities(["optimism"], "0xasset", [], "key")
         assert "error" in result
 
     @patch("packages.valory.customs.asset_lending.asset_lending.filter_aggregators")
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_no_filtered_aggregators(self, mock_fetch, mock_filter):
-        """Test when no aggregators pass filtering."""
+    def test_no_filtered_aggregators(
+        self, mock_fetch: MagicMock, mock_filter: MagicMock
+    ) -> None:
+        """Test when no aggregators pass filtering.
+
+        :param mock_fetch: TODO
+        :param mock_filter: TODO
+        """
         mock_fetch.return_value = [{"address": "0x1"}]
         mock_filter.return_value = []
         result = get_best_opportunities(["optimism"], "0xasset", [], "key")
@@ -726,9 +860,24 @@ class TestGetBestOpportunities:
     @patch("packages.valory.customs.asset_lending.asset_lending.filter_aggregators")
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
     def test_no_historical_data(
-        self, mock_fetch, mock_filter, mock_hist, mock_il, mock_sharpe, mock_vault
-    ):
-        """Test when historical data is unavailable."""
+        self,
+        mock_fetch: MagicMock,
+        mock_filter: MagicMock,
+        mock_hist: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_vault: MagicMock,
+    ) -> None:
+        """Test when historical data is unavailable.
+
+        :param mock_hist: TODO
+        :param mock_il: TODO
+
+        :param mock_fetch: TODO
+        :param mock_filter: TODO
+        :param mock_sharpe: TODO
+        :param mock_vault: TODO
+        """
         mock_fetch.return_value = [{"address": "0x1"}]
         mock_filter.return_value = [
             {"address": "0x1", "asset": {"symbol": "WETH"}, "whitelistedSilos": []}
@@ -752,15 +901,24 @@ class TestGetBestOpportunities:
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
     def test_successful_flow(
         self,
-        mock_fetch,
-        mock_filter,
-        mock_hist,
-        mock_il,
-        mock_sharpe,
-        mock_vault,
-        mock_format,
-    ):
-        """Test successful end-to-end flow."""
+        mock_fetch: MagicMock,
+        mock_filter: MagicMock,
+        mock_hist: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_vault: MagicMock,
+        mock_format: MagicMock,
+    ) -> None:
+        """Test successful end-to-end flow.
+
+        :param mock_fetch: TODO
+        :param mock_filter: TODO
+        :param mock_format: TODO
+        :param mock_hist: TODO
+        :param mock_il: TODO
+        :param mock_sharpe: TODO
+        :param mock_vault: TODO
+        """
         mock_fetch.return_value = [{"address": "0x1"}]
         mock_filter.return_value = [
             {"address": "0x1", "asset": {"symbol": "WETH"}, "whitelistedSilos": []}
@@ -788,8 +946,20 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos"
     )
-    def test_successful(self, mock_il, mock_hist, mock_sharpe, mock_vault):
-        """Test successful metrics calculation."""
+    def test_successful(
+        self,
+        mock_il: MagicMock,
+        mock_hist: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_vault: MagicMock,
+    ) -> None:
+        """Test successful metrics calculation.
+
+        :param mock_hist: TODO
+        :param mock_il: TODO
+        :param mock_sharpe: TODO
+        :param mock_vault: TODO
+        """
         mock_il.return_value = -0.05
         mock_hist.return_value = [{"timestamp": 1}]
         mock_sharpe.return_value = 1.5
@@ -800,14 +970,19 @@ class TestCalculateMetrics:
             "pool_address": "0x1",
         }
         result = calculate_metrics(position, "key")
-        assert result["il_risk_score"] == -0.05
+        assert result["il_risk_score"] == -0.05  # type: ignore[index]
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_historical_data")
     @patch(
         "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos"
     )
-    def test_no_historical_data(self, mock_il, mock_hist):
-        """Test when historical data is unavailable."""
+    def test_no_historical_data(self, mock_il: MagicMock, mock_hist: MagicMock) -> None:
+        """Test when historical data is unavailable.
+
+        :param mock_hist: TODO
+        :param mock_il: TODO
+
+        """
         mock_il.return_value = -0.05
         mock_hist.return_value = None
         position = {
@@ -816,20 +991,23 @@ class TestCalculateMetrics:
             "pool_address": "0x1",
         }
         result = calculate_metrics(position, "key")
-        assert "error" in result
+        assert "error" in result  # type: ignore[operator]
 
 
 class TestRun:
     """Tests for the run function."""
 
-    def test_missing_fields(self):
+    def test_missing_fields(self) -> None:
         """Test with missing required fields."""
         result = run()
         assert "error" in result
 
     @patch("packages.valory.customs.asset_lending.asset_lending.calculate_metrics")
-    def test_get_metrics_mode(self, mock_calc):
-        """Test get_metrics mode."""
+    def test_get_metrics_mode(self, mock_calc: MagicMock) -> None:
+        """Test get_metrics mode.
+
+        :param mock_calc: TODO
+        """
         mock_calc.return_value = {"il_risk_score": -0.05}
         result = run(
             chains=["optimism"],
@@ -846,8 +1024,11 @@ class TestRun:
         assert result == {"il_risk_score": -0.05}
 
     @patch("packages.valory.customs.asset_lending.asset_lending.calculate_metrics")
-    def test_get_metrics_returns_none(self, mock_calc):
-        """Test get_metrics mode when metrics is None."""
+    def test_get_metrics_returns_none(self, mock_calc: MagicMock) -> None:
+        """Test get_metrics mode when metrics is None.
+
+        :param mock_calc: TODO
+        """
         mock_calc.return_value = None
         result = run(
             chains=["optimism"],
@@ -860,8 +1041,11 @@ class TestRun:
         assert "error" in result
 
     @patch("packages.valory.customs.asset_lending.asset_lending.get_best_opportunities")
-    def test_opportunity_search_mode(self, mock_opp):
-        """Test opportunity search mode."""
+    def test_opportunity_search_mode(self, mock_opp: MagicMock) -> None:
+        """Test opportunity search mode.
+
+        :param mock_opp: TODO
+        """
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
             chains=["optimism"],
@@ -873,8 +1057,11 @@ class TestRun:
         assert "error" in result
 
     @patch("packages.valory.customs.asset_lending.asset_lending.get_best_opportunities")
-    def test_opportunity_search_error(self, mock_opp):
-        """Test opportunity search returning error."""
+    def test_opportunity_search_error(self, mock_opp: MagicMock) -> None:
+        """Test opportunity search returning error.
+
+        :param mock_opp: TODO
+        """
         mock_opp.return_value = {"error": ["some error"]}
         result = run(
             chains=["optimism"],
@@ -885,8 +1072,11 @@ class TestRun:
         assert "result" in result
 
     @patch("packages.valory.customs.asset_lending.asset_lending.get_best_opportunities")
-    def test_opportunity_search_empty(self, mock_opp):
-        """Test opportunity search returning empty."""
+    def test_opportunity_search_empty(self, mock_opp: MagicMock) -> None:
+        """Test opportunity search returning empty.
+
+        :param mock_opp: TODO
+        """
         mock_opp.return_value = []
         result = run(
             chains=["optimism"],
@@ -897,8 +1087,11 @@ class TestRun:
         assert "result" in result
 
     @patch("packages.valory.customs.asset_lending.asset_lending.get_best_opportunities")
-    def test_get_metrics_with_errors(self, mock_opp):
-        """Test that errors are included in the response."""
+    def test_get_metrics_with_errors(self, mock_opp: MagicMock) -> None:
+        """Test that errors are included in the response.
+
+        :param mock_opp: TODO
+        """
         mock_opp.return_value = [{"pool": "data"}]
         al_module._thread_local.errors = []
         result = run(
@@ -916,8 +1109,11 @@ class TestBranchCoverage:
     @patch(
         "packages.valory.customs.asset_lending.asset_lending.apply_composite_pre_filter"
     )
-    def test_filter_aggregators_asset_mismatch(self, mock_filter):
-        """Test filter_aggregators where chain matches but asset address does not (376->370)."""
+    def test_filter_aggregators_asset_mismatch(self, mock_filter: MagicMock) -> None:
+        """Test filter_aggregators where chain matches but asset address does not (376->370).
+
+        :param mock_filter: TODO
+        """
         mock_filter.side_effect = lambda x, **kw: x
         aggs = [
             {
@@ -943,8 +1139,14 @@ class TestBranchCoverage:
         "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_lending"
     )
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_token_id")
-    def test_silos_token_id_cache_hit(self, mock_fetch, mock_il):
-        """Test calculate_il_risk_score_for_silos where token_id_cache is hit (line 483)."""
+    def test_silos_token_id_cache_hit(
+        self, mock_fetch: MagicMock, mock_il: MagicMock
+    ) -> None:
+        """Test calculate_il_risk_score_for_silos where token_id_cache is hit (line 483).
+
+        :param mock_fetch: TODO
+        :param mock_il: TODO
+        """
         mock_fetch.side_effect = lambda s: f"id_{s.lower()}"
         mock_il.return_value = -0.05
         # Two silos with the SAME collateral token to trigger cache hit on second lookup
@@ -956,8 +1158,13 @@ class TestBranchCoverage:
         assert mock_fetch.call_count == 1
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_aggregators")
-    def test_analyze_vault_liquidity_non_matching_items(self, mock_fetch):
-        """Test analyze_vault_liquidity where aggregators list has non-matching items (532->531)."""
+    def test_analyze_vault_liquidity_non_matching_items(
+        self, mock_fetch: MagicMock
+    ) -> None:
+        """Test analyze_vault_liquidity where aggregators list has non-matching items (532->531).
+
+        :param mock_fetch: TODO
+        """
         mock_fetch.return_value = [
             {"address": "0xNOTMATCH1", "tvl": 999, "totalAssets": 999},
             {"address": "0xNOTMATCH2", "tvl": 888, "totalAssets": 888},
@@ -973,16 +1180,22 @@ class TestNetworkResilience:
     """Tests for network resilience in asset_lending."""
 
     @patch("packages.valory.customs.asset_lending.asset_lending.requests.get")
-    def test_throttled_request_passes_timeout(self, mock_get):
-        """Test that throttled_request passes timeout=30 to requests.get."""
+    def test_throttled_request_passes_timeout(self, mock_get: MagicMock) -> None:
+        """Test that throttled_request passes timeout=30 to requests.get.
+
+        :param mock_get: TODO
+        """
         mock_get.return_value = MagicMock()
         throttled_request("https://example.com")
         _, kwargs = mock_get.call_args
         assert kwargs.get("timeout") == 30
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_fetch_historical_data_connection_error(self, mock_req):
-        """Test that ConnectionError in fetch_historical_data returns None."""
+    def test_fetch_historical_data_connection_error(self, mock_req: MagicMock) -> None:
+        """Test that ConnectionError in fetch_historical_data returns None.
+
+        :param mock_req: TODO
+        """
         import requests as req_lib
 
         mock_req.side_effect = req_lib.ConnectionError("connection refused")
@@ -990,8 +1203,11 @@ class TestNetworkResilience:
         assert result is None
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_fetch_historical_data_json_decode_error(self, mock_req):
-        """Test that JSONDecodeError in fetch_historical_data returns None."""
+    def test_fetch_historical_data_json_decode_error(self, mock_req: MagicMock) -> None:
+        """Test that JSONDecodeError in fetch_historical_data returns None.
+
+        :param mock_req: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.side_effect = ValueError("No JSON")
@@ -1000,8 +1216,11 @@ class TestNetworkResilience:
         assert result is None
 
     @patch("packages.valory.customs.asset_lending.asset_lending.throttled_request")
-    def test_fetch_aggregators_json_decode_error(self, mock_req):
-        """Test that ValueError from response.json() in fetch_aggregators is caught."""
+    def test_fetch_aggregators_json_decode_error(self, mock_req: MagicMock) -> None:
+        """Test that ValueError from response.json() in fetch_aggregators is caught.
+
+        :param mock_req: TODO
+        """
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.side_effect = ValueError("No JSON object could be decoded")
@@ -1015,8 +1234,14 @@ class TestNetworkResilience:
 
     @patch("packages.valory.customs.asset_lending.asset_lending.is_pro_api_key")
     @patch("packages.valory.customs.asset_lending.asset_lending.CoinGeckoAPI")
-    def test_il_risk_score_missing_prices_key(self, mock_cg_class, mock_is_pro):
-        """Test that missing 'prices' key in CoinGecko response returns None."""
+    def test_il_risk_score_missing_prices_key(
+        self, mock_cg_class: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """Test that missing 'prices' key in CoinGecko response returns None.
+
+        :param mock_cg_class: TODO
+        :param mock_is_pro: TODO
+        """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
         # Response missing "prices" key

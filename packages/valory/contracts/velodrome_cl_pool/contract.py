@@ -57,7 +57,17 @@ class VelodromeCLPoolContract(Contract):
         amount: int,
         data: bytes,
     ) -> JSONLike:
-        """Prepare encoded tx for mint."""
+        """Prepare encoded tx for mint.
+
+        :param amount: TODO
+        :param contract_address: TODO
+        :param data: TODO
+        :param ledger_api: TODO
+        :param recipient: TODO
+        :param tick_lower: TODO
+        :param tick_upper: TODO
+        :return: TODO
+        """
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -80,7 +90,15 @@ class VelodromeCLPoolContract(Contract):
         tick_upper: int,
         amount: int,
     ) -> JSONLike:
-        """Prepare encoded tx for burn."""
+        """Prepare encoded tx for burn.
+
+        :param amount: TODO
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param tick_lower: TODO
+        :param tick_upper: TODO
+        :return: TODO
+        """
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -103,7 +121,17 @@ class VelodromeCLPoolContract(Contract):
         amount0_requested: int,
         amount1_requested: int,
     ) -> JSONLike:
-        """Prepare encoded tx for collect."""
+        """Prepare encoded tx for collect.
+
+        :param amount0_requested: TODO
+        :param amount1_requested: TODO
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param recipient: TODO
+        :param tick_lower: TODO
+        :param tick_upper: TODO
+        :return: TODO
+        """
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -123,16 +151,22 @@ class VelodromeCLPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the current state of the pool from slot0."""
+        """Get the current state of the pool from slot0.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.slot0().call()
-        return dict(slot0={
-            "sqrt_price_x96": result[0],
-            "tick": result[1],
-            "observation_index": result[2],
-            "observation_cardinality": result[3],
-            "observation_cardinality_next": result[4],
-            "unlocked": result[5],
+        return dict(
+            slot0={
+                "sqrt_price_x96": result[0],
+                "tick": result[1],
+                "observation_index": result[2],
+                "observation_cardinality": result[3],
+                "observation_cardinality_next": result[4],
+                "unlocked": result[5],
             }
         )
 
@@ -142,18 +176,28 @@ class VelodromeCLPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the tick spacing."""
+        """Get the tick spacing.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tick_spacing = contract_instance.functions.tickSpacing().call()
         return dict(data=tick_spacing)
-    
+
     @classmethod
     def get_pool_tokens(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the pool tokens"""
+        """Get the pool tokens
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()

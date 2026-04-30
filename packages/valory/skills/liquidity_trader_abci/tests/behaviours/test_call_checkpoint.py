@@ -21,9 +21,8 @@
 
 # pylint: skip-file
 
+from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
-
-import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import (
     CallCheckpointBehaviour,
@@ -33,7 +32,7 @@ from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import 
 )
 
 
-def _make_behaviour():
+def _make_behaviour() -> Any:
     """Create a CallCheckpointBehaviour without __init__."""
     obj = object.__new__(CallCheckpointBehaviour)
     ctx = MagicMock()
@@ -42,7 +41,7 @@ def _make_behaviour():
     return obj
 
 
-def _drive(gen):
+def _drive(gen: Any) -> Any:
     """Drive a generator to completion."""
     val = None
     while True:
@@ -55,7 +54,7 @@ def _drive(gen):
 class TestCallCheckpointBehaviour:
     """Tests for CallCheckpointBehaviour."""
 
-    def _run_async_act(self, obj, params_mock):
+    def _run_async_act(self, obj: Any, params_mock: MagicMock) -> Any:
         with patch.object(
             type(obj), "params", new_callable=PropertyMock, return_value=params_mock
         ):
@@ -63,10 +62,10 @@ class TestCallCheckpointBehaviour:
             obj.context.benchmark_tool.measure.return_value = benchmark_mock
             obj.context.agent_address = "0xagent"
 
-            def fake_send(*args, **kwargs):
+            def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
                 yield
 
-            def fake_wait(*args, **kwargs):
+            def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
                 yield
 
             obj.send_a2a_transaction = fake_send
@@ -95,15 +94,15 @@ class TestCallCheckpointBehaviour:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_token_contract_address = "0xstaking"
 
-        def fake_get_staking_state(chain):
+        def fake_get_staking_state(chain: Any) -> Generator[Any, Any, Any]:
             obj.service_staking_state = StakingState.STAKED
             yield
 
-        def fake_calc_min_tx(chain):
+        def fake_calc_min_tx(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
-        def fake_check_checkpoint(chain):
+        def fake_check_checkpoint(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return False
 
@@ -121,19 +120,19 @@ class TestCallCheckpointBehaviour:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_token_contract_address = "0xstaking"
 
-        def fake_get_staking_state(chain):
+        def fake_get_staking_state(chain: Any) -> Generator[Any, Any, Any]:
             obj.service_staking_state = StakingState.STAKED
             yield
 
-        def fake_calc_min_tx(chain):
+        def fake_calc_min_tx(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 5
 
-        def fake_check_checkpoint(chain):
+        def fake_check_checkpoint(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return True
 
-        def fake_prepare_checkpoint_tx(chain):
+        def fake_prepare_checkpoint_tx(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xcheckpoint_tx"
 
@@ -151,15 +150,15 @@ class TestCallCheckpointBehaviour:
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_get_staking_state(chain):
+        def fake_get_staking_state(chain: Any) -> Generator[Any, Any, Any]:
             obj.service_staking_state = StakingState.STAKED
             yield
 
-        def fake_calc_min_tx(chain):
+        def fake_calc_min_tx(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 5
 
-        def fake_check_checkpoint(chain):
+        def fake_check_checkpoint(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return False
 
@@ -176,7 +175,7 @@ class TestCallCheckpointBehaviour:
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_get_staking_state(chain):
+        def fake_get_staking_state(chain: Any) -> Generator[Any, Any, Any]:
             obj.service_staking_state = StakingState.EVICTED
             yield
 
@@ -191,7 +190,7 @@ class TestCallCheckpointBehaviour:
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_get_staking_state(chain):
+        def fake_get_staking_state(chain: Any) -> Generator[Any, Any, Any]:
             obj.service_staking_state = StakingState.UNSTAKED
             yield
 
@@ -207,7 +206,7 @@ class TestCheckIfCheckpointReached:
         """Test returns False when next_checkpoint is None."""
         obj = _make_behaviour()
 
-        def fake_get_next_checkpoint(chain):
+        def fake_get_next_checkpoint(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -220,7 +219,7 @@ class TestCheckIfCheckpointReached:
         """Test returns True when next_checkpoint is 0."""
         obj = _make_behaviour()
 
-        def fake_get_next_checkpoint(chain):
+        def fake_get_next_checkpoint(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 0
 
@@ -233,7 +232,7 @@ class TestCheckIfCheckpointReached:
         """Test returns False when next_checkpoint is in the future."""
         obj = _make_behaviour()
 
-        def fake_get_next_checkpoint(chain):
+        def fake_get_next_checkpoint(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 9999999999
 
@@ -252,7 +251,7 @@ class TestCheckIfCheckpointReached:
         """Test returns True when next_checkpoint is in the past."""
         obj = _make_behaviour()
 
-        def fake_get_next_checkpoint(chain):
+        def fake_get_next_checkpoint(chain: Any) -> Generator[Any, Any, Any]:
             yield
             return 1600000000
 
@@ -278,11 +277,11 @@ class TestPrepareCheckpointTx:
         params_mock.staking_token_contract_address = "0xstaking"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return b"checkpoint_data"
 
-        def fake_prepare_safe_tx(chain, data):
+        def fake_prepare_safe_tx(chain: Any, data: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xsafehash"
 
@@ -307,7 +306,7 @@ class TestPrepareSafeTx:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_token_contract_address = "0xstaking"
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -327,7 +326,7 @@ class TestPrepareSafeTx:
         params_mock.safe_contract_addresses = {"optimism": "0x" + "aa" * 20}
         params_mock.staking_token_contract_address = "0x" + "bb" * 20
 
-        def fake_contract_interact(**kwargs):
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
             yield
             return "0x" + "ab" * 32
 

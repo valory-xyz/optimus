@@ -23,10 +23,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.velodrome_sugar.contract import VelodromeSugarContract
-
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
 MOCK_ACCOUNT = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
@@ -65,10 +62,7 @@ class TestPositions:
     """Tests for the positions method."""
 
     def test_positions_returns_single_position(self) -> None:
-        """Test that positions returns correctly parsed position data for a single position.
-
-        :return: None
-        """
+        """Test that positions returns correctly parsed position data for a single position."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -91,10 +85,7 @@ class TestPositions:
             assert pos[field] == 100 + i
 
     def test_positions_returns_multiple_positions(self) -> None:
-        """Test that positions correctly parses multiple position entries.
-
-        :return: None
-        """
+        """Test that positions correctly parses multiple position entries."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -115,10 +106,7 @@ class TestPositions:
         assert result["positions"][1]["id"] == 100
 
     def test_positions_returns_empty_list_when_no_positions(self) -> None:
-        """Test that positions returns an empty list when there are no positions.
-
-        :return: None
-        """
+        """Test that positions returns an empty list when there are no positions."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -134,10 +122,7 @@ class TestPositions:
         assert result == {"positions": []}
 
     def test_positions_checksums_account_address(self) -> None:
-        """Test that positions checksums the account address before use.
-
-        :return: None
-        """
+        """Test that positions checksums the account address before use."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -153,10 +138,7 @@ class TestPositions:
         mock_ledger_api.api.to_checksum_address.assert_called_once_with(MOCK_ACCOUNT)
 
     def test_positions_passes_correct_args_to_contract(self) -> None:
-        """Test that positions passes limit, offset, and checksummed account to the contract.
-
-        :return: None
-        """
+        """Test that positions passes limit, offset, and checksummed account to the contract."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()

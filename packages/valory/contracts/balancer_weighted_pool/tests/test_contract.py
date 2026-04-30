@@ -23,12 +23,9 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
-
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
 MOCK_ACCOUNT = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
@@ -38,10 +35,7 @@ class TestGetBalance:
     """Tests for the get_balance method."""
 
     def test_get_balance_returns_correct_balance(self) -> None:
-        """Test that get_balance returns a dict with the balance key.
-
-        :return: None
-        """
+        """Test that get_balance returns a dict with the balance key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.balanceOf.return_value.call.return_value = 5000
@@ -61,10 +55,7 @@ class TestGetName:
     """Tests for the get_name method."""
 
     def test_get_name_returns_pool_name(self) -> None:
-        """Test that get_name returns a dict with the name key.
-
-        :return: None
-        """
+        """Test that get_name returns a dict with the name key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.name.return_value.call.return_value = (
@@ -83,10 +74,7 @@ class TestGetPoolId:
     """Tests for the get_pool_id method."""
 
     def test_get_pool_id_returns_hex_prefixed_id(self) -> None:
-        """Test that get_pool_id returns a dict with the pool_id prefixed with 0x.
-
-        :return: None
-        """
+        """Test that get_pool_id returns a dict with the pool_id prefixed with 0x."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         pool_id_bytes = bytes.fromhex("abcdef1234567890" * 4)
@@ -106,10 +94,7 @@ class TestGetVaultAddress:
     """Tests for the get_vault_address method."""
 
     def test_get_vault_address_returns_vault(self) -> None:
-        """Test that get_vault_address returns a dict with the vault key.
-
-        :return: None
-        """
+        """Test that get_vault_address returns a dict with the vault key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         vault_address = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"
@@ -131,10 +116,7 @@ class TestGetTotalSupply:
     """Tests for the get_total_supply method."""
 
     def test_get_total_supply_returns_supply(self) -> None:
-        """Test that get_total_supply returns a dict with the data key.
-
-        :return: None
-        """
+        """Test that get_total_supply returns a dict with the data key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.totalSupply.return_value.call.return_value = (

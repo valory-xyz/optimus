@@ -24,7 +24,6 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi, LedgerApi
 
-
 PUBLIC_ID = PublicId.from_str("valory/velodrome_pool:0.1.0")
 
 
@@ -40,11 +39,17 @@ class VelodromePoolContract(Contract):
         contract_address: str,
         account: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """Get the balance of the given account.
+
+        :param account: TODO
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.balanceOf(account).call()
         return dict(balance=data)
-    
+
     @classmethod
     def build_approval_tx(
         cls,
@@ -53,22 +58,34 @@ class VelodromePoolContract(Contract):
         spender: str,
         amount: int,
     ) -> JSONLike:
-        """Build an ERC20 approval."""
+        """Build an ERC20 approval.
+
+        :param amount: TODO
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param spender: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         checksumed_spender = ledger_api.api.to_checksum_address(spender)
-        data = contract_instance.encode_abi("approve", args=(checksumed_spender, amount))
+        data = contract_instance.encode_abi(
+            "approve", args=(checksumed_spender, amount)
+        )
         return {"tx_hash": bytes.fromhex(data[2:])}
-    
+
     @classmethod
     def get_reserves(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the current reserves of token0 and token1."""
+        """Get the current reserves of token0 and token1.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         reserve0 = contract_instance.functions.reserve0().call()
         reserve1 = contract_instance.functions.reserve1().call()
         return dict(data=[reserve0, reserve1])
-
-    

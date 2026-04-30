@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the support resources for the  UniswapV3 Pool contract interface."""
-from pathlib import Path
 
+from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).parent

@@ -44,7 +44,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     _initial_value = None
     _final_value = None
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
@@ -52,7 +52,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
             try:
                 # Check if we should calculate APR
-                should_calculate = yield from self._should_calculate_apr()
+                should_calculate = yield from self._should_calculate_apr()  # type: ignore[func-returns-value]
                 if should_calculate:
                     # Get or create required resources
                     agent_type = yield from self._get_or_create_agent_type(sender)
@@ -112,7 +112,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         timestamp = self._get_current_timestamp()
         enhanced_data = {
             "apr": float(total_actual_apr),
-            "adjusted_apr": float(adjusted_apr),
+            "adjusted_apr": float(adjusted_apr),  # type: ignore[arg-type]
             "timestamp": timestamp,
             "portfolio_snapshot": portfolio_snapshot,
             "calculation_metrics": self._get_apr_calculation_metrics(),
@@ -141,12 +141,12 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         """Check if enough time has passed since last APR calculation or if any investment has been made."""
 
         # Get last calculation time from DB
-        data = yield from self._read_kv(keys=("last_apr_calculation",))
+        data = yield from self._read_kv(keys=("last_apr_calculation",))  # type: ignore[misc]
         last_calculation_time = None
 
         if data and data.get("last_apr_calculation"):
             try:
-                last_calculation_time = int(data.get("last_apr_calculation"))
+                last_calculation_time = int(data.get("last_apr_calculation"))  # type: ignore[arg-type]
             except (ValueError, TypeError):
                 self.context.logger.warning("Invalid last APR calculation time in DB")
 
@@ -164,19 +164,19 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                             self.context.logger.info(
                                 "New position opened since last APR calculation"
                             )
-                            return True
+                            return True  # type: ignore[return-value]
 
         if (
             not last_calculation_time
             or (current_time - last_calculation_time) >= APR_UPDATE_INTERVAL
         ):
-            return True
+            return True  # type: ignore[return-value]
 
         self.context.logger.info(
             f"Skipping APR calculation. Only {(current_time - last_calculation_time) // 60} minutes "
             f"passed since last calculation"
         )
-        return False
+        return False  # type: ignore[return-value]
 
     def _create_portfolio_snapshot(self) -> Dict[str, Any]:
         """Create a structured snapshot of the current portfolio state."""
@@ -188,7 +188,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         return snapshot
 
-    def _to_decimal(self, value) -> Optional[Decimal]:
+    def _to_decimal(self, value: Any) -> Optional[Decimal]:
         """Safely convert a value to Decimal, handling None, float, int, and Decimal inputs."""
         if value is None:
             return None
@@ -250,16 +250,16 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
             if hours_decimal < MIN_HOURS:
                 hours = MIN_HOURS
-                metrics["volatility_warning"] = "VERY_HIGH"
+                metrics["volatility_warning"] = "VERY_HIGH"  # type: ignore[assignment]
             elif hours_decimal < Decimal("1"):
                 hours = hours_decimal
-                metrics["volatility_warning"] = "HIGH"
+                metrics["volatility_warning"] = "HIGH"  # type: ignore[assignment]
             elif hours_decimal < Decimal("24"):
                 hours = hours_decimal
-                metrics["volatility_warning"] = "MEDIUM"
+                metrics["volatility_warning"] = "MEDIUM"  # type: ignore[assignment]
             else:
                 hours = hours_decimal
-                metrics["volatility_warning"] = "LOW"
+                metrics["volatility_warning"] = "LOW"  # type: ignore[assignment]
 
             hours_in_year = Decimal("8760")
             time_ratio = hours_in_year / hours
@@ -269,7 +269,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         return metrics
 
-    def sign_message(self, message) -> Generator[None, None, Optional[str]]:
+    def sign_message(self, message: Any) -> Generator[None, None, Optional[str]]:
         """Sign a message."""
         message_bytes = message.encode("utf-8")
         signature = yield from self.get_signature(message_bytes)
@@ -290,10 +290,10 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         self, portfolio_value: float
     ) -> Generator[None, None, Dict[str, float]]:
         """Calculate the actual APR for the portfolio based on current positions."""
-        result = {}
+        result: Dict[Any, Any] = {}
 
         if not self._has_valid_portfolio_data():
-            return None
+            return None  # type: ignore[return-value]
 
         self._final_value = portfolio_value
         current_timestamp = self._get_current_timestamp()
@@ -302,15 +302,15 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         initial_value = self.get_stored_initial_investment()
         if not initial_value:
             self.context.logger.error("No current investment")
-            return None
+            return None  # type: ignore[return-value]
 
         self._initial_value = initial_value
         self.context.logger.info(f"Using initial investment value: {initial_value}")
 
         first_investment_timestamp = self._get_first_investment_timestamp()
-        self._calculate_apr(current_timestamp, first_investment_timestamp, result)
+        self._calculate_apr(current_timestamp, first_investment_timestamp, result)  # type: ignore[arg-type]
 
-        yield from self._adjust_apr_for_eth_price(result, first_investment_timestamp)
+        yield from self._adjust_apr_for_eth_price(result, first_investment_timestamp)  # type: ignore[arg-type]
 
         return result
 
@@ -352,8 +352,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         self,
         current_timestamp: int,
         first_investment_timestamp: int,
-        result,
-    ):
+        result: Any,
+    ) -> Any:
         """Calculate APR with robust error handling and precision."""
 
         # Convert to Decimal for precise calculation
@@ -459,7 +459,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 ]
             ):
                 # Check for zero division in price calculation
-                if start_price_decimal <= 0:
+                if start_price_decimal <= 0:  # type: ignore[operator]
                     self.context.logger.warning(
                         "Start ETH price is zero or negative, skipping adjustment"
                     )
@@ -467,9 +467,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
                 # Perform calculation in Decimal precision
                 adjustment_factor = Decimal("1") - (
-                    current_price_decimal / start_price_decimal
+                    current_price_decimal / start_price_decimal  # type: ignore[operator]
                 )
-                adjusted_apr_decimal = total_apr_decimal + (
+                adjusted_apr_decimal = total_apr_decimal + (  # type: ignore[operator]
                     adjustment_factor * Decimal("100")
                 )
 
@@ -480,8 +480,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 result["adjustment_factor"] = float(
                     adjustment_factor.quantize(Decimal("0.0001"))
                 )
-                result["current_price"] = float(current_price_decimal)
-                result["initial_price"] = float(start_price_decimal)
+                result["current_price"] = float(current_price_decimal)  # type: ignore[arg-type]
+                result["initial_price"] = float(start_price_decimal)  # type: ignore[arg-type]
 
                 self.context.logger.info(f"Adjusted APR: {result['adjusted_apr']}%")
             else:

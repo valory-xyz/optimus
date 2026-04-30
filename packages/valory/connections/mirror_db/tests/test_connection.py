@@ -22,7 +22,7 @@
 
 import asyncio
 import json
-from typing import Optional
+from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -32,14 +32,13 @@ from aea.mail.base import Envelope
 from aea.protocols.base import Message
 
 from packages.valory.connections.mirror_db.connection import (
-    PUBLIC_ID,
     GenericMirrorDBConnection,
+    PUBLIC_ID,
     SrrDialogues,
     retry_with_exponential_backoff,
 )
 from packages.valory.protocols.srr.dialogues import SrrDialogue
 from packages.valory.protocols.srr.message import SrrMessage
-
 
 ANY_SKILL = "skill/any:0.1.0"
 BASE_URL = "https://test-mirror-db.example.com"
@@ -61,7 +60,7 @@ def _make_connection(base_url: str = BASE_URL) -> GenericMirrorDBConnection:
 def _make_srr_request_message(payload: dict) -> SrrMessage:
     """Create an SrrMessage with REQUEST performative."""
     return SrrMessage(
-        performative=SrrMessage.Performative.REQUEST,
+        performative=SrrMessage.Performative.REQUEST,  # type: ignore[arg-type]
         payload=json.dumps(payload),
     )
 
@@ -70,7 +69,7 @@ def _make_mock_dialogue() -> MagicMock:
     """Create a mock dialogue that supports reply()."""
     dialogue = MagicMock()
 
-    def mock_reply(**kwargs):
+    def mock_reply(**kwargs: Any) -> Any:
         """Build a real SrrMessage from reply kwargs."""
         return SrrMessage(
             performative=kwargs["performative"],
@@ -89,7 +88,7 @@ class TestRetryWithExponentialBackoff:
     """Tests for the retry_with_exponential_backoff decorator."""
 
     @pytest.mark.asyncio
-    async def test_success_no_retry(self) -> None:
+    async def test_success_no_retry(self) -> Any:
         """Test that a successful call returns immediately without retry."""
         call_count = 0
 
@@ -104,7 +103,7 @@ class TestRetryWithExponentialBackoff:
         assert call_count == 1
 
     @pytest.mark.asyncio
-    async def test_rate_limit_retry_then_success(self) -> None:
+    async def test_rate_limit_retry_then_success(self) -> Any:
         """Test retry on rate limit error then eventual success."""
         call_count = 0
 
@@ -331,13 +330,14 @@ class TestHandleEnvelope:
             mock_envelope = MagicMock(spec=Envelope)
             mock_envelope.message = mock_message
 
-            with patch.object(
-                connection.dialogues, "update", return_value=MagicMock()
-            ), patch.object(
-                connection,
-                "_get_response",
-                new_callable=AsyncMock,
-                return_value=MagicMock(),
+            with (
+                patch.object(connection.dialogues, "update", return_value=MagicMock()),
+                patch.object(
+                    connection,
+                    "_get_response",
+                    new_callable=AsyncMock,
+                    return_value=MagicMock(),
+                ),
             ):
                 task = connection._handle_envelope(mock_envelope)
                 assert isinstance(task, asyncio.Task)
@@ -438,7 +438,7 @@ class TestGetResponse:
         """Set up test fixtures."""
         self.connection = _make_connection()
 
-    def _make_request_and_dialogue(self, payload: dict):
+    def _make_request_and_dialogue(self, payload: dict) -> Any:
         """Create a mock SrrMessage with REQUEST performative and a mock dialogue."""
         msg = MagicMock(spec=SrrMessage)
         msg.performative = SrrMessage.Performative.REQUEST
@@ -544,21 +544,24 @@ class TestGetResponse:
 
         call_count = 0
 
-        def mock_print_fn(*args, **kwargs):
+        def mock_print_fn(*args: Any, **kwargs: Any) -> None:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise UnicodeEncodeError("utf-8", "test", 0, 1, "err")
             # second call succeeds
 
-        with patch.object(
-            self.connection,
-            "read_",
-            new_callable=AsyncMock,
-            return_value=mock_result,
-        ), patch(
-            "builtins.print",
-            side_effect=mock_print_fn,
+        with (
+            patch.object(
+                self.connection,
+                "read_",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+            patch(
+                "builtins.print",
+                side_effect=mock_print_fn,
+            ),
         ):
             result = await self.connection._get_response(msg, dialogue)
 
@@ -666,7 +669,7 @@ class TestRaiseForResponse:
         mock_response = MagicMock()
         mock_response.status = 200
 
-        result = await connection._raise_for_response(mock_response, "test")
+        result = await connection._raise_for_response(mock_response, "test")  # type: ignore[func-returns-value]
         assert result is None
 
     @pytest.mark.asyncio
@@ -705,7 +708,7 @@ class TestCRUDMethods:
         method_name: str,
         status: int = 200,
         json_data: Optional[dict] = None,
-    ):
+    ) -> Any:
         """Create a mock context manager for a session HTTP method."""
         mock_response = AsyncMock()
         mock_response.status = status

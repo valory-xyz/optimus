@@ -19,8 +19,6 @@
 
 """This module contains the class to interact with the Velodrome Sugar contract."""
 
-from typing import Any, Dict, List, Tuple
-
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
@@ -32,7 +30,6 @@ class VelodromeSugarContract(Contract):
 
     contract_id = PublicId.from_str("valory/velodrome_sugar:0.1.0")
 
-
     @classmethod
     def positions(
         cls,
@@ -42,13 +39,21 @@ class VelodromeSugarContract(Contract):
         offset: int,
         account: str,
     ) -> JSONLike:
-        """Get user positions and rewards data using Velodrome Sugar contract."""
+        """Get user positions and rewards data using Velodrome Sugar contract.
+
+        :param account: TODO
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param limit: TODO
+        :param offset: TODO
+        :return: TODO
+        """
         checksumed_account = ledger_api.api.to_checksum_address(account)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.positions(
             limit, offset, checksumed_account
         ).call()
-        
+
         # Convert the result to a more readable format
         positions = []
         for position in result:
@@ -71,5 +76,5 @@ class VelodromeSugarContract(Contract):
                 "alm": position[15],
             }
             positions.append(position_data)
-        
+
         return {"positions": positions}

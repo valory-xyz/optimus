@@ -29,7 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 import requests
@@ -61,7 +61,9 @@ from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
-from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
+from packages.valory.skills.abstract_round_abci.handlers import (
+    AbstractResponseHandler,
+)
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
@@ -627,7 +629,7 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(f"{error_str=}")
             return None
 
-    def _ensure_sufficient_funds_for_x402_payments(self) -> None:
+    def _ensure_sufficient_funds_for_x402_payments(self) -> Any:
         """Ensure agent EOA has at sufficient funds for x402 requests payments"""
         try:
             chain = self.context.params.target_investment_chains[0]
@@ -820,7 +822,7 @@ class HttpHandler(BaseHttpHandler):
         x402_eth_deficit = getattr(self.shared_state, "x402_eth_deficit", None)
         if isinstance(x402_eth_deficit, (int, float)) and x402_eth_deficit > 0:
             standard_deficit = self._inject_x402_eth_deficit(
-                standard_deficit or {}, x402_eth_deficit
+                standard_deficit or {}, x402_eth_deficit  # type: ignore[arg-type]
             )
             self.context.logger.info(
                 f"Injected x402 ETH deficit of {x402_eth_deficit} into funds-status response"
@@ -933,7 +935,7 @@ class HttpHandler(BaseHttpHandler):
         """Check if agent is in withdrawal mode."""
         withdrawal_data = self._read_withdrawal_data()
         return (
-            withdrawal_data
+            withdrawal_data  # type: ignore[return-value]
             and withdrawal_data.get("investing_paused", "").lower() == "true"
         )
 
@@ -1184,7 +1186,7 @@ class HttpHandler(BaseHttpHandler):
         handler(http_msg, http_dialogue, **kwargs)
 
     def _handle_bad_request(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg=None
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg: Any = None
     ) -> None:
         """
         Handle a Http bad request.
@@ -1421,7 +1423,7 @@ class HttpHandler(BaseHttpHandler):
 
     def _handle_post_process_prompt(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """
         Handle POST requests to process user prompts.
 
@@ -1700,7 +1702,6 @@ class HttpHandler(BaseHttpHandler):
         :param dialogue: the Dialogue
         :param http_msg: the original HttpMessage
         :param http_dialogue: the original HttpDialogue
-        :param llm_request_start_time: the time when LLM request was initiated
         """
 
         try:
@@ -1883,7 +1884,7 @@ class HttpHandler(BaseHttpHandler):
 
         self.context.state.request_queue.pop()
 
-    def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
+    def _write_kv(self, data: Dict[str, str]) -> None:
         """
         Create or update data in the KV store.
 
@@ -2152,7 +2153,7 @@ class HttpHandler(BaseHttpHandler):
                 response["transaction_hashes"] = json.loads(
                     withdrawal_data.get("withdrawal_transaction_hashes", "[]")
                 )
-                response["transaction_count"] = len(response["transaction_hashes"])
+                response["transaction_count"] = len(response["transaction_hashes"])  # type: ignore[arg-type]
 
             self._send_ok_response(http_msg, http_dialogue, response)
 

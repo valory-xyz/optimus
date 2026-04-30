@@ -19,8 +19,6 @@
 
 """This module contains the class to interact with the Velodrome Slipstream Helper contract."""
 
-from typing import Any, Dict, List, Tuple
-
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
@@ -41,7 +39,15 @@ class VelodromeSlipstreamHelperContract(Contract):
         token_id: int,
         sqrt_price_x96: int,
     ) -> JSONLike:
-        """Get position principal using Velodrome Slipstream Helper contract."""
+        """Get position principal using Velodrome Slipstream Helper contract.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param position_manager: TODO
+        :param sqrt_price_x96: TODO
+        :param token_id: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.principal(
             position_manager, token_id, sqrt_price_x96
@@ -58,13 +64,22 @@ class VelodromeSlipstreamHelperContract(Contract):
         sqrt_ratio_b_x96: int,
         liquidity: int,
     ) -> JSONLike:
-        """Get amounts for liquidity using Velodrome Slipstream Helper contract."""
+        """Get amounts for liquidity using Velodrome Slipstream Helper contract.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param liquidity: TODO
+        :param sqrt_price_x96: TODO
+        :param sqrt_ratio_a_x96: TODO
+        :param sqrt_ratio_b_x96: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.getAmountsForLiquidity(
             sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
         ).call()
         return {"amounts": result}
-    
+
     @classmethod
     def get_sqrt_ratio_at_tick(
         cls,
@@ -72,7 +87,13 @@ class VelodromeSlipstreamHelperContract(Contract):
         contract_address: str,
         tick: int,
     ) -> JSONLike:
-        """Get sqrt ratio at tick using Velodrome Sugar contract."""
+        """Get sqrt ratio at tick using Velodrome Sugar contract.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param tick: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.getSqrtRatioAtTick(tick).call()
         return {"sqrt_ratio": result}
@@ -86,7 +107,15 @@ class VelodromeSlipstreamHelperContract(Contract):
         sqrt_ratio_b_x96: int,
         liquidity_delta: int,
     ) -> JSONLike:
-        """Get amount0 delta using Velodrome Slipstream Helper contract."""
+        """Get amount0 delta using Velodrome Slipstream Helper contract.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param liquidity_delta: TODO
+        :param sqrt_ratio_a_x96: TODO
+        :param sqrt_ratio_b_x96: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.getAmount0Delta(
             sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity_delta
@@ -102,7 +131,15 @@ class VelodromeSlipstreamHelperContract(Contract):
         sqrt_ratio_b_x96: int,
         liquidity_delta: int,
     ) -> JSONLike:
-        """Get amount1 delta using Velodrome Slipstream Helper contract."""
+        """Get amount1 delta using Velodrome Slipstream Helper contract.
+
+        :param contract_address: TODO
+        :param ledger_api: TODO
+        :param liquidity_delta: TODO
+        :param sqrt_ratio_a_x96: TODO
+        :param sqrt_ratio_b_x96: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.getAmount1Delta(
             sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity_delta

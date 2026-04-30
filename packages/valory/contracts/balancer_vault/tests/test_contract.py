@@ -23,8 +23,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"

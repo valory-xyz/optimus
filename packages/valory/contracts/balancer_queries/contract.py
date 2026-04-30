@@ -35,7 +35,6 @@ class BalancerQueriesContract(Contract):
 
     contract_id = PUBLIC_ID
 
-
     @classmethod
     def query_join(
         cls,
@@ -50,14 +49,27 @@ class BalancerQueriesContract(Contract):
         minimum_bpt: int,
         from_internal_balance: bool,
     ) -> JSONLike:
-        """Query join operation to get expected BPT output - view function, no gas cost."""
+        """Query join operation to get expected BPT output - view function, no gas cost.
+
+        :param assets: TODO
+        :param contract_address: TODO
+        :param from_internal_balance: TODO
+        :param join_kind: TODO
+        :param ledger_api: TODO
+        :param max_amounts_in: TODO
+        :param minimum_bpt: TODO
+        :param pool_id: TODO
+        :param recipient: TODO
+        :param sender: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        
+
         encoded_user_data = encode(
             ["uint256", "uint256[]", "uint256"],
             [join_kind, max_amounts_in, minimum_bpt],
         )
-        
+
         # Prepare join request struct
         join_request = (
             assets,
@@ -65,17 +77,14 @@ class BalancerQueriesContract(Contract):
             encoded_user_data,
             from_internal_balance,
         )
-        
+
         # Call queryJoin - this is a view function
         result = contract_instance.functions.queryJoin(
-            bytes.fromhex(pool_id[2:]),
-            sender,
-            recipient,
-            join_request
+            bytes.fromhex(pool_id[2:]), sender, recipient, join_request
         ).call()
-        
+
         # Result contains (bptOut, amountsIn)
-        return {"result":{"bpt_out":result[0], "amounts_in":result[1]}}
+        return {"result": {"bpt_out": result[0], "amounts_in": result[1]}}
 
     @classmethod
     def query_exit(
@@ -91,11 +100,24 @@ class BalancerQueriesContract(Contract):
         bpt_amount_in: int,
         to_internal_balance: bool,
     ) -> JSONLike:
-        """Query exit operation to get expected token amounts - view function, no gas cost."""
+        """Query exit operation to get expected token amounts - view function, no gas cost.
+
+        :param assets: TODO
+        :param bpt_amount_in: TODO
+        :param contract_address: TODO
+        :param exit_kind: TODO
+        :param ledger_api: TODO
+        :param min_amounts_out: TODO
+        :param pool_id: TODO
+        :param recipient: TODO
+        :param sender: TODO
+        :param to_internal_balance: TODO
+        :return: TODO
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        
+
         encoded_user_data = encode(["uint256", "uint256"], [exit_kind, bpt_amount_in])
-        
+
         # Prepare exit request struct
         exit_request = (
             assets,
@@ -103,14 +125,10 @@ class BalancerQueriesContract(Contract):
             encoded_user_data,
             to_internal_balance,
         )
-        
+
         # Call queryExit - this is a view function
         result = contract_instance.functions.queryExit(
-            bytes.fromhex(pool_id[2:]),
-            sender,
-            recipient,
-            exit_request
+            bytes.fromhex(pool_id[2:]), sender, recipient, exit_request
         ).call()
-        
 
-        return {"result":{"bpt_in":result[0], "amounts_out":result[1]}}
+        return {"result": {"bpt_in": result[0], "amounts_out": result[1]}}

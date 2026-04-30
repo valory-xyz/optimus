@@ -20,15 +20,11 @@
 """Tests for merkl_pools_search custom component."""
 
 import json
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.customs.merkl_pools_search.merkl_pools_search import (
-    CAMPAIGN_TYPES,
-    HTTP_OK,
     REQUIRED_FIELDS,
-    DexTypes,
     check_missing_fields,
     highest_apr_opportunity,
     remove_irrelevant_fields,
@@ -39,18 +35,18 @@ from packages.valory.customs.merkl_pools_search.merkl_pools_search import (
 class TestCheckMissingFields:
     """Tests for the check_missing_fields function."""
 
-    def test_no_missing_fields(self):
+    def test_no_missing_fields(self) -> None:
         """Test that no missing fields are returned when all fields are present."""
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
         result = check_missing_fields(kwargs)
         assert result == []
 
-    def test_all_missing_fields(self):
+    def test_all_missing_fields(self) -> None:
         """Test that all fields are returned when none are present."""
         result = check_missing_fields({})
         assert set(result) == set(REQUIRED_FIELDS)
 
-    def test_some_missing_fields(self):
+    def test_some_missing_fields(self) -> None:
         """Test that only missing fields are returned."""
         kwargs = {"chains": ["optimism"], "apr_threshold": 5.0}
         result = check_missing_fields(kwargs)
@@ -60,10 +56,10 @@ class TestCheckMissingFields:
             if field not in kwargs:
                 assert field in result
 
-    def test_none_value_counts_as_missing(self):
+    def test_none_value_counts_as_missing(self) -> None:
         """Test that fields with None value count as missing."""
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
-        kwargs["chains"] = None
+        kwargs["chains"] = None  # type: ignore[assignment]
         result = check_missing_fields(kwargs)
         assert "chains" in result
 
@@ -71,7 +67,7 @@ class TestCheckMissingFields:
 class TestRemoveIrrelevantFields:
     """Tests for the remove_irrelevant_fields function."""
 
-    def test_removes_irrelevant_fields(self):
+    def test_removes_irrelevant_fields(self) -> None:
         """Test that irrelevant fields are removed."""
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
         kwargs["extra_field"] = "should_be_removed"
@@ -80,12 +76,12 @@ class TestRemoveIrrelevantFields:
         for field in REQUIRED_FIELDS:
             assert field in result
 
-    def test_empty_kwargs(self):
+    def test_empty_kwargs(self) -> None:
         """Test with empty kwargs."""
         result = remove_irrelevant_fields({})
         assert result == {}
 
-    def test_only_relevant_fields(self):
+    def test_only_relevant_fields(self) -> None:
         """Test with only relevant fields."""
         kwargs = {field: f"val_{i}" for i, field in enumerate(REQUIRED_FIELDS)}
         result = remove_irrelevant_fields(kwargs)
@@ -95,7 +91,7 @@ class TestRemoveIrrelevantFields:
 class TestHighestAprOpportunity:
     """Tests for the highest_apr_opportunity function."""
 
-    def _base_params(self):
+    def _base_params(self) -> Any:
         """Return base parameters for highest_apr_opportunity."""
         return {
             "balancer_graphql_endpoints": {
@@ -114,7 +110,7 @@ class TestHighestAprOpportunity:
         }
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_empty_chains(self, mock_get):
+    def test_empty_chains(self, mock_get: MagicMock) -> None:
         """Test with empty chains list."""
         params = self._base_params()
         params["chains"] = []
@@ -123,7 +119,7 @@ class TestHighestAprOpportunity:
         assert "No chain selected" in result["error"]
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_api_error_status_code(self, mock_get):
+    def test_api_error_status_code(self, mock_get: MagicMock) -> None:
         """Test when API returns error status code."""
         mock_response = MagicMock()
         mock_response.status_code = 500
@@ -135,7 +131,7 @@ class TestHighestAprOpportunity:
         assert "Status code 500" in result["error"]
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_api_json_parse_error(self, mock_get):
+    def test_api_json_parse_error(self, mock_get: MagicMock) -> None:
         """Test when API returns invalid JSON."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -147,7 +143,7 @@ class TestHighestAprOpportunity:
         assert "Could not parse response" in result["error"]
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_no_eligible_pools(self, mock_get):
+    def test_no_eligible_pools(self, mock_get: MagicMock) -> None:
         """Test when no pools match criteria."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -170,7 +166,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_pool_with_zero_apr(self, mock_get):
+    def test_pool_with_zero_apr(self, mock_get: MagicMock) -> None:
         """Test that pools with zero APR are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -193,7 +189,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_pool_with_negative_apr(self, mock_get):
+    def test_pool_with_negative_apr(self, mock_get: MagicMock) -> None:
         """Test that pools with negative APR are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -216,7 +212,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_pool_below_apr_threshold(self, mock_get):
+    def test_pool_below_apr_threshold(self, mock_get: MagicMock) -> None:
         """Test that pools below APR threshold are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -239,7 +235,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_pool_is_current_pool(self, mock_get):
+    def test_pool_is_current_pool(self, mock_get: MagicMock) -> None:
         """Test that the current pool is filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -262,7 +258,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_pool_with_no_main_parameter(self, mock_get):
+    def test_pool_with_no_main_parameter(self, mock_get: MagicMock) -> None:
         """Test that pools without mainParameter are filtered out."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -278,7 +274,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_balancer_pool_successful(self, mock_get, mock_post):
+    def test_balancer_pool_successful(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test successful Balancer pool processing with valid tokensList of length 2."""
         campaign_data = {
             "10": {
@@ -334,7 +332,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_balancer_pool_type_none_skips(self, mock_get, mock_post):
+    def test_balancer_pool_type_none_skips(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test that Balancer pool with None pool_type is skipped."""
         campaign_data = {
             "10": {
@@ -373,7 +373,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_balancer_pool_wrong_token_count(self, mock_get, mock_post):
+    def test_balancer_pool_wrong_token_count(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test that Balancer pool with != 2 tokens is skipped."""
         campaign_data = {
             "10": {
@@ -422,7 +424,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_uniswap_v3_pool_successful(self, mock_get):
+    def test_uniswap_v3_pool_successful(self, mock_get: MagicMock) -> None:
         """Test successful UniswapV3 pool processing."""
         campaign_data = {
             "10": {
@@ -456,7 +458,9 @@ class TestHighestAprOpportunity:
         assert result["pool_fee"] == 3000
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_uniswap_v3_pool_missing_campaign_parameters(self, mock_get):
+    def test_uniswap_v3_pool_missing_campaign_parameters(
+        self, mock_get: MagicMock
+    ) -> None:
         """Test UniswapV3 pool with empty campaignParameters."""
         campaign_data = {
             "10": {
@@ -481,7 +485,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_uniswap_v3_pool_none_token_values(self, mock_get):
+    def test_uniswap_v3_pool_none_token_values(self, mock_get: MagicMock) -> None:
         """Test UniswapV3 pool with None in token values."""
         campaign_data = {
             "10": {
@@ -515,7 +519,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_balancer_pool_insufficient_tokens(self, mock_get, mock_post):
+    def test_balancer_pool_insufficient_tokens(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test Balancer pool with fewer than 2 pool tokens."""
         campaign_data = {
             "10": {
@@ -547,7 +553,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_balancer_pool_token_missing_symbol(self, mock_get, mock_post):
+    def test_balancer_pool_token_missing_symbol(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test Balancer pool where a token is missing its symbol."""
         campaign_data = {
             "10": {
@@ -580,7 +588,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_fetch_balancer_pool_info_no_endpoint(self, mock_get, mock_post):
+    def test_fetch_balancer_pool_info_no_endpoint(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test fetch_balancer_pool_info when no graphql endpoint exists for chain."""
         campaign_data = {
             "10": {
@@ -615,7 +625,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_fetch_balancer_pool_info_api_error(self, mock_get, mock_post):
+    def test_fetch_balancer_pool_info_api_error(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test fetch_balancer_pool_info when GraphQL API returns error status."""
         campaign_data = {
             "10": {
@@ -652,7 +664,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_fetch_balancer_pool_info_json_decode_error(self, mock_get, mock_post):
+    def test_fetch_balancer_pool_info_json_decode_error(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test fetch_balancer_pool_info when GraphQL returns invalid JSON."""
         campaign_data = {
             "10": {
@@ -690,7 +704,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_fetch_balancer_pool_info_null_response(self, mock_get, mock_post):
+    def test_fetch_balancer_pool_info_null_response(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test fetch_balancer_pool_info when GraphQL returns null."""
         campaign_data = {
             "10": {
@@ -728,7 +744,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_fetch_balancer_pool_info_data_null(self, mock_get, mock_post):
+    def test_fetch_balancer_pool_info_data_null(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test fetch_balancer_pool_info when GraphQL returns {"data": null}."""
         campaign_data = {
             "10": {
@@ -766,7 +784,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_fetch_balancer_pool_info_no_pools_in_response(self, mock_get, mock_post):
+    def test_fetch_balancer_pool_info_no_pools_in_response(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test fetch_balancer_pool_info when GraphQL response has empty pools array."""
         campaign_data = {
             "10": {
@@ -804,7 +824,9 @@ class TestHighestAprOpportunity:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_fetch_balancer_pool_info_tokens_error(self, mock_get, mock_post):
+    def test_fetch_balancer_pool_info_tokens_error(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test when tokensList fetch returns an error."""
         campaign_data = {
             "10": {
@@ -844,7 +866,7 @@ class TestHighestAprOpportunity:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_dex_type_from_ammname_fallback(self, mock_get):
+    def test_dex_type_from_ammname_fallback(self, mock_get: MagicMock) -> None:
         """Test that pools use ammName when type field is None."""
         campaign_data = {
             "10": {
@@ -877,7 +899,7 @@ class TestHighestAprOpportunity:
         assert result["dex_type"] == "UniswapV3"
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_dex_type_from_ammname_field(self, mock_get):
+    def test_dex_type_from_ammname_field(self, mock_get: MagicMock) -> None:
         """Test that dex_type can come from ammName field when type is missing."""
         campaign_data = {
             "10": {
@@ -909,7 +931,7 @@ class TestHighestAprOpportunity:
         assert result["dex_type"] == "UniswapV3"
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_live_default_value(self, mock_get):
+    def test_live_default_value(self, mock_get: MagicMock) -> None:
         """Test that 'live' parameter defaults to 'true'."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -923,7 +945,7 @@ class TestHighestAprOpportunity:
         assert "live=true" in call_url
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_api_201_status_accepted(self, mock_get):
+    def test_api_201_status_accepted(self, mock_get: MagicMock) -> None:
         """Test that HTTP 201 status code is accepted."""
         mock_response = MagicMock()
         mock_response.status_code = 201
@@ -937,13 +959,13 @@ class TestHighestAprOpportunity:
 class TestRun:
     """Tests for the run function."""
 
-    def test_missing_required_fields(self):
+    def test_missing_required_fields(self) -> None:
         """Test run with missing required fields."""
         result = run()
         assert "error" in result
-        assert "Required kwargs" in result["error"]
+        assert "Required kwargs" in result["error"]  # type: ignore[operator]
 
-    def test_partial_missing_fields(self):
+    def test_partial_missing_fields(self) -> None:
         """Test run with some missing fields."""
         result = run(chains=["optimism"])
         assert "error" in result
@@ -951,7 +973,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity"
     )
-    def test_run_delegates_to_highest_apr(self, mock_func):
+    def test_run_delegates_to_highest_apr(self, mock_func: MagicMock) -> None:
         """Test that run properly delegates to highest_apr_opportunity."""
         mock_func.return_value = {"pool_address": "0x123"}
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
@@ -962,7 +984,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity"
     )
-    def test_run_strips_irrelevant_fields(self, mock_func):
+    def test_run_strips_irrelevant_fields(self, mock_func: MagicMock) -> None:
         """Test that run strips extra kwargs before delegating."""
         mock_func.return_value = {}
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
@@ -974,7 +996,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.highest_apr_opportunity"
     )
-    def test_run_with_positional_args(self, mock_func):
+    def test_run_with_positional_args(self, mock_func: MagicMock) -> None:
         """Test that run ignores positional arguments."""
         mock_func.return_value = {}
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
@@ -985,7 +1007,7 @@ class TestRun:
 class TestNetworkResilience:
     """Tests for network resilience in merkl_pools_search."""
 
-    def _base_params(self):
+    def _base_params(self) -> Any:
         """Return base parameters for highest_apr_opportunity."""
         return {
             "balancer_graphql_endpoints": {
@@ -1004,7 +1026,7 @@ class TestNetworkResilience:
         }
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_connection_error_returns_error(self, mock_get):
+    def test_connection_error_returns_error(self, mock_get: MagicMock) -> None:
         """Test that ConnectionError in fetch_all_pools returns error dict."""
         import requests as req_lib
 
@@ -1014,7 +1036,7 @@ class TestNetworkResilience:
         assert "error" in result
 
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_timeout_kwarg_passed(self, mock_get):
+    def test_timeout_kwarg_passed(self, mock_get: MagicMock) -> None:
         """Test that timeout=30 is passed to requests.get."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1029,7 +1051,9 @@ class TestNetworkResilience:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_graphql_connection_error(self, mock_get, mock_post):
+    def test_graphql_connection_error(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test that ConnectionError in fetch_balancer_pool_info returns error."""
         import requests as req_lib
 
@@ -1064,7 +1088,9 @@ class TestNetworkResilience:
         "packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.post"
     )
     @patch("packages.valory.customs.merkl_pools_search.merkl_pools_search.requests.get")
-    def test_graphql_timeout_kwarg(self, mock_get, mock_post):
+    def test_graphql_timeout_kwarg(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
         """Test that timeout=30 is passed to graphql requests.post."""
         # Campaign data with a Balancer pool to trigger fetch_balancer_pool_info
         campaign_data = {

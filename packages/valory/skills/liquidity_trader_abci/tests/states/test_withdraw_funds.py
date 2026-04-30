@@ -52,11 +52,11 @@ class TestWithdrawFundsRound:
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.update.return_value = mock_synced
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(  # type: ignore[method-assign]
             return_value=json.dumps(withdrawal_actions)
         )
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
 
         result = round_obj.end_block()
         assert result is not None
@@ -67,10 +67,10 @@ class TestWithdrawFundsRound:
         """Test end_block returns NO_MAJORITY when majority not possible."""
         round_obj = object.__new__(WithdrawFundsRound)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=False)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.nb_participants = 4
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         type(round_obj).collection = PropertyMock(return_value={})
 
         with patch.object(
@@ -85,10 +85,10 @@ class TestWithdrawFundsRound:
         """Test end_block returns None while waiting for threshold."""
         round_obj = object.__new__(WithdrawFundsRound)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=False)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.nb_participants = 4
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         type(round_obj).collection = PropertyMock(return_value={})
 
         with patch.object(

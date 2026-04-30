@@ -26,9 +26,6 @@ from unittest.mock import MagicMock
 from packages.valory.protocols.kv_store.dialogues import (
     KvStoreDialogue as BaseKvStoreDialogue,
 )
-from packages.valory.protocols.kv_store.dialogues import (
-    KvStoreDialogues as BaseKvStoreDialogues,
-)
 from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue
 from packages.valory.skills.optimus_abci.dialogues import KvStoreDialogues, SrrDialogues
 

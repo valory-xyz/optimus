@@ -39,7 +39,6 @@ from packages.valory.protocols.srr.dialogues import SrrDialogue
 from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
 from packages.valory.protocols.srr.message import SrrMessage
 
-
 PUBLIC_ID = PublicId.from_str("valory/mirror_db:0.1.0")
 
 
@@ -73,7 +72,7 @@ def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_facto
 class SrrDialogues(BaseSrrDialogues):
     """A class to keep track of SRR dialogues."""
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: Any):
         """
         Initialize dialogues.
 
@@ -128,7 +127,6 @@ class GenericMirrorDBConnection(Connection):
         """
         super().__init__(*args, **kwargs)
         self.base_url = self.configuration.config.get("mirror_db_base_url")
-        # self.api_key: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.dialogues = SrrDialogues(connection_id=PUBLIC_ID)
         self._response_envelopes: Optional[asyncio.Queue] = None
@@ -137,9 +135,7 @@ class GenericMirrorDBConnection(Connection):
 
         # Store all configuration in a single dictionary
         self._config = {
-            # "api_key": self.api_key,
             "base_url": self.base_url,
-            # Add other default configs here
         }
 
     @property
@@ -306,10 +302,10 @@ class GenericMirrorDBConnection(Connection):
         # Log endpoint and payload (safe print that handles Unicode characters)
         endpoint = payload.get("kwargs", {}).get("endpoint")
         try:
-            print(f"endpoint,payload : {endpoint,payload}")
+            print(f"endpoint,payload : {endpoint}, {payload}")
         except UnicodeEncodeError:
             safe_payload = str(payload).encode("ascii", "replace").decode("ascii")
-            print(f"endpoint,payload : {endpoint},{safe_payload}")
+            print(f"endpoint,payload : {endpoint}, {safe_payload}")
 
         try:
             response = await method(**payload.get("kwargs", {}))
@@ -358,7 +354,6 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.post(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"creating resource via {method_name}"
@@ -376,7 +371,6 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.get(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"reading resource via {method_name}"
@@ -396,7 +390,6 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.put(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"updating resource via {method_name}"
@@ -414,7 +407,6 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.delete(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"deleting resource via {method_name}"

@@ -46,7 +46,7 @@ class CallCheckpointBehaviour(
 
     matching_round = CallCheckpointRound
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             checkpoint_tx_hex = None

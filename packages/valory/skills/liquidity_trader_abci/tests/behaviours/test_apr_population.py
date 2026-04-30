@@ -21,11 +21,9 @@
 
 # pylint: skip-file
 
-import os
 from decimal import Decimal
+from typing import Any, Dict, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
-
-import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.apr_population import (
     APRPopulationBehaviour,
@@ -36,7 +34,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 
 
-def _make_behaviour():
+def _make_behaviour() -> Any:
     """Create an APRPopulationBehaviour without __init__."""
     obj = object.__new__(APRPopulationBehaviour)
     ctx = MagicMock()
@@ -46,7 +44,7 @@ def _make_behaviour():
     return obj
 
 
-def _drive(gen):
+def _drive(gen: Any) -> Any:
     """Drive a generator to completion."""
     val = None
     while True:
@@ -66,14 +64,14 @@ class TestAPRPopulationBehaviour:
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
-        def fake_should_calc():
+        def fake_should_calc() -> Generator[Any, Any, Any]:
             yield
             return False
 
-        def fake_send(*args, **kwargs):
+        def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_wait(*args, **kwargs):
+        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj._should_calculate_apr = fake_should_calc
@@ -92,29 +90,31 @@ class TestAPRPopulationBehaviour:
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
-        def fake_should_calc():
+        def fake_should_calc() -> Generator[Any, Any, Any]:
             yield
             return True
 
-        def fake_get_agent_type(sender):
+        def fake_get_agent_type(sender: Any) -> Generator[Any, Any, Any]:
             yield
             return {"type_id": "t1"}
 
-        def fake_get_agent_reg():
+        def fake_get_agent_reg() -> Generator[Any, Any, Any]:
             yield
             return {"agent_id": "a1"}
 
-        def fake_get_attr_def(type_id, agent_id):
+        def fake_get_attr_def(type_id: Any, agent_id: Any) -> Generator[Any, Any, Any]:
             yield
             return {"attr_def_id": "ad1"}
 
-        def fake_calc_and_store(agent_id, attr_def_id):
+        def fake_calc_and_store(
+            agent_id: Any, attr_def_id: Any
+        ) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_send(*args, **kwargs):
+        def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_wait(*args, **kwargs):
+        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj._should_calculate_apr = fake_should_calc
@@ -137,14 +137,14 @@ class TestAPRPopulationBehaviour:
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
-        def fake_should_calc():
+        def fake_should_calc() -> Generator[Any, Any, Any]:
             raise ValueError("test error")
             yield  # noqa
 
-        def fake_send(*args, **kwargs):
+        def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
-        def fake_wait(*args, **kwargs):
+        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj._should_calculate_apr = fake_should_calc
@@ -166,7 +166,7 @@ class TestShouldCalculateApr:
         obj = _make_behaviour()
         obj.current_positions = []
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -182,7 +182,7 @@ class TestShouldCalculateApr:
         obj = _make_behaviour()
         obj.current_positions = []
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "invalid"}
 
@@ -198,7 +198,7 @@ class TestShouldCalculateApr:
         obj = _make_behaviour()
         obj.current_positions = []
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -215,7 +215,7 @@ class TestShouldCalculateApr:
         obj = _make_behaviour()
         obj.current_positions = []
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -239,7 +239,7 @@ class TestShouldCalculateApr:
             }
         ]
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -260,7 +260,7 @@ class TestShouldCalculateApr:
             }
         ]
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -282,7 +282,7 @@ class TestShouldCalculateApr:
             }
         ]
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -304,7 +304,7 @@ class TestShouldCalculateApr:
             }
         ]
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -327,7 +327,7 @@ class TestShouldCalculateApr:
             }
         ]
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -348,7 +348,7 @@ class TestShouldCalculateApr:
             }
         ]
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"last_apr_calculation": None}
 
@@ -368,7 +368,7 @@ class TestCalculateAndStoreApr:
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100}
 
-        def fake_calc_actual_apr(pv):
+        def fake_calc_actual_apr(pv: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -384,7 +384,7 @@ class TestCalculateAndStoreApr:
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100}
 
-        def fake_calc_actual_apr(pv):
+        def fake_calc_actual_apr(pv: Any) -> Generator[Any, Any, Any]:
             yield
             return {"total_actual_apr": None, "adjusted_apr": 5.0}
 
@@ -405,15 +405,17 @@ class TestCalculateAndStoreApr:
         shared.trading_type = "balanced"
         shared.selected_protocols = ["uniswap"]
 
-        def fake_calc_actual_apr(pv):
+        def fake_calc_actual_apr(pv: Any) -> Generator[Any, Any, Any]:
             yield
             return {"total_actual_apr": 0.0, "adjusted_apr": 0.0}
 
-        def fake_create_agent_attr(agent_id, attr_def_id, data):
+        def fake_create_agent_attr(
+            agent_id: Any, attr_def_id: Any, data: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return {"id": "attr1"}
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj.calculate_actual_apr = fake_calc_actual_apr
@@ -436,7 +438,7 @@ class TestCalculateAndStoreApr:
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100}
 
-        def fake_calc_actual_apr(pv):
+        def fake_calc_actual_apr(pv: Any) -> Generator[Any, Any, Any]:
             yield
             return {"total_actual_apr": None, "adjusted_apr": 5.0}
 
@@ -457,15 +459,17 @@ class TestCalculateAndStoreApr:
         shared.trading_type = "balanced"
         shared.selected_protocols = ["uniswap"]
 
-        def fake_calc_actual_apr(pv):
+        def fake_calc_actual_apr(pv: Any) -> Generator[Any, Any, Any]:
             yield
             return {"total_actual_apr": 12.5, "adjusted_apr": 10.0}
 
-        def fake_create_agent_attr(agent_id, attr_def_id, data):
+        def fake_create_agent_attr(
+            agent_id: Any, attr_def_id: Any, data: Any
+        ) -> Generator[Any, Any, Any]:
             yield
             return {"id": "attr1"}
 
-        def fake_write_kv(data):
+        def fake_write_kv(data: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj.calculate_actual_apr = fake_calc_actual_apr
@@ -487,21 +491,25 @@ class TestConvertDecimals:
     """Tests for _convert_decimals."""
 
     def test_dict(self) -> None:
+        """Test dict."""
         obj = _make_behaviour()
         result = obj._convert_decimals({"a": Decimal("1.5"), "b": "hello"})
         assert result == {"a": 1.5, "b": "hello"}
 
     def test_list(self) -> None:
+        """Test list."""
         obj = _make_behaviour()
         result = obj._convert_decimals([Decimal("1.5"), "hello", 42])
         assert result == [1.5, "hello", 42]
 
     def test_decimal(self) -> None:
+        """Test decimal."""
         obj = _make_behaviour()
         result = obj._convert_decimals(Decimal("3.14"))
         assert result == 3.14
 
     def test_plain_value(self) -> None:
+        """Test plain value."""
         obj = _make_behaviour()
         assert obj._convert_decimals(42) == 42
         assert obj._convert_decimals("hello") == "hello"
@@ -511,25 +519,30 @@ class TestToDecimal:
     """Tests for _to_decimal."""
 
     def test_none(self) -> None:
+        """Test none."""
         obj = _make_behaviour()
         assert obj._to_decimal(None) is None
 
     def test_decimal(self) -> None:
+        """Test decimal."""
         obj = _make_behaviour()
         d = Decimal("1.5")
         assert obj._to_decimal(d) is d
 
     def test_float(self) -> None:
+        """Test float."""
         obj = _make_behaviour()
         result = obj._to_decimal(1.5)
         assert result == Decimal("1.5")
 
     def test_int(self) -> None:
+        """Test int."""
         obj = _make_behaviour()
         result = obj._to_decimal(100)
         assert result == Decimal("100")
 
     def test_invalid(self) -> None:
+        """Test invalid."""
         obj = _make_behaviour()
         result = obj._to_decimal("not_a_number")
         assert result is None
@@ -539,6 +552,7 @@ class TestCreatePortfolioSnapshot:
     """Tests for _create_portfolio_snapshot."""
 
     def test_snapshot(self) -> None:
+        """Test snapshot."""
         obj = _make_behaviour()
         obj.portfolio_data = {"value": Decimal("100")}
         obj.current_positions = [{"amount": Decimal("50")}]
@@ -628,9 +642,10 @@ class TestSignMessage:
     """Tests for sign_message."""
 
     def test_sign_success(self) -> None:
+        """Test sign success."""
         obj = _make_behaviour()
 
-        def fake_get_signature(msg_bytes):
+        def fake_get_signature(msg_bytes: Any) -> Generator[Any, Any, Any]:
             yield
             return "0xabcdef"
 
@@ -640,9 +655,10 @@ class TestSignMessage:
         assert result == "abcdef"
 
     def test_sign_failure(self) -> None:
+        """Test sign failure."""
         obj = _make_behaviour()
 
-        def fake_get_signature(msg_bytes):
+        def fake_get_signature(msg_bytes: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -656,6 +672,7 @@ class TestCalculateActualApr:
     """Tests for calculate_actual_apr."""
 
     def test_no_valid_portfolio_data(self) -> None:
+        """Test no valid portfolio data."""
         obj = _make_behaviour()
         obj.portfolio_data = None
         gen = obj.calculate_actual_apr(100)
@@ -663,10 +680,11 @@ class TestCalculateActualApr:
         assert result is None
 
     def test_no_initial_investment(self) -> None:
+        """Test no initial investment."""
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100, "initial_investment": None}
 
-        def fake_adjust(*a, **kw):
+        def fake_adjust(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj._adjust_apr_for_eth_price = fake_adjust
@@ -675,12 +693,13 @@ class TestCalculateActualApr:
         assert result is None
 
     def test_success(self) -> None:
+        """Test success."""
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100, "initial_investment": 90}
         obj.current_positions = [{"timestamp": 1700000000}]
         obj._get_current_timestamp = MagicMock(return_value=1700000000 + 100000)
 
-        def fake_adjust(*a, **kw):
+        def fake_adjust(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
 
         obj._adjust_apr_for_eth_price = fake_adjust
@@ -694,16 +713,19 @@ class TestGetStoredInitialInvestment:
     """Tests for get_stored_initial_investment."""
 
     def test_no_portfolio_data(self) -> None:
+        """Test no portfolio data."""
         obj = _make_behaviour()
         obj.portfolio_data = None
         assert obj.get_stored_initial_investment() is None
 
     def test_no_initial_investment(self) -> None:
+        """Test no initial investment."""
         obj = _make_behaviour()
         obj.portfolio_data = {"other": "data"}
         assert obj.get_stored_initial_investment() is None
 
     def test_has_initial_investment(self) -> None:
+        """Test has initial investment."""
         obj = _make_behaviour()
         obj.portfolio_data = {"initial_investment": 100}
         assert obj.get_stored_initial_investment() == 100.0
@@ -713,16 +735,19 @@ class TestHasValidPortfolioData:
     """Tests for _has_valid_portfolio_data."""
 
     def test_no_portfolio_data(self) -> None:
+        """Test no portfolio data."""
         obj = _make_behaviour()
         obj.portfolio_data = None
         assert obj._has_valid_portfolio_data() is False
 
     def test_no_portfolio_value(self) -> None:
+        """Test no portfolio value."""
         obj = _make_behaviour()
         obj.portfolio_data = {"other": "data"}
         assert obj._has_valid_portfolio_data() is False
 
     def test_valid(self) -> None:
+        """Test valid."""
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100}
         assert obj._has_valid_portfolio_data() is True
@@ -732,16 +757,19 @@ class TestGetFirstInvestmentTimestamp:
     """Tests for _get_first_investment_timestamp."""
 
     def test_timestamp_field(self) -> None:
+        """Test timestamp field."""
         obj = _make_behaviour()
         obj.current_positions = [{"timestamp": 1700000000}]
         assert obj._get_first_investment_timestamp() == 1700000000
 
     def test_enter_timestamp_field(self) -> None:
+        """Test enter timestamp field."""
         obj = _make_behaviour()
         obj.current_positions = [{"enter_timestamp": 1700000000}]
         assert obj._get_first_investment_timestamp() == 1700000000
 
     def test_no_timestamp_fallback(self) -> None:
+        """Test no timestamp fallback."""
         obj = _make_behaviour()
         obj.current_positions = [{"no_ts": True}]
         obj._get_current_timestamp = MagicMock(return_value=1700000000.5)
@@ -753,18 +781,20 @@ class TestCalculateApr:
     """Tests for _calculate_apr."""
 
     def test_zero_final_value(self) -> None:
+        """Test zero final value."""
         obj = _make_behaviour()
         obj._final_value = 0
         obj._initial_value = 100
-        result = {}
+        result: Dict[Any, Any] = {}
         ret = obj._calculate_apr(1700000000, 1699900000, result)
         assert ret == 0.0
 
     def test_zero_initial_value(self) -> None:
+        """Test zero initial value."""
         obj = _make_behaviour()
         obj._final_value = 100
         obj._initial_value = 0
-        result = {}
+        result: Dict[Any, Any] = {}
         ret = obj._calculate_apr(1700000000, 1699900000, result)
         assert ret == 0.0
 
@@ -773,17 +803,18 @@ class TestCalculateApr:
         obj = _make_behaviour()
         obj._final_value = 90
         obj._initial_value = 100
-        result = {}
+        result: Dict[Any, Any] = {}
         # Short period to amplify negative APR
         obj._calculate_apr(1700000000, 1700000000 - 3600, result)
         # With negative APR, the code recalculates as (final/initial - 1) * 100
         assert "total_actual_apr" in result
 
     def test_positive_apr(self) -> None:
+        """Test positive apr."""
         obj = _make_behaviour()
         obj._final_value = 110
         obj._initial_value = 100
-        result = {}
+        result: Dict[Any, Any] = {}
         obj._calculate_apr(1700000000, 1700000000 - 86400, result)
         assert result.get("total_actual_apr") is not None
         assert result["total_actual_apr"] > 0
@@ -793,7 +824,7 @@ class TestCalculateApr:
         obj = _make_behaviour()
         obj._final_value = 110
         obj._initial_value = 100
-        result = {}
+        result: Dict[Any, Any] = {}
         obj._calculate_apr(1700000000, 1700000000 - 10, result)
         assert "total_actual_apr" in result
 
@@ -802,7 +833,7 @@ class TestCalculateApr:
         obj = _make_behaviour()
         obj._final_value = 110
         obj._initial_value = 100
-        result = {}
+        result: Dict[Any, Any] = {}
         obj._calculate_apr(1700000000, 1700000000 - 1800, result)
         assert "total_actual_apr" in result
 
@@ -811,7 +842,7 @@ class TestCalculateApr:
         obj = _make_behaviour()
         obj._final_value = 100
         obj._initial_value = 100
-        result = {}
+        result: Dict[Any, Any] = {}
         obj._calculate_apr(1700000000, 1700000000 - 86400, result)
         # APR is 0, so total_actual_apr should not be set (falsy check fails)
         assert "total_actual_apr" not in result
@@ -821,13 +852,14 @@ class TestAdjustAprForEthPrice:
     """Tests for _adjust_apr_for_eth_price."""
 
     def test_both_prices_none(self) -> None:
+        """Test both prices none."""
         obj = _make_behaviour()
 
-        def fake_fetch_zero(*a, **kw):
+        def fake_fetch_zero(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
-        def fake_fetch_hist(*a, **kw):
+        def fake_fetch_hist(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -840,13 +872,14 @@ class TestAdjustAprForEthPrice:
         assert "adjusted_apr" not in result
 
     def test_success(self) -> None:
+        """Test success."""
         obj = _make_behaviour()
 
-        def fake_fetch_zero(*a, **kw):
+        def fake_fetch_zero(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return 2000.0
 
-        def fake_fetch_hist(*a, **kw):
+        def fake_fetch_hist(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return 1800.0
 
@@ -863,11 +896,11 @@ class TestAdjustAprForEthPrice:
         """Test when start ETH price is zero."""
         obj = _make_behaviour()
 
-        def fake_fetch_zero(*a, **kw):
+        def fake_fetch_zero(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return 2000.0
 
-        def fake_fetch_hist(*a, **kw):
+        def fake_fetch_hist(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return 0.0
 
@@ -883,11 +916,11 @@ class TestAdjustAprForEthPrice:
         """Test when one price can't be converted to Decimal."""
         obj = _make_behaviour()
 
-        def fake_fetch_zero(*a, **kw):
+        def fake_fetch_zero(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return "not_a_number"
 
-        def fake_fetch_hist(*a, **kw):
+        def fake_fetch_hist(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return 1800.0
 
@@ -904,18 +937,18 @@ class TestAdjustAprForEthPrice:
         """Test when total_actual_apr is not in result."""
         obj = _make_behaviour()
 
-        def fake_fetch_zero(*a, **kw):
+        def fake_fetch_zero(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return 2000.0
 
-        def fake_fetch_hist(*a, **kw):
+        def fake_fetch_hist(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
             yield
             return 1800.0
 
         obj._fetch_zero_address_price = fake_fetch_zero
         obj._fetch_historical_token_price = fake_fetch_hist
 
-        result = {}
+        result: Dict[Any, Any] = {}
         gen = obj._adjust_apr_for_eth_price(result, 1700000000)
         _drive(gen)
         assert "adjusted_apr" not in result
@@ -925,9 +958,10 @@ class TestReadInvestingPaused:
     """Tests for _read_investing_paused."""
 
     def test_result_none(self) -> None:
+        """Test result none."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return None
 
@@ -937,9 +971,10 @@ class TestReadInvestingPaused:
         assert result is False
 
     def test_value_none(self) -> None:
+        """Test value none."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"investing_paused": None}
 
@@ -949,9 +984,10 @@ class TestReadInvestingPaused:
         assert result is False
 
     def test_value_true(self) -> None:
+        """Test value true."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"investing_paused": "true"}
 
@@ -961,9 +997,10 @@ class TestReadInvestingPaused:
         assert result is True
 
     def test_value_false(self) -> None:
+        """Test value false."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             yield
             return {"investing_paused": "false"}
 
@@ -973,9 +1010,10 @@ class TestReadInvestingPaused:
         assert result is False
 
     def test_exception(self) -> None:
+        """Test exception."""
         obj = _make_behaviour()
 
-        def fake_read_kv(keys):
+        def fake_read_kv(keys: Any) -> Generator[Any, Any, Any]:
             raise ValueError("test")
             yield  # noqa
 

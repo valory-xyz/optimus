@@ -6389,7 +6389,7 @@ class TestPostExecuteStepFallThrough:
                 [{"remaining_fee_allowance": 1.0, "remaining_gas_allowance": 1.0}], 0
             )
         )
-        assert result is None
+        assert result == (None, None)
 
 
 class TestPostExecuteEnterPoolUnknownDex:

@@ -2373,6 +2373,33 @@ class TestExitClPool:
         )
         assert result is None
 
+    def test_falls_back_to_cached_liquidity_on_rpc_failure(self) -> None:
+        """RPC failure on liquidity read must use the cached value if present."""
+        b = self._make_b()
+        b.get_liquidity_for_token_velodrome = _mock_gen(None)
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        captured = {}
+
+        def decrease_stub(token_id, liquidity, *a, **k):
+            captured["liquidity"] = liquidity
+            yield
+            return "0xDec"
+
+        b.decrease_liquidity_velodrome = decrease_stub
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [777], "0xPool"))
+        assert result is not None
+        assert captured["liquidity"] == 777
+
+    def test_skips_when_onchain_liquidity_is_zero(self) -> None:
+        """A fresh on-chain read of 0 skips the token (no decrease/collect)."""
+        b = self._make_b()
+        b.get_liquidity_for_token_velodrome = _mock_gen(0)
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [0], "0xPool"))
+        # Single token, skipped, multi_send_txs empty -> returns None.
+        assert result is None
+
 
 class TestCalculateTickLowerAndUpperVelodrome:
     """Tests for _calculate_tick_lower_and_upper_velodrome."""

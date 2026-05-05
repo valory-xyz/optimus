@@ -469,6 +469,123 @@ class TestExitCachedLiquidityDivergenceLog:
 
         assert captured["liq_for_decrease"] == 1000
 
+    def test_falls_back_to_cached_liquidity_on_rpc_failure(self) -> None:
+        """RPC failure on the on-chain read must reuse the cached value."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+        params_mock.multisend_contract_addresses = {"optimism": "0xmulti"}
+
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return None  # RPC failure
+
+        captured = {}
+
+        def fake_slippage(tid, liq, chain, pool):
+            yield
+            return 0, 0
+
+        def fake_decrease(tid, liq, a0, a1, dl, chain):
+            captured["liq_for_decrease"] = liq
+            yield
+            return "0xdec"
+
+        def fake_collect(*a, **k):
+            yield
+            return "0xcol"
+
+        def fake_contract_interact(**kwargs):
+            yield
+            return "0x" + "ab" * 32
+
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
+
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
+        obj._calculate_slippage_protection_for_decrease = fake_slippage
+        obj.decrease_liquidity = fake_decrease
+        obj.collect_tokens = fake_collect
+        obj.contract_interact = fake_contract_interact
+        obj.context.state.round_sequence = rs
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=1,
+                safe_address="0xsafe",
+                chain="optimism",
+                liquidity=4242,  # cached, will be used due to RPC failure
+                pool_address="0xpool",
+            )
+            _drive(gen)
+
+        assert captured["liq_for_decrease"] == 4242
+
+    def test_returns_none_when_both_cached_and_onchain_unavailable(self) -> None:
+        """No cached liquidity and on-chain read fails: bail out."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return None
+
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=1,
+                safe_address="0xsafe",
+                chain="optimism",
+                pool_address="0xpool",
+            )
+            result = _drive(gen)
+            assert result == (None, None, None)
+
+    def test_returns_none_when_onchain_liquidity_is_zero(self) -> None:
+        """A fresh on-chain read of 0 (depleted position) bails out."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.uniswap_position_manager_contract_addresses = {"optimism": "0xpm"}
+
+        def fake_owner(tid, chain):
+            yield
+            return "0xsafe"
+
+        def fake_get_liquidity(tid, chain):
+            yield
+            return 0
+
+        obj.get_uniswap_position_owner = fake_owner
+        obj.get_liquidity_for_token = fake_get_liquidity
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            gen = obj.exit(
+                token_id=1,
+                safe_address="0xsafe",
+                chain="optimism",
+                pool_address="0xpool",
+            )
+            result = _drive(gen)
+            assert result == (None, None, None)
+
 
 class TestGetLiquidityForToken:
     """Tests for get_liquidity_for_token."""

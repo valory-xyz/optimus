@@ -197,14 +197,24 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             return None, None, None
 
         cached_liquidity = liquidity
-        liquidity = yield from self.get_liquidity_for_token(token_id, chain)
+        fresh_liquidity = yield from self.get_liquidity_for_token(token_id, chain)
+        if fresh_liquidity is None:
+            if not cached_liquidity:
+                return None, None, None
+            self.context.logger.warning(
+                f"On-chain liquidity read failed for token {token_id}; "
+                f"falling back to cached value {cached_liquidity}"
+            )
+            liquidity = cached_liquidity
+        else:
+            liquidity = fresh_liquidity
+            if cached_liquidity and cached_liquidity != fresh_liquidity:
+                self.context.logger.info(
+                    f"Cached liquidity for token {token_id} ({cached_liquidity}) "
+                    f"diverged from on-chain ({liquidity}); using on-chain value"
+                )
         if not liquidity:
             return None, None, None
-        if cached_liquidity and cached_liquidity != liquidity:
-            self.context.logger.info(
-                f"Cached liquidity for token {token_id} ({cached_liquidity}) "
-                f"diverged from on-chain ({liquidity}); using on-chain value"
-            )
 
         # Calculate slippage protection for decrease liquidity
         (

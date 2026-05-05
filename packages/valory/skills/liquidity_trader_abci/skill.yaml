@@ -29,8 +29,8 @@ fingerprint:
   pool_behaviour.py: bafybeigztdzmnzkkbyjdpbfxt25v73fezgdg5vckr75jujcjzckd3grzw4
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
   pools/balancer.py: bafybeigqgrn23bwqjj3c2ptui34di4jnug7kqmyev3jtqxu357qxogc62i
-  pools/uniswap.py: bafybeieujwbwd6qntq43usadvzibqdfddowp3zy5v2fxcf3fnhtylc7jrq
-  pools/velodrome.py: bafybeigndf5xrvt7jpeuohuhcd7kb7x4i4w3nlduushtsra7q7chagp7ni
+  pools/uniswap.py: bafybeihoegxrjsq6al3coxtrf5ljhewjz5m2py6nwwzefyoo7molc2fdsi
+  pools/velodrome.py: bafybeifu7mx22tkpgshq4ctclelree63roj7dt3ry7yhnai4xeyjucgqam
   rounds.py: bafybeiao54i3b3s6dz7lme24l7isj62b6lufnyuvez2fzeppybbfk7qgnm
   rounds_info.py: bafybeifwcra5ytabjigrwei6t63ajjy54fe444pbwsvi4tf2copnxi5r2i
   states/__init__.py: bafybeie5h3g3ndkq4c7tnv6c25tp64fn3jwyaatsm4buwyz2qiakpecgoy
@@ -63,8 +63,8 @@ fingerprint:
   tests/io_/test_loader.py: bafybeidcy2l6fpipq5jg7kc5afccnad7pywwobm3qskhpgk37nbsbaw7om
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/pools/test_balancer.py: bafybeicfm4wqyb5ycmji3wxej4cs2iedggnrzexmevzt3u43h6q6avb5fu
-  tests/pools/test_uniswap.py: bafybeicobmay7jatmz75hytipcyr7wyqrabynjqavbw6rpozsxmwvg2l6e
-  tests/pools/test_velodrome.py: bafybeiezwwj25zxxhtuimiut5cwq3hpbxkqlax3nmwtoi7n4lxrucepuhi
+  tests/pools/test_uniswap.py: bafybeifj3rovlkte5l676m3sbu75kkzjampxzfxjv6fvdn2kbfjyrqqne4
+  tests/pools/test_velodrome.py: bafybeifqjj5g7tctibdbf25t7n5yjup4lp7igpcts5h2ijuajxcyd3vdwe
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/states/test_apr_population.py: bafybeigangckuw2cpdxelxqc3adlpccekr2halqypraizermtjhvzzm7i4
   tests/states/test_base.py: bafybeihhpz74uoqqz4ltd75ms6rvtnqr3zuqbcf4sdzoelm56yg2pohjw4

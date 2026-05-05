@@ -979,20 +979,33 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 continue
 
             cached_liquidity = liquidities[index] if index < len(liquidities) else None
-            position_liquidity = yield from self.get_liquidity_for_token_velodrome(
+            fresh_liquidity = yield from self.get_liquidity_for_token_velodrome(
                 position_token_id, chain
             )
+            if fresh_liquidity is None:
+                if not cached_liquidity:
+                    self.context.logger.warning(
+                        f"Could not get liquidity for token ID {position_token_id}, skipping"
+                    )
+                    continue
+                self.context.logger.warning(
+                    f"On-chain liquidity read failed for token {position_token_id}; "
+                    f"falling back to cached value {cached_liquidity}"
+                )
+                position_liquidity = cached_liquidity
+            else:
+                position_liquidity = fresh_liquidity
+                if cached_liquidity and cached_liquidity != fresh_liquidity:
+                    self.context.logger.info(
+                        f"Cached liquidity for token {position_token_id} "
+                        f"({cached_liquidity}) diverged from on-chain "
+                        f"({position_liquidity}); using on-chain value"
+                    )
             if not position_liquidity:
                 self.context.logger.warning(
                     f"Could not get liquidity for token ID {position_token_id}, skipping"
                 )
                 continue
-            if cached_liquidity and cached_liquidity != position_liquidity:
-                self.context.logger.info(
-                    f"Cached liquidity for token {position_token_id} "
-                    f"({cached_liquidity}) diverged from on-chain "
-                    f"({position_liquidity}); using on-chain value"
-                )
 
             # Calculate slippage protection for this specific position
             (

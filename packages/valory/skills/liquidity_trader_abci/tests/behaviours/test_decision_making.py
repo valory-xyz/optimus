@@ -4556,6 +4556,35 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
         assert captured["token_ids"] == [1, 2]
 
+    def test_claim_cl_emits_structured_warning_on_verification_failure(self):
+        """The claim path must surface the same structured warning the
+        unstake path does so dashboards covering "fallback fired,
+        on-chain state not actually verified" pick up both code paths.
+        """
+        b = _make_behaviour()
+        mock_pool = MagicMock()
+        mock_pool.is_cl_token_staked = _make_gen_method(None)
+
+        def fake_claim(behaviour, **kwargs):
+            yield
+            return {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
+
+        mock_pool.claim_cl_rewards = fake_claim
+        b.pools = {"velodrome": mock_pool}
+        b.contract_interact = _make_gen_method("0x" + "ab" * 32)
+
+        warnings: List[str] = []
+        b.context.logger.warning = lambda msg, *a, **k: warnings.append(str(msg))
+
+        action = self._velodrome_action(
+            is_cl_pool=True, token_ids=[1, 2], gauge_address="0xGAUGE"
+        )
+        _exhaust(b.get_claim_staking_rewards_tx_hash(action))
+        assert any(
+            "claim_verification_fallback" in w and "reason=verification_rpc_failed" in w
+            for w in warnings
+        )
+
     def test_unstake_cl_no_matching_position(self):
         b = _make_behaviour()
         mock_pool = MagicMock()

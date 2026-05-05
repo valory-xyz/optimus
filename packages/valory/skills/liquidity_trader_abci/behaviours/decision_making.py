@@ -4193,7 +4193,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         pool, safe_address, token_ids, chain, gauge_address
                     )
                 )
-                if not verification_failed:
+                if verification_failed:
+                    self._log_verification_fallback(
+                        "claim",
+                        "verification_rpc_failed",
+                        pool_address,
+                        chain,
+                        gauge_address=gauge_address,
+                        token_ids=token_ids,
+                    )
+                else:
                     if not staked_token_ids:
                         self.context.logger.info(
                             f"Skipping claim for pool {pool_address}: none of "

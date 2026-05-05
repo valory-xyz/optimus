@@ -384,19 +384,12 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
     def _prepare_swap_to_usdc_actions_standard(
         self, portfolio_data: Dict[str, Any]
     ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """
-        Prepare swap actions to convert all non-USDC assets to USDC.
+        """Prepare swap actions to convert all non-USDC assets to USDC.
 
-        :param portfolio_data: cached portfolio snapshot; trusted for
-            position-derived entries.
-        :yield: while reading on-chain ERC20 balances for the safe-held
-            backstop.
+        :param portfolio_data: portfolio snapshot used for position-derived entries.
+        :yield: contract calls reading on-chain ERC20 balances and decimals.
         :return: list of swap actions, deduped by token address.
         """
-        # Position-derived entries are read from `portfolio_data` (untouched).
-        # Safe-held entries are re-read on-chain from the WHITELISTED_ASSETS
-        # list so a SafeGlobal outage cannot strand idle tokens in the safe
-        # during withdrawal.
         self.context.logger.info("=== SWAP DEBUGGING ===")
         actions: List[Dict[str, Any]] = []
 
@@ -411,11 +404,9 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         ) or ""
         olas_lc = olas_address.lower()
 
-        # token_address (preserving casing) -> symbol for logging.
         tokens_to_swap: Dict[str, str] = {}
         seen: Set[str] = set()
 
-        # 1. Position-derived: trust portfolio_data.
         for asset in portfolio_data.get("portfolio_breakdown", []):
             token_address = asset.get("address")
             value_usd = asset.get("value_usd", 0)
@@ -427,10 +418,6 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             seen.add(key)
             tokens_to_swap[token_address] = asset.get("asset") or ""
 
-        # 2. Safe-held backstop: read every whitelisted token on-chain. Picks
-        # up idle tokens that SafeGlobal failed to report. Skip dust below
-        # one full token unit (matches the >$1 threshold in pass 1, since
-        # whitelisted assets are stablecoins).
         if safe_address:
             for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
                 key = whitelisted_addr.lower()
@@ -447,7 +434,6 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 seen.add(key)
                 tokens_to_swap[whitelisted_addr] = symbol or ""
 
-        # 3. Build one swap action per unique token.
         for token_address, token_symbol in tokens_to_swap.items():
             self.context.logger.info(
                 f"Creating swap action for {token_symbol or token_address}"

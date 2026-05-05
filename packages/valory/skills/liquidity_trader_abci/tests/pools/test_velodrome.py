@@ -995,7 +995,7 @@ class TestExitStableVolatilePool:
         assert result[2] is True
 
     def test_query_remove_returns_none(self) -> None:
-        """When _query_remove_liquidity_velodrome returns None, returns (None, None)."""
+        """When _query_remove_liquidity_velodrome returns None, returns (None, None, None)."""
         b = make_behaviour()
         b.params.velodrome_router_contract_addresses = {"optimism": "0xrouter"}
 
@@ -1007,7 +1007,7 @@ class TestExitStableVolatilePool:
 
         gen = b._exit_stable_volatile_pool(**self._base_kwargs())
         result = exhaust_generator(gen)
-        assert result == (None, None)
+        assert result == (None, None, None)
 
     def test_approve_tx_fails(self) -> None:
         """When approve transaction fails, returns (None, None, None)."""
@@ -2254,7 +2254,7 @@ class TestExitClPool:
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result is None
+        assert result == (None, None, None)
 
     def test_no_multisend_address(self) -> None:
         b = self._make_b()
@@ -2263,15 +2263,16 @@ class TestExitClPool:
         b.decrease_liquidity_velodrome = _mock_gen("0xDec")
         b.collect_tokens_velodrome = _mock_gen("0xCol")
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result is None
+        assert result == (None, None, None)
 
-    def test_slippage_protection_none_returns_none_tuple(self) -> None:
+    def test_slippage_protection_none_returns_none_triple(self) -> None:
+        """Slippage failure returns a 3-tuple of Nones."""
         b = self._make_b()
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen(
             (None, None)
         )
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result == (None, None)
+        assert result == (None, None, None)
 
     def test_zero_liquidity_fetches_from_contract(self) -> None:
         """When liquidity is 0 (falsy), get_liquidity_for_token is called."""
@@ -2323,7 +2324,7 @@ class TestExitClPool:
         b.collect_tokens_velodrome = _mock_gen("0xCol")
         b.contract_interact = _mock_gen(None)
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result is None
+        assert result == (None, None, None)
 
     def test_successful_exit(self) -> None:
         b = self._make_b()

@@ -511,10 +511,6 @@ class TestPrepareSwapToUsdcActionsStandard:
         decimals=6,
     ):
         """Create a behaviour with common stubs."""
-        # ``balances`` maps token_address (lowercase) to int. Anything not in
-        # the map returns 0, simulating an empty safe-held backstop.
-        # ``decimals`` is returned by _get_token_decimals for any token; defaults
-        # to 6 so a balance of 1_000_000 just barely passes the dust threshold.
         obj = _make_behaviour()
         params_mock = MagicMock()
         params_mock.target_investment_chains = ["optimism"]
@@ -740,10 +736,8 @@ class TestPrepareSwapToUsdcActionsStandard:
         assert len(result) == 0
 
     def test_safe_held_backstop_skips_dust_below_one_token_unit(self) -> None:
-        """A non-zero raw balance below one whole token unit must be treated as
-        dust and skipped — matches the >$1 threshold used in pass 1."""
+        """Balance below one whole token unit is skipped as dust."""
         ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
-        # 999_999 raw, decimals=6 → 0.999999 token (~$1 dust); below threshold.
         obj = self._make_obj(balances={ousdt: 999_999}, decimals=6)
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
@@ -753,8 +747,7 @@ class TestPrepareSwapToUsdcActionsStandard:
         obj._build_swap_to_usdc_action.assert_not_called()
 
     def test_safe_held_backstop_skips_when_decimals_unavailable(self) -> None:
-        """If ``_get_token_decimals`` cannot be resolved, the backstop must not
-        guess a threshold and accidentally queue dust — it skips the token."""
+        """Token is skipped when _get_token_decimals returns None."""
         ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
         obj = self._make_obj(balances={ousdt: 5_000_000})
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
@@ -770,8 +763,7 @@ class TestPrepareSwapToUsdcActionsStandard:
         assert len(result) == 0
 
     def test_safe_held_backstop_dedupes_mixed_case_address(self) -> None:
-        """Portfolio entry with upper-case address must dedupe against the
-        whitelist's lower-case address — locks in the .lower() normalization."""
+        """Mixed-case portfolio address dedupes against lowercase whitelist."""
         ousdt_lower = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
         ousdt_upper = ousdt_lower.upper().replace("0X", "0x")
         obj = self._make_obj(balances={ousdt_lower: 5_000_000}, decimals=6)
@@ -783,8 +775,6 @@ class TestPrepareSwapToUsdcActionsStandard:
             ]
         }
         result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
-        # One action total — backstop must NOT re-queue the same token under a
-        # different casing.
         assert len(result) == 1
 
 

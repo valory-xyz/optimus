@@ -3881,14 +3881,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     safe_address=safe_address,
                 )
 
-            if not result or result.get("error"):
-                error_msg = (
-                    result.get("error", "Unknown error")
-                    if result
-                    else "No result returned"
+            if result is None:
+                self.context.logger.info(
+                    f"No staking work for pool {pool_address}; advancing action"
                 )
+                return None, None, None
+
+            if result.get("error"):
                 self.context.logger.error(
-                    f"Failed to get staking transaction: {error_msg}"
+                    f"Failed to get staking transaction: {result.get('error')}"
                 )
                 return None, None, None
 

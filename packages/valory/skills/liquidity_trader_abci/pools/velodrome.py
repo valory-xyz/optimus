@@ -3107,7 +3107,34 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return {"error": f"No position manager address found for chain {chain}"}
 
-        # Check if we need to approve the gauge for all NFTs
+        # First pass: filter out tokens already in the gauge's stake set so we
+        # can decide whether the approval and deposit txs are even needed.
+        tokens_to_stake = []
+        for token_id in token_ids:
+            is_staked = yield from self.is_cl_token_staked(
+                safe_address,
+                token_id,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            if is_staked is True:
+                self.context.logger.info(
+                    f"Token {token_id} is already staked in gauge "
+                    f"{gauge_address}; skipping deposit"
+                )
+                continue
+            tokens_to_stake.append(token_id)
+
+        if not tokens_to_stake:
+            self.context.logger.info(
+                f"All {len(token_ids)} tokens already staked in gauge "
+                f"{gauge_address}; nothing to do"
+            )
+            return None
+
+        # Check if we need to approve the gauge for all NFTs. We only build
+        # this tx now that we know at least one deposit will follow it,
+        # otherwise we would submit an orphan approval-only multisend.
         is_approved = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
@@ -3121,7 +3148,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # Add approval transaction if needed
         if not is_approved:
             self.context.logger.info(
                 f"Setting approval for all NFTs to gauge {gauge_address}"
@@ -3151,23 +3177,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
-        # Stake each NFT position
+        # Stake each NFT position that wasn't filtered out above.
         staked_positions = []
-        for token_id in token_ids:
-            is_staked = yield from self.is_cl_token_staked(
-                safe_address,
-                token_id,
-                chain=chain,
-                gauge_address=gauge_address,
-            )
-            if is_staked is True:
-                self.context.logger.info(
-                    f"Token {token_id} is already staked in gauge "
-                    f"{gauge_address}; skipping deposit"
-                )
-                continue
-
-            # Create stake transaction for this NFT
+        for token_id in tokens_to_stake:
             stake_tx_hash = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=gauge_address,

@@ -4674,6 +4674,7 @@ class TestStakeClLpTokens:
         b.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPM"
         }
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True (skip approval)
         # 2: stake token 1 -> None (fail)
         # 3: stake token 2 -> None (fail)
@@ -4810,10 +4811,12 @@ class TestStakeClLpTokens:
         staked_ids = {p["token_id"] for p in result["staked_positions"]}
         assert staked_ids == {2}
 
-    def test_all_already_staked_returns_error_not_solo_approval(self) -> None:
-        """If approval is needed but every token is already staked, do not
-        submit a solo setApprovalForAll multisend. Return an error so the
-        caller doesn't advance the action index treating it as success."""
+    def test_all_already_staked_returns_none_no_op(self) -> None:
+        """If every token is already in the gauge's stake set, no work is
+        required. The function returns None (no-op) without queueing an
+        approval or any deposits, so the caller doesn't submit an orphan
+        setApprovalForAll multisend.
+        """
         b = make_behaviour()
         b.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPM"
@@ -4825,15 +4828,25 @@ class TestStakeClLpTokens:
             return True
 
         b.is_cl_token_staked = is_staked_stub
-        # is_approved -> False (would queue an approval), then no deposits.
-        b.contract_interact = make_contract_interact([False, "0xApproveData"])
+        # is_approved is never called because we bail out before that step.
+        # If contract_interact were called, the test would consume the queue.
+        contract_calls = []
+
+        def fake_contract_interact(**kwargs):
+            contract_calls.append(kwargs.get("contract_callable"))
+            yield
+            return None
+
+        b.contract_interact = fake_contract_interact
         result = exhaust_generator(
             b.stake_cl_lp_tokens(
                 [1, 2], "0xGauge", chain="optimism", safe_address="0xSafe"
             )
         )
-        assert "error" in result
-        assert result.get("success") is not True
+        assert result is None
+        assert "is_approved_for_all" not in contract_calls
+        assert "set_approval_for_all" not in contract_calls
+        assert "deposit" not in contract_calls
 
 
 class TestUnstakeClLpTokens:

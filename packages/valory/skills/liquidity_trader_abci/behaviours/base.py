@@ -35,14 +35,9 @@ from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
 from eth_utils import to_checksum_address
 
-from packages.dvilela.connections.kv_store.connection import (
+from packages.valory.connections.kv_store.connection import (
     PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
 )
-from packages.dvilela.protocols.kv_store.dialogues import (
-    KvStoreDialogue,
-    KvStoreDialogues,
-)
-from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.connections.mirror_db.connection import (
     PUBLIC_ID as MIRRORDB_CONNECTION_PUBLIC_ID,
 )
@@ -55,6 +50,11 @@ from packages.valory.contracts.velodrome_slipstream_helper.contract import (
     VelodromeSlipstreamHelperContract,
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
 from packages.valory.protocols.srr.message import SrrMessage

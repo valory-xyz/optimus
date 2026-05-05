@@ -23,8 +23,8 @@ from typing import Optional, cast
 
 from aea.configurations.data_types import PublicId
 
-from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )

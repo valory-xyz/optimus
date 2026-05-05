@@ -18,7 +18,7 @@ contract_interface_paths:
   ethereum: build/Vault.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.1.0
+    version: ==2.2.1
   web3:
     version: <8,>=7.0.0
   eth_abi:

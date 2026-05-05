@@ -23,8 +23,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler,
     KvStoreHandler,

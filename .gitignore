@@ -14,13 +14,9 @@ assets.json
 current_pool.json
 gas_costs.json
 portfolio.json
-Pipfile.lock
-   
+logs/
 packages/valory/agents/*
 packages/valory/connections/*
-packages/dvilela/*
-packages/dvilela/connections/*
-packages/dvilela/protocols/*
 packages/valory/contracts/gnosis_safe
 packages/valory/contracts/gnosis_safe_proxy_factory
 packages/valory/contracts/multisend
@@ -42,7 +38,6 @@ packages/valory/contracts/staking_activity_checker/
 packages/valory/contracts/staking_token/
 
 leak_report
-/Pipfile.lock
 keys.json
 ethereum_private_key.txt
 __pycache__/

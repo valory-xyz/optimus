@@ -42,21 +42,21 @@ from aea_ledger_ethereum.ethereum import EthereumCrypto
 from eth_account import Account
 from web3 import Web3
 
-from packages.dvilela.connections.genai.connection import (
+from packages.valory.connections.genai.connection import (
     PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
 )
-from packages.dvilela.connections.kv_store.connection import (
-    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
-)
-from packages.dvilela.protocols.kv_store.dialogues import (
-    KvStoreDialogue,
-    KvStoreDialogues,
-)
-from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.connections.http_server.connection import (
     PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
 )
+from packages.valory.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
 from packages.valory.protocols.http.message import HttpMessage
+from packages.valory.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,

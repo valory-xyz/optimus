@@ -141,8 +141,8 @@ Below are the steps to prepare your environment, configure the agent keys, and r
 
 System requirements:
 
-- Python `== 3.10`
-- [Poetry](https://python-poetry.org/docs/) `>=1.4.0`
+- Python `>=3.10, <3.15`
+- [uv](https://docs.astral.sh/uv/)
 - [Docker Engine](https://docs.docker.com/engine/install/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
 
@@ -155,7 +155,8 @@ git clone https://github.com/valory-xyz/optimus.git
 Create a development environment:
 
 ```bash
-poetry install && poetry shell
+uv sync --all-groups
+source .venv/bin/activate
 ```
 
 Configure the Open Autonomy framework:
@@ -221,7 +222,7 @@ Once you have configured the environment variables:
 2. Run as a local agent (development):
 
     ```bash
-    pip install aea-helpers
+    pip install open-aea-helpers
 
     # Create data directory and set environment variables
     mkdir -p data
@@ -231,14 +232,12 @@ Once you have configured the environment variables:
     # Run the agent
     aea-helpers run-agent \
       --name valory/optimus \
-      --config-replace \
-      --config-mapping config-mapping.json \
       --connection-key
     ```
 
     To run multiple agents on the same machine, add `--free-ports`.
 
-    > **Note:** `STORE_PATH` and `LOG_DIR` must be set to an absolute path before running. The `config-replace` step substitutes these into the agent config. You can also set them in your `.env` file.
+    > **Note:** `STORE_PATH` and `LOG_DIR` must be set to an absolute path before running. Set them in your `.env` file or as environment variables.
 
 3. Run as a service (Docker deployment):
 

@@ -25,10 +25,10 @@ from aea.protocols.base import Address, Message
 from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from aea.skills.base import Model
 
-from packages.dvilela.protocols.kv_store.dialogues import (
+from packages.valory.protocols.kv_store.dialogues import (
     KvStoreDialogue as BaseKvStoreDialogue,
 )
-from packages.dvilela.protocols.kv_store.dialogues import (
+from packages.valory.protocols.kv_store.dialogues import (
     KvStoreDialogues as BaseKvStoreDialogues,
 )
 from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue

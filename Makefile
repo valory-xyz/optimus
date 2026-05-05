@@ -10,7 +10,6 @@ clean-build:
 	find . -name '*.egg-info' -exec rm -fr {} +
 	find . -name '*.egg' -exec rm -fr {} +
 	find . -type d -name __pycache__ -exec rm -rv {} +
-	rm -fr Pipfile.lock
 	rm -rf plugins/*/build
 	rm -rf plugins/*/dist
 
@@ -127,11 +126,28 @@ tm:
 	tendermint init
 	tendermint node --proxy_app=tcp://127.0.0.1:26658 --rpc.laddr=tcp://127.0.0.1:26657 --p2p.laddr=tcp://0.0.0.0:26656 --p2p.seeds= --consensus.create_empty_blocks=true
 
-v := $(shell pip -V | grep virtualenvs)
-
 .PHONY: uv-install
 uv-install:
 	uv sync --all-groups
+
+# Cross-platform binary suffix (.exe on Windows, empty on Unix).
+EXE_SUFFIX := $(if $(filter Windows_NT,$(OS)),.exe,)
+
+# Writable scratch dir for the ``check-agent-runner`` smoke test. ``/tmp``
+# doesn't exist on native Windows, so fall back to ``%TEMP%`` (inherited
+# as ``$(TEMP)``) — both are absolute, writable, and guaranteed to exist.
+STORE_PATH_VALUE := $(if $(filter Windows_NT,$(OS)),$(TEMP),/tmp)
+
+.PHONY: run-agent
+run-agent:
+	mkdir -p ./logs && \
+	bash -c 'TIMESTAMP=$$(date +%d-%m-%y_%H-%M); \
+	LOG_FILE="./logs/agent_log_$$TIMESTAMP.log"; \
+	LATEST_LOG_FILE="./logs/agent_log_latest.log"; \
+	echo "Running agent and logging to $$LOG_FILE"; \
+	aea-helpers run-agent \
+	--name valory/optimus \
+	--connection-key 2>&1 | tee $$LOG_FILE $$LATEST_LOG_FILE'
 
 ./agent:  uv-install ./hash_id
 	@if [ ! -d "agent" ]; then \
@@ -151,10 +167,11 @@ build-agent-runner: uv-install agent
 	--hidden-import aea_ledger_ethereum \
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
-	$(shell uv run python get_pyinstaller_dependencies.py) \
-	--onefile pyinstaller/optimus_bin.py \
+	$(shell uv run aea-helpers build-binary-deps ./agent) \
+	--onefile $(shell uv run python -c "import aea_helpers, os; print(os.path.join(os.path.dirname(aea_helpers.__file__), 'bin_template.py'))") \
 	--name agent_runner_bin
-	./dist/agent_runner_bin --version
+	./dist/agent_runner_bin$(EXE_SUFFIX) --help 1>/dev/null
+	./dist/agent_runner_bin$(EXE_SUFFIX) --version
 
 
 .PHONY: build-agent-runner-mac
@@ -169,11 +186,12 @@ build-agent-runner-mac: uv-install  agent
 	--hidden-import aea_ledger_ethereum \
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
-	$(shell uv run python get_pyinstaller_dependencies.py) \
-	--onefile pyinstaller/optimus_bin.py \
+	$(shell uv run aea-helpers build-binary-deps ./agent) \
+	--onefile $(shell uv run python -c "import aea_helpers, os; print(os.path.join(os.path.dirname(aea_helpers.__file__), 'bin_template.py'))") \
 	--codesign-identity "${SIGN_ID}" \
 	--name agent_runner_bin
-	./dist/agent_runner_bin --version
+	./dist/agent_runner_bin$(EXE_SUFFIX) --help 1>/dev/null
+	./dist/agent_runner_bin$(EXE_SUFFIX) --version
 
 
 ./hash_id: ./packages/packages.json
@@ -192,25 +210,11 @@ build-agent-runner-mac: uv-install  agent
 	uv run bash -c "cd ./agent; autonomy  -s generate-key ethereum; autonomy  -s add-key ethereum ethereum_private_key.txt; autonomy add-key ethereum ethereum_private_key.txt --connection; autonomy -s issue-certificates;"
 
 
-# Configuration
-TIMEOUT := 20
-COMMAND := cd ./agent && SKILL_TRADER_ABCI_MODELS_PARAMS_ARGS_STORE_PATH=/tmp ../dist/agent_runner_bin -s run
-SEARCH_STRING := Starting AEA
-
-
-# Determine OS and set appropriate options
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-    # macOS specific settings
-    MKTEMP = mktemp -t tmp
-else ifeq ($(OS),Windows_NT)
-    # Windows specific settings
-    MKTEMP = echo $$(cygpath -m "$$(mktemp -t tmp.XXXXXX)")
-else
-    # Linux and other Unix-like systems
-    MKTEMP = mktemp
-endif
-
 .PHONY: check-agent-runner
 check-agent-runner:
-	python check_agent_runner.py
+	# aea-config.yaml uses anonymous templates ($${str:/data}) so Pearl's
+	# path-based env-var injection wins at runtime; a named template would
+	# suppress the fallback. See valory-xyz/olas-operate-middleware#424.
+	uv run aea-helpers check-binary ./dist/agent_runner_bin$(EXE_SUFFIX) ./agent \
+	--env-var CONNECTION_KV_STORE_CONFIG_STORE_PATH=$(STORE_PATH_VALUE) \
+	--env-var SKILL_OPTIMUS_ABCI_MODELS_PARAMS_ARGS_STORE_PATH=$(STORE_PATH_VALUE)

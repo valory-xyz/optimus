@@ -168,13 +168,13 @@ class TestKvStoreHandler:
 
     def test_supported_protocol(self) -> None:
         """Test SUPPORTED_PROTOCOL is set."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         assert KvStoreHandler.SUPPORTED_PROTOCOL == KvStoreMessage.protocol_id
 
     def test_allowed_response_performatives(self) -> None:
         """Test allowed_response_performatives is set."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         expected = frozenset(
             {
@@ -201,7 +201,7 @@ class TestKvStoreHandler:
 
     def test_handle_success_with_callback(self) -> None:
         """Test handle SUCCESS with callback in req_to_callback."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler = KvStoreHandler.__new__(KvStoreHandler)
         mock_context = MagicMock()
@@ -221,7 +221,7 @@ class TestKvStoreHandler:
 
     def test_handle_success_without_callback(self) -> None:
         """Test handle SUCCESS without callback delegates to super."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler = KvStoreHandler.__new__(KvStoreHandler)
         mock_context = MagicMock()
@@ -238,7 +238,7 @@ class TestKvStoreHandler:
 
     def test_handle_read_response_with_callback(self) -> None:
         """Test handle READ_RESPONSE with callback."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler = KvStoreHandler.__new__(KvStoreHandler)
         mock_context = MagicMock()
@@ -258,7 +258,7 @@ class TestKvStoreHandler:
 
     def test_handle_error_delegates_to_super(self) -> None:
         """Test handle ERROR delegates to super."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler = KvStoreHandler.__new__(KvStoreHandler)
         mock_context = MagicMock()
@@ -886,7 +886,7 @@ class TestHttpHandlerMethods:
 
     def test_handle_kv_store_response_success(self) -> None:
         """Test _handle_kv_store_response logs success."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler, _ = _make_http_handler()
         msg = MagicMock()
@@ -895,7 +895,7 @@ class TestHttpHandlerMethods:
 
     def test_handle_kv_store_response_failure(self) -> None:
         """Test _handle_kv_store_response logs failure."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler, _ = _make_http_handler()
         msg = MagicMock()
@@ -904,7 +904,7 @@ class TestHttpHandlerMethods:
 
     def test_handle_kv_read_response_success(self) -> None:
         """Test _handle_kv_read_response stores data on success."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler, ctx = _make_http_handler()
         msg = MagicMock()
@@ -916,7 +916,7 @@ class TestHttpHandlerMethods:
 
     def test_handle_kv_read_response_success_no_data_attr(self) -> None:
         """Test _handle_kv_read_response when msg has no data attribute."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler, ctx = _make_http_handler()
         msg = MagicMock(spec=[])
@@ -927,7 +927,7 @@ class TestHttpHandlerMethods:
 
     def test_handle_kv_read_response_failure(self) -> None:
         """Test _handle_kv_read_response sets empty data on failure."""
-        from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
 
         handler, ctx = _make_http_handler()
         msg = MagicMock()

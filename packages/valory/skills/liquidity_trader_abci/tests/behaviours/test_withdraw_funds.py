@@ -242,7 +242,12 @@ class TestPrepareWithdrawalActions:
     ):
         """Create a behaviour with stubbed sub-methods."""
         obj = _make_behaviour()
-        obj._prepare_unstaking_actions = MagicMock(return_value=unstake_actions or [])
+
+        def fake_prepare_unstaking(_positions):
+            yield
+            return unstake_actions or []
+
+        obj._prepare_unstaking_actions = fake_prepare_unstaking
         obj._prepare_exit_pool_actions = MagicMock(return_value=exit_actions or [])
         obj._prepare_swap_to_usdc_actions_standard = MagicMock(
             return_value=swap_actions or []
@@ -320,16 +325,24 @@ class TestPrepareWithdrawalActions:
 class TestPrepareUnstakingActions:
     """Tests for _prepare_unstaking_actions."""
 
+    @staticmethod
+    def _verified_action_gen(action):
+        def _gen(_position):
+            yield
+            return action
+
+        return _gen
+
     def test_open_position_with_staking(self) -> None:
         """Test open position with staking metadata returns unstake action."""
         obj = _make_behaviour()
         obj._has_staking_metadata = MagicMock(return_value=True)
-        obj._build_unstake_lp_tokens_action = MagicMock(
-            return_value={"action": "unstake"}
+        obj._build_unstake_lp_tokens_action_verified = self._verified_action_gen(
+            {"action": "unstake"}
         )
 
         positions = [{"status": PositionStatus.OPEN.value}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 1
 
     def test_open_position_without_staking(self) -> None:
@@ -338,30 +351,30 @@ class TestPrepareUnstakingActions:
         obj._has_staking_metadata = MagicMock(return_value=False)
 
         positions = [{"status": PositionStatus.OPEN.value}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 0
 
     def test_open_position_build_returns_none(self) -> None:
         """Test open position with staking but build returns None."""
         obj = _make_behaviour()
         obj._has_staking_metadata = MagicMock(return_value=True)
-        obj._build_unstake_lp_tokens_action = MagicMock(return_value=None)
+        obj._build_unstake_lp_tokens_action_verified = self._verified_action_gen(None)
 
         positions = [{"status": PositionStatus.OPEN.value}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 0
 
     def test_closed_position_skipped(self) -> None:
         """Test closed position is skipped."""
         obj = _make_behaviour()
         positions = [{"status": "closed"}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 0
 
     def test_empty_positions(self) -> None:
         """Test empty positions list."""
         obj = _make_behaviour()
-        result = obj._prepare_unstaking_actions([])
+        result = _drive(obj._prepare_unstaking_actions([]))
         assert len(result) == 0
 
 

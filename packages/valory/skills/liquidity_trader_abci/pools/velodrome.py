@@ -81,6 +81,11 @@ class AllocationStatus(Enum):
     FAILED = "failed"
 
 
+# Mirrors LiquidityTraderBaseBehaviour.MAX_VERIFY_RETRIES so the stake-side
+# pre-filter retries on RPC failures the same way the unstake/claim helpers do.
+MAX_STAKE_VERIFY_RETRIES = 2
+
+
 class VelodromePoolBehaviour(PoolBehaviour, ABC):
     """Velodrome Pool Behaviour that handles both Stable/Volatile and Concentrated Liquidity pools"""
 
@@ -970,17 +975,42 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Process each position
         for index, position_token_id in enumerate(token_ids):
-            # Get liquidity for this position from the corresponding index
-            position_liquidity = liquidities[index]
-            if not position_liquidity:
-                position_liquidity = yield from self.get_liquidity_for_token_velodrome(
-                    position_token_id, chain
+            owner = yield from self.get_cl_position_owner(position_token_id, chain)
+            if owner is not None and owner.lower() != safe_address.lower():
+                self.context.logger.warning(
+                    f"Skipping exit for token {position_token_id}: owner "
+                    f"{owner} is not the Safe {safe_address}"
                 )
-                if not position_liquidity:
+                continue
+
+            cached_liquidity = liquidities[index] if index < len(liquidities) else None
+            fresh_liquidity = yield from self.get_liquidity_for_token_velodrome(
+                position_token_id, chain
+            )
+            if fresh_liquidity is None:
+                if not cached_liquidity:
                     self.context.logger.warning(
                         f"Could not get liquidity for token ID {position_token_id}, skipping"
                     )
                     continue
+                self.context.logger.warning(
+                    f"On-chain liquidity read failed for token {position_token_id}; "
+                    f"falling back to cached value {cached_liquidity}"
+                )
+                position_liquidity = cached_liquidity
+            else:
+                position_liquidity = fresh_liquidity
+                if cached_liquidity and cached_liquidity != fresh_liquidity:
+                    self.context.logger.info(
+                        f"Cached liquidity for token {position_token_id} "
+                        f"({cached_liquidity}) diverged from on-chain "
+                        f"({position_liquidity}); using on-chain value"
+                    )
+            if not position_liquidity:
+                self.context.logger.warning(
+                    f"Could not get liquidity for token ID {position_token_id}, skipping"
+                )
+                continue
 
             # Calculate slippage protection for this specific position
             (
@@ -1043,6 +1073,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
+        if not multi_send_txs:
+            self.context.logger.warning(
+                "No exit transactions queued for any token; skipping multisend"
+            )
+            return None, None, None
+
         # prepare multisend
         multisend_address = self.params.multisend_contract_addresses.get(chain, "")
         if not multisend_address:
@@ -1065,6 +1101,37 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
+
+    def get_cl_position_owner(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Return the on-chain owner of a Velodrome CL position NFT, or None on failure."""
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain, ""
+            )
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return None
+
+        owner = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+            contract_callable="ownerOf",
+            data_key="owner",
+            token_id=token_id,
+            chain_id=chain,
+        )
+        if not owner:
+            self.context.logger.warning(
+                f"Could not read owner of velodrome CL position {token_id}"
+            )
+            return None
+        return owner
 
     def get_liquidity_for_token_velodrome(
         self, token_id: int, chain: str
@@ -1094,12 +1161,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # liquidity is returned from positions mapping at the appropriate index
-        # Typically liquidity is at a specific index in the struct
-        liquidity = position[
-            2
-        ]  # This should match the index where liquidity is stored in the positions struct
-        return liquidity
+        return position.get("liquidity")
 
     def decrease_liquidity_velodrome(
         self,
@@ -3050,7 +3112,43 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return {"error": f"No position manager address found for chain {chain}"}
 
-        # Check if we need to approve the gauge for all NFTs
+        # First pass: filter out tokens already in the gauge's stake set so we
+        # can decide whether the approval and deposit txs are even needed.
+        # Uses the same retry policy as the unstake/claim verification helpers
+        # so a transient RPC failure on a single check does not push the token
+        # straight into the "try anyway" branch on the first attempt.
+        tokens_to_stake = []
+        for token_id in token_ids:
+            is_staked = yield from self._is_cl_token_staked_with_retry(
+                safe_address,
+                token_id,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            if is_staked is True:
+                self.context.logger.info(
+                    f"Token {token_id} is already staked in gauge "
+                    f"{gauge_address}; skipping deposit"
+                )
+                continue
+            if is_staked is None:
+                self.context.logger.warning(
+                    f"Could not verify on-chain staked state for token "
+                    f"{token_id} on gauge {gauge_address} after retry; "
+                    f"queuing deposit anyway"
+                )
+            tokens_to_stake.append(token_id)
+
+        if not tokens_to_stake:
+            self.context.logger.info(
+                f"All {len(token_ids)} tokens already staked in gauge "
+                f"{gauge_address}; nothing to do"
+            )
+            return None
+
+        # Check if we need to approve the gauge for all NFTs. We only build
+        # this tx now that we know at least one deposit will follow it,
+        # otherwise we would submit an orphan approval-only multisend.
         is_approved = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
@@ -3064,7 +3162,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # Add approval transaction if needed
         if not is_approved:
             self.context.logger.info(
                 f"Setting approval for all NFTs to gauge {gauge_address}"
@@ -3094,10 +3191,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
-        # Stake each NFT position
+        # Stake each NFT position that wasn't filtered out above.
         staked_positions = []
-        for token_id in token_ids:
-            # Create stake transaction for this NFT
+        for token_id in tokens_to_stake:
             stake_tx_hash = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=gauge_address,
@@ -3125,7 +3221,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             staked_positions.append({"token_id": token_id})
 
-        if not multi_send_txs:
+        if not staked_positions:
             error_msg = "No valid stake transactions created"
             self.context.logger.error(error_msg)
             return {"error": error_msg}
@@ -3461,6 +3557,58 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         staked_amount = balance_result if isinstance(balance_result, int) else 0
         self.context.logger.info(f"CL staked balance for {account}: {staked_amount}")
         return staked_amount
+
+    # Mirrors LiquidityTraderBaseBehaviour._verify_cl_token_staked_with_retry
+    # for the stake-side pre-filter so a one-shot RPC blip does not flip a
+    # token into the "try anyway" branch on the first call.
+    def _is_cl_token_staked_with_retry(
+        self,
+        account: str,
+        token_id: int,
+        chain: str,
+        gauge_address: str,
+    ) -> Generator[None, None, Optional[bool]]:
+        """Verify on-chain stake state with up to ``MAX_STAKE_VERIFY_RETRIES`` attempts."""
+        for _ in range(MAX_STAKE_VERIFY_RETRIES):
+            is_staked = yield from self.is_cl_token_staked(
+                account, token_id, chain=chain, gauge_address=gauge_address
+            )
+            if is_staked is not None:
+                return is_staked
+        return None
+
+    def is_cl_token_staked(
+        self, account: str, token_id: int, **kwargs: Any
+    ) -> Generator[None, None, Optional[bool]]:
+        """Return True/False if the gauge's stake set can be read, else None."""
+        chain = kwargs.get("chain")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not chain or not gauge_address or token_id is None:
+            self.context.logger.error(
+                "Chain, gauge_address and token_id are required for is_cl_token_staked"
+            )
+            return None
+
+        result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="staked_contains",
+            data_key="is_staked",
+            account=account,
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if result is None:
+            self.context.logger.warning(
+                f"Could not verify on-chain staked state for token {token_id} "
+                f"on gauge {gauge_address}"
+            )
+            return None
+
+        return bool(result)
 
     def get_cl_gauge_total_supply(self, **kwargs: Any) -> Generator[None, None, int]:
         """Get the total supply of staked tokens in CL gauge."""

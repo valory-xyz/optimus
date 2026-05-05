@@ -4188,21 +4188,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     return None, None, None
 
                 # On RPC failure keep the original list.
-                staked_token_ids: List[int] = []
-                verification_failed = False
-                for token_id in token_ids:
-                    is_staked = yield from pool.is_cl_token_staked(
-                        self,
-                        safe_address,
-                        token_id,
-                        chain=chain,
-                        gauge_address=gauge_address,
+                staked_token_ids, verification_failed = (
+                    yield from self._filter_staked_token_ids(
+                        pool, safe_address, token_ids, chain, gauge_address
                     )
-                    if is_staked is None:
-                        verification_failed = True
-                        break
-                    if is_staked:
-                        staked_token_ids.append(token_id)
+                )
                 if not verification_failed:
                     if not staked_token_ids:
                         self.context.logger.info(

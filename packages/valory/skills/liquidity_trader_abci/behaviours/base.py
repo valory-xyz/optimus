@@ -2709,6 +2709,26 @@ class LiquidityTraderBaseBehaviour(
                 return is_staked
         return None
 
+    def _filter_staked_token_ids(
+        self,
+        pool: Any,
+        safe_address: str,
+        token_ids: List[int],
+        chain: str,
+        gauge_address: str,
+    ) -> Generator[None, None, Tuple[List[int], bool]]:
+        """Return ``(staked_ids, verification_failed)`` for a list of CL token IDs."""
+        staked_ids: List[int] = []
+        for token_id in token_ids:
+            is_staked = yield from self._verify_cl_token_staked_with_retry(
+                pool, safe_address, token_id, chain, gauge_address
+            )
+            if is_staked is None:
+                return [], True
+            if is_staked:
+                staked_ids.append(token_id)
+        return staked_ids, False
+
     def _log_unstake_fallback(
         self,
         reason: str,
@@ -2777,17 +2797,11 @@ class LiquidityTraderBaseBehaviour(
             )
             return self._build_unstake_lp_tokens_action(position)
 
-        staked_token_ids: List[int] = []
-        verification_failed = False
-        for token_id in token_ids:
-            is_staked = yield from self._verify_cl_token_staked_with_retry(
-                pool, safe_address, token_id, chain, gauge_address
+        staked_token_ids, verification_failed = (
+            yield from self._filter_staked_token_ids(
+                pool, safe_address, token_ids, chain, gauge_address
             )
-            if is_staked is None:
-                verification_failed = True
-                break
-            if is_staked:
-                staked_token_ids.append(token_id)
+        )
 
         if verification_failed:
             self._log_unstake_fallback(

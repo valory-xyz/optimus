@@ -2775,9 +2775,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
 
-        if position_data and position_data.get("liquidity"):
-            # Update the position with the current liquidity
-            position["current_liquidity"] = position_data.get("liquidity")
+        liquidity = position_data.get("liquidity") if position_data else None
+        if liquidity is not None:
+            position["current_liquidity"] = liquidity
             self.context.logger.info(
                 f"Updated Uniswap position liquidity: {position['current_liquidity']}"
             )
@@ -2829,15 +2829,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     chain_id=chain,
                 )
 
-                if position_data and position_data.get("liquidity"):
-                    # Update the position with the current liquidity
-                    pos["current_liquidity"] = position_data.get("liquidity")
+                liquidity = position_data.get("liquidity") if position_data else None
+                if liquidity is not None:
+                    pos["current_liquidity"] = liquidity
                     self.context.logger.info(
-                        f"Updated Uniswap position liquidity: {pos['current_liquidity']}"
+                        f"Updated Velodrome CL position liquidity: {pos['current_liquidity']}"
                     )
                 else:
                     self.context.logger.warning(
-                        f"Failed to get liquidity for Uniswap position: {pos}"
+                        f"Failed to get liquidity for Velodrome CL position: {pos}"
                     )
         else:
             # Handle Velodrome stable/volatile pool

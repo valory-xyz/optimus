@@ -1020,6 +1020,18 @@ class TestUpdateUniswapPosition:
         gen = obj._update_uniswap_position(pos)
         _drive(gen)
 
+    def test_zero_liquidity_writes_zero(self):
+        """On-chain liquidity of 0 must be written through, not treated as
+        a fetch failure that leaves the cached non-zero value intact."""
+        obj = _mk()
+
+        obj.params.uniswap_position_manager_contract_addresses = {"optimism": "0xPM"}
+        obj.contract_interact = _gen_return({"liquidity": 0})
+        pos = {"token_id": 1, "chain": "optimism", "current_liquidity": 12345}
+        gen = obj._update_uniswap_position(pos)
+        _drive(gen)
+        assert pos["current_liquidity"] == 0
+
 
 class TestUpdateSturdyPosition:
     def test_missing(self):
@@ -1070,6 +1082,25 @@ class TestUpdateVelodromePosition:
         gen = obj._update_velodrome_position(pos)
         _drive(gen)
         assert pos["positions"][0]["current_liquidity"] == 42
+
+    def test_cl_zero_liquidity_writes_zero(self):
+        """On-chain liquidity of 0 must be written through. A stale cached
+        non-zero current_liquidity would otherwise prevent
+        check_and_update_zero_liquidity_positions from closing the position."""
+        obj = _mk()
+
+        obj.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPM"
+        }
+        obj.contract_interact = _gen_return({"liquidity": 0})
+        pos = {
+            "chain": "optimism",
+            "is_cl_pool": True,
+            "positions": [{"token_id": 1, "current_liquidity": 999}],
+        }
+        gen = obj._update_velodrome_position(pos)
+        _drive(gen)
+        assert pos["positions"][0]["current_liquidity"] == 0
 
     def test_cl_no_token_id(self):
         obj = _mk()

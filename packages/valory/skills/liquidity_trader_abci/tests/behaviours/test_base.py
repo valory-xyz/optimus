@@ -3376,6 +3376,18 @@ class TestBuildUnstakeActionVerified:
         assert result is not None
         assert result["token_ids"] == [1]
 
+    def test_partial_staked_drops_stale_top_level_token_id(self) -> None:
+        """A position carrying both a positions list and a top-level token_id
+        for an unstaked entry must not leave the stale top-level token_id on
+        the filtered position."""
+        b = _make_behaviour()
+        b.pools = {"velodrome": self._pool_stub({1: True, 2: False})}
+        pos = self._cl_position()
+        pos["token_id"] = 2  # Top-level points at the un-staked token.
+        result = _exhaust(b._build_unstake_lp_tokens_action_verified(pos))
+        assert result is not None
+        assert result["token_ids"] == [1]
+
     def test_rpc_failure_falls_back_to_local_state(self) -> None:
         """If we can't verify on-chain, preserve prior behaviour."""
         b = _make_behaviour()

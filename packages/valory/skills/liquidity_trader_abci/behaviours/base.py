@@ -2761,8 +2761,12 @@ class LiquidityTraderBaseBehaviour(
         filtered_position["positions"] = [
             p for p in positions_data if p.get("token_id") in staked_token_ids
         ]
-        if position.get("token_id") is not None and not filtered_position["positions"]:
-            filtered_position["token_id"] = position.get("token_id")
+        top_level_token_id = position.get("token_id")
+        if (
+            top_level_token_id is not None
+            and top_level_token_id not in staked_token_ids
+        ):
+            filtered_position.pop("token_id", None)
         filtered_position["gauge_address"] = gauge_address
         return self._build_unstake_lp_tokens_action(filtered_position)
 

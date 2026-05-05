@@ -3539,7 +3539,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain = kwargs.get("chain")
         gauge_address = kwargs.get("gauge_address")
 
-        if not all([chain, gauge_address, token_id is not None]):
+        if not chain or not gauge_address or token_id is None:
             self.context.logger.error(
                 "Chain, gauge_address and token_id are required for is_cl_token_staked"
             )

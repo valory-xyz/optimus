@@ -2729,17 +2729,18 @@ class LiquidityTraderBaseBehaviour(
                 staked_ids.append(token_id)
         return staked_ids, False
 
-    def _log_unstake_fallback(
+    def _log_verification_fallback(
         self,
+        action: str,
         reason: str,
         pool_address: Optional[str],
         chain: Optional[str],
         gauge_address: Optional[str] = None,
         token_ids: Optional[List[int]] = None,
     ) -> None:
-        """Emit a structured ``unstake_verification_fallback`` warning."""
+        """Emit a structured ``<action>_verification_fallback`` warning."""
         self.context.logger.warning(
-            "unstake_verification_fallback "
+            f"{action}_verification_fallback "
             f"reason={reason} chain={chain} pool={pool_address} "
             f"gauge={gauge_address} token_ids={token_ids}"
         )
@@ -2751,8 +2752,8 @@ class LiquidityTraderBaseBehaviour(
         # Best-effort: on RPC failure, missing config, or any path that
         # prevents an authoritative on-chain check, falls back to
         # _build_unstake_lp_tokens_action (the unverified path). Every
-        # fallback emits an ``unstake_verification_fallback`` warning so
-        # the failure mode is alertable from logs.
+        # fallback emits a structured ``unstake_verification_fallback``
+        # warning so the failure mode is alertable from logs.
         is_cl_pool = position.get("is_cl_pool", False)
         dex_type = position.get("dex_type")
         pool_address = position.get("pool_address")
@@ -2763,7 +2764,9 @@ class LiquidityTraderBaseBehaviour(
 
         safe_address = self.params.safe_contract_addresses.get(chain)
         if not all([chain, pool_address, safe_address]):
-            self._log_unstake_fallback("missing_required_fields", pool_address, chain)
+            self._log_verification_fallback(
+                "unstake", "missing_required_fields", pool_address, chain
+            )
             return self._build_unstake_lp_tokens_action(position)
 
         positions_data = position.get("positions", [])
@@ -2773,13 +2776,19 @@ class LiquidityTraderBaseBehaviour(
             if token_id is not None:
                 token_ids = [token_id]
         if not token_ids:
-            self._log_unstake_fallback("no_token_ids", pool_address, chain)
+            self._log_verification_fallback(
+                "unstake", "no_token_ids", pool_address, chain
+            )
             return self._build_unstake_lp_tokens_action(position)
 
         pool = self.pools.get("velodrome")
         if not pool:
-            self._log_unstake_fallback(
-                "no_velodrome_pool_registry", pool_address, chain, token_ids=token_ids
+            self._log_verification_fallback(
+                "unstake",
+                "no_velodrome_pool_registry",
+                pool_address,
+                chain,
+                token_ids=token_ids,
             )
             return self._build_unstake_lp_tokens_action(position)
 
@@ -2789,7 +2798,8 @@ class LiquidityTraderBaseBehaviour(
                 self, pool_address, chain=chain
             )
         if not gauge_address:
-            self._log_unstake_fallback(
+            self._log_verification_fallback(
+                "unstake",
                 "gauge_address_unresolvable",
                 pool_address,
                 chain,
@@ -2804,7 +2814,8 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if verification_failed:
-            self._log_unstake_fallback(
+            self._log_verification_fallback(
+                "unstake",
                 "verification_rpc_failed",
                 pool_address,
                 chain,

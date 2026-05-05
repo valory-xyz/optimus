@@ -81,6 +81,11 @@ class AllocationStatus(Enum):
     FAILED = "failed"
 
 
+# Mirrors LiquidityTraderBaseBehaviour.MAX_VERIFY_RETRIES so the stake-side
+# pre-filter retries on RPC failures the same way the unstake/claim helpers do.
+MAX_STAKE_VERIFY_RETRIES = 2
+
+
 class VelodromePoolBehaviour(PoolBehaviour, ABC):
     """Velodrome Pool Behaviour that handles both Stable/Volatile and Concentrated Liquidity pools"""
 
@@ -1072,7 +1077,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.warning(
                 "No exit transactions queued for any token; skipping multisend"
             )
-            return None
+            return None, None, None
 
         # prepare multisend
         multisend_address = self.params.multisend_contract_addresses.get(chain, "")
@@ -3109,9 +3114,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # First pass: filter out tokens already in the gauge's stake set so we
         # can decide whether the approval and deposit txs are even needed.
+        # Uses the same retry policy as the unstake/claim verification helpers
+        # so a transient RPC failure on a single check does not push the token
+        # straight into the "try anyway" branch on the first attempt.
         tokens_to_stake = []
         for token_id in token_ids:
-            is_staked = yield from self.is_cl_token_staked(
+            is_staked = yield from self._is_cl_token_staked_with_retry(
                 safe_address,
                 token_id,
                 chain=chain,
@@ -3123,6 +3131,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"{gauge_address}; skipping deposit"
                 )
                 continue
+            if is_staked is None:
+                self.context.logger.warning(
+                    f"Could not verify on-chain staked state for token "
+                    f"{token_id} on gauge {gauge_address} after retry; "
+                    f"queuing deposit anyway"
+                )
             tokens_to_stake.append(token_id)
 
         if not tokens_to_stake:
@@ -3543,6 +3557,25 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         staked_amount = balance_result if isinstance(balance_result, int) else 0
         self.context.logger.info(f"CL staked balance for {account}: {staked_amount}")
         return staked_amount
+
+    # Mirrors LiquidityTraderBaseBehaviour._verify_cl_token_staked_with_retry
+    # for the stake-side pre-filter so a one-shot RPC blip does not flip a
+    # token into the "try anyway" branch on the first call.
+    def _is_cl_token_staked_with_retry(
+        self,
+        account: str,
+        token_id: int,
+        chain: str,
+        gauge_address: str,
+    ) -> Generator[None, None, Optional[bool]]:
+        """Verify on-chain stake state with up to ``MAX_STAKE_VERIFY_RETRIES`` attempts."""
+        for _ in range(MAX_STAKE_VERIFY_RETRIES):
+            is_staked = yield from self.is_cl_token_staked(
+                account, token_id, chain=chain, gauge_address=gauge_address
+            )
+            if is_staked is not None:
+                return is_staked
+        return None
 
     def is_cl_token_staked(
         self, account: str, token_id: int, **kwargs: Any

@@ -8,9 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeig7yybsi673jarcf4px5miycwhnp3pjt6mxlx6r6kenoonbv25gy4
   build/contract_interface.json: bafybeiexbbxt4mizvtmvnepnsscrnvuqcwrzl2vu3k4dpeminjpq3saig4
-  contract.py: bafybeifchuyhqeuemyjesvrn7ubpjvrg4hauhpiaath4fcmo6b2sqsfikq
+  contract.py: bafybeibg2s6wccyq77dnuefjpjlhy6l7im2js45lfzfecizkxpl2eibs64
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeicet636mm6wnvgarexv6h4puzx36hk6r7dz7nux7nxcchojgclxm4
+  tests/test_contract.py: bafybeiewxr4tfqc2ztfzdvba6bevxj225zxhodxewq77yjmcjcckrc3bge
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeGaugeContract

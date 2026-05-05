@@ -7,7 +7,7 @@ description: A strategy that returns the highest APR yielding liquidity pool ove
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeiej6rb7f54w4epuyvwj3fays7lo6rqqxetjdrzc52k3q5qcbckv4a
+  __init__.py: bafybeihtmxfvz5vio5m3x6w356swgbhzjke3eirjk665bxdg3qvcbtoag4
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/conftest.py: bafybeiaovyfq6kvftvezd3yytah7nxipxzlqvd7c7fpbr64foyr47z5ww4
   tests/test_uniswap_pools_search.py: bafybeih2rsva5tuwr6fj72jgwn72jgl6nys7ojhqntel5crtglivrqte4m

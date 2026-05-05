@@ -55,7 +55,7 @@ class TestEncodeCall:
                 mock_ledger_api, MOCK_ADDRESS, "someMethod", (1, 2)
             )
 
-        assert result == {"tx_hash": "0xdeadbeef"}
+        assert result == {"tx_hash": bytes.fromhex("deadbeef")}
         mock_instance.encode_abi.assert_called_once_with("someMethod", args=(1, 2))
 
 
@@ -66,7 +66,7 @@ class TestMint:
         """Test that mint delegates to _encode_call with correct tuple-wrapped params."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xm1nt"
+        mock_instance.encode_abi.return_value = "0xa17a17a1"
 
         with patch.object(
             VelodromeNonFungiblePositionManagerContract,
@@ -90,7 +90,7 @@ class TestMint:
                 sqrt_price_x96=79228162514264337593543950336,
             )
 
-        assert result == {"tx_hash": "0xm1nt"}
+        assert result == {"tx_hash": bytes.fromhex("a17a17a1")}
         mock_instance.encode_abi.assert_called_once_with(
             "mint",
             args=(
@@ -119,7 +119,7 @@ class TestDecreaseLiquidity:
         """Test that decrease_liquidity delegates to _encode_call with correct params tuple."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xdecr"
+        mock_instance.encode_abi.return_value = "0xdecfdecf"
 
         with patch.object(
             VelodromeNonFungiblePositionManagerContract,
@@ -136,7 +136,7 @@ class TestDecreaseLiquidity:
                 deadline=8888888,
             )
 
-        assert result == {"tx_hash": "0xdecr"}
+        assert result == {"tx_hash": bytes.fromhex("decfdecf")}
         mock_instance.encode_abi.assert_called_once_with(
             "decreaseLiquidity",
             args=((42, 5000, 100, 200, 8888888),),
@@ -150,7 +150,7 @@ class TestBurn:
         """Test that burn delegates to _encode_call with token_id."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xburn"
+        mock_instance.encode_abi.return_value = "0xb47a"
 
         with patch.object(
             VelodromeNonFungiblePositionManagerContract,
@@ -163,7 +163,7 @@ class TestBurn:
                 token_id=99,
             )
 
-        assert result == {"tx_hash": "0xburn"}
+        assert result == {"tx_hash": bytes.fromhex("b47a")}
         mock_instance.encode_abi.assert_called_once_with("burn", args=(99,))
 
 
@@ -174,7 +174,7 @@ class TestCollect:
         """Test that collect delegates to _encode_call with correct params tuple."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xc011ect"
+        mock_instance.encode_abi.return_value = "0xc011ec70"
 
         with patch.object(
             VelodromeNonFungiblePositionManagerContract,
@@ -190,7 +190,7 @@ class TestCollect:
                 amount1_max=20000,
             )
 
-        assert result == {"tx_hash": "0xc011ect"}
+        assert result == {"tx_hash": bytes.fromhex("c011ec70")}
         mock_instance.encode_abi.assert_called_once_with(
             "collect",
             args=((7, MOCK_RECIPIENT, 10000, 20000),),
@@ -357,7 +357,7 @@ class TestApprove:
         """Test that approve delegates to _encode_call with (to, token_id) args."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xappr0ve"
+        mock_instance.encode_abi.return_value = "0xa9905ec0"
 
         with patch.object(
             VelodromeNonFungiblePositionManagerContract,
@@ -371,7 +371,7 @@ class TestApprove:
                 token_id=42,
             )
 
-        assert result == {"tx_hash": "0xappr0ve"}
+        assert result == {"tx_hash": bytes.fromhex("a9905ec0")}
         mock_instance.encode_abi.assert_called_once_with(
             "approve", args=(MOCK_OPERATOR, 42)
         )
@@ -384,7 +384,7 @@ class TestSetApprovalForAll:
         """Test that set_approval_for_all encodes setApprovalForAll with correct args."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xsetall"
+        mock_instance.encode_abi.return_value = "0x5e7a11a1"
 
         with patch.object(
             VelodromeNonFungiblePositionManagerContract,
@@ -398,7 +398,7 @@ class TestSetApprovalForAll:
                 approved=True,
             )
 
-        assert result == {"tx_hash": "0xsetall"}
+        assert result == {"tx_hash": bytes.fromhex("5e7a11a1")}
         mock_instance.encode_abi.assert_called_once_with(
             "setApprovalForAll", args=(MOCK_OPERATOR, True)
         )

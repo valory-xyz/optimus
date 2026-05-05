@@ -43,7 +43,7 @@ class VelodromeCLPoolContract(Contract):
     ) -> JSONLike:
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(method_name, args=args)
-        return dict(tx_hash=data)
+        return dict(tx_hash=bytes.fromhex(data[2:]))
 
     # ----------------------- Methods -----------------------
     @classmethod

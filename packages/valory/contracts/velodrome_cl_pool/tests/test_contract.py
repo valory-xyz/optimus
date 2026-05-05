@@ -37,7 +37,7 @@ class TestEncodeCall:
     """Tests for _encode_call."""
 
     def test_encode_call_returns_tx_hash_dict(self) -> None:
-        """Test that _encode_call returns a dict with tx_hash key containing raw ABI data."""
+        """Test that _encode_call returns a dict with tx_hash key containing the ABI bytes."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
         mock_instance.encode_abi.return_value = "0xdeadbeef"
@@ -49,7 +49,7 @@ class TestEncodeCall:
                 mock_ledger_api, MOCK_ADDRESS, "someMethod", (1, 2)
             )
 
-        assert result == {"tx_hash": "0xdeadbeef"}
+        assert result == {"tx_hash": bytes.fromhex("deadbeef")}
         mock_instance.encode_abi.assert_called_once_with("someMethod", args=(1, 2))
 
 
@@ -60,7 +60,7 @@ class TestMint:
         """Test that mint delegates to _encode_call with correct args."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xm1nt"
+        mock_instance.encode_abi.return_value = "0xa17a17a1"
 
         with patch.object(
             VelodromeCLPoolContract, "get_instance", return_value=mock_instance
@@ -75,7 +75,7 @@ class TestMint:
                 data=b"\x00",
             )
 
-        assert result == {"tx_hash": "0xm1nt"}
+        assert result == {"tx_hash": bytes.fromhex("a17a17a1")}
         mock_instance.encode_abi.assert_called_once_with(
             "mint",
             args=(MOCK_RECIPIENT, -100, 100, 5000, b"\x00"),
@@ -89,7 +89,7 @@ class TestBurn:
         """Test that burn delegates to _encode_call with correct args."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xburn"
+        mock_instance.encode_abi.return_value = "0xb47a"
 
         with patch.object(
             VelodromeCLPoolContract, "get_instance", return_value=mock_instance
@@ -102,7 +102,7 @@ class TestBurn:
                 amount=3000,
             )
 
-        assert result == {"tx_hash": "0xburn"}
+        assert result == {"tx_hash": bytes.fromhex("b47a")}
         mock_instance.encode_abi.assert_called_once_with(
             "burn",
             args=(-200, 200, 3000),
@@ -116,7 +116,7 @@ class TestCollect:
         """Test that collect delegates to _encode_call with correct args."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xc011ect"
+        mock_instance.encode_abi.return_value = "0xc011ec70"
 
         with patch.object(
             VelodromeCLPoolContract, "get_instance", return_value=mock_instance
@@ -131,7 +131,7 @@ class TestCollect:
                 amount1_requested=2000,
             )
 
-        assert result == {"tx_hash": "0xc011ect"}
+        assert result == {"tx_hash": bytes.fromhex("c011ec70")}
         mock_instance.encode_abi.assert_called_once_with(
             "collect",
             args=(MOCK_RECIPIENT, -50, 50, 1000, 2000),

@@ -39,7 +39,7 @@ class TestEncodeCall:
     """Tests for _encode_call."""
 
     def test_encode_call_returns_tx_hash_dict(self) -> None:
-        """Test that _encode_call returns a dict with tx_hash key containing raw ABI data."""
+        """Test that _encode_call returns a dict with tx_hash key containing the ABI bytes."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
         mock_instance.encode_abi.return_value = "0xdeadbeef"
@@ -51,7 +51,7 @@ class TestEncodeCall:
                 mock_ledger_api, MOCK_ADDRESS, "someMethod", (1, 2)
             )
 
-        assert result == {"tx_hash": "0xdeadbeef"}
+        assert result == {"tx_hash": bytes.fromhex("deadbeef")}
         mock_instance.encode_abi.assert_called_once_with("someMethod", args=(1, 2))
 
 
@@ -62,7 +62,7 @@ class TestAddLiquidity:
         """Test that add_liquidity delegates to _encode_call with correct args."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xadd11qu1d"
+        mock_instance.encode_abi.return_value = "0xadd11ad1"
 
         with patch.object(
             VelodromeRouterContract, "get_instance", return_value=mock_instance
@@ -81,7 +81,7 @@ class TestAddLiquidity:
                 deadline=9999999,
             )
 
-        assert result == {"tx_hash": "0xadd11qu1d"}
+        assert result == {"tx_hash": bytes.fromhex("add11ad1")}
         mock_instance.encode_abi.assert_called_once_with(
             "addLiquidity",
             args=(
@@ -105,7 +105,7 @@ class TestRemoveLiquidity:
         """Test that remove_liquidity delegates to _encode_call with correct args."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xrem0ve"
+        mock_instance.encode_abi.return_value = "0x7e110ace"
 
         with patch.object(
             VelodromeRouterContract, "get_instance", return_value=mock_instance
@@ -123,7 +123,7 @@ class TestRemoveLiquidity:
                 deadline=8888888,
             )
 
-        assert result == {"tx_hash": "0xrem0ve"}
+        assert result == {"tx_hash": bytes.fromhex("7e110ace")}
         mock_instance.encode_abi.assert_called_once_with(
             "removeLiquidity",
             args=(

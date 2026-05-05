@@ -532,7 +532,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.warning(
                 "Unable to quote remove liquidity amounts, using zero minimums"
             )
-            return None, None
+            return None, None, None
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -949,7 +949,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         token_ids: List[int],
         liquidities: List[int],
         pool_address: str,
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    ) -> Generator[None, None, Tuple[Optional[bytes], Optional[str], Optional[bool]]]:
         """Exit positions from a Velodrome concentrated liquidity pool."""
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
@@ -960,7 +960,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No CLPoolManager contract address found for chain {chain}"
             )
-            return None
+            return None, None, None
 
         multi_send_txs = []
 
@@ -1024,7 +1024,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to calculate slippage protection for position {position_token_id}"
                 )
-                return None, None
+                return None, None, None
 
             # Decrease liquidity for this position
             decrease_liquidity_tx_hash = yield from self.decrease_liquidity_velodrome(
@@ -1085,7 +1085,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Could not find multisend address for chain {chain}"
             )
-            return None
+            return None, None, None
 
         multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1097,7 +1097,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
         if not multisend_tx_hash:
-            return None
+            return None, None, None
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True

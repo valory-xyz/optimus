@@ -21,12 +21,13 @@
 
 import json
 import time
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Set
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     LiquidityTraderBaseBehaviour,
     PositionStatus,
+    WHITELISTED_ASSETS,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import WithdrawFundsPayload
 from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
@@ -239,7 +240,9 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Step 2: Create swap actions for all non-USDC assets
         self.context.logger.info("=== STEP 2: PREPARING SWAP ACTIONS ===")
-        swap_actions = self._prepare_swap_to_usdc_actions_standard(portfolio_data)
+        swap_actions = yield from self._prepare_swap_to_usdc_actions_standard(
+            portfolio_data
+        )
         if swap_actions:
             self.context.logger.info(
                 f"Found {len(swap_actions)} assets to swap to USDC"
@@ -380,85 +383,76 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
     def _prepare_swap_to_usdc_actions_standard(
         self, portfolio_data: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Prepare swap actions to convert all assets to USDC using positions data."""
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Prepare swap actions to convert all non-USDC assets to USDC.
+
+        :param portfolio_data: portfolio snapshot used for position-derived entries.
+        :yield: contract calls reading on-chain ERC20 balances and decimals.
+        :return: list of swap actions, deduped by token address.
+        """
         self.context.logger.info("=== SWAP DEBUGGING ===")
-        actions = []
+        actions: List[Dict[str, Any]] = []
 
-        # Get the configured chain
         chain = self.context.params.target_investment_chains[0]
-        portfolio_breakdown = portfolio_data.get("portfolio_breakdown", [])
+        safe_address = self.context.params.safe_contract_addresses.get(chain)
+        usdc_address = self._get_usdc_address(chain) or ""
+        usdc_lc = usdc_address.lower()
+        olas_address = (
+            self._get_olas_address(chain)
+            if hasattr(self, "_get_olas_address")
+            else None
+        ) or ""
+        olas_lc = olas_address.lower()
 
-        # Process positions data to find assets with balances
-        for asset in portfolio_breakdown:
-            token_symbol = asset.get("asset")
-            self.context.logger.info(f"--- Processing asset: {token_symbol} ---")
+        tokens_to_swap: Dict[str, str] = {}
+        seen: Set[str] = set()
 
+        for asset in portfolio_data.get("portfolio_breakdown", []):
             token_address = asset.get("address")
             value_usd = asset.get("value_usd", 0)
-
-            self.context.logger.info(
-                f"Token: {token_symbol}, Address: {token_address}, Value: {value_usd}"
-            )
-
-            # Skip if it's already USDC
-            usdc_address = self._get_usdc_address(chain)
-            if (
-                token_address
-                and usdc_address
-                and token_address.lower() == usdc_address.lower()
-            ):
-                self.context.logger.info("Skipping USDC - it's USDC (by address)")
+            if not token_address or value_usd <= 1:
                 continue
+            key = token_address.lower()
+            if key in (usdc_lc, olas_lc) or key in seen:
+                continue
+            seen.add(key)
+            tokens_to_swap[token_address] = asset.get("asset") or ""
 
-            # Skip OLAS tokens - do not swap OLAS during withdrawal
-            olas_address = (
-                self._get_olas_address(chain)
-                if hasattr(self, "_get_olas_address")
-                else None
-            )
-            if (
-                token_address
-                and olas_address
-                and token_address.lower() == olas_address.lower()
-            ):
-                self.context.logger.info(
-                    "Skipping OLAS - do not swap OLAS during withdrawal"
+        if safe_address:
+            for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+                key = whitelisted_addr.lower()
+                if key in (usdc_lc, olas_lc) or key in seen:
+                    continue
+                balance = yield from self._get_token_balance(
+                    chain, safe_address, whitelisted_addr
                 )
-                continue
+                if not balance or balance <= 0:
+                    continue
+                decimals = yield from self._get_token_decimals(chain, whitelisted_addr)
+                if decimals is None or balance < 10**decimals:
+                    continue
+                seen.add(key)
+                tokens_to_swap[whitelisted_addr] = symbol or ""
 
-            # Skip if balance is too small
-            if value_usd <= 1:  # nosec B105
-                self.context.logger.info(
-                    f"Skipping {token_symbol} - balance too small: {value_usd}"
-                )
-                continue
-
+        for token_address, token_symbol in tokens_to_swap.items():
             self.context.logger.info(
-                f"Creating swap action for {token_symbol} with balance {value_usd}"
+                f"Creating swap action for {token_symbol or token_address}"
             )
-
-            # Use base class method to build swap action
             swap_action = self._build_swap_to_usdc_action(
                 chain=chain,
                 from_token_address=token_address,
                 from_token_symbol=token_symbol,
-                funds_percentage=1.0,  # Use 100% of available balance
-                description=f"Swap {asset} to USDC for withdrawal",
+                funds_percentage=1.0,
+                description=f"Swap {token_symbol or token_address} to USDC for withdrawal",
             )
-
             if swap_action:
-                self.context.logger.info(f"Created swap action: {swap_action}")
                 actions.append(swap_action)
             else:
                 self.context.logger.error(
-                    f"Failed to create swap action for {token_symbol}"
+                    f"Failed to create swap action for {token_symbol or token_address}"
                 )
 
-        self.context.logger.info("=== SWAP DEBUGGING COMPLETE ===")
         self.context.logger.info(f"Total swap actions created: {len(actions)}")
-        self.context.logger.info(f"Swap actions: {actions}")
-
         return actions
 
     def _prepare_transfer_usdc_actions_standard(

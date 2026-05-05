@@ -1812,9 +1812,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        tx_hash, contract_address, is_multisend = yield from pool.exit(
-            self, **exit_pool_kwargs
-        )
+        exit_result = yield from pool.exit(self, **exit_pool_kwargs)
+        if exit_result is None:
+            self.context.logger.warning(
+                f"Pool exit returned no transaction for dex {dex_type}"
+            )
+            return None, None, None
+        tx_hash, contract_address, is_multisend = exit_result
         if not tx_hash or not contract_address:
             return None, None, None
 

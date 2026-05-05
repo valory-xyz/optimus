@@ -3248,6 +3248,22 @@ class TestGetExitPoolTxHash:
         result = _exhaust(b.get_exit_pool_tx_hash(action))
         assert result == (None, None, None)
 
+    def test_pool_exit_returns_none_object(self):
+        b = _make_behaviour()
+        mock_pool = MagicMock()
+        mock_pool.exit = _make_gen_method(None)
+        b.pools = {DexType.VELODROME.value: mock_pool}
+        action = {
+            "dex_type": DexType.VELODROME.value,
+            "chain": "optimism",
+            "pool_address": "0xPOOL",
+            "is_cl_pool": True,
+            "token_ids": [1, 2],
+            "liquidities": [100, 200],
+        }
+        result = _exhaust(b.get_exit_pool_tx_hash(action))
+        assert result == (None, None, None)
+
     def test_safe_tx_hash_none(self):
         b = _make_behaviour()
         mock_pool = MagicMock()

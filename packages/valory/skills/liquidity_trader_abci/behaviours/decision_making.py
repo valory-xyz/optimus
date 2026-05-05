@@ -1812,9 +1812,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        tx_hash, contract_address, is_multisend = yield from pool.exit(
-            self, **exit_pool_kwargs
-        )
+        exit_result = yield from pool.exit(self, **exit_pool_kwargs)
+        if exit_result is None:
+            self.context.logger.warning(
+                f"Pool exit returned no transaction for dex {dex_type}"
+            )
+            return None, None, None
+        tx_hash, contract_address, is_multisend = exit_result
         if not tx_hash or not contract_address:
             return None, None, None
 
@@ -3881,14 +3885,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     safe_address=safe_address,
                 )
 
-            if not result or result.get("error"):
-                error_msg = (
-                    result.get("error", "Unknown error")
-                    if result
-                    else "No result returned"
+            if result is None:
+                self.context.logger.info(
+                    f"No staking work for pool {pool_address}; advancing action"
                 )
+                return None, None, None
+
+            if result.get("error"):
                 self.context.logger.error(
-                    f"Failed to get staking transaction: {error_msg}"
+                    f"Failed to get staking transaction: {result.get('error')}"
                 )
                 return None, None, None
 
@@ -4185,6 +4190,30 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         f"Missing token_ids ({token_ids}) or gauge_address ({gauge_address}) for CL pool reward claiming"
                     )
                     return None, None, None
+
+                # On RPC failure keep the original list.
+                staked_token_ids, verification_failed = (
+                    yield from self._filter_staked_token_ids(
+                        pool, safe_address, token_ids, chain, gauge_address
+                    )
+                )
+                if verification_failed:
+                    self._log_verification_fallback(
+                        "claim",
+                        "verification_rpc_failed",
+                        pool_address,
+                        chain,
+                        gauge_address=gauge_address,
+                        token_ids=token_ids,
+                    )
+                else:
+                    if not staked_token_ids:
+                        self.context.logger.info(
+                            f"Skipping claim for pool {pool_address}: none of "
+                            f"{token_ids} are staked in gauge {gauge_address}"
+                        )
+                        return None, None, None
+                    token_ids = staked_token_ids
 
                 self.context.logger.info(
                     f"Claiming CL rewards for token IDs: {token_ids} from gauge: {gauge_address}"

@@ -153,6 +153,16 @@ def _make_gen_none():
     return method
 
 
+def _make_gen_method_by_token(token_map):
+    """Build a fake is_cl_token_staked that returns token_map[token_id]."""
+
+    def method(behaviour, account, token_id, **kwargs):
+        yield
+        return token_map.get(token_id)
+
+    return method
+
+
 class TestReadInvestingPaused:
     """Tests for _read_investing_paused."""
 
@@ -3238,6 +3248,22 @@ class TestGetExitPoolTxHash:
         result = _exhaust(b.get_exit_pool_tx_hash(action))
         assert result == (None, None, None)
 
+    def test_pool_exit_returns_none_object(self):
+        b = _make_behaviour()
+        mock_pool = MagicMock()
+        mock_pool.exit = _make_gen_method(None)
+        b.pools = {DexType.VELODROME.value: mock_pool}
+        action = {
+            "dex_type": DexType.VELODROME.value,
+            "chain": "optimism",
+            "pool_address": "0xPOOL",
+            "is_cl_pool": True,
+            "token_ids": [1, 2],
+            "liquidities": [100, 200],
+        }
+        result = _exhaust(b.get_exit_pool_tx_hash(action))
+        assert result == (None, None, None)
+
     def test_safe_tx_hash_none(self):
         b = _make_behaviour()
         mock_pool = MagicMock()
@@ -4488,6 +4514,92 @@ class TestStakeUnstakeClaimStakingRewards:
         action = self._velodrome_action(is_cl_pool=True)
         result = _exhaust(b.get_claim_staking_rewards_tx_hash(action))
         assert result == (None, None, None)
+
+    def test_claim_cl_filters_to_staked_tokens(self):
+        """Only staked token_ids are forwarded to claim_cl_rewards."""
+        b = _make_behaviour()
+        mock_pool = MagicMock()
+        mock_pool.is_cl_token_staked = _make_gen_method_by_token({1: True, 2: False})
+        captured = {}
+
+        def fake_claim(behaviour, **kwargs):
+            captured["token_ids"] = kwargs["token_ids"]
+            yield
+            return {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
+
+        mock_pool.claim_cl_rewards = fake_claim
+        b.pools = {"velodrome": mock_pool}
+        b.contract_interact = _make_gen_method("0x" + "ab" * 32)
+        action = self._velodrome_action(
+            is_cl_pool=True, token_ids=[1, 2], gauge_address="0xGAUGE"
+        )
+        result = _exhaust(b.get_claim_staking_rewards_tx_hash(action))
+        assert result[0] is not None
+        assert captured["token_ids"] == [1]
+
+    def test_claim_cl_skips_when_no_tokens_staked(self):
+        """If no tokens are staked on-chain, claim is skipped entirely."""
+        b = _make_behaviour()
+        mock_pool = MagicMock()
+        mock_pool.is_cl_token_staked = _make_gen_method_by_token({1: False, 2: False})
+        mock_pool.claim_cl_rewards = _make_gen_method({"tx_hash": b"nope"})
+        b.pools = {"velodrome": mock_pool}
+        action = self._velodrome_action(
+            is_cl_pool=True, token_ids=[1, 2], gauge_address="0xGAUGE"
+        )
+        result = _exhaust(b.get_claim_staking_rewards_tx_hash(action))
+        assert result == (None, None, None)
+
+    def test_claim_cl_falls_back_on_verification_failure(self):
+        """RPC failure on is_cl_token_staked preserves the original token_ids."""
+        b = _make_behaviour()
+        mock_pool = MagicMock()
+        mock_pool.is_cl_token_staked = _make_gen_method(None)
+        captured = {}
+
+        def fake_claim(behaviour, **kwargs):
+            captured["token_ids"] = kwargs["token_ids"]
+            yield
+            return {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
+
+        mock_pool.claim_cl_rewards = fake_claim
+        b.pools = {"velodrome": mock_pool}
+        b.contract_interact = _make_gen_method("0x" + "ab" * 32)
+        action = self._velodrome_action(
+            is_cl_pool=True, token_ids=[1, 2], gauge_address="0xGAUGE"
+        )
+        result = _exhaust(b.get_claim_staking_rewards_tx_hash(action))
+        assert result[0] is not None
+        assert captured["token_ids"] == [1, 2]
+
+    def test_claim_cl_emits_structured_warning_on_verification_failure(self):
+        """The claim path must surface the same structured warning the
+        unstake path does so dashboards covering "fallback fired,
+        on-chain state not actually verified" pick up both code paths.
+        """
+        b = _make_behaviour()
+        mock_pool = MagicMock()
+        mock_pool.is_cl_token_staked = _make_gen_method(None)
+
+        def fake_claim(behaviour, **kwargs):
+            yield
+            return {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
+
+        mock_pool.claim_cl_rewards = fake_claim
+        b.pools = {"velodrome": mock_pool}
+        b.contract_interact = _make_gen_method("0x" + "ab" * 32)
+
+        warnings: List[str] = []
+        b.context.logger.warning = lambda msg, *a, **k: warnings.append(str(msg))
+
+        action = self._velodrome_action(
+            is_cl_pool=True, token_ids=[1, 2], gauge_address="0xGAUGE"
+        )
+        _exhaust(b.get_claim_staking_rewards_tx_hash(action))
+        assert any(
+            "claim_verification_fallback" in w and "reason=verification_rpc_failed" in w
+            for w in warnings
+        )
 
     def test_unstake_cl_no_matching_position(self):
         b = _make_behaviour()

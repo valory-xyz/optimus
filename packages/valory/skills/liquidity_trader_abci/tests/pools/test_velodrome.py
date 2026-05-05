@@ -763,6 +763,46 @@ class TestExit:
         result = exhaust_generator(gen)
         assert result == (None, None, None)
 
+    def test_cl_pool_exit_unpacks_when_all_tokens_skipped(self) -> None:
+        """``pool.exit`` must return a 3-tuple even when no exit txs are queued.
+
+        The caller in decision_making unpacks the result as
+        ``tx_hash, contract_address, is_multisend``. If ``_exit_cl_pool``
+        returns plain ``None`` on the empty-multisend path the unpack raises
+        ``TypeError`` on exactly the drift cases this PR is meant to handle.
+        """
+        b = make_behaviour()
+        b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPosMgr"
+        }
+        b.context.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        mock_ts = MagicMock()
+        mock_ts.timestamp.return_value = 1_000_000.0
+        mock_rs = MagicMock()
+        mock_rs.last_round_transition_timestamp = mock_ts
+        b.context.state.round_sequence = mock_rs
+        # Every token's ownerOf returns a non-Safe address so all tokens are
+        # skipped and multi_send_txs ends up empty.
+        b.get_cl_position_owner = _mock_gen("0xOther")
+        b.get_liquidity_for_token_velodrome = _mock_gen(100)
+
+        result = exhaust_generator(
+            b.exit(
+                pool_address="0xpool",
+                safe_address="0xSafe",
+                chain="optimism",
+                is_cl_pool=True,
+                token_ids=[1, 2],
+                liquidities=[100, 200],
+            )
+        )
+
+        # Must unpack as a 3-tuple without raising.
+        tx_hash, contract_address, is_multisend = result
+        assert tx_hash is None
+        assert contract_address is None
+        assert is_multisend is None
+
 
 class TestEnterStableVolatilePool:
     """Tests for VelodromePoolBehaviour._enter_stable_volatile_pool."""
@@ -955,7 +995,7 @@ class TestExitStableVolatilePool:
         assert result[2] is True
 
     def test_query_remove_returns_none(self) -> None:
-        """When _query_remove_liquidity_velodrome returns None, returns (None, None)."""
+        """When _query_remove_liquidity_velodrome returns None, returns (None, None, None)."""
         b = make_behaviour()
         b.params.velodrome_router_contract_addresses = {"optimism": "0xrouter"}
 
@@ -967,7 +1007,7 @@ class TestExitStableVolatilePool:
 
         gen = b._exit_stable_volatile_pool(**self._base_kwargs())
         result = exhaust_generator(gen)
-        assert result == (None, None)
+        assert result == (None, None, None)
 
     def test_approve_tx_fails(self) -> None:
         """When approve transaction fails, returns (None, None, None)."""
@@ -1429,12 +1469,27 @@ class TestGetLiquidityForTokenVelodrome:
         result = exhaust(b.get_liquidity_for_token_velodrome(42, "optimism"))
         assert result is None
 
-    def test_returns_liquidity_at_index_2(self) -> None:
+    def test_returns_liquidity_from_dict(self) -> None:
+        """The contract wrapper returns a dict keyed by field name; helper
+        must index into it by key, not by position."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
         }
-        b.contract_interact = MagicMock(return_value=_gen_return([0, 0, 500000, 0]))
+        b.contract_interact = MagicMock(
+            return_value=_gen_return(
+                {
+                    "nonce": 0,
+                    "operator": "0x0",
+                    "token0": "0xa",
+                    "token1": "0xb",
+                    "tickSpacing": 1,
+                    "tickLower": -2,
+                    "tickUpper": 3,
+                    "liquidity": 500000,
+                }
+            )
+        )
         result = exhaust(b.get_liquidity_for_token_velodrome(42, "optimism"))
         assert result == 500000
 
@@ -2189,13 +2244,17 @@ class TestExitClPool:
         mock_rs = MagicMock()
         mock_rs.last_round_transition_timestamp = mock_ts
         b.context.state.round_sequence = mock_rs
+        # Default stubs for on-chain verification helpers added in the
+        # ownerOf / fresh-liquidity hardening. Tests override per-case.
+        b.get_cl_position_owner = _mock_gen("0xSafe")
+        b.get_liquidity_for_token_velodrome = _mock_gen(100)
         return b
 
     def test_no_position_manager(self) -> None:
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result is None
+        assert result == (None, None, None)
 
     def test_no_multisend_address(self) -> None:
         b = self._make_b()
@@ -2204,15 +2263,16 @@ class TestExitClPool:
         b.decrease_liquidity_velodrome = _mock_gen("0xDec")
         b.collect_tokens_velodrome = _mock_gen("0xCol")
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result is None
+        assert result == (None, None, None)
 
-    def test_slippage_protection_none_returns_none_tuple(self) -> None:
+    def test_slippage_protection_none_returns_none_triple(self) -> None:
+        """Slippage failure returns a 3-tuple of Nones."""
         b = self._make_b()
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen(
             (None, None)
         )
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result == (None, None)
+        assert result == (None, None, None)
 
     def test_zero_liquidity_fetches_from_contract(self) -> None:
         """When liquidity is 0 (falsy), get_liquidity_for_token is called."""
@@ -2244,8 +2304,8 @@ class TestExitClPool:
         b.decrease_liquidity_velodrome = _mock_gen(None)
         b.contract_interact = _mock_gen("0xabcdef1234567890")
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        # Decrease failed -> position skipped, multisend still runs
-        assert result is not None
+        # Decrease failed for the only token -> multi_send_txs empty -> (None, None, None).
+        assert result == (None, None, None)
 
     def test_collect_fails_skips(self) -> None:
         b = self._make_b()
@@ -2264,7 +2324,7 @@ class TestExitClPool:
         b.collect_tokens_velodrome = _mock_gen("0xCol")
         b.contract_interact = _mock_gen(None)
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        assert result is None
+        assert result == (None, None, None)
 
     def test_successful_exit(self) -> None:
         b = self._make_b()
@@ -2290,6 +2350,100 @@ class TestExitClPool:
         assert result is not None
         assert result[1] == "0xMulti"
         assert result[2] is True
+
+    def test_skips_tokens_not_owned_by_safe(self) -> None:
+        """Tokens whose ownerOf is not the Safe must be skipped."""
+        b = self._make_b()
+        # Token 2 is not owned by the Safe (e.g. transferred externally).
+        owners = {1: "0xSafe", 2: "0xOther", 3: "0xSafe"}
+
+        def owner_stub(token_id, chain):
+            yield
+            return owners[token_id]
+
+        b.get_cl_position_owner = owner_stub
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        b.decrease_liquidity_velodrome = _mock_gen("0xDec")
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(
+            b._exit_cl_pool("optimism", "0xSafe", [1, 2, 3], [100, 200, 300], "0xPool")
+        )
+        # Multisend still produced from tokens 1 and 3; token 2 skipped.
+        assert result is not None
+        assert result[1] == "0xMulti"
+
+    def test_owner_unreadable_attempts_exit_anyway(self) -> None:
+        """None from ownerOf must not drop a valid exit (RPC failure fallback)."""
+        b = self._make_b()
+        b.get_cl_position_owner = _mock_gen(None)
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        b.decrease_liquidity_velodrome = _mock_gen("0xDec")
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
+        assert result is not None
+        assert result[2] is True
+
+    def test_always_reads_liquidity_even_when_cached_nonzero(self) -> None:
+        """Fresh liquidity from contract must override the cached value."""
+        b = self._make_b()
+        # Cached liquidity is 999; real on-chain is 500 (partial exit happened).
+        b.get_liquidity_for_token_velodrome = _mock_gen(500)
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        captured = {}
+
+        def decrease_stub(token_id, liquidity, *a, **k):
+            captured["liquidity"] = liquidity
+            yield
+            return "0xDec"
+
+        b.decrease_liquidity_velodrome = decrease_stub
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [999], "0xPool"))
+        assert result is not None
+        assert captured["liquidity"] == 500
+
+    def test_returns_none_tuple_when_all_tokens_skipped(self) -> None:
+        """If every token fails the ownerOf check, no multisend is built.
+
+        Returns ``(None, None, None)`` so the caller's 3-tuple unpack of
+        ``pool.exit`` does not raise.
+        """
+        b = self._make_b()
+        b.get_cl_position_owner = _mock_gen("0xOther")
+        result = exhaust(
+            b._exit_cl_pool("optimism", "0xSafe", [1, 2], [100, 200], "0xPool")
+        )
+        assert result == (None, None, None)
+
+    def test_falls_back_to_cached_liquidity_on_rpc_failure(self) -> None:
+        """RPC failure on liquidity read must use the cached value if present."""
+        b = self._make_b()
+        b.get_liquidity_for_token_velodrome = _mock_gen(None)
+        b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
+        captured = {}
+
+        def decrease_stub(token_id, liquidity, *a, **k):
+            captured["liquidity"] = liquidity
+            yield
+            return "0xDec"
+
+        b.decrease_liquidity_velodrome = decrease_stub
+        b.collect_tokens_velodrome = _mock_gen("0xCol")
+        b.contract_interact = _mock_gen("0xabcdef1234567890")
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [777], "0xPool"))
+        assert result is not None
+        assert captured["liquidity"] == 777
+
+    def test_skips_when_onchain_liquidity_is_zero(self) -> None:
+        """A fresh on-chain read of 0 skips the token (no decrease/collect)."""
+        b = self._make_b()
+        b.get_liquidity_for_token_velodrome = _mock_gen(0)
+        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [0], "0xPool"))
+        # Single token, skipped, multi_send_txs empty -> (None, None, None).
+        assert result == (None, None, None)
 
 
 class TestCalculateTickLowerAndUpperVelodrome:
@@ -4565,6 +4719,7 @@ class TestStakeClLpTokens:
         b.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPM"
         }
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True (skip approval)
         # 2: stake token 1 -> None (fail)
         # 3: stake token 2 -> None (fail)
@@ -4583,6 +4738,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake -> ok
         b.contract_interact = make_contract_interact([True, "0xStakeData"])
         result = exhaust_generator(
@@ -4599,6 +4755,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake -> ok, 3: multisend -> None
         b.contract_interact = make_contract_interact([True, "0xStakeData", None])
         result = exhaust_generator(
@@ -4615,6 +4772,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake1, 3: stake2, 4: multisend
         b.contract_interact = make_contract_interact(
             [True, "0xStake1", "0xStake2", "0xaabbccdd"]
@@ -4635,6 +4793,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> False, 2: approve -> ok, 3: stake1, 4: multisend
         b.contract_interact = make_contract_interact(
             [False, "0xApproveAll", "0xStake1", "0xaabbccdd"]
@@ -4653,6 +4812,7 @@ class TestStakeClLpTokens:
             "optimism": "0xPM"
         }
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(False)
         # 1: is_approved -> True, 2: stake token1 -> None (fail), 3: stake token2 -> ok, 4: multisend
         b.contract_interact = make_contract_interact(
             [True, None, "0xStake2", "0xaabbccdd"]
@@ -4665,6 +4825,142 @@ class TestStakeClLpTokens:
         assert result["success"] is True
         assert len(result["staked_positions"]) == 1
         assert result["staked_positions"][0]["token_id"] == 2
+
+    def test_skips_already_staked_token(self) -> None:
+        """Already-staked tokens should be skipped before deposit is called.
+
+        Prevents re-staking an NFT the gauge already holds (would revert on deposit).
+        """
+        b = make_behaviour()
+        b.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPM"
+        }
+        b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+
+        staked_map = {1: True, 2: False}
+
+        def is_staked_stub(account, token_id, **kwargs):
+            yield
+            return staked_map[token_id]
+
+        b.is_cl_token_staked = is_staked_stub
+        # token 1 is already staked; its deposit is not called. Sequence is:
+        # is_approved -> True, stake token2, multisend
+        b.contract_interact = make_contract_interact([True, "0xStake2", "0xaabbccdd"])
+        result = exhaust_generator(
+            b.stake_cl_lp_tokens(
+                [1, 2], "0xGauge", chain="optimism", safe_address="0xSafe"
+            )
+        )
+        assert result["success"] is True
+        staked_ids = {p["token_id"] for p in result["staked_positions"]}
+        assert staked_ids == {2}
+
+    def test_all_already_staked_returns_none_no_op(self) -> None:
+        """If every token is already in the gauge's stake set, no work is
+        required. The function returns None (no-op) without queueing an
+        approval or any deposits, so the caller doesn't submit an orphan
+        setApprovalForAll multisend.
+        """
+        b = make_behaviour()
+        b.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPM"
+        }
+        b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+
+        def is_staked_stub(account, token_id, **kwargs):
+            yield
+            return True
+
+        b.is_cl_token_staked = is_staked_stub
+        # is_approved is never called because we bail out before that step.
+        # If contract_interact were called, the test would consume the queue.
+        contract_calls = []
+
+        def fake_contract_interact(**kwargs):
+            contract_calls.append(kwargs.get("contract_callable"))
+            yield
+            return None
+
+        b.contract_interact = fake_contract_interact
+        result = exhaust_generator(
+            b.stake_cl_lp_tokens(
+                [1, 2], "0xGauge", chain="optimism", safe_address="0xSafe"
+            )
+        )
+        assert result is None
+        assert "is_approved_for_all" not in contract_calls
+        assert "set_approval_for_all" not in contract_calls
+        assert "deposit" not in contract_calls
+
+    def test_stake_filter_retries_on_rpc_failure(self) -> None:
+        """A transient RPC failure on the first stake check must be retried.
+
+        Mirrors the unstake/claim verification policy: a single ``None`` from
+        the gauge read is retried before the token is treated as
+        unverifiable. Without the retry, a one-shot blip would push the
+        token straight into the "try anyway" branch and produce a
+        re-stake attempt that reverts on-chain.
+        """
+        b = make_behaviour()
+        b.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPM"
+        }
+        b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+
+        # First check returns None (RPC blip), second returns True (already
+        # staked). The retry must consume both and conclude the token is
+        # staked, so the deposit is skipped.
+        results = iter([None, True])
+
+        def is_staked_stub(account, token_id, **kwargs):
+            yield
+            return next(results)
+
+        b.is_cl_token_staked = is_staked_stub
+        contract_calls = []
+
+        def fake_contract_interact(**kwargs):
+            contract_calls.append(kwargs.get("contract_callable"))
+            yield
+            return None
+
+        b.contract_interact = fake_contract_interact
+        result = exhaust_generator(
+            b.stake_cl_lp_tokens(
+                [1], "0xGauge", chain="optimism", safe_address="0xSafe"
+            )
+        )
+        # All tokens determined as already staked after retry -> no-op return.
+        assert result is None
+        assert "deposit" not in contract_calls
+
+    def test_stake_filter_falls_open_after_retry_exhaustion(self) -> None:
+        """If every retry attempt returns None, the token is queued anyway.
+
+        Matches the unstake/claim fallback policy of "best-effort: when we
+        cannot verify, proceed with the caller's intent rather than skip".
+        The deposit is queued and the call site sees it through to the
+        gauge contract, which will revert if the token really was already
+        staked. The structured warning surfaces the unverified state.
+        """
+        b = make_behaviour()
+        b.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPM"
+        }
+        b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+        b.is_cl_token_staked = _mock_gen(None)
+        # is_approved -> True, deposit token1 -> ok, multisend -> ok
+        b.contract_interact = make_contract_interact([True, "0xStake1", "0xaabbccdd"])
+        warnings: List[str] = []
+        b.context.logger.warning = lambda msg, *a, **k: warnings.append(str(msg))
+        result = exhaust_generator(
+            b.stake_cl_lp_tokens(
+                [1], "0xGauge", chain="optimism", safe_address="0xSafe"
+            )
+        )
+        assert result["success"] is True
+        assert any("Could not verify on-chain staked state" in w for w in warnings)
 
 
 class TestUnstakeClLpTokens:
@@ -4983,6 +5279,128 @@ class TestGetClStakedBalance:
             )
         )
         assert result == 7777
+
+
+class TestGetClPositionOwner:
+    """Tests for get_cl_position_owner generator."""
+
+    def test_missing_position_manager(self) -> None:
+        b = make_behaviour()
+        b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
+        result = exhaust_generator(b.get_cl_position_owner(1, "optimism"))
+        assert result is None
+
+    def test_owner_empty(self) -> None:
+        b = make_behaviour()
+        b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPosMgr"
+        }
+        b.contract_interact = make_contract_interact([None])
+        result = exhaust_generator(b.get_cl_position_owner(1, "optimism"))
+        assert result is None
+
+    def test_success(self) -> None:
+        b = make_behaviour()
+        b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPosMgr"
+        }
+        b.contract_interact = make_contract_interact(["0xOwner"])
+        result = exhaust_generator(b.get_cl_position_owner(1, "optimism"))
+        assert result == "0xOwner"
+
+
+class TestIsClTokenStaked:
+    """Tests for is_cl_token_staked generator."""
+
+    def test_missing_params(self) -> None:
+        """Missing chain/gauge/token_id returns None (cannot verify)."""
+        b = make_behaviour()
+        result = exhaust_generator(b.is_cl_token_staked("0xAccount", 1))
+        assert result is None
+
+    def test_missing_gauge_address(self) -> None:
+        b = make_behaviour()
+        result = exhaust_generator(
+            b.is_cl_token_staked("0xAccount", 1, chain="optimism")
+        )
+        assert result is None
+
+    def test_missing_token_id(self) -> None:
+        b = make_behaviour()
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", None, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is None
+
+    def test_contract_returns_none(self) -> None:
+        """RPC failure bubbles up as None so callers can fall back."""
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([None])
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is None
+
+    def test_true(self) -> None:
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([True])
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is True
+
+    def test_false(self) -> None:
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([False])
+        result = exhaust_generator(
+            b.is_cl_token_staked(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is False
+
+
+class TestIsClTokenStakedWithRetry:
+    """Tests for the pool-side ``_is_cl_token_staked_with_retry`` helper."""
+
+    def test_returns_first_non_none_result(self) -> None:
+        """A definitive False on the first attempt short-circuits the retry."""
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([False])
+        result = exhaust_generator(
+            b._is_cl_token_staked_with_retry(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is False
+
+    def test_retries_after_transient_none(self) -> None:
+        """A first-call None is retried; second-call result wins."""
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([None, True])
+        result = exhaust_generator(
+            b._is_cl_token_staked_with_retry(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is True
+
+    def test_returns_none_after_retry_exhaustion(self) -> None:
+        """Every attempt returns None -> caller sees None and falls open."""
+        b = make_behaviour()
+        b.contract_interact = make_contract_interact([None, None])
+        result = exhaust_generator(
+            b._is_cl_token_staked_with_retry(
+                "0xAccount", 1, chain="optimism", gauge_address="0xGauge"
+            )
+        )
+        assert result is None
 
 
 class TestGetClGaugeTotalSupply:

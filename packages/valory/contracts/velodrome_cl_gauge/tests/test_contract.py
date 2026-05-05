@@ -432,6 +432,73 @@ class TestBalanceOf:
         )
 
 
+class TestStakedContains:
+    """Tests for the staked_contains method."""
+
+    def test_staked_contains_true(self) -> None:
+        """Returns a dict with is_staked=True when the gauge has the token."""
+        mock_ledger_api = MagicMock()
+        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.stakedContains.return_value.call.return_value = (
+            True
+        )
+
+        with patch.object(
+            VelodromeCLGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeCLGaugeContract.staked_contains(
+                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT, MOCK_TOKEN_ID
+            )
+
+        assert result == {"is_staked": True}
+
+    def test_staked_contains_false(self) -> None:
+        """Returns is_staked=False when the token is not in the gauge's stake set."""
+        mock_ledger_api = MagicMock()
+        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.stakedContains.return_value.call.return_value = (
+            False
+        )
+
+        with patch.object(
+            VelodromeCLGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeCLGaugeContract.staked_contains(
+                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT, MOCK_TOKEN_ID
+            )
+
+        assert result == {"is_staked": False}
+
+    def test_staked_contains_checksums_account(self) -> None:
+        """Account is checksummed before the on-chain call."""
+        mock_ledger_api = MagicMock()
+        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.stakedContains.return_value.call.return_value = (
+            False
+        )
+
+        with patch.object(
+            VelodromeCLGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            VelodromeCLGaugeContract.staked_contains(
+                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT, MOCK_TOKEN_ID
+            )
+
+        mock_ledger_api.api.to_checksum_address.assert_called_once_with(MOCK_ACCOUNT)
+        mock_contract_instance.functions.stakedContains.assert_called_once_with(
+            MOCK_CHECKSUMMED_ACCOUNT, MOCK_TOKEN_ID
+        )
+
+
 class TestTotalSupply:
     """Tests for the total_supply method."""
 
@@ -467,6 +534,7 @@ class TestAbiIntegrity:
         "deposit",
         "earned",
         "getReward",
+        "stakedContains",
         "totalSupply",
         "withdraw",
     ]

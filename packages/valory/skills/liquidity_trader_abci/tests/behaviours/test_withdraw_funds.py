@@ -242,11 +242,18 @@ class TestPrepareWithdrawalActions:
     ):
         """Create a behaviour with stubbed sub-methods."""
         obj = _make_behaviour()
-        obj._prepare_unstaking_actions = MagicMock(return_value=unstake_actions or [])
+
+        def fake_prepare_unstaking(_positions):
+            yield
+            return unstake_actions or []
+
+        def fake_prepare_swap(_portfolio_data):
+            yield
+            return swap_actions or []
+
+        obj._prepare_unstaking_actions = fake_prepare_unstaking
         obj._prepare_exit_pool_actions = MagicMock(return_value=exit_actions or [])
-        obj._prepare_swap_to_usdc_actions_standard = MagicMock(
-            return_value=swap_actions or []
-        )
+        obj._prepare_swap_to_usdc_actions_standard = fake_prepare_swap
         obj._prepare_transfer_usdc_actions_standard = MagicMock(
             return_value=transfer_actions or []
         )
@@ -320,16 +327,24 @@ class TestPrepareWithdrawalActions:
 class TestPrepareUnstakingActions:
     """Tests for _prepare_unstaking_actions."""
 
+    @staticmethod
+    def _verified_action_gen(action):
+        def _gen(_position):
+            yield
+            return action
+
+        return _gen
+
     def test_open_position_with_staking(self) -> None:
         """Test open position with staking metadata returns unstake action."""
         obj = _make_behaviour()
         obj._has_staking_metadata = MagicMock(return_value=True)
-        obj._build_unstake_lp_tokens_action = MagicMock(
-            return_value={"action": "unstake"}
+        obj._build_unstake_lp_tokens_action_verified = self._verified_action_gen(
+            {"action": "unstake"}
         )
 
         positions = [{"status": PositionStatus.OPEN.value}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 1
 
     def test_open_position_without_staking(self) -> None:
@@ -338,30 +353,30 @@ class TestPrepareUnstakingActions:
         obj._has_staking_metadata = MagicMock(return_value=False)
 
         positions = [{"status": PositionStatus.OPEN.value}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 0
 
     def test_open_position_build_returns_none(self) -> None:
         """Test open position with staking but build returns None."""
         obj = _make_behaviour()
         obj._has_staking_metadata = MagicMock(return_value=True)
-        obj._build_unstake_lp_tokens_action = MagicMock(return_value=None)
+        obj._build_unstake_lp_tokens_action_verified = self._verified_action_gen(None)
 
         positions = [{"status": PositionStatus.OPEN.value}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 0
 
     def test_closed_position_skipped(self) -> None:
         """Test closed position is skipped."""
         obj = _make_behaviour()
         positions = [{"status": "closed"}]
-        result = obj._prepare_unstaking_actions(positions)
+        result = _drive(obj._prepare_unstaking_actions(positions))
         assert len(result) == 0
 
     def test_empty_positions(self) -> None:
         """Test empty positions list."""
         obj = _make_behaviour()
-        result = obj._prepare_unstaking_actions([])
+        result = _drive(obj._prepare_unstaking_actions([]))
         assert len(result) == 0
 
 
@@ -488,14 +503,33 @@ class TestPrepareExitPoolActions:
 class TestPrepareSwapToUsdcActionsStandard:
     """Tests for _prepare_swap_to_usdc_actions_standard."""
 
-    def _make_obj(self, usdc_addr="0xusdc", olas_addr="0xolas"):
+    def _make_obj(
+        self,
+        usdc_addr="0xusdc",
+        olas_addr="0xolas",
+        balances=None,
+        decimals=6,
+    ):
         """Create a behaviour with common stubs."""
         obj = _make_behaviour()
         params_mock = MagicMock()
         params_mock.target_investment_chains = ["optimism"]
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         obj.context.params = params_mock
         obj._get_usdc_address = MagicMock(return_value=usdc_addr)
         obj._get_olas_address = MagicMock(return_value=olas_addr)
+        balances = {(k or "").lower(): v for k, v in (balances or {}).items()}
+
+        def fake_get_token_balance(chain, account, asset_address):
+            yield
+            return balances.get((asset_address or "").lower(), 0)
+
+        def fake_get_token_decimals(chain, asset_address):
+            yield
+            return decimals
+
+        obj._get_token_balance = fake_get_token_balance
+        obj._get_token_decimals = fake_get_token_decimals
         return obj
 
     def test_swap_non_usdc_asset(self) -> None:
@@ -508,7 +542,7 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "WETH", "address": "0xweth", "value_usd": 100},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 1
 
     def test_skip_usdc_asset(self) -> None:
@@ -520,7 +554,7 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "USDC", "address": "0xusdc", "value_usd": 500},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 0
 
     def test_skip_olas_asset(self) -> None:
@@ -532,7 +566,7 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "OLAS", "address": "0xolas", "value_usd": 500},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 0
 
     def test_skip_small_balance(self) -> None:
@@ -544,7 +578,7 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "WETH", "address": "0xweth", "value_usd": 0.5},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 0
 
     def test_build_swap_returns_none(self) -> None:
@@ -557,18 +591,18 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "WETH", "address": "0xweth", "value_usd": 100},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 0
 
     def test_empty_portfolio(self) -> None:
         """Test empty portfolio breakdown."""
         obj = self._make_obj()
         portfolio = {"portfolio_breakdown": []}
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 0
 
     def test_no_token_address_not_usdc(self) -> None:
-        """Test asset with no token_address (None) is not matched as USDC."""
+        """Test asset with no token_address (None) is skipped (no address to swap)."""
         obj = self._make_obj()
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
@@ -577,9 +611,9 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "UNKNOWN", "address": None, "value_usd": 100},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
-        # With None address, the USDC/OLAS checks fail (token_address is falsy), so it proceeds
-        assert len(result) == 1
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        # An entry with no address can't be swapped; skipped.
+        assert len(result) == 0
 
     def test_usdc_address_none(self) -> None:
         """Test when _get_usdc_address returns None."""
@@ -591,7 +625,7 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "WETH", "address": "0xweth", "value_usd": 100},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 1
 
     def test_olas_address_none(self) -> None:
@@ -604,7 +638,7 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "WETH", "address": "0xweth", "value_usd": 100},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 1
 
     def test_value_usd_exactly_one(self) -> None:
@@ -616,7 +650,7 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "WETH", "address": "0xweth", "value_usd": 1},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 0
 
     def test_no_has_get_olas_address(self) -> None:
@@ -631,7 +665,116 @@ class TestPrepareSwapToUsdcActionsStandard:
                 {"asset": "WETH", "address": "0xweth", "value_usd": 100},
             ]
         }
-        result = obj._prepare_swap_to_usdc_actions_standard(portfolio)
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        assert len(result) == 1
+
+    def test_safe_held_backstop_picks_up_idle_token(self) -> None:
+        """Empty portfolio_breakdown but safe holds a whitelisted token: queue the swap."""
+        # Real WHITELISTED_ASSETS["optimism"] entry: oUSDT.
+        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+        obj = self._make_obj(balances={ousdt: 5_000_000})
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        portfolio = {"portfolio_breakdown": []}
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        assert len(result) == 1
+        # Verify the swap was built for oUSDT, not for some unrelated token.
+        kwargs = obj._build_swap_to_usdc_action.call_args.kwargs
+        assert kwargs["from_token_address"].lower() == ousdt
+
+    def test_safe_held_backstop_skips_zero_balance_tokens(self) -> None:
+        """Whitelisted tokens with zero balance must not be queued."""
+        obj = self._make_obj(balances={})  # all zero
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        portfolio = {"portfolio_breakdown": []}
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        assert len(result) == 0
+        obj._build_swap_to_usdc_action.assert_not_called()
+
+    def test_safe_held_backstop_dedupes_against_portfolio(self) -> None:
+        """A token already queued from portfolio_breakdown is not re-queued from the
+        on-chain backstop."""
+        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+        obj = self._make_obj(balances={ousdt: 5_000_000})
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        portfolio = {
+            "portfolio_breakdown": [
+                {"asset": "oUSDT", "address": ousdt, "value_usd": 50},
+            ]
+        }
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        assert len(result) == 1  # one action total, not two
+
+    def test_safe_held_backstop_skips_usdc_and_olas(self) -> None:
+        """USDC and OLAS in the whitelist must never produce a swap action."""
+        usdc = "0x0b2c639c533813f4aa9d7837caf62653d097ff85"
+        # Treat the OLAS placeholder as a whitelisted-but-skipped address.
+        obj = self._make_obj(usdc_addr=usdc, olas_addr="0xolas")
+        # Pretend USDC has a balance (it does: any safe holds USDC).
+        obj._get_token_balance = lambda chain, account, asset_address: (yield) or 1_000
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        portfolio = {"portfolio_breakdown": []}
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        # USDC is skipped by address; OLAS is not in WHITELISTED_ASSETS["optimism"]
+        # so the backstop should never even ask for it.
+        for call in obj._build_swap_to_usdc_action.call_args_list:
+            from_addr = call.kwargs["from_token_address"].lower()
+            assert from_addr != usdc
+
+    def test_safe_held_backstop_skips_when_no_safe_address(self) -> None:
+        """If the chain has no safe address configured, the backstop is skipped
+        entirely (no on-chain reads, no swaps from backstop)."""
+        obj = self._make_obj()
+        obj.context.params.safe_contract_addresses = {}  # no safe for any chain
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        portfolio = {"portfolio_breakdown": []}
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        assert len(result) == 0
+
+    def test_safe_held_backstop_skips_dust_below_one_token_unit(self) -> None:
+        """Balance below one whole token unit is skipped as dust."""
+        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+        obj = self._make_obj(balances={ousdt: 999_999}, decimals=6)
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        portfolio = {"portfolio_breakdown": []}
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        assert len(result) == 0
+        obj._build_swap_to_usdc_action.assert_not_called()
+
+    def test_safe_held_backstop_skips_when_decimals_unavailable(self) -> None:
+        """Token is skipped when _get_token_decimals returns None."""
+        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+        obj = self._make_obj(balances={ousdt: 5_000_000})
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        def fake_decimals_none(chain, asset_address):
+            yield
+            return None
+
+        obj._get_token_decimals = fake_decimals_none
+
+        portfolio = {"portfolio_breakdown": []}
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        assert len(result) == 0
+
+    def test_safe_held_backstop_dedupes_mixed_case_address(self) -> None:
+        """Mixed-case portfolio address dedupes against lowercase whitelist."""
+        ousdt_lower = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+        ousdt_upper = ousdt_lower.upper().replace("0X", "0x")
+        obj = self._make_obj(balances={ousdt_lower: 5_000_000}, decimals=6)
+        obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
+
+        portfolio = {
+            "portfolio_breakdown": [
+                {"asset": "oUSDT", "address": ousdt_upper, "value_usd": 50},
+            ]
+        }
+        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 1
 
 

@@ -35,7 +35,7 @@ contracts:
 - valory/velodrome_sugar:0.1.0:bafybeid5cqotvvvoxthvk66e547wyoo5lmkr7fqw2ncwwjmarlkceuqpd4
 - valory/velodrome_gauge:0.1.0:bafybeigwchk2f5gv436mqckfcwbkrjbngbtx5u7nrzakrqpk22kqtehw7a
 - valory/velodrome_voter:0.1.0:bafybeiahwmuw6oo6qy2gqedec2dgb2hkbhpce7gwthywjwkg4kcura75zq
-- valory/velodrome_cl_gauge:0.1.0:bafybeifvep2wr34v4puwponri2ti5otkbtup7rrfseybgrnlzeoktkapje
+- valory/velodrome_cl_gauge:0.1.0:bafybeigtxuc2kpmuivftb6omet7gax6c4o6jccma2nclewm2mlavpvt2c4
 - valory/balancer_queries:0.1.0:bafybeidgwlwpmd5bkce7rln7fbdrclpbx367ehg2bdik55vx5hyfy4bkb4
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeib5qjkpfsxjcur4asube6kctmy2xsrg2hzcele2tmvsstula4lt54
 - valory/abstract_round_abci:0.1.0:bafybeiesqybjt2d3cwazu5xurye7znnkidem2qhudfvjnaprbk6p5flfe4
 - valory/funds_manager:0.1.0:bafybeiebmb72sxx3odmxzpn7qy4la3i6n5vf4di4vbkt4mt4kuybosftay
-- valory/liquidity_trader_abci:0.1.0:bafybeihs3t6nhm3ocqqhgwl2gxcf6e4wmdsu2epphyjgo7zvedl44jlma4
-- valory/optimus_abci:0.1.0:bafybeia4fmclspozsphey6v2pjuwrztayh2fqp3otog6nbgrcja7a66e2q
+- valory/liquidity_trader_abci:0.1.0:bafybeidkq6huikbs3jjbuk3ojjwqoqse5cmxy7fgzce7pv65rk2cuxiqda
+- valory/optimus_abci:0.1.0:bafybeidx4dmzo63kxkodlqbgmyd5qrgmsn5v4jgy2ygptuwc5are72oslu
 - valory/registration_abci:0.1.0:bafybeidywralavqvrmzxomdgnthngqfzhbpop6n23pwf67lg2p6ndvt3fy
 - valory/reset_pause_abci:0.1.0:bafybeiahbkc4gfcmcvifbs6dvhtcj6wtjr7bvvdxunhxxquglkv365lu3e
 - valory/termination_abci:0.1.0:bafybeic7wo6vp7ag2yhirxgftim6mjmo225v2lixfxuj5q6rdp7mj6ujqy

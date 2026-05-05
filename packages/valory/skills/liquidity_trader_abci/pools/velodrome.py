@@ -1055,6 +1055,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
+        if not multi_send_txs:
+            self.context.logger.warning(
+                "No exit transactions queued for any token; skipping multisend"
+            )
+            return None
+
         # prepare multisend
         multisend_address = self.params.multisend_contract_addresses.get(chain, "")
         if not multisend_address:
@@ -3176,7 +3182,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             staked_positions.append({"token_id": token_id})
 
-        if not multi_send_txs:
+        if not staked_positions:
             error_msg = "No valid stake transactions created"
             self.context.logger.error(error_msg)
             return {"error": error_msg}

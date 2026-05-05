@@ -2263,8 +2263,8 @@ class TestExitClPool:
         b.decrease_liquidity_velodrome = _mock_gen(None)
         b.contract_interact = _mock_gen("0xabcdef1234567890")
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
-        # Decrease failed -> position skipped, multisend still runs
-        assert result is not None
+        # Decrease failed for the only token -> multi_send_txs empty -> None.
+        assert result is None
 
     def test_collect_fails_skips(self) -> None:
         b = self._make_b()
@@ -2363,6 +2363,15 @@ class TestExitClPool:
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [999], "0xPool"))
         assert result is not None
         assert captured["liquidity"] == 500
+
+    def test_returns_none_when_all_tokens_skipped(self) -> None:
+        """If every token fails the ownerOf check, no multisend is built."""
+        b = self._make_b()
+        b.get_cl_position_owner = _mock_gen("0xOther")
+        result = exhaust(
+            b._exit_cl_pool("optimism", "0xSafe", [1, 2], [100, 200], "0xPool")
+        )
+        assert result is None
 
 
 class TestCalculateTickLowerAndUpperVelodrome:
@@ -4773,6 +4782,31 @@ class TestStakeClLpTokens:
         assert result["success"] is True
         staked_ids = {p["token_id"] for p in result["staked_positions"]}
         assert staked_ids == {2}
+
+    def test_all_already_staked_returns_error_not_solo_approval(self) -> None:
+        """If approval is needed but every token is already staked, do not
+        submit a solo setApprovalForAll multisend. Return an error so the
+        caller doesn't advance the action index treating it as success."""
+        b = make_behaviour()
+        b.params.velodrome_non_fungible_position_manager_contract_addresses = {
+            "optimism": "0xPM"
+        }
+        b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
+
+        def is_staked_stub(account, token_id, **kwargs):
+            yield
+            return True
+
+        b.is_cl_token_staked = is_staked_stub
+        # is_approved -> False (would queue an approval), then no deposits.
+        b.contract_interact = make_contract_interact([False, "0xApproveData"])
+        result = exhaust_generator(
+            b.stake_cl_lp_tokens(
+                [1, 2], "0xGauge", chain="optimism", safe_address="0xSafe"
+            )
+        )
+        assert "error" in result
+        assert result.get("success") is not True
 
 
 class TestUnstakeClLpTokens:

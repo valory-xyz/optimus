@@ -18,7 +18,7 @@ fingerprint:
   behaviours/get_positions.py: bafybeihmv3pjtso44gwtwzqjp62cb5n5qtxhxqpc5ybsrixp2cmtplpifa
   behaviours/post_tx_settlement.py: bafybeid2wjs3damzbsors5jr4rt7kbkbieljaex64b52zphfteve4hfnli
   behaviours/round_behaviour.py: bafybeicqhex5umf4ngytpgcrtf27qiwdytidqedzx2jzxhgxottpukabum
-  behaviours/withdraw_funds.py: bafybeigsvb2yzsyvnvgbrggr3g5gcceuhthbz73vr4uopizctkvmjptlzi
+  behaviours/withdraw_funds.py: bafybeibpez42ma3f7mkvxhpkbo72lratynfx7wt6374p4g4jz22cw55rwa
   dialogues.py: bafybeih6mbvnbindcnfk5xqza2kvcs6hqie4tkd36jnrniukrnceos5yyq
   fsm_specification.yaml: bafybeieqpelkdmo5shywlun3v53dgpv4gwscs3kton5deww2xztfwx5uvu
   handlers.py: bafybeiccfjcgjq7dkul4jlypspgwqyoe3747ucsy73psam5lpk2aw6kpya
@@ -58,7 +58,7 @@ fingerprint:
   tests/behaviours/test_get_positions.py: bafybeial3qhqe6rwwspzvzp7xrw2upf7pjhtvgmtmomwz5zhjcd3q5nrmy
   tests/behaviours/test_post_tx_settlement.py: bafybeib57kgsv7yziyg3u4n3vtd6bwb3scwscuhcffkinhmrlt6bzb7zdq
   tests/behaviours/test_round_behaviour.py: bafybeie3eqpc3t7ejy2wrc2jbrwk36vbdviuamvywmtmge4zl25ydswemq
-  tests/behaviours/test_withdraw_funds.py: bafybeigcjqmbtrqmbuygyvbc7xalf4yrs5cs2fvnxzztlnm2nfnnblreny
+  tests/behaviours/test_withdraw_funds.py: bafybeicmtdjmcs7qsx4pxukfl2uvessmdbgdocwzhdbrfcjdiezq7aaueu
   tests/io_/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/io_/test_loader.py: bafybeidcy2l6fpipq5jg7kc5afccnad7pywwobm3qskhpgk37nbsbaw7om
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm

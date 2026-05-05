@@ -419,7 +419,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         for asset in portfolio_data.get("portfolio_breakdown", []):
             token_address = asset.get("address")
             value_usd = asset.get("value_usd", 0)
-            if not token_address or value_usd <= 1:  # nosec B105
+            if not token_address or value_usd <= 1:
                 continue
             key = token_address.lower()
             if key in (usdc_lc, olas_lc) or key in seen:
@@ -428,7 +428,9 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             tokens_to_swap[token_address] = asset.get("asset") or ""
 
         # 2. Safe-held backstop: read every whitelisted token on-chain. Picks
-        # up idle tokens that SafeGlobal failed to report.
+        # up idle tokens that SafeGlobal failed to report. Skip dust below
+        # one full token unit (matches the >$1 threshold in pass 1, since
+        # whitelisted assets are stablecoins).
         if safe_address:
             for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
                 key = whitelisted_addr.lower()
@@ -437,9 +439,13 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 balance = yield from self._get_token_balance(
                     chain, safe_address, whitelisted_addr
                 )
-                if balance and balance > 0:
-                    seen.add(key)
-                    tokens_to_swap[whitelisted_addr] = symbol or ""
+                if not balance or balance <= 0:
+                    continue
+                decimals = yield from self._get_token_decimals(chain, whitelisted_addr)
+                if decimals is None or balance < 10**decimals:
+                    continue
+                seen.add(key)
+                tokens_to_swap[whitelisted_addr] = symbol or ""
 
         # 3. Build one swap action per unique token.
         for token_address, token_symbol in tokens_to_swap.items():

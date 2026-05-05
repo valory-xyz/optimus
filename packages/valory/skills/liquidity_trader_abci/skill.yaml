@@ -58,7 +58,7 @@ fingerprint:
   tests/behaviours/test_get_positions.py: bafybeial3qhqe6rwwspzvzp7xrw2upf7pjhtvgmtmomwz5zhjcd3q5nrmy
   tests/behaviours/test_post_tx_settlement.py: bafybeib57kgsv7yziyg3u4n3vtd6bwb3scwscuhcffkinhmrlt6bzb7zdq
   tests/behaviours/test_round_behaviour.py: bafybeie3eqpc3t7ejy2wrc2jbrwk36vbdviuamvywmtmge4zl25ydswemq
-  tests/behaviours/test_withdraw_funds.py: bafybeicmtdjmcs7qsx4pxukfl2uvessmdbgdocwzhdbrfcjdiezq7aaueu
+  tests/behaviours/test_withdraw_funds.py: bafybeidzwsvybooxeywcomhn4h7mwwk6rmotevkc6wzwpiitqxkaopoi3i
   tests/io_/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/io_/test_loader.py: bafybeidcy2l6fpipq5jg7kc5afccnad7pywwobm3qskhpgk37nbsbaw7om
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm

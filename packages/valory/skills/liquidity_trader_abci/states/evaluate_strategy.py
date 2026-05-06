@@ -70,5 +70,3 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
             return synced_data, Event.WAIT
 
         return synced_data, Event.DONE
-
-    # Event.NO_MAJORITY, Event.WAIT, Event.ROUND_TIMEOUT

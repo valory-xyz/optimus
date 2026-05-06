@@ -98,6 +98,36 @@ def _gen_none(*a, **kw):
     yield
 
 
+class TestFetchStrategiesWithdrawalGate:
+    """Verify the gate at the top of async_act emits a withdrawal payload."""
+
+    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
+        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        obj._read_investing_paused = _gen_return(True)
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = _gen_none
+        obj.set_done = MagicMock()
+        obj._validate_velodrome_v2_pool_addresses = MagicMock(
+            side_effect=AssertionError("no fetch work when investing is paused")
+        )
+
+        _drive(obj.async_act())
+
+        decoded = json.loads(captured["payload"].content)
+        assert decoded["event"] == "withdrawal_initiated"
+        obj.set_done.assert_called_once()
+
+
 class TestIsTimeUpdateDue:
     def test_due(self):
         obj = _mk()

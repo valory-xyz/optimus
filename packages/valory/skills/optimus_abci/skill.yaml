@@ -10,9 +10,9 @@ fingerprint:
   behaviours.py: bafybeib3kst4zp2btwplfwps3rptdknh7zjx2dndjcejzov4ldqmwcnzxu
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeihia2xwr4qylgejq5cclfbuaxbmqnjojl37kc4j5qlpl3ssm5ujha
-  fsm_specification.yaml: bafybeiclrv7v4i2dvig7uea3fjxqfwwfqp3vsnumy5647dulgfhha6mlea
-  handlers.py: bafybeid3ys2vo5vjgz5sdvc3uvvt7m3d4csyfrqgobqf6i2j5b4howbvza
-  models.py: bafybeib6hdrjjemlrllw4zr3famqllxzbon4pobpk62jmqpo2b2nk244se
+  fsm_specification.yaml: bafybeig2kmu6pwiabradi3h62di4aap5zjamdh4e4gryh2kw7342twzv7e
+  handlers.py: bafybeigsgi7effd7sjdnb7jqodvp3mxnekc2vpmy2gkhbsyvpl2oc26bxy
+  models.py: bafybeigpkdy7m52rsawlwgf3nq7y452wp33rilcvveachebwsjdsl3b6jy
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
   modius-ui-build/assets/index-DPlzseC6.js: bafybeihn3b6hvbogyassji7f22tao4hqrvypoan2xqv5dlbbkolq6icphy
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeidywralavqvrmzxomdgnthngqfzhbpop6n23pwf67lg2p6ndvt3fy
 - valory/reset_pause_abci:0.1.0:bafybeiahbkc4gfcmcvifbs6dvhtcj6wtjr7bvvdxunhxxquglkv365lu3e
 - valory/termination_abci:0.1.0:bafybeic7wo6vp7ag2yhirxgftim6mjmo225v2lixfxuj5q6rdp7mj6ujqy
-- valory/liquidity_trader_abci:0.1.0:bafybeih4gabjgu7qsgcxbwu3vux6nnw4aespro5izhgzs6o2wn2rbr2whm
+- valory/liquidity_trader_abci:0.1.0:bafybeibqxf77uzvufgqolxmr7fg6ambbtwrov5e4qhm2757yga6q2vu4hm
 - valory/transaction_settlement_abci:0.1.0:bafybeiemyjkxj2ifzjr5kubtebpyezocl33zxt7gwf7yongg6zlbfjilte
 - valory/funds_manager:0.1.0:bafybeiebmb72sxx3odmxzpn7qy4la3i6n5vf4di4vbkt4mt4kuybosftay
 behaviours:

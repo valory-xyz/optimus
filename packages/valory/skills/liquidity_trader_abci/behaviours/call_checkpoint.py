@@ -32,6 +32,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import (
     CallCheckpointPayload,
     CallCheckpointRound,
+    Event,
     StakingState,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
@@ -49,6 +50,26 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
+                payload = CallCheckpointPayload(
+                    sender=self.context.agent_address,
+                    tx_submitter=self.matching_round.auto_round_id(),
+                    tx_hash=None,
+                    safe_contract_address=None,
+                    chain_id=None,
+                    service_staking_state=StakingState.UNSTAKED.value,
+                    min_num_of_safe_tx_required=None,
+                    event=Event.WITHDRAWAL_INITIATED.value,
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
 

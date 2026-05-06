@@ -152,8 +152,6 @@ def load_fsm_spec() -> Dict:
 
 def camel_to_snake(camel_str: str) -> str:
     """Converts from CamelCase to snake_case."""
-    import re
-
     snake_str = re.sub(r"(?<!^)(?=[A-Z])", "_", camel_str).lower()
     return snake_str
 
@@ -2168,8 +2166,6 @@ class HttpHandler(BaseHttpHandler):
         :param address: the address to validate
         :return: True if valid, False otherwise
         """
-        import re
-
         # Check if it matches Ethereum address pattern
         pattern = re.compile(r"^0x[a-fA-F0-9]{40}$")
         return bool(pattern.match(address))

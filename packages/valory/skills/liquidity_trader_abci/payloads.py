@@ -41,6 +41,7 @@ class CallCheckpointPayload(MultisigTxPayload):
 
     service_staking_state: int
     min_num_of_safe_tx_required: Optional[int]
+    event: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class CheckStakingKPIMetPayload(MultisigTxPayload):
     """A transaction payload for the CheckStakingKPIMetRound."""
 
     is_staking_kpi_met: Optional[bool]
+    event: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ class GetPositionsPayload(BaseTxPayload):
     """Represent a transaction payload for the GetPositionsRound."""
 
     positions: Optional[str]
+    event: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,7 @@ class APRPopulationPayload(BaseTxPayload):
 
     context: str
     content: Optional[str] = None
+    event: Optional[str] = None
 
 
 @dataclass(frozen=True)

@@ -141,3 +141,42 @@ class TestGetPositionsBehaviour:
         )
         assert payload.positions == expected
         obj.set_done.assert_called_once()
+
+
+class TestGetPositionsWithdrawalGate:
+    """Verify the gate at the top of async_act emits a withdrawal payload."""
+
+    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
+        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return True
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj.get_positions = MagicMock(
+            side_effect=AssertionError(
+                "get_positions must not run when investing is paused"
+            )
+        )
+        obj._read_investing_paused = fake_read_investing_paused
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event == "withdrawal_initiated"
+        assert captured["payload"].positions is None
+        obj.set_done.assert_called_once()

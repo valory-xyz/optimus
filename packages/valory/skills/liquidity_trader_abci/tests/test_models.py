@@ -24,10 +24,10 @@
 import json
 import tempfile
 import time as time_module
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from time import time
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -253,246 +253,6 @@ class TestCoingeckoRateLimiter:
         assert ts == int(expected.timestamp())
 
 
-class TestCoingeckoRateLimiterPersistence:
-    """Tests for CoingeckoRateLimiter on-disk credits_used persistence."""
-
-    def test_burn_credits_persist_at_threshold(self) -> None:
-        """Burns persist at every Nth credit, not on every single burn."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            limiter = CoingeckoRateLimiter(
-                limit=1000, credits_=10000, credits_persistence_path=Path(tmpdir)
-            )
-            persist_file = Path(tmpdir) / limiter._PERSIST_FILENAME
-            n = limiter._PERSIST_EVERY_N_BURNS
-
-            # First N-1 burns do not write to disk.
-            for _ in range(n - 1):
-                assert limiter.check_and_burn() is True
-            assert not persist_file.exists()
-
-            # The Nth burn flushes.
-            assert limiter.check_and_burn() is True
-            assert persist_file.exists()
-            with open(persist_file, "r", encoding="utf-8") as fh:
-                payload = json.load(fh)
-            assert payload["credits_used"] == n
-            assert payload["month"] == datetime.now(timezone.utc).strftime("%Y-%m")
-
-    def test_persist_uses_atomic_temp_then_replace(self) -> None:
-        """The on-disk file is written via a tempfile and atomically replaced."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            limiter = CoingeckoRateLimiter(
-                limit=1000,
-                credits_=10000,
-                credits_persistence_path=Path(tmpdir),
-            )
-            persist_file = Path(tmpdir) / limiter._PERSIST_FILENAME
-            tmp_file = persist_file.with_suffix(persist_file.suffix + ".tmp")
-
-            with patch(
-                "packages.valory.skills.liquidity_trader_abci.models.os.replace"
-            ) as mock_replace:
-                limiter._persist_credits_used()
-                mock_replace.assert_called_once_with(tmp_file, persist_file)
-                # The temp file must exist before os.replace runs.
-                assert tmp_file.exists()
-
-    def test_restored_credits_used_decrements_remaining_credits(self) -> None:
-        """A persisted credits_used count is restored on a fresh limiter."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
-            with open(persist_path, "w", encoding="utf-8") as fh:
-                json.dump(
-                    {
-                        "month": datetime.now(timezone.utc).strftime("%Y-%m"),
-                        "credits_used": 42,
-                    },
-                    fh,
-                )
-            limiter = CoingeckoRateLimiter(
-                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
-            )
-            assert limiter.remaining_credits == 58
-
-    def test_stale_month_resets_credits_used(self) -> None:
-        """A persisted entry from a previous month must not bleed into a new month."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
-            with open(persist_path, "w", encoding="utf-8") as fh:
-                json.dump({"month": "1970-01", "credits_used": 99}, fh)
-            limiter = CoingeckoRateLimiter(
-                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
-            )
-            assert limiter.remaining_credits == 100
-
-    def test_corrupt_persistence_file_treated_as_no_state(self) -> None:
-        """A malformed persistence file does not crash the limiter init."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
-            with open(persist_path, "w", encoding="utf-8") as fh:
-                fh.write("not-valid-json{")
-            limiter = CoingeckoRateLimiter(
-                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
-            )
-            assert limiter.remaining_credits == 100
-
-    def test_no_persistence_path_disables_disk_io(self) -> None:
-        """When no path is supplied the limiter behaves as before (no file written)."""
-        limiter = CoingeckoRateLimiter(
-            limit=30, credits_=100, credits_persistence_path=None
-        )
-        # Direct call must short-circuit and not raise.
-        limiter._persist_credits_used()
-        assert limiter.check_and_burn() is True
-        assert limiter.remaining_credits == 99
-
-    def test_persist_swallows_oserror_and_cleans_tmp_file(self) -> None:
-        """A failed disk write must not crash the limiter; tmp file cleaned up."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            limiter = CoingeckoRateLimiter(
-                limit=1000,
-                credits_=10000,
-                credits_persistence_path=Path(tmpdir),
-            )
-            tmp_path = limiter._persistence_path.with_suffix(
-                limiter._persistence_path.suffix + ".tmp"
-            )
-            with patch(
-                "packages.valory.skills.liquidity_trader_abci.models.os.replace",
-                side_effect=OSError("simulated failure on rename"),
-            ):
-                limiter._persist_credits_used()
-            # The tmp file is cleaned up so it can't accumulate stale state.
-            assert not tmp_path.exists()
-            # The final file was not produced because os.replace failed.
-            assert not limiter._persistence_path.exists()
-
-    def test_persist_oserror_with_no_tmp_file_present(self) -> None:
-        """OSError before the tempfile is created leaves nothing to clean up."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            limiter = CoingeckoRateLimiter(
-                limit=1000,
-                credits_=10000,
-                credits_persistence_path=Path(tmpdir),
-            )
-            tmp_path = limiter._persistence_path.with_suffix(
-                limiter._persistence_path.suffix + ".tmp"
-            )
-            with patch("builtins.open", side_effect=OSError("disk full")):
-                limiter._persist_credits_used()
-            assert not tmp_path.exists()
-
-    def test_persist_swallows_double_oserror(self) -> None:
-        """If both the write AND the tmp cleanup fail, the limiter still survives."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            limiter = CoingeckoRateLimiter(
-                limit=1000,
-                credits_=10000,
-                credits_persistence_path=Path(tmpdir),
-            )
-            tmp_path = limiter._persistence_path.with_suffix(
-                limiter._persistence_path.suffix + ".tmp"
-            )
-            tmp_path.write_text("partial", encoding="utf-8")
-            with (
-                patch(
-                    "packages.valory.skills.liquidity_trader_abci.models.os.replace",
-                    side_effect=OSError("rename failed"),
-                ),
-                patch.object(Path, "unlink", side_effect=OSError("unlink failed")),
-            ):
-                limiter._persist_credits_used()
-            # No exception escapes; the limiter remains usable.
-            assert limiter.remaining_credits == 10000
-
-    def test_attach_persistence_path_restores_credits_used(self) -> None:
-        """attach_persistence_path restores credits_used from disk after construction."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
-            with open(persist_path, "w", encoding="utf-8") as fh:
-                json.dump(
-                    {
-                        "month": datetime.now(timezone.utc).strftime("%Y-%m"),
-                        "credits_used": 25,
-                    },
-                    fh,
-                )
-            limiter = CoingeckoRateLimiter(limit=30, credits_=100)
-            assert limiter.remaining_credits == 100
-            limiter.attach_persistence_path(Path(tmpdir))
-            assert limiter.remaining_credits == 75
-
-
-class TestCoingeckoSetup:
-    """Tests for the Coingecko model's setup() persistence wiring."""
-
-    def _make_kwargs(self) -> dict:
-        return {
-            "token_price_endpoint": "https://example.com/token",
-            "coin_price_endpoint": "https://example.com/coin",
-            "historical_price_endpoint": "https://example.com/history",
-            "historical_market_data_endpoint": "https://example.com/history-md",
-            "coin_from_address_endpoint": "https://example.com/coin-from-addr",
-            "api_key": "test_key",
-            "rate_limited_code": 429,
-            "requests_per_minute": 30,
-            "credits": 1000,
-            "chain_to_platform_id_mapping": json.dumps(
-                {"optimism": "optimistic-ethereum"}
-            ),
-            "use_x402": False,
-            "coingecko_server_base_url": "https://example.com",
-            "coingecko_x402_server_base_url": "https://example.com/x402",
-            "network_selector": "optimism",
-            "skill_context": MagicMock(),
-        }
-
-    def test_setup_attaches_persistence_path_from_params(self) -> None:
-        """Coingecko.setup() restores credits_used via context.params.store_path."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
-            with open(persist_path, "w", encoding="utf-8") as fh:
-                json.dump(
-                    {
-                        "month": datetime.now(timezone.utc).strftime("%Y-%m"),
-                        "credits_used": 7,
-                    },
-                    fh,
-                )
-            coingecko = object.__new__(Coingecko)
-            kwargs = self._make_kwargs()
-            with patch.object(Coingecko.__bases__[0], "__init__", return_value=None):
-                coingecko.__init__(**kwargs)
-            assert coingecko.rate_limiter.remaining_credits == 1000
-
-            mock_context = MagicMock()
-            mock_context.params.store_path = tmpdir
-            with patch.object(
-                type(coingecko), "context", new_callable=PropertyMock
-            ) as mock_ctx:
-                mock_ctx.return_value = mock_context
-                with patch.object(Coingecko.__bases__[0], "setup", return_value=None):
-                    coingecko.setup()
-            assert coingecko.rate_limiter.remaining_credits == 993
-
-    def test_setup_skips_persistence_when_store_path_missing(self) -> None:
-        """If params.store_path is None, setup() does not crash and persistence stays off."""
-        coingecko = object.__new__(Coingecko)
-        kwargs = self._make_kwargs()
-        with patch.object(Coingecko.__bases__[0], "__init__", return_value=None):
-            coingecko.__init__(**kwargs)
-
-        mock_context = MagicMock()
-        mock_context.params.store_path = None
-        with patch.object(
-            type(coingecko), "context", new_callable=PropertyMock
-        ) as mock_ctx:
-            mock_ctx.return_value = mock_context
-            with patch.object(Coingecko.__bases__[0], "setup", return_value=None):
-                coingecko.setup()  # Must not raise
-        assert coingecko.rate_limiter._persistence_path is None
-
-
 class TestEndpointCircuitBreaker:
     """Tests for the EndpointCircuitBreaker state machine."""
 
@@ -565,26 +325,50 @@ class TestEndpointCircuitBreaker:
         assert breaker.state == CircuitBreakerState.OPEN
 
     def test_half_open_wedged_probe_auto_reverts_to_open(self) -> None:
-        """A probe that never reports back is auto-reverted to OPEN.
-
-        Without this, a wedged probe would block every other caller
-        forever — see PR #285 review.
-        """
+        """A probe that never reports back is auto-reverted to OPEN."""
         breaker = EndpointCircuitBreaker(
             failure_threshold=1, recovery_timeout_seconds=0.05
         )
         breaker.on_failure()
         time_module.sleep(0.06)
-        # First call after cooldown enters HALF_OPEN.
         assert breaker.allow() is True
         assert breaker.state == CircuitBreakerState.HALF_OPEN
-        # Second call while still in HALF_OPEN is blocked (probe in flight).
         assert breaker.allow() is False
-        # Probe never reports. After another recovery_timeout, the breaker
-        # forces itself back to OPEN with a fresh cooldown.
         time_module.sleep(0.06)
         assert breaker.allow() is False
         assert breaker.state == CircuitBreakerState.OPEN
+
+    def test_stale_probe_success_does_not_overwrite_reverted_open(self) -> None:
+        """A late on_success after auto-revert must not silently re-close."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.05
+        )
+        breaker.on_failure()
+        time_module.sleep(0.06)
+        breaker.allow()  # OPEN -> HALF_OPEN
+        time_module.sleep(0.06)
+        breaker.allow()  # auto-revert: HALF_OPEN -> OPEN
+        assert breaker.state == CircuitBreakerState.OPEN
+        opened_at_before = breaker._opened_at
+        # The slow probe finally reports success after the auto-revert.
+        breaker.on_success()
+        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker._opened_at == opened_at_before
+
+    def test_stale_probe_failure_does_not_extend_cooldown(self) -> None:
+        """A late on_failure after auto-revert must not push opened_at forward."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.05
+        )
+        breaker.on_failure()
+        time_module.sleep(0.06)
+        breaker.allow()
+        time_module.sleep(0.06)
+        breaker.allow()
+        assert breaker.state == CircuitBreakerState.OPEN
+        opened_at_before = breaker._opened_at
+        breaker.on_failure()
+        assert breaker._opened_at == opened_at_before
 
 
 class TestSharedStateCircuitBreakers:

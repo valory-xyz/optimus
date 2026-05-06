@@ -22,7 +22,7 @@
 import json
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from time import time
@@ -121,14 +121,19 @@ class EndpointCircuitBreaker:
     def on_success(self) -> None:
         """Record a successful call and close the breaker."""
         with self._lock:
+            if self._state == CircuitBreakerState.OPEN:
+                return
+            if self._state == CircuitBreakerState.HALF_OPEN:
+                self._state = CircuitBreakerState.CLOSED
+                self._opened_at = None
+                self._half_open_at = None
             self._consecutive_failures = 0
-            self._state = CircuitBreakerState.CLOSED
-            self._opened_at = None
-            self._half_open_at = None
 
     def on_failure(self) -> None:
         """Record a failed call. Opens the breaker once the threshold is hit."""
         with self._lock:
+            if self._state == CircuitBreakerState.OPEN:
+                return
             if self._state == CircuitBreakerState.HALF_OPEN:
                 self._state = CircuitBreakerState.OPEN
                 self._opened_at = time()
@@ -206,34 +211,13 @@ BenchmarkTool = BaseBenchmarkTool
 
 
 class CoingeckoRateLimiter:
-    """Keeps track of the rate limiting for Coingecko.
+    """Keeps track of the rate limiting for Coingecko."""
 
-    The monthly credit counter is optionally persisted to disk at
-    ``credits_persistence_path`` so a process restart does not silently
-    re-grant the full monthly allowance to a deployment that has already
-    burned most of it. Per-minute counters stay in memory.
-    """
-
-    _PERSIST_FILENAME = "coingecko_credits_used.json"
-    _PERSIST_EVERY_N_BURNS = 10
-
-    def __init__(
-        self,
-        limit: int,
-        credits_: int,
-        credits_persistence_path: Optional[Path] = None,
-    ) -> None:
+    def __init__(self, limit: int, credits_: int) -> None:
         """Initialize the Coingecko rate limiter."""
         self._limit = self._remaining_limit = limit
-        self._credits = credits_
+        self._credits = self._remaining_credits = credits_
         self._last_request_time = time()
-        self._persistence_path: Optional[Path] = (
-            credits_persistence_path / self._PERSIST_FILENAME
-            if credits_persistence_path is not None
-            else None
-        )
-        used = self._load_credits_used_for_month(self._current_month())
-        self._remaining_credits = max(0, credits_ - used)
 
     @property
     def limit(self) -> int:
@@ -300,72 +284,11 @@ class CoingeckoRateLimiter:
         if self.can_reset_credits:
             self._remaining_credits = self.credits
 
-    def attach_persistence_path(self, store_path: Path) -> None:
-        """Attach an on-disk persistence path after construction.
-
-        Used when ``store_path`` is not available at limiter construction
-        time (e.g., when the agent's params are wired up later in the
-        skill lifecycle). Restores the month-keyed credit counter so a
-        process restart does not re-grant the full monthly allowance.
-
-        :param store_path: directory under which the persistence file is read/written.
-        """
-        self._persistence_path = store_path / self._PERSIST_FILENAME
-        used = self._load_credits_used_for_month(self._current_month())
-        self._remaining_credits = max(0, self._credits - used)
-
-    @staticmethod
-    def _current_month() -> str:
-        """Return the current month as a YYYY-MM key."""
-        return datetime.now(timezone.utc).strftime("%Y-%m")
-
-    def _load_credits_used_for_month(self, month: str) -> int:
-        """Load credits_used for the given month from disk, or 0 if none."""
-        if self._persistence_path is None or not self._persistence_path.exists():
-            return 0
-        try:
-            with open(self._persistence_path, "r", encoding="utf-8") as fh:
-                payload = json.load(fh)
-            stored_month = payload.get("month")
-            if stored_month != month:
-                return 0
-            credits_used = int(payload.get("credits_used", 0))
-            return max(0, credits_used)
-        except (OSError, ValueError, TypeError):
-            return 0
-
-    def _persist_credits_used(self) -> None:
-        """Persist credits_used to disk for the current month."""
-        if self._persistence_path is None:
-            return
-        credits_used = max(0, self._credits - self._remaining_credits)
-        payload = {
-            "month": self._current_month(),
-            "credits_used": credits_used,
-        }
-        tmp_path = self._persistence_path.with_suffix(
-            self._persistence_path.suffix + ".tmp"
-        )
-        try:
-            self._persistence_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(tmp_path, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh)
-            os.replace(tmp_path, self._persistence_path)
-        except OSError:
-            try:
-                if tmp_path.exists():
-                    tmp_path.unlink()
-            except OSError:
-                pass
-
     def _burn_credit(self) -> None:
         """Use one credit."""
         self._remaining_limit -= 1
         self._remaining_credits -= 1
         self._last_request_time = time()
-        credits_used = self._credits - self._remaining_credits
-        if credits_used % self._PERSIST_EVERY_N_BURNS == 0:
-            self._persist_credits_used()
 
     def check_and_burn(self) -> bool:
         """Check whether we can perform a new request, and if yes, update the remaining limit and credits."""
@@ -398,8 +321,6 @@ class Coingecko(Model, TypeCheckMixin):
         )
         limit: int = self._ensure("requests_per_minute", kwargs, int)
         credits_: int = self._ensure("credits", kwargs, int)
-        # The credit counter's persistence path is wired in setup() once the
-        # skill context is attached and Params.store_path is reachable.
         self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
         self.network_selector = self._ensure("network_selector", kwargs, str)
@@ -448,19 +369,6 @@ class Coingecko(Model, TypeCheckMixin):
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")
             return False, {"exception": str(exc)}
-
-    def setup(self) -> None:
-        """Wire the rate limiter's on-disk credit counter to the agent's store_path.
-
-        Runs after the skill context is attached, so ``self.context.params``
-        is reachable. Persistence is best-effort: if the path is unset the
-        rate limiter stays in-memory only.
-        """
-        super().setup()
-        store_path = getattr(self.context.params, "store_path", None)
-        if store_path is None:
-            return
-        self.rate_limiter.attach_persistence_path(Path(store_path))
 
 
 class Params(BaseParams):

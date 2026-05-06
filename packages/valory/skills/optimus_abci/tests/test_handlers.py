@@ -1388,6 +1388,23 @@ class TestHttpHandlerMethods:
         handler._write_kv.assert_not_called()
         ctx.logger.info.assert_called()
 
+    def test_write_withdrawal_data_releases_lock_after_exception(self) -> None:
+        """Wrapped function raising must not leak the lock to subsequent callers."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = _make_http_handler()
+        handler._write_kv = MagicMock(side_effect=RuntimeError("boom"))
+        # First call hits the wrapped function, which raises. The except
+        # branch swallows it. Lock must be released on the way out.
+        handler._write_withdrawal_data({"withdrawal_id": "1"})
+        # The lock should be free now — try acquiring without blocking.
+        acquired = handlers_mod._WITHDRAWAL_WRITE_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True, "lock leaked across exception"
+        finally:
+            if acquired:
+                handlers_mod._WITHDRAWAL_WRITE_LOCK.release()
+
     def test_read_withdrawal_data(self) -> None:
         """Test _read_withdrawal_data reads from KV store."""
         handler, ctx = _make_http_handler()
@@ -1470,8 +1487,11 @@ class TestHttpHandlerMethods:
         assert (
             _is_transient_web3_error(requests.exceptions.ConnectionError("dns")) is True
         )
-        # HTTP statuses matched only on word boundaries
-        for status in (408, 429, 502, 503, 504):
+        # HTTP statuses matched only on word boundaries.
+        # Includes Cloudflare-fronted RPC range (520-525).
+        for status in (
+            408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525
+        ):
             assert (
                 _is_transient_web3_error(Exception(f"HTTP {status} from rpc")) is True
             ), f"status {status} should retry"
@@ -1617,10 +1637,10 @@ class TestHttpHandlerMethods:
         assert result is None
 
     def test_check_usdc_balance_exception(self) -> None:
-        """Test _check_usdc_balance returns None on exception."""
+        """Test _check_usdc_balance returns None on a transient network error."""
         handler, ctx = _make_http_handler()
         handler._get_web3_instance = MagicMock(
-            side_effect=Exception("Connection error")
+            side_effect=requests.exceptions.ConnectionError("Connection error")
         )
         result = handler._check_usdc_balance("0xaddr", "optimism", "0xusdc")
         assert result is None
@@ -2613,6 +2633,26 @@ class TestHttpHandlerMethods:
         handler._write_kv.assert_not_called()
         ctx.logger.info.assert_called()
 
+    def test_delayed_write_kv_extended_releases_lock_after_exception(
+        self,
+    ) -> None:
+        """The KV-write lock is released even when the wrapped body raises."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, ctx = _make_http_handler()
+        handler._write_kv = MagicMock(side_effect=RuntimeError("boom"))
+        ctx.state.request_queue = ["req1"]
+        ctx.params.default_acceptance_time = 0
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            with pytest.raises(RuntimeError):
+                handler._delayed_write_kv_extended({"trading_type": "balanced"})
+        acquired = handlers_mod._KV_WRITE_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True, "lock leaked across exception"
+        finally:
+            if acquired:
+                handlers_mod._KV_WRITE_LOCK.release()
+
     def test_handle_get_withdrawal_amount_success(self) -> None:
         """Test _handle_get_withdrawal_amount with valid portfolio data."""
         handler, ctx = _make_http_handler()
@@ -3139,6 +3179,25 @@ class TestHttpHandlerMethods:
         # The function returned before doing any work.
         handler._get_eoa_account.assert_not_called()
         ctx.logger.info.assert_called()
+
+    def test_ensure_sufficient_funds_releases_lock_after_exception(self) -> None:
+        """The x402 topup lock is released even when the wrapped body raises."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        handler._get_eoa_account = MagicMock(side_effect=RuntimeError("boom"))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_shared.return_value = MagicMock()
+            handler._ensure_sufficient_funds_for_x402_payments()
+        acquired = handlers_mod._X402_TOPUP_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True, "lock leaked across exception"
+        finally:
+            if acquired:
+                handlers_mod._X402_TOPUP_LOCK.release()
 
     def test_ensure_sufficient_funds_no_eoa(self) -> None:
         """Test _ensure_sufficient_funds_for_x402_payments when no EOA account."""

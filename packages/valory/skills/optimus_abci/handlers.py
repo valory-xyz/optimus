@@ -42,6 +42,7 @@ from aea.skills.base import Handler
 from aea_ledger_ethereum.ethereum import EthereumCrypto
 from eth_account import Account
 from web3 import Web3
+from web3.exceptions import ContractLogicError, Web3Exception
 
 from packages.valory.connections.genai.connection import (
     PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
@@ -147,7 +148,9 @@ _KV_WRITE_LOCK = threading.Lock()
 _WITHDRAWAL_WRITE_LOCK = threading.Lock()
 
 
-_TRANSIENT_HTTP_STATUS_RE = re.compile(r"\b(408|429|502|503|504)\b")
+_TRANSIENT_HTTP_STATUS_RE = re.compile(
+    r"\b(408|429|500|502|503|504|520|521|522|523|524|525)\b"
+)
 
 
 def _is_transient_web3_error(exc: BaseException) -> bool:
@@ -561,7 +564,13 @@ class HttpHandler(BaseHttpHandler):
 
         except CircuitBreakerOpenError:
             raise
-        except Exception as e:
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            ContractLogicError,
+            Web3Exception,
+            ValueError,
+        ) as e:
             self.context.logger.error(f"Error checking USDC balance: {str(e)}")
             return None
 
@@ -754,8 +763,8 @@ class HttpHandler(BaseHttpHandler):
                     eoa_address, chain, usdc_address
                 )
             except CircuitBreakerOpenError:
-                self.context.logger.warning(
-                    f"Circuit breaker open for {chain}; "
+                self.context.logger.error(
+                    f"x402-funds-check-breaker-open chain={chain}; "
                     "marking x402 funds insufficient until recovery"
                 )
                 self.shared_state.sufficient_funds_for_x402_payments = False

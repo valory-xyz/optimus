@@ -949,6 +949,101 @@ class TestRaiseForResponse:
         with pytest.raises(Exception, match="Internal Server Error"):
             await connection._raise_for_response(mock_response, "action")
 
+    @pytest.mark.asyncio
+    async def test_falls_back_to_text_on_non_json_body(self) -> None:
+        """A non-JSON error body must fall back to .text() instead of failing."""
+        connection = _make_connection()
+        mock_response = AsyncMock()
+        mock_response.status = 502
+        mock_response.json.side_effect = aiohttp.ContentTypeError(
+            request_info=MagicMock(), history=()
+        )
+        mock_response.text.return_value = "<html>502 Bad Gateway</html>"
+
+        with pytest.raises(MirrorDBHTTPError) as exc_info:
+            await connection._raise_for_response(mock_response, "fetch")
+        assert exc_info.value.status_code == 502
+        assert "502 Bad Gateway" in str(exc_info.value)
+        mock_response.text.assert_awaited()
+
+
+class TestEndpointValidation:
+    """Tests for the _VALID_ENDPOINTS regex enforcement."""
+
+    def setup_method(self) -> None:
+        """Set up test fixtures."""
+        self.connection = _make_connection()
+
+    def _make_msg_dialogue(self, payload: dict):
+        """Build a request msg + dialogue."""
+        msg = MagicMock(spec=SrrMessage)
+        msg.performative = SrrMessage.Performative.REQUEST
+        msg.payload = json.dumps(payload)
+        return msg, _make_mock_dialogue()
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "api/users",
+            "api/users/123",
+            "api/users/123/posts",
+            "api/users/",
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_valid_endpoint_patterns(self, endpoint: str) -> None:
+        """Endpoints matching the regex are forwarded to the backend method."""
+        msg, dialogue = self._make_msg_dialogue(
+            {
+                "method": "read_",
+                "kwargs": {"method_name": "test", "endpoint": endpoint},
+            }
+        )
+        with patch.object(
+            self.connection,
+            "read_",
+            new_callable=AsyncMock,
+            return_value={"ok": True},
+        ):
+            result = await self.connection._get_response(msg, dialogue)
+        body = json.loads(result.payload)
+        assert "response" in body
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "users",  # no api/ prefix
+            "api/users/123/posts/extra/segments",  # too deep
+            "api//bad",  # empty segment
+            "/api/users",  # leading slash
+            "api/has space",  # spaces are not allowed
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_invalid_endpoint_rejected(self, endpoint: str) -> None:
+        """Endpoints not matching the regex are rejected with an error reply."""
+        msg, dialogue = self._make_msg_dialogue(
+            {
+                "method": "read_",
+                "kwargs": {"method_name": "test", "endpoint": endpoint},
+            }
+        )
+        with patch.object(
+            self.connection, "read_", new_callable=AsyncMock
+        ) as mock_read:
+            result = await self.connection._get_response(msg, dialogue)
+        body = json.loads(result.payload)
+        assert "error" in body
+        assert "does not match any allowed pattern" in body["error"]
+        mock_read.assert_not_called()
+
+    def test_endpoint_validator_directly(self) -> None:
+        """The classmethod _is_valid_endpoint can be called without a connection."""
+        assert (
+            GenericMirrorDBConnection._is_valid_endpoint("api/users/123") is True
+        )
+        assert GenericMirrorDBConnection._is_valid_endpoint("not-api") is False
+
 
 class TestCRUDMethods:
     """Tests for the CRUD methods (create_, read_, update_, delete_)."""

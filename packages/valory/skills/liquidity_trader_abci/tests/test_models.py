@@ -23,15 +23,19 @@
 
 import json
 import tempfile
+import time as time_module
 from datetime import datetime
+from pathlib import Path
 from time import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.models import (
+    CircuitBreakerState,
     Coingecko,
     CoingeckoRateLimiter,
+    EndpointCircuitBreaker,
     Params,
     SharedState,
 )
@@ -247,6 +251,175 @@ class TestCoingeckoRateLimiter:
         assert isinstance(ts, int)
         expected = datetime(2025, 7, 1)
         assert ts == int(expected.timestamp())
+
+
+class TestCoingeckoRateLimiterPersistence:
+    """Tests for CoingeckoRateLimiter on-disk credits_used persistence."""
+
+    def test_burn_credit_persists_to_disk(self) -> None:
+        """A burned credit shows up in the persisted file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            limiter = CoingeckoRateLimiter(
+                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
+            )
+            assert limiter.check_and_burn() is True
+            persist_file = Path(tmpdir) / limiter._PERSIST_FILENAME
+            assert persist_file.exists()
+            with open(persist_file, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            assert payload["credits_used"] == 1
+            assert payload["month"] == datetime.utcnow().strftime("%Y-%m")
+
+    def test_restored_credits_used_decrements_remaining_credits(self) -> None:
+        """A persisted credits_used count is restored on a fresh limiter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
+            with open(persist_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "month": datetime.utcnow().strftime("%Y-%m"),
+                        "credits_used": 42,
+                    },
+                    fh,
+                )
+            limiter = CoingeckoRateLimiter(
+                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
+            )
+            assert limiter.remaining_credits == 58
+
+    def test_stale_month_resets_credits_used(self) -> None:
+        """A persisted entry from a previous month must not bleed into a new month."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
+            with open(persist_path, "w", encoding="utf-8") as fh:
+                json.dump({"month": "1970-01", "credits_used": 99}, fh)
+            limiter = CoingeckoRateLimiter(
+                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
+            )
+            assert limiter.remaining_credits == 100
+
+    def test_corrupt_persistence_file_treated_as_no_state(self) -> None:
+        """A malformed persistence file does not crash the limiter init."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
+            with open(persist_path, "w", encoding="utf-8") as fh:
+                fh.write("not-valid-json{")
+            limiter = CoingeckoRateLimiter(
+                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
+            )
+            assert limiter.remaining_credits == 100
+
+    def test_no_persistence_path_disables_disk_io(self) -> None:
+        """When no path is supplied the limiter behaves as before (no file written)."""
+        limiter = CoingeckoRateLimiter(
+            limit=30, credits_=100, credits_persistence_path=None
+        )
+        assert limiter.check_and_burn() is True
+        assert limiter.remaining_credits == 99
+
+    def test_persist_swallows_oserror(self) -> None:
+        """A failed disk write must not crash the limiter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            limiter = CoingeckoRateLimiter(
+                limit=30, credits_=100, credits_persistence_path=Path(tmpdir)
+            )
+            with patch("builtins.open", side_effect=OSError("disk full")):
+                # Burning a credit triggers a write that will raise; the
+                # limiter must continue to count the burn in memory.
+                assert limiter.check_and_burn() is True
+            assert limiter.remaining_credits == 99
+
+
+class TestEndpointCircuitBreaker:
+    """Tests for the EndpointCircuitBreaker state machine."""
+
+    def test_starts_closed_and_allows_calls(self) -> None:
+        """A fresh breaker is CLOSED and permits calls."""
+        breaker = EndpointCircuitBreaker()
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.allow() is True
+
+    def test_opens_after_threshold_failures(self) -> None:
+        """Reaching the failure threshold transitions to OPEN."""
+        breaker = EndpointCircuitBreaker(failure_threshold=3)
+        for _ in range(3):
+            breaker.on_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker.allow() is False
+
+    def test_success_resets_failure_counter(self) -> None:
+        """Successful calls reset the consecutive-failure count."""
+        breaker = EndpointCircuitBreaker(failure_threshold=3)
+        breaker.on_failure()
+        breaker.on_failure()
+        breaker.on_success()
+        breaker.on_failure()
+        breaker.on_failure()
+        # Only 2 consecutive failures since last success
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+    def test_open_transitions_to_half_open_after_cooldown(self) -> None:
+        """Once recovery_timeout elapses, the next allow() call enters HALF_OPEN."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=2, recovery_timeout_seconds=0.01
+        )
+        breaker.on_failure()
+        breaker.on_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+        time_module.sleep(0.02)
+        assert breaker.allow() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+    def test_half_open_allows_only_one_probe(self) -> None:
+        """Once a probe is in flight, additional allow() calls are blocked."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.0
+        )
+        breaker.on_failure()
+        # First allow() flips to HALF_OPEN and returns True
+        assert breaker.allow() is True
+        # Subsequent allow() calls are blocked until the probe resolves
+        assert breaker.allow() is False
+
+    def test_half_open_success_closes_breaker(self) -> None:
+        """A successful probe transitions HALF_OPEN to CLOSED."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.0
+        )
+        breaker.on_failure()
+        breaker.allow()  # OPEN -> HALF_OPEN
+        breaker.on_success()
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+    def test_half_open_failure_reopens_breaker(self) -> None:
+        """A failed probe re-opens the breaker."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.0
+        )
+        breaker.on_failure()
+        breaker.allow()  # OPEN -> HALF_OPEN
+        breaker.on_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+
+class TestSharedStateCircuitBreakers:
+    """Tests for SharedState.get_circuit_breaker."""
+
+    def test_returns_same_breaker_for_same_endpoint(self) -> None:
+        """Repeated lookups for the same endpoint key return the same breaker."""
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        breaker_a = state.get_circuit_breaker("https://rpc.example.com")
+        breaker_b = state.get_circuit_breaker("https://rpc.example.com")
+        assert breaker_a is breaker_b
+
+    def test_distinct_endpoints_get_distinct_breakers(self) -> None:
+        """Different endpoint keys map to independent breakers."""
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        breaker_a = state.get_circuit_breaker("https://a.example.com")
+        breaker_b = state.get_circuit_breaker("https://b.example.com")
+        assert breaker_a is not breaker_b
 
 
 class TestCoingecko:

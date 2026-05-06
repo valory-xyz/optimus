@@ -21,7 +21,9 @@
 
 import json
 import os
+import threading
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from time import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -44,6 +46,88 @@ from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderA
 
 HTTP_OK = [200, 201]
 MINUTE_UNIX = 60
+
+# Defaults for the per-endpoint circuit breaker. Tuned to skip a known-bad
+# external endpoint for a recovery window instead of replaying the full
+# retry sequence every FSM round.
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
+CIRCUIT_BREAKER_RECOVERY_SECONDS = 60.0
+
+
+class CircuitBreakerState(Enum):
+    """Circuit breaker lifecycle states."""
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreakerOpenError(Exception):
+    """Raised when an endpoint's breaker is open and the call is short-circuited."""
+
+
+class EndpointCircuitBreaker:
+    """Per-endpoint circuit breaker.
+
+    Starts CLOSED. After ``failure_threshold`` consecutive failures it opens
+    and rejects calls for ``recovery_timeout_seconds``. Then it transitions
+    to HALF_OPEN, allowing a single probe through. The probe's outcome
+    decides whether to close (success) or re-open (failure).
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+        recovery_timeout_seconds: float = CIRCUIT_BREAKER_RECOVERY_SECONDS,
+    ) -> None:
+        """Initialize a CLOSED breaker."""
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout_seconds
+        self._consecutive_failures = 0
+        self._opened_at: Optional[float] = None
+        self._state = CircuitBreakerState.CLOSED
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> CircuitBreakerState:
+        """Return the current breaker state."""
+        return self._state
+
+    def allow(self) -> bool:
+        """Return True if a call is permitted; transition OPEN→HALF_OPEN if cooldown elapsed."""
+        with self._lock:
+            if self._state == CircuitBreakerState.CLOSED:
+                return True
+            if self._state == CircuitBreakerState.OPEN:
+                if (
+                    self._opened_at is not None
+                    and (time() - self._opened_at) >= self._recovery_timeout
+                ):
+                    self._state = CircuitBreakerState.HALF_OPEN
+                    return True
+                return False
+            # HALF_OPEN: only the probe that triggered the transition is in flight
+            return False
+
+    def on_success(self) -> None:
+        """Record a successful call and close the breaker."""
+        with self._lock:
+            self._consecutive_failures = 0
+            self._state = CircuitBreakerState.CLOSED
+            self._opened_at = None
+
+    def on_failure(self) -> None:
+        """Record a failed call. Opens the breaker once the threshold is hit."""
+        with self._lock:
+            if self._state == CircuitBreakerState.HALF_OPEN:
+                # Probe failed; re-open immediately
+                self._state = CircuitBreakerState.OPEN
+                self._opened_at = time()
+                return
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._failure_threshold:
+                self._state = CircuitBreakerState.OPEN
+                self._opened_at = time()
 
 
 class SharedState(BaseSharedState):
@@ -70,6 +154,18 @@ class SharedState(BaseSharedState):
         self.last_strategy_evaluation_time: float = 0.0
         # Shared price cache passed to strategies via kwargs
         self.strategy_coingecko_price_cache: Dict[str, Any] = {}
+        # Per-endpoint circuit breakers for external dependencies.
+        self._endpoint_breakers: Dict[str, EndpointCircuitBreaker] = {}
+        self._endpoint_breakers_lock = threading.Lock()
+
+    def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
+        """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""
+        with self._endpoint_breakers_lock:
+            breaker = self._endpoint_breakers.get(endpoint)
+            if breaker is None:
+                breaker = EndpointCircuitBreaker()
+                self._endpoint_breakers[endpoint] = breaker
+            return breaker
 
     def setup(self) -> None:
         """Set up the model."""
@@ -100,13 +196,33 @@ BenchmarkTool = BaseBenchmarkTool
 
 
 class CoingeckoRateLimiter:
-    """Keeps track of the rate limiting for Coingecko."""
+    """Keeps track of the rate limiting for Coingecko.
 
-    def __init__(self, limit: int, credits_: int) -> None:
+    The monthly credit counter is optionally persisted to disk at
+    ``credits_persistence_path`` so a process restart does not silently
+    re-grant the full monthly allowance to a deployment that has already
+    burned most of it. Per-minute counters stay in memory.
+    """
+
+    _PERSIST_FILENAME = "coingecko_credits_used.json"
+
+    def __init__(
+        self,
+        limit: int,
+        credits_: int,
+        credits_persistence_path: Optional[Path] = None,
+    ) -> None:
         """Initialize the Coingecko rate limiter."""
         self._limit = self._remaining_limit = limit
-        self._credits = self._remaining_credits = credits_
+        self._credits = credits_
         self._last_request_time = time()
+        self._persistence_path: Optional[Path] = (
+            credits_persistence_path / self._PERSIST_FILENAME
+            if credits_persistence_path is not None
+            else None
+        )
+        used = self._load_credits_used_for_month(self._current_month())
+        self._remaining_credits = max(0, credits_ - used)
 
     @property
     def limit(self) -> int:
@@ -173,11 +289,50 @@ class CoingeckoRateLimiter:
         if self.can_reset_credits:
             self._remaining_credits = self.credits
 
+    @staticmethod
+    def _current_month() -> str:
+        """Return the current month as a YYYY-MM key."""
+        return datetime.utcnow().strftime("%Y-%m")
+
+    def _load_credits_used_for_month(self, month: str) -> int:
+        """Load credits_used for the given month from disk, or 0 if none."""
+        if self._persistence_path is None or not self._persistence_path.exists():
+            return 0
+        try:
+            with open(self._persistence_path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            stored_month = payload.get("month")
+            if stored_month != month:
+                return 0
+            credits_used = int(payload.get("credits_used", 0))
+            return max(0, credits_used)
+        except (OSError, ValueError, TypeError):
+            return 0
+
+    def _persist_credits_used(self) -> None:
+        """Persist credits_used to disk for the current month."""
+        if self._persistence_path is None:
+            return
+        credits_used = max(0, self._credits - self._remaining_credits)
+        payload = {
+            "month": self._current_month(),
+            "credits_used": credits_used,
+        }
+        try:
+            self._persistence_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._persistence_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+        except OSError:
+            # Persistence is best-effort. If the disk is full or read-only the
+            # in-memory counter still enforces the cap for the current process.
+            pass
+
     def _burn_credit(self) -> None:
         """Use one credit."""
         self._remaining_limit -= 1
         self._remaining_credits -= 1
         self._last_request_time = time()
+        self._persist_credits_used()
 
     def check_and_burn(self) -> bool:
         """Check whether we can perform a new request, and if yes, update the remaining limit and credits."""
@@ -210,7 +365,15 @@ class Coingecko(Model, TypeCheckMixin):
         )
         limit: int = self._ensure("requests_per_minute", kwargs, int)
         credits_: int = self._ensure("credits", kwargs, int)
-        self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
+        store_path_raw = kwargs.get("store_path")
+        credits_persistence_path: Optional[Path] = (
+            Path(store_path_raw) if isinstance(store_path_raw, str) else None
+        )
+        self.rate_limiter = CoingeckoRateLimiter(
+            limit,
+            credits_,
+            credits_persistence_path=credits_persistence_path,
+        )
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
         self.network_selector = self._ensure("network_selector", kwargs, str)
         self.coingecko_server_base_url = self._ensure(
@@ -448,6 +611,15 @@ class Params(BaseParams):
             "lifi_quote_to_amount_url", kwargs, str
         )
         self.tls_verify: bool = self._ensure("tls_verify", kwargs, bool)
+        self.mode_conduit_explorer_url: str = self._ensure(
+            "mode_conduit_explorer_url", kwargs, str
+        )
+        self.safe_api_v1_url: str = self._ensure(
+            "safe_api_v1_url", kwargs, str
+        )
+        self.mode_native_explorer_url: str = self._ensure(
+            "mode_native_explorer_url", kwargs, str
+        )
         self.stoploss_threshold_multiplier = kwargs.get(
             "stoploss_threshold_multiplier", 0.43
         )

@@ -3703,6 +3703,22 @@ class TestTrackErc20TransfersMode:
         result = obj._track_erc20_transfers_mode("0xSafe", 1704067200)
         assert "outgoing" in result
 
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.MAX_PAGINATION_PAGES",
+        0,
+    )
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
+    )
+    def test_pagination_cap_triggers_break(self, mock_requests):
+        """When the pagination cap is hit the loop breaks and no request is made."""
+        obj = _mk()
+        result = obj._track_erc20_transfers_mode("0xSafe", 1704067200)
+        # Cap fired before any HTTP call; function returns the empty accumulator.
+        assert result == {"outgoing": {}}
+        mock_requests.get.assert_not_called()
+        obj.context.logger.warning.assert_called()
+
 
 class TestFetchEthTransfersMode:
     @patch(
@@ -5785,6 +5801,46 @@ class TestFetchTokenTransfersModeBatch2:
             )
             is True
         )
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.MAX_PAGINATION_PAGES",
+        0,
+    )
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_pagination_cap_triggers_break(self, m):
+        """When the pagination cap is hit the loop breaks before any HTTP call."""
+        obj = _mk()
+        obj.funding_events = {}
+        result = _drive(
+            obj._fetch_token_transfers_mode(
+                "0xA", datetime(2025, 1, 1, tzinfo=timezone.utc), {}, True
+            )
+        )
+        assert result is True
+        m.assert_not_called()
+        obj.context.logger.warning.assert_called()
+
+
+class TestFetchEthTransfersModePaginationCap:
+    """Cover the pagination cap in _fetch_eth_transfers_mode."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.MAX_PAGINATION_PAGES",
+        0,
+    )
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_pagination_cap_triggers_break(self, m):
+        """When the pagination cap is hit the loop breaks before any HTTP call."""
+        obj = _mk()
+        obj.funding_events = {}
+        result = obj._fetch_eth_transfers_mode("0xA", "2025-01-01", {}, True)
+        assert result is True
+        m.assert_not_called()
+        obj.context.logger.warning.assert_called()
 
 
 class TestFetchEthTransfersModeBatch2:

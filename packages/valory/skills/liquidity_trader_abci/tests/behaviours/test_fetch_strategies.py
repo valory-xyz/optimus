@@ -4940,7 +4940,7 @@ class TestAsyncAct:
                 obj.set_done.assert_called_once()
 
     def test_invalid_last_updated_timestamp(self):
-        """Cover lines 208-212: ValueError on int(last_updated)."""
+        """Cover the ValueError branch on int(last_updated)."""
         obj = _mk()
         bm = MagicMock()
         bm.local.return_value.__enter__ = MagicMock(return_value=None)
@@ -4961,6 +4961,7 @@ class TestAsyncAct:
             obj.params.available_strategies = {}
 
             obj._get_native_balance = _gen_return(1.0)
+            obj._read_investing_paused = _gen_return(False)
 
             read_call = [0]
 

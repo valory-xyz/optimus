@@ -23,6 +23,7 @@
 import asyncio
 import json
 import logging
+import re
 import ssl
 from functools import wraps
 from typing import Any, Dict, Optional, Union, cast
@@ -267,6 +268,14 @@ class GenericMirrorDBConnection(Connection):
         task = self.loop.create_task(self._get_response(message, dialogue))
         return task
 
+    @classmethod
+    def _is_valid_endpoint(cls, endpoint: str) -> bool:
+        """Return True if the endpoint matches one of the allowed patterns."""
+        return any(
+            re.match(pattern, endpoint) is not None
+            for pattern in cls._VALID_ENDPOINTS
+        )
+
     def prepare_error_message(
         self, srr_message: SrrMessage, dialogue: Optional[BaseDialogue], error: str
     ) -> SrrMessage:
@@ -394,6 +403,13 @@ class GenericMirrorDBConnection(Connection):
             safe_payload = str(payload).encode("ascii", "replace").decode("ascii")
             self.logger.info(f"endpoint,payload : {endpoint},{safe_payload}")
 
+        if endpoint is not None and not self._is_valid_endpoint(endpoint):
+            return self.prepare_error_message(
+                srr_message,
+                dialogue,
+                f"Endpoint {endpoint!r} does not match any allowed pattern.",
+            )
+
         try:
             response = await method(**payload.get("kwargs", {}))
             response_message = cast(
@@ -424,8 +440,11 @@ class GenericMirrorDBConnection(Connection):
         """
         if response.status == 200:
             return
-        error_content = await response.json()
-        detail = error_content.get("detail", error_content)
+        try:
+            error_content = await response.json()
+            detail = error_content.get("detail", error_content)
+        except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError):
+            detail = await response.text()
         raise MirrorDBHTTPError(
             response.status,
             f"Error {action}: {detail} (HTTP {response.status})",

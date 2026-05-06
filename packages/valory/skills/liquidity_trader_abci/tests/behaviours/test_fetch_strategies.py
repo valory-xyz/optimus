@@ -3703,6 +3703,53 @@ class TestTrackErc20TransfersMode:
         result = obj._track_erc20_transfers_mode("0xSafe", 1704067200)
         assert "outgoing" in result
 
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.MAX_PAGINATION_PAGES",
+        2,
+    )
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
+    )
+    def test_pagination_cap_triggers_break(self, mock_requests):
+        """The cap fires after exactly MAX_PAGINATION_PAGES pages, not before."""
+
+        # Fake API: always returns one item plus a next-page cursor, so without
+        # the cap the loop would never terminate.
+        def make_response(*_args, **_kwargs):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = {
+                "items": [
+                    {
+                        "timestamp": "2024-01-01T00:00:00.000000Z",
+                        "total": {"value": "1000000"},
+                        "token": {
+                            "address": "0xUSDC",
+                            "symbol": "USDC",
+                            "decimals": "6",
+                        },
+                        "from": {"hash": "0xsafe", "is_contract": False},
+                        "to": {
+                            "hash": "0xrecipient",
+                            "is_contract": False,
+                            "name": "",
+                        },
+                        "transaction_hash": "0xTX",
+                    }
+                ],
+                "next_page_params": {"block_number": 100, "index": 0},
+            }
+            return resp
+
+        mock_requests.get.side_effect = make_response
+        obj = _mk()
+        obj._track_erc20_transfers_mode("0xSafe", 1704067200)
+
+        # The loop fetched exactly MAX_PAGINATION_PAGES (=2) pages and stopped,
+        # despite the API still advertising a next-page cursor.
+        assert mock_requests.get.call_count == 2
+        obj.context.logger.warning.assert_called()
+
 
 class TestFetchEthTransfersMode:
     @patch(
@@ -5785,6 +5832,75 @@ class TestFetchTokenTransfersModeBatch2:
             )
             is True
         )
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.MAX_PAGINATION_PAGES",
+        2,
+    )
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_pagination_cap_triggers_break(self, m):
+        """The cap fires after exactly MAX_PAGINATION_PAGES pages, not before."""
+        tx = {
+            "timestamp": "2024-12-15T10:00:00Z",
+            "from": {"hash": "0xS", "is_contract": False},
+            "token": {"symbol": "USDC", "decimals": "6", "address": "0xT"},
+            "total": {"value": "1000000"},
+            "transaction_hash": "0xH",
+        }
+        # Always advertise a next-page cursor so without the cap the loop
+        # would never terminate.
+        m.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "items": [tx],
+                "next_page_params": {"block_number": 100, "index": 0},
+            },
+        )
+        obj = _mk()
+        obj.funding_events = {}
+        obj._is_airdrop_transfer = lambda t: False
+        obj._should_include_transfer_mode = lambda fa, tx, is_eth_transfer: True
+        _drive(
+            obj._fetch_token_transfers_mode(
+                "0xA", datetime(2025, 1, 1, tzinfo=timezone.utc), {}, True
+            )
+        )
+        # The cap stops the loop after exactly 2 pages.
+        assert m.call_count == 2
+        obj.context.logger.warning.assert_called()
+
+
+class TestFetchEthTransfersModePaginationCap:
+    """Cover the pagination cap in _fetch_eth_transfers_mode."""
+
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.MAX_PAGINATION_PAGES",
+        2,
+    )
+    @patch(
+        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
+    )
+    def test_pagination_cap_triggers_break(self, m):
+        """The cap fires after exactly MAX_PAGINATION_PAGES pages, not before."""
+        item = {
+            "date": "2024-12-15",
+            "value": "1000000000000000000",
+        }
+        m.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "items": [item],
+                "next_page_params": {"block_number": 100, "items_count": 1},
+            },
+        )
+        obj = _mk()
+        obj.funding_events = {}
+        obj._fetch_historical_eth_price = lambda *_args, **_kwargs: 0.0
+        obj._fetch_eth_transfers_mode("0xA", "2025-01-01", {}, True)
+        assert m.call_count == 2
+        obj.context.logger.warning.assert_called()
 
 
 class TestFetchEthTransfersModeBatch2:

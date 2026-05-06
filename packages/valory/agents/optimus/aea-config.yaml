@@ -16,7 +16,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 - valory/genai:0.1.0:bafybeif37mudnpbd4yhvi2kvqfvlnnp6klhudbrncws5vsha72jydj5raq
 - valory/kv_store:0.1.0:bafybeigtbb7qch5et2wked5h7riozxfw2rui3yp47lfdkhin7zcmpsosbi
-- valory/mirror_db:0.1.0:bafybeic3hqwgs6n4t7isgysb56uyffpdjqydgnhlgeqgas5ukch2mgk6ge
+- valory/mirror_db:0.1.0:bafybeiefswev5gopfcns2jqhbh5ovnzk7a6rurqnhuozh73etcbzpfnmti
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa
@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeib5qjkpfsxjcur4asube6kctmy2xsrg2hzcele2tmvsstula4lt54
 - valory/abstract_round_abci:0.1.0:bafybeiesqybjt2d3cwazu5xurye7znnkidem2qhudfvjnaprbk6p5flfe4
 - valory/funds_manager:0.1.0:bafybeiebmb72sxx3odmxzpn7qy4la3i6n5vf4di4vbkt4mt4kuybosftay
-- valory/liquidity_trader_abci:0.1.0:bafybeifmmvo47qkfwvjl2vkzqskc45fw43ogchupetk2kx7jygsopdjszi
-- valory/optimus_abci:0.1.0:bafybeih3qdz4yl6qs4owr3u77xyot4ldszpodntg3sv6lz52s5lhzuz5d4
+- valory/liquidity_trader_abci:0.1.0:bafybeih3nzy7drhtfn6ulltjiezci42sigibotxsm54mankbffqwj2zj6u
+- valory/optimus_abci:0.1.0:bafybeidi4bptlhsukg4pyyvzqr72jhpyx55exwu2zbtzlbxv447c4t2hta
 - valory/registration_abci:0.1.0:bafybeidywralavqvrmzxomdgnthngqfzhbpop6n23pwf67lg2p6ndvt3fy
 - valory/reset_pause_abci:0.1.0:bafybeiahbkc4gfcmcvifbs6dvhtcj6wtjr7bvvdxunhxxquglkv365lu3e
 - valory/termination_abci:0.1.0:bafybeic7wo6vp7ag2yhirxgftim6mjmo225v2lixfxuj5q6rdp7mj6ujqy
@@ -338,3 +338,6 @@ models:
       optimism_ledger_rpc: ${str:https://mainnet.optimism.io}
       lifi_quote_to_amount_url: ${str:https://li.quest/v1/quote/toAmount}
       tls_verify: ${bool:true}
+      mode_conduit_explorer_url: ${str:https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2}
+      safe_api_v1_url: ${str:https://safe-transaction-optimism.safe.global/api/v1}
+      mode_native_explorer_url: ${str:https://explorer.mode.network/api}

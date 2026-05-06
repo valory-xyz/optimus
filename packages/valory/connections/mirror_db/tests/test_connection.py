@@ -31,10 +31,14 @@ from aea.connections.base import ConnectionStates
 from aea.mail.base import Envelope
 from aea.protocols.base import Message
 
+import aiohttp
+
 from packages.valory.connections.mirror_db.connection import (
     PUBLIC_ID,
     GenericMirrorDBConnection,
+    MirrorDBHTTPError,
     SrrDialogues,
+    _is_retryable,
     retry_with_exponential_backoff,
 )
 from packages.valory.protocols.srr.dialogues import SrrDialogue
@@ -104,8 +108,8 @@ class TestRetryWithExponentialBackoff:
         assert call_count == 1
 
     @pytest.mark.asyncio
-    async def test_rate_limit_retry_then_success(self) -> None:
-        """Test retry on rate limit error then eventual success."""
+    async def test_http_429_retries_then_succeeds(self) -> None:
+        """Test that an HTTP 429 response is retried until success."""
         call_count = 0
 
         @retry_with_exponential_backoff(
@@ -115,7 +119,7 @@ class TestRetryWithExponentialBackoff:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise Exception("Rate limit exceeded")
+                raise MirrorDBHTTPError(429, "Too Many Requests")
             return "success"
 
         result = await flaky_func()
@@ -123,30 +127,175 @@ class TestRetryWithExponentialBackoff:
         assert call_count == 3
 
     @pytest.mark.asyncio
-    async def test_rate_limit_max_retries_exceeded(self) -> None:
-        """Test that max retries raises the exception."""
+    async def test_http_503_retries_then_succeeds(self) -> None:
+        """Test that an HTTP 5xx response is retried until success."""
+        call_count = 0
 
-        @retry_with_exponential_backoff(max_retries=2, initial_delay=0.01)
-        async def always_rate_limited() -> str:
-            raise Exception("Rate limit exceeded")
+        @retry_with_exponential_backoff(
+            max_retries=3, initial_delay=0.01, backoff_factor=2
+        )
+        async def flaky_func() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise MirrorDBHTTPError(503, "Service Unavailable")
+            return "success"
 
-        with pytest.raises(Exception, match="Rate limit exceeded"):
-            await always_rate_limited()
+        result = await flaky_func()
+        assert result == "success"
+        assert call_count == 2
 
     @pytest.mark.asyncio
-    async def test_non_rate_limit_error_raises_immediately(self) -> None:
-        """Test non-rate-limit errors raise immediately without retrying."""
+    async def test_aiohttp_connect_error_retries(self) -> None:
+        """Test that aiohttp.ClientConnectorError is retried."""
+        call_count = 0
+
+        @retry_with_exponential_backoff(max_retries=3, initial_delay=0.01)
+        async def flaky_func() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise aiohttp.ClientConnectorError(
+                    connection_key=MagicMock(),
+                    os_error=OSError("connection refused"),
+                )
+            return "success"
+
+        result = await flaky_func()
+        assert result == "success"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_asyncio_timeout_retries(self) -> None:
+        """Test that asyncio.TimeoutError is retried."""
+        call_count = 0
+
+        @retry_with_exponential_backoff(max_retries=3, initial_delay=0.01)
+        async def flaky_func() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise asyncio.TimeoutError()
+            return "success"
+
+        result = await flaky_func()
+        assert result == "success"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_max_retries_exceeded_raises(self) -> None:
+        """Test that the original exception is raised after max retries."""
+
+        @retry_with_exponential_backoff(max_retries=2, initial_delay=0.01)
+        async def always_429() -> str:
+            raise MirrorDBHTTPError(429, "Too Many Requests")
+
+        with pytest.raises(MirrorDBHTTPError) as exc_info:
+            await always_429()
+        assert exc_info.value.status_code == 429
+
+    @pytest.mark.asyncio
+    async def test_http_400_raises_immediately(self) -> None:
+        """Test that 4xx other than 429 is not retried."""
+        call_count = 0
+
+        @retry_with_exponential_backoff(max_retries=5, initial_delay=0.01)
+        async def bad_request_func() -> str:
+            nonlocal call_count
+            call_count += 1
+            raise MirrorDBHTTPError(400, "Bad Request")
+
+        with pytest.raises(MirrorDBHTTPError) as exc_info:
+            await bad_request_func()
+        assert exc_info.value.status_code == 400
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_value_error_raises_immediately(self) -> None:
+        """Test that non-network errors raise immediately without retrying."""
         call_count = 0
 
         @retry_with_exponential_backoff(max_retries=5, initial_delay=0.01)
         async def failing_func() -> str:
             nonlocal call_count
             call_count += 1
-            raise ValueError("Some other error")
+            raise ValueError("Some logic error")
 
-        with pytest.raises(ValueError, match="Some other error"):
+        with pytest.raises(ValueError, match="Some logic error"):
             await failing_func()
         assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_backoff_progression_doubles_each_attempt(self) -> None:
+        """The sleep duration must grow by backoff_factor between attempts."""
+        sleeps: list = []
+
+        async def fake_sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        @retry_with_exponential_backoff(
+            max_retries=4, initial_delay=1, backoff_factor=2
+        )
+        async def always_429() -> str:
+            raise MirrorDBHTTPError(429, "Too Many Requests")
+
+        with patch.object(asyncio, "sleep", side_effect=fake_sleep):
+            with pytest.raises(MirrorDBHTTPError):
+                await always_429()
+        # Three sleeps for max_retries=4 (no sleep after the final attempt).
+        # Doubling pattern asserts backoff_factor is actually applied.
+        assert sleeps == [1, 2, 4]
+
+    @pytest.mark.asyncio
+    async def test_logger_attribute_emits_retry_warnings(self) -> None:
+        """When the wrapped object exposes a logger, retry warnings reach it."""
+        mock_logger = MagicMock()
+
+        class _Owner:
+            logger = mock_logger
+
+            @retry_with_exponential_backoff(max_retries=3, initial_delay=0.0)
+            async def call(self) -> str:
+                raise MirrorDBHTTPError(429, "Too Many Requests")
+
+        with pytest.raises(MirrorDBHTTPError):
+            await _Owner().call()
+        assert mock_logger.warning.call_count >= 1
+        first_call = mock_logger.warning.call_args_list[0]
+        assert "Retrying mirror_db request" in first_call.args[0]
+        # Final exhaustion log lands on .error
+        mock_logger.error.assert_called_once()
+        assert "Max retries" in mock_logger.error.call_args.args[0]
+
+
+class TestIsRetryable:
+    """Tests for the _is_retryable predicate."""
+
+    def test_429_is_retryable(self) -> None:
+        """HTTP 429 (too many requests) should retry."""
+        assert _is_retryable(MirrorDBHTTPError(429, "x")) is True
+
+    def test_408_is_retryable(self) -> None:
+        """HTTP 408 (request timeout) should retry."""
+        assert _is_retryable(MirrorDBHTTPError(408, "x")) is True
+
+    @pytest.mark.parametrize("status", [500, 502, 503, 504, 599])
+    def test_5xx_is_retryable(self, status: int) -> None:
+        """All 5xx codes should retry."""
+        assert _is_retryable(MirrorDBHTTPError(status, "x")) is True
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+    def test_4xx_other_than_429_is_not_retryable(self, status: int) -> None:
+        """4xx codes other than 429 should not retry."""
+        assert _is_retryable(MirrorDBHTTPError(status, "x")) is False
+
+    def test_asyncio_timeout_is_retryable(self) -> None:
+        """asyncio.TimeoutError should retry."""
+        assert _is_retryable(asyncio.TimeoutError()) is True
+
+    def test_value_error_is_not_retryable(self) -> None:
+        """Non-network logic errors should not retry."""
+        assert _is_retryable(ValueError("nope")) is False
 
 
 class TestSrrDialogues:
@@ -430,6 +579,83 @@ class TestHandleDoneTask:
         finally:
             await connection.disconnect()
 
+    @pytest.mark.asyncio
+    async def test_handle_done_task_queues_typed_error_on_task_failure(
+        self,
+    ) -> None:
+        """task.result() raising puts a typed error envelope on the queue."""
+        connection = _make_connection()
+        await connection.connect()
+        try:
+            mock_task = MagicMock(spec=asyncio.Future)
+            mock_task.result.side_effect = RuntimeError("simulated task failure")
+
+            srr_message = MagicMock(spec=SrrMessage)
+            request_envelope = MagicMock(
+                to=str(PUBLIC_ID),
+                sender=ANY_SKILL,
+                context=None,
+                message=srr_message,
+            )
+            connection.task_to_request[mock_task] = request_envelope
+
+            mock_dialogue = _make_mock_dialogue()
+            with patch.object(
+                connection.dialogues, "update", return_value=mock_dialogue
+            ):
+                connection._handle_done_task(mock_task)
+
+            assert mock_task not in connection.task_to_request
+            envelope = connection.response_envelopes.get_nowait()
+            assert envelope is not None
+            payload = json.loads(envelope.message.payload)
+            assert "Backend task failed" in payload.get("error", "")
+        finally:
+            await connection.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_handle_done_task_falls_back_to_none_when_build_fails(
+        self,
+    ) -> None:
+        """If error-message building itself raises, queue None instead of crashing."""
+        connection = _make_connection()
+        await connection.connect()
+        try:
+            mock_task = MagicMock(spec=asyncio.Future)
+            mock_task.result.side_effect = RuntimeError("simulated task failure")
+
+            request_envelope = MagicMock(
+                to=str(PUBLIC_ID),
+                sender=ANY_SKILL,
+                context=None,
+                message=MagicMock(spec=SrrMessage),
+            )
+            connection.task_to_request[mock_task] = request_envelope
+
+            with patch.object(
+                connection.dialogues,
+                "update",
+                side_effect=RuntimeError("build failure"),
+            ):
+                connection._handle_done_task(mock_task)
+            envelope = connection.response_envelopes.get_nowait()
+            assert envelope is None
+        finally:
+            await connection.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_handle_done_task_recovers_from_pop_failure(self) -> None:
+        """Even if pop raises (duplicate callback), the queue does not starve."""
+        connection = _make_connection()
+        await connection.connect()
+        try:
+            mock_task = MagicMock(spec=asyncio.Future)
+            connection._handle_done_task(mock_task)
+            envelope = connection.response_envelopes.get_nowait()
+            assert envelope is None
+        finally:
+            await connection.disconnect()
+
 
 class TestGetResponse:
     """Tests for the _get_response method."""
@@ -445,6 +671,32 @@ class TestGetResponse:
         msg.payload = json.dumps(payload)
         dialogue = _make_mock_dialogue()
         return msg, dialogue
+
+    @pytest.mark.asyncio
+    async def test_malformed_json_payload_returns_error(self) -> None:
+        """Malformed JSON in the SRR payload returns an error response, not a hang."""
+        msg = MagicMock(spec=SrrMessage)
+        msg.performative = SrrMessage.Performative.REQUEST
+        msg.payload = "not-valid-json{"
+        dialogue = _make_mock_dialogue()
+
+        result = await self.connection._get_response(msg, dialogue)
+        payload = json.loads(result.payload)
+        assert "error" in payload
+        assert "Failed to parse request payload" in payload["error"]
+
+    @pytest.mark.asyncio
+    async def test_non_string_payload_returns_error(self) -> None:
+        """A non-string payload (TypeError on json.loads) returns an error response."""
+        msg = MagicMock(spec=SrrMessage)
+        msg.performative = SrrMessage.Performative.REQUEST
+        msg.payload = 12345  # not a str/bytes
+        dialogue = _make_mock_dialogue()
+
+        result = await self.connection._get_response(msg, dialogue)
+        payload = json.loads(result.payload)
+        assert "error" in payload
+        assert "Failed to parse request payload" in payload["error"]
 
     @pytest.mark.asyncio
     async def test_wrong_performative(self) -> None:
@@ -531,8 +783,8 @@ class TestGetResponse:
         assert "Connection failed" in payload["error"]
 
     @pytest.mark.asyncio
-    async def test_endpoint_print_unicode_error(self) -> None:
-        """Test _get_response handles UnicodeEncodeError in print."""
+    async def test_endpoint_log_unicode_error(self) -> None:
+        """Test _get_response handles UnicodeEncodeError in the endpoint log."""
         msg, dialogue = self._make_request_and_dialogue(
             {
                 "method": "read_",
@@ -544,26 +796,31 @@ class TestGetResponse:
 
         call_count = 0
 
-        def mock_print_fn(*args, **kwargs):
+        def mock_log_info(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise UnicodeEncodeError("utf-8", "test", 0, 1, "err")
-            # second call succeeds
+            # second call (the ascii-safe fallback) succeeds
+
+        mock_logger = MagicMock()
+        mock_logger.info.side_effect = mock_log_info
 
         with patch.object(
             self.connection,
             "read_",
             new_callable=AsyncMock,
             return_value=mock_result,
-        ), patch(
-            "builtins.print",
-            side_effect=mock_print_fn,
+        ), patch.object(
+            type(self.connection),
+            "logger",
+            new=mock_logger,
         ):
             result = await self.connection._get_response(msg, dialogue)
 
         payload = json.loads(result.payload)
         assert payload["response"] == mock_result
+        assert call_count == 2
 
     @pytest.mark.asyncio
     async def test_create_method_call(self) -> None:
@@ -691,6 +948,101 @@ class TestRaiseForResponse:
 
         with pytest.raises(Exception, match="Internal Server Error"):
             await connection._raise_for_response(mock_response, "action")
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_text_on_non_json_body(self) -> None:
+        """A non-JSON error body must fall back to .text() instead of failing."""
+        connection = _make_connection()
+        mock_response = AsyncMock()
+        mock_response.status = 502
+        mock_response.json.side_effect = aiohttp.ContentTypeError(
+            request_info=MagicMock(), history=()
+        )
+        mock_response.text.return_value = "<html>502 Bad Gateway</html>"
+
+        with pytest.raises(MirrorDBHTTPError) as exc_info:
+            await connection._raise_for_response(mock_response, "fetch")
+        assert exc_info.value.status_code == 502
+        assert "502 Bad Gateway" in str(exc_info.value)
+        mock_response.text.assert_awaited()
+
+
+class TestEndpointValidation:
+    """Tests for the _VALID_ENDPOINTS regex enforcement."""
+
+    def setup_method(self) -> None:
+        """Set up test fixtures."""
+        self.connection = _make_connection()
+
+    def _make_msg_dialogue(self, payload: dict):
+        """Build a request msg + dialogue."""
+        msg = MagicMock(spec=SrrMessage)
+        msg.performative = SrrMessage.Performative.REQUEST
+        msg.payload = json.dumps(payload)
+        return msg, _make_mock_dialogue()
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "api/users",
+            "api/users/123",
+            "api/users/123/posts",
+            "api/users/",
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_valid_endpoint_patterns(self, endpoint: str) -> None:
+        """Endpoints matching the regex are forwarded to the backend method."""
+        msg, dialogue = self._make_msg_dialogue(
+            {
+                "method": "read_",
+                "kwargs": {"method_name": "test", "endpoint": endpoint},
+            }
+        )
+        with patch.object(
+            self.connection,
+            "read_",
+            new_callable=AsyncMock,
+            return_value={"ok": True},
+        ):
+            result = await self.connection._get_response(msg, dialogue)
+        body = json.loads(result.payload)
+        assert "response" in body
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "users",  # no api/ prefix
+            "api/users/123/posts/extra/segments",  # too deep
+            "api//bad",  # empty segment
+            "/api/users",  # leading slash
+            "api/has space",  # spaces are not allowed
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_invalid_endpoint_rejected(self, endpoint: str) -> None:
+        """Endpoints not matching the regex are rejected with an error reply."""
+        msg, dialogue = self._make_msg_dialogue(
+            {
+                "method": "read_",
+                "kwargs": {"method_name": "test", "endpoint": endpoint},
+            }
+        )
+        with patch.object(
+            self.connection, "read_", new_callable=AsyncMock
+        ) as mock_read:
+            result = await self.connection._get_response(msg, dialogue)
+        body = json.loads(result.payload)
+        assert "error" in body
+        assert "does not match any allowed pattern" in body["error"]
+        mock_read.assert_not_called()
+
+    def test_endpoint_validator_directly(self) -> None:
+        """The classmethod _is_valid_endpoint can be called without a connection."""
+        assert (
+            GenericMirrorDBConnection._is_valid_endpoint("api/users/123") is True
+        )
+        assert GenericMirrorDBConnection._is_valid_endpoint("not-api") is False
 
 
 class TestCRUDMethods:

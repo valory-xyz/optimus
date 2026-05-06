@@ -214,6 +214,20 @@ class TestGetWeb3Connection:
         result = get_web3_connection("https://rpc.example.com")
         assert result == mock_instance
 
+    @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.Web3")
+    def test_provider_constructed_with_request_timeout(self, mock_web3):
+        """Web3 HTTPProvider must be built with the documented request timeout."""
+        mock_instance = MagicMock()
+        mock_web3.return_value = mock_instance
+        mock_web3.HTTPProvider = MagicMock()
+        vel_mod.get_web3_connection.cache_clear()
+        get_web3_connection("https://rpc.example.com")
+        provider_call = mock_web3.HTTPProvider.call_args
+        assert provider_call.kwargs["request_kwargs"] == {
+            "timeout": vel_mod.WEB3_HTTP_TIMEOUT_SECONDS
+        }
+        assert vel_mod.WEB3_HTTP_TIMEOUT_SECONDS == 30
+
 
 class TestFetchTokenNameFromContract:
     """Tests for fetch_token_name_from_contract function."""

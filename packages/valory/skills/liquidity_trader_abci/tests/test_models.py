@@ -23,15 +23,19 @@
 
 import json
 import tempfile
+import time as time_module
 from datetime import datetime
+from pathlib import Path
 from time import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.models import (
+    CircuitBreakerState,
     Coingecko,
     CoingeckoRateLimiter,
+    EndpointCircuitBreaker,
     Params,
     SharedState,
 )
@@ -247,6 +251,144 @@ class TestCoingeckoRateLimiter:
         assert isinstance(ts, int)
         expected = datetime(2025, 7, 1)
         assert ts == int(expected.timestamp())
+
+
+class TestEndpointCircuitBreaker:
+    """Tests for the EndpointCircuitBreaker state machine."""
+
+    def test_starts_closed_and_allows_calls(self) -> None:
+        """A fresh breaker is CLOSED and permits calls."""
+        breaker = EndpointCircuitBreaker()
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.allow() is True
+
+    def test_opens_after_threshold_failures(self) -> None:
+        """Reaching the failure threshold transitions to OPEN."""
+        breaker = EndpointCircuitBreaker(failure_threshold=3)
+        for _ in range(3):
+            breaker.on_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker.allow() is False
+
+    def test_success_resets_failure_counter(self) -> None:
+        """Successful calls reset the consecutive-failure count."""
+        breaker = EndpointCircuitBreaker(failure_threshold=3)
+        breaker.on_failure()
+        breaker.on_failure()
+        breaker.on_success()
+        breaker.on_failure()
+        breaker.on_failure()
+        # Only 2 consecutive failures since last success
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+    def test_open_transitions_to_half_open_after_cooldown(self) -> None:
+        """Once recovery_timeout elapses, the next allow() call enters HALF_OPEN."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=2, recovery_timeout_seconds=0.01
+        )
+        breaker.on_failure()
+        breaker.on_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+        time_module.sleep(0.02)
+        assert breaker.allow() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+    def test_half_open_allows_only_one_probe(self) -> None:
+        """Once a probe is in flight, additional allow() calls are blocked."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.0
+        )
+        breaker.on_failure()
+        # First allow() flips to HALF_OPEN and returns True
+        assert breaker.allow() is True
+        # Subsequent allow() calls are blocked until the probe resolves
+        assert breaker.allow() is False
+
+    def test_half_open_success_closes_breaker(self) -> None:
+        """A successful probe transitions HALF_OPEN to CLOSED."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.0
+        )
+        breaker.on_failure()
+        breaker.allow()  # OPEN -> HALF_OPEN
+        breaker.on_success()
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+    def test_half_open_failure_reopens_breaker(self) -> None:
+        """A failed probe re-opens the breaker."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.0
+        )
+        breaker.on_failure()
+        breaker.allow()  # OPEN -> HALF_OPEN
+        breaker.on_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+    def test_half_open_wedged_probe_auto_reverts_to_open(self) -> None:
+        """A probe that never reports back is auto-reverted to OPEN."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.05
+        )
+        breaker.on_failure()
+        time_module.sleep(0.06)
+        assert breaker.allow() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+        assert breaker.allow() is False
+        time_module.sleep(0.06)
+        assert breaker.allow() is False
+        assert breaker.state == CircuitBreakerState.OPEN
+
+    def test_stale_probe_success_does_not_overwrite_reverted_open(self) -> None:
+        """A late on_success after auto-revert must not silently re-close."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.05
+        )
+        breaker.on_failure()
+        time_module.sleep(0.06)
+        breaker.allow()  # OPEN -> HALF_OPEN
+        time_module.sleep(0.06)
+        breaker.allow()  # auto-revert: HALF_OPEN -> OPEN
+        assert breaker.state == CircuitBreakerState.OPEN
+        opened_at_before = breaker._opened_at
+        # The slow probe finally reports success after the auto-revert.
+        breaker.on_success()
+        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker._opened_at == opened_at_before
+
+    def test_stale_probe_failure_does_not_extend_cooldown(self) -> None:
+        """A late on_failure after auto-revert must not push opened_at forward."""
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=0.05
+        )
+        breaker.on_failure()
+        time_module.sleep(0.06)
+        breaker.allow()
+        time_module.sleep(0.06)
+        breaker.allow()
+        assert breaker.state == CircuitBreakerState.OPEN
+        opened_at_before = breaker._opened_at
+        breaker.on_failure()
+        assert breaker._opened_at == opened_at_before
+
+
+class TestSharedStateCircuitBreakers:
+    """Tests for SharedState.get_circuit_breaker."""
+
+    def test_returns_same_breaker_for_same_endpoint(self) -> None:
+        """Repeated lookups for the same endpoint key return the same breaker."""
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        breaker_a = state.get_circuit_breaker("https://rpc.example.com")
+        breaker_b = state.get_circuit_breaker("https://rpc.example.com")
+        assert breaker_a is breaker_b
+
+    def test_distinct_endpoints_get_distinct_breakers(self) -> None:
+        """Different endpoint keys map to independent breakers."""
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        breaker_a = state.get_circuit_breaker("https://a.example.com")
+        breaker_b = state.get_circuit_breaker("https://b.example.com")
+        assert breaker_a is not breaker_b
 
 
 class TestCoingecko:
@@ -485,6 +627,10 @@ class TestParams:
             "optimism_ledger_rpc": "https://optimism.rpc.example.com",
             "lifi_quote_to_amount_url": "https://lifi.example.com/quote",
             "request_timeout": 20.0,
+            "tls_verify": True,
+            "mode_conduit_explorer_url": "https://conduit.example.com/api/v2",
+            "safe_api_v1_url": "https://safe.example.com/api/v1",
+            "mode_native_explorer_url": "https://explorer.example.com/api",
             "skill_context": MagicMock(),
         }
 
@@ -542,6 +688,36 @@ class TestParams:
             assert params.tenderly_access_key == ""
             assert params.tenderly_account_slug == ""
             assert params.tenderly_project_slug == ""
+
+    def test_tls_verify_passes_through_when_true(self) -> None:
+        """tls_verify=True from yaml is read into the Params attribute."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["tls_verify"] = True
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                params.__init__(**kwargs)
+            assert params.tls_verify is True
+
+    def test_tls_verify_can_be_disabled(self) -> None:
+        """tls_verify honours an explicit False override."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["tls_verify"] = False
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                params.__init__(**kwargs)
+            assert params.tls_verify is False
+
+    def test_tls_verify_missing_kwarg_raises(self) -> None:
+        """Missing tls_verify in kwargs surfaces a config error via _ensure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs.pop("tls_verify", None)
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(Exception):
+                    params.__init__(**kwargs)
 
     def test_get_store_path_valid(self) -> None:
         """Test get_store_path with a valid path."""

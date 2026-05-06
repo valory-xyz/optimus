@@ -23,6 +23,7 @@ import json
 import math
 import re
 import sys
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -41,6 +42,7 @@ from aea.skills.base import Handler
 from aea_ledger_ethereum.ethereum import EthereumCrypto
 from eth_account import Account
 from web3 import Web3
+from web3.exceptions import ContractLogicError, Web3Exception
 
 from packages.valory.connections.genai.connection import (
     PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
@@ -87,6 +89,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
 )
+from packages.valory.skills.liquidity_trader_abci.models import CircuitBreakerOpenError
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.liquidity_trader_abci.utils import (
@@ -134,6 +137,65 @@ NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
 ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
+WEB3_HTTP_TIMEOUT_SECONDS = 30
+WEB3_READ_RETRY_ATTEMPTS = 3
+WEB3_READ_RETRY_INITIAL_DELAY = 1.0
+
+# Module-level locks gate fire-and-forget executor submissions so that
+# duplicate concurrent invocations short-circuit instead of running twice.
+_X402_TOPUP_LOCK = threading.Lock()
+_KV_WRITE_LOCK = threading.Lock()
+_WITHDRAWAL_WRITE_LOCK = threading.Lock()
+
+
+_TRANSIENT_HTTP_STATUS_RE = re.compile(
+    r"\b(408|429|500|502|503|504|520|521|522|523|524|525)\b"
+)
+
+
+def _is_transient_web3_error(exc: BaseException) -> bool:
+    """Return True for transient Web3 read failures worth retrying."""
+    if isinstance(
+        exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)
+    ):
+        return True
+    msg = str(exc).lower()
+    if "execution reverted" in msg or "return amount is not enough" in msg:
+        return False
+    if _TRANSIENT_HTTP_STATUS_RE.search(msg):
+        return True
+    return False
+
+
+def _call_with_web3_retries(
+    func: Callable[..., Any],
+    *args: Any,
+    max_retries: int = WEB3_READ_RETRY_ATTEMPTS,
+    initial_delay: float = WEB3_READ_RETRY_INITIAL_DELAY,
+    **kwargs: Any,
+) -> Any:
+    """Call a read-only Web3 function with exponential-backoff retries.
+
+    Only invoke this for idempotent reads (balance lookups, gas price,
+    estimate_gas, etc.). Never wrap a transaction submission with this
+    helper because a retried submission can land twice if the first
+    response was lost in transit.
+    """
+    delay = initial_delay
+    last_exception: Optional[BaseException] = None
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:  # pylint: disable=broad-except
+            last_exception = exc
+            if not _is_transient_web3_error(exc):
+                raise
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+                delay *= 2
+    raise last_exception  # type: ignore
+
+
 USDC_ADDRESSES = {
     "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
 }
@@ -162,6 +224,7 @@ class HttpCode(Enum):
     OK_CODE = 200
     NOT_FOUND_CODE = 404
     BAD_REQUEST_CODE = 400
+    INTERNAL_SERVER_ERROR = 500
     NOT_READY = 503
 
 
@@ -422,6 +485,33 @@ class HttpHandler(BaseHttpHandler):
 
         return None
 
+    def _call_web3_with_breaker(
+        self,
+        chain: str,
+        func: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Call a read-only Web3 function gated by a per-chain circuit breaker.
+
+        Use only for idempotent reads. The breaker short-circuits to
+        CircuitBreakerOpenError once the chain's RPC has produced enough
+        consecutive failures, and recovers via a HALF_OPEN probe after a
+        cooldown.
+        """
+        breaker = self.shared_state.get_circuit_breaker(chain)
+        if not breaker.allow():
+            raise CircuitBreakerOpenError(
+                f"Circuit breaker open for {chain}; skipping call"
+            )
+        try:
+            result = _call_with_web3_retries(func, *args, **kwargs)
+        except Exception:
+            breaker.on_failure()
+            raise
+        breaker.on_success()
+        return result
+
     def _get_web3_instance(self, chain: str) -> Optional[Web3]:
         """Get Web3 instance for the specified chain."""
         try:
@@ -433,7 +523,12 @@ class HttpHandler(BaseHttpHandler):
 
             # Note that you should create only one HTTPProvider with the same provider URL per python process,
             # as the HTTPProvider recycles underlying TCP/IP network connections, for better performance. Multiple HTTPProviders with different URLs will work as expected.
-            return Web3(Web3.HTTPProvider(rpc_url))
+            return Web3(
+                Web3.HTTPProvider(
+                    rpc_url,
+                    request_kwargs={"timeout": WEB3_HTTP_TIMEOUT_SECONDS},
+                )
+            )
         except Exception as e:
             self.context.logger.error(f"Error creating Web3 instance: {str(e)}")
             return None
@@ -461,12 +556,21 @@ class HttpHandler(BaseHttpHandler):
             usdc_contract = w3.eth.contract(
                 address=Web3.to_checksum_address(usdc_address), abi=erc20_abi
             )
-            balance = usdc_contract.functions.balanceOf(
+            balance_fn = usdc_contract.functions.balanceOf(
                 Web3.to_checksum_address(eoa_address)
-            ).call()
+            )
+            balance = self._call_web3_with_breaker(chain, balance_fn.call)
             return balance
 
-        except Exception as e:
+        except CircuitBreakerOpenError:
+            raise
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            ContractLogicError,
+            Web3Exception,
+            ValueError,
+        ) as e:
             self.context.logger.error(f"Error checking USDC balance: {str(e)}")
             return None
 
@@ -566,8 +670,12 @@ class HttpHandler(BaseHttpHandler):
             if not w3:
                 return None, None
 
-            nonce = w3.eth.get_transaction_count(Web3.to_checksum_address(address))
-            gas_price = w3.eth.gas_price
+            nonce = self._call_web3_with_breaker(
+                chain,
+                w3.eth.get_transaction_count,
+                Web3.to_checksum_address(address),
+            )
+            gas_price = self._call_web3_with_breaker(chain, lambda: w3.eth.gas_price)
 
             return nonce, gas_price
 
@@ -588,7 +696,7 @@ class HttpHandler(BaseHttpHandler):
                 self.context.logger.error(
                     "Failed to get Web3 instance for gas estimation"
                 )
-                return False
+                return None
 
             tx_value = (
                 int(tx_request["value"], 16)
@@ -603,8 +711,10 @@ class HttpHandler(BaseHttpHandler):
                 "value": tx_value,
                 "from": Web3.to_checksum_address(eoa_address),
             }
-            # Try to estimate gas using Web3
-            estimated_gas = w3.eth.estimate_gas(tx_data_for_estimation)
+            # Try to estimate gas using Web3 (read-only call, safe to retry)
+            estimated_gas = self._call_web3_with_breaker(
+                chain, w3.eth.estimate_gas, tx_data_for_estimation
+            )
             # Add 20% buffer to estimated gas
             tx_gas = int(estimated_gas * 1.2)
             self.context.logger.info(
@@ -627,6 +737,13 @@ class HttpHandler(BaseHttpHandler):
 
     def _ensure_sufficient_funds_for_x402_payments(self) -> None:
         """Ensure agent EOA has at sufficient funds for x402 requests payments"""
+        # Concurrent topups would re-broadcast the same swap; serialize via a
+        # process-wide lock and short-circuit if a prior topup is still running.
+        if not _X402_TOPUP_LOCK.acquire(blocking=False):
+            self.context.logger.info(
+                "x402 topup already in flight, skipping duplicate submission"
+            )
+            return
         try:
             chain = self.context.params.target_investment_chains[0]
             eoa_account = self._get_eoa_account()
@@ -641,7 +758,17 @@ class HttpHandler(BaseHttpHandler):
                 self.shared_state.sufficient_funds_for_x402_payments = False
                 return
 
-            usdc_balance = self._check_usdc_balance(eoa_address, chain, usdc_address)
+            try:
+                usdc_balance = self._check_usdc_balance(
+                    eoa_address, chain, usdc_address
+                )
+            except CircuitBreakerOpenError:
+                self.context.logger.error(
+                    f"x402-funds-check-breaker-open chain={chain}; "
+                    "marking x402 funds insufficient until recovery"
+                )
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             if usdc_balance is None:
                 self.context.logger.warning("Could not check USDC balance, skipping")
@@ -762,6 +889,8 @@ class HttpHandler(BaseHttpHandler):
             )
             self.shared_state.sufficient_funds_for_x402_payments = False
             return
+        finally:
+            _X402_TOPUP_LOCK.release()
 
     def _handle_get_features(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -1179,7 +1308,23 @@ class HttpHandler(BaseHttpHandler):
                 http_msg.body,
             )
         )
-        handler(http_msg, http_dialogue, **kwargs)
+        try:
+            handler(http_msg, http_dialogue, **kwargs)
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.exception(
+                f"Unhandled exception while dispatching HTTP handler for "
+                f"{http_msg.method} {http_msg.url}: {e}"
+            )
+            try:
+                self._handle_internal_error(
+                    http_msg,
+                    http_dialogue,
+                    error_msg="Internal server error",
+                )
+            except Exception as reply_exc:  # pylint: disable=broad-except
+                self.context.logger.exception(
+                    f"Failed to send error reply for {http_msg.url}: {reply_exc}"
+                )
 
     def _handle_bad_request(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg=None
@@ -1201,6 +1346,25 @@ class HttpHandler(BaseHttpHandler):
         )
 
         # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
+
+    def _handle_internal_error(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        error_msg: Optional[str] = None,
+    ) -> None:
+        """Send an HTTP 500 response for an unhandled handler exception."""
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=HttpCode.INTERNAL_SERVER_ERROR.value,
+            status_text="Internal server error",
+            headers=http_msg.headers,
+            body=b"" if not error_msg else error_msg.encode("utf-8"),
+        )
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
 
@@ -1857,29 +2021,39 @@ class HttpHandler(BaseHttpHandler):
 
         :param data: Dictionary of data to store
         """
-        self.context.logger.info("Waiting for default acceptance time...")
-        time.sleep(self.context.params.default_acceptance_time)
+        # Concurrent invocations would write the same KV state twice; gate on
+        # a process-wide lock and skip the duplicate.
+        if not _KV_WRITE_LOCK.acquire(blocking=False):
+            self.context.logger.info(
+                "delayed KV write already in flight, skipping duplicate"
+            )
+            return
+        try:
+            self.context.logger.info("Waiting for default acceptance time...")
+            time.sleep(self.context.params.default_acceptance_time)
 
-        if len(self.context.state.request_queue) == 1:
-            self._write_kv(data)
+            if len(self.context.state.request_queue) == 1:
+                self._write_kv(data)
 
-            self._update_agent_performance_chat(data.get("reasoning"))
+                self._update_agent_performance_chat(data.get("reasoning"))
 
-            # Also update the state values
-            if "selected_protocols" in data:
-                self.context.state.selected_protocols = json.loads(
-                    data["selected_protocols"]
-                )
-            if "trading_type" in data:
-                self.context.state.trading_type = data["trading_type"]
-            if "composite_score" in data:
-                # Update the appropriate threshold based on trading type
-                self.context.logger.info(
-                    f"KV composite_score {(data['composite_score'])}"
-                )
-                self.context.state.composite_score = float(data["composite_score"])
+                # Also update the state values
+                if "selected_protocols" in data:
+                    self.context.state.selected_protocols = json.loads(
+                        data["selected_protocols"]
+                    )
+                if "trading_type" in data:
+                    self.context.state.trading_type = data["trading_type"]
+                if "composite_score" in data:
+                    # Update the appropriate threshold based on trading type
+                    self.context.logger.info(
+                        f"KV composite_score {(data['composite_score'])}"
+                    )
+                    self.context.state.composite_score = float(data["composite_score"])
 
-        self.context.state.request_queue.pop()
+            self.context.state.request_queue.pop()
+        finally:
+            _KV_WRITE_LOCK.release()
 
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
         """
@@ -2176,12 +2350,21 @@ class HttpHandler(BaseHttpHandler):
 
         :param data: the withdrawal data to store
         """
+        # Concurrent invocations would write the same withdrawal twice; gate
+        # on a process-wide lock and skip the duplicate.
+        if not _WITHDRAWAL_WRITE_LOCK.acquire(blocking=False):
+            self.context.logger.info(
+                "withdrawal write already in flight, skipping duplicate"
+            )
+            return
         try:
             # Use the existing _write_kv method
             self._write_kv(data)
             self.context.logger.info(f"Withdrawal data written to KV store: {data}")
         except Exception as e:
             self.context.logger.error(f"Error writing withdrawal data: {str(e)}")
+        finally:
+            _WITHDRAWAL_WRITE_LOCK.release()
 
     def _read_withdrawal_data(self) -> Optional[Dict[str, str]]:
         """

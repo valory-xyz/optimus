@@ -26,6 +26,9 @@ import math
 from typing import Dict
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
+import requests
+
 from packages.valory.skills.optimus_abci.handlers import (
     BaseHandler,
     ESTIMATED_GAS_PER_TX,
@@ -1169,6 +1172,133 @@ class TestHttpHandlerMethods:
         call_kwargs = mock_dialogue.reply.call_args[1]
         assert call_kwargs["status_code"] == HttpCode.NOT_FOUND_CODE.value
 
+    def test_handle_internal_error_sends_500(self) -> None:
+        """_handle_internal_error sends an HTTP 500 response."""
+        handler, _ = _make_http_handler()
+        mock_msg = MagicMock()
+        mock_msg.version = "1.1"
+        mock_msg.headers = "Host: localhost"
+        mock_dialogue = MagicMock()
+
+        handler._handle_internal_error(mock_msg, mock_dialogue, error_msg="boom")
+
+        mock_dialogue.reply.assert_called_once()
+        call_kwargs = mock_dialogue.reply.call_args[1]
+        assert call_kwargs["status_code"] == HttpCode.INTERNAL_SERVER_ERROR.value
+        assert call_kwargs["status_text"] == "Internal server error"
+        assert call_kwargs["body"] == b"boom"
+
+    def test_handle_dispatch_catches_handler_exception(self) -> None:
+        """A handler that raises must trigger an HTTP 500 reply, not propagate."""
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+        from packages.valory.protocols.http.message import HttpMessage
+
+        handler, ctx = _make_http_handler()
+
+        raising_handler = MagicMock(side_effect=RuntimeError("kaboom"))
+        handler._get_handler = MagicMock(return_value=(raising_handler, {}))
+
+        http_msg = MagicMock(spec=HttpMessage)
+        http_msg.performative = HttpMessage.Performative.REQUEST
+        http_msg.method = "GET"
+        http_msg.url = "http://localhost/test"
+        http_msg.body = b""
+        http_msg.version = "1.1"
+        http_msg.headers = "Host: localhost"
+        http_msg.sender = str(HTTP_SERVER_PUBLIC_ID.without_hash())
+
+        mock_dialogue = MagicMock()
+        ctx.http_dialogues.update.return_value = mock_dialogue
+
+        with patch.object(handler, "_handle_internal_error") as mock_internal_error:
+            handler.handle(http_msg)
+
+        raising_handler.assert_called_once()
+        mock_internal_error.assert_called_once()
+        call_args = mock_internal_error.call_args
+        assert call_args.args[0] is http_msg
+        assert call_args.args[1] is mock_dialogue
+        # Body must be generic — no exception text leaks to the HTTP caller.
+        assert call_args.kwargs["error_msg"] == "Internal server error"
+        # The exception detail is preserved in the server-side log only.
+        log_args = ctx.logger.exception.call_args_list[0]
+        assert "kaboom" in log_args.args[0]
+
+    def test_handle_dispatch_writes_500_to_outbox_end_to_end(self) -> None:
+        """A raising handler results in a 500 envelope on outbox.put_message."""
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+        from packages.valory.protocols.http.message import HttpMessage
+
+        handler, ctx = _make_http_handler()
+
+        raising_handler = MagicMock(side_effect=RuntimeError("internal-detail"))
+        handler._get_handler = MagicMock(return_value=(raising_handler, {}))
+
+        http_msg = MagicMock(spec=HttpMessage)
+        http_msg.performative = HttpMessage.Performative.REQUEST
+        http_msg.method = "GET"
+        http_msg.url = "http://localhost/test"
+        http_msg.body = b""
+        http_msg.version = "1.1"
+        http_msg.headers = "Host: localhost"
+        http_msg.sender = str(HTTP_SERVER_PUBLIC_ID.without_hash())
+
+        reply_msg = MagicMock()
+        mock_dialogue = MagicMock()
+        mock_dialogue.reply.return_value = reply_msg
+        ctx.http_dialogues.update.return_value = mock_dialogue
+
+        handler.handle(http_msg)
+
+        mock_dialogue.reply.assert_called_once()
+        reply_kwargs = mock_dialogue.reply.call_args.kwargs
+        assert reply_kwargs["status_code"] == HttpCode.INTERNAL_SERVER_ERROR.value
+        assert reply_kwargs["body"] == b"Internal server error"
+        # The internal exception text is NOT echoed in the response body.
+        assert b"internal-detail" not in reply_kwargs["body"]
+        ctx.outbox.put_message.assert_called_once_with(message=reply_msg)
+
+    def test_handle_dispatch_swallows_error_reply_exception(self) -> None:
+        """If _handle_internal_error itself raises, the failure is logged, not propagated."""
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+        from packages.valory.protocols.http.message import HttpMessage
+
+        handler, ctx = _make_http_handler()
+
+        raising_handler = MagicMock(side_effect=RuntimeError("kaboom"))
+        handler._get_handler = MagicMock(return_value=(raising_handler, {}))
+
+        http_msg = MagicMock(spec=HttpMessage)
+        http_msg.performative = HttpMessage.Performative.REQUEST
+        http_msg.method = "GET"
+        http_msg.url = "http://localhost/test"
+        http_msg.body = b""
+        http_msg.version = "1.1"
+        http_msg.headers = "Host: localhost"
+        http_msg.sender = str(HTTP_SERVER_PUBLIC_ID.without_hash())
+
+        mock_dialogue = MagicMock()
+        ctx.http_dialogues.update.return_value = mock_dialogue
+
+        with patch.object(
+            handler,
+            "_handle_internal_error",
+            side_effect=RuntimeError("reply failed"),
+        ):
+            handler.handle(http_msg)
+
+        # Two .exception calls: one for the original handler error, one for the reply error.
+        assert ctx.logger.exception.call_count == 2
+        log_messages = [call.args[0] for call in ctx.logger.exception.call_args_list]
+        assert any("Failed to send error reply" in m for m in log_messages)
+        assert any("reply failed" in m for m in log_messages)
+
     def test_synchronized_data_property(self) -> None:
         """Test synchronized_data property."""
         handler, ctx = _make_http_handler()
@@ -1242,6 +1372,39 @@ class TestHttpHandlerMethods:
         handler._write_withdrawal_data({"withdrawal_id": "123"})
         ctx.logger.error.assert_called()
 
+    def test_write_withdrawal_data_skips_when_lock_held(self) -> None:
+        """A duplicate concurrent withdrawal write must short-circuit."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, ctx = _make_http_handler()
+        handler._write_kv = MagicMock()
+        # Hold the module-level lock so the call sees a duplicate in flight
+        acquired = handlers_mod._WITHDRAWAL_WRITE_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True
+            handler._write_withdrawal_data({"withdrawal_id": "123"})
+        finally:
+            handlers_mod._WITHDRAWAL_WRITE_LOCK.release()
+        handler._write_kv.assert_not_called()
+        ctx.logger.info.assert_called()
+
+    def test_write_withdrawal_data_releases_lock_after_exception(self) -> None:
+        """Wrapped function raising must not leak the lock to subsequent callers."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = _make_http_handler()
+        handler._write_kv = MagicMock(side_effect=RuntimeError("boom"))
+        # First call hits the wrapped function, which raises. The except
+        # branch swallows it. Lock must be released on the way out.
+        handler._write_withdrawal_data({"withdrawal_id": "1"})
+        # The lock should be free now — try acquiring without blocking.
+        acquired = handlers_mod._WITHDRAWAL_WRITE_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True, "lock leaked across exception"
+        finally:
+            if acquired:
+                handlers_mod._WITHDRAWAL_WRITE_LOCK.release()
+
     def test_read_withdrawal_data(self) -> None:
         """Test _read_withdrawal_data reads from KV store."""
         handler, ctx = _make_http_handler()
@@ -1293,6 +1456,177 @@ class TestHttpHandlerMethods:
             result = handler._get_web3_instance("optimism")
         assert result is mock_web3
 
+    def test_get_web3_instance_passes_timeout_to_provider(self) -> None:
+        """Web3 provider must be constructed with a request timeout."""
+        from packages.valory.skills.optimus_abci.handlers import (
+            WEB3_HTTP_TIMEOUT_SECONDS,
+        )
+
+        handler, ctx = _make_http_handler()
+        ctx.params.optimism_ledger_rpc = "https://rpc.example.com"
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.Web3"
+        ) as mock_web3_cls:
+            handler._get_web3_instance("optimism")
+
+        provider_call = mock_web3_cls.HTTPProvider.call_args
+        assert provider_call.args[0] == "https://rpc.example.com"
+        assert provider_call.kwargs["request_kwargs"] == {
+            "timeout": WEB3_HTTP_TIMEOUT_SECONDS
+        }
+        assert WEB3_HTTP_TIMEOUT_SECONDS == 30
+
+    def test_is_transient_web3_error_classifications(self) -> None:
+        """Transient errors retry, deterministic ones propagate immediately."""
+        from packages.valory.skills.optimus_abci.handlers import (
+            _is_transient_web3_error,
+        )
+
+        # Typed transient
+        assert _is_transient_web3_error(requests.exceptions.Timeout("slow")) is True
+        assert (
+            _is_transient_web3_error(requests.exceptions.ConnectionError("dns")) is True
+        )
+        # HTTP statuses matched only on word boundaries.
+        # Includes Cloudflare-fronted RPC range (520-525).
+        for status in (408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525):
+            assert (
+                _is_transient_web3_error(Exception(f"HTTP {status} from rpc")) is True
+            ), f"status {status} should retry"
+        # Deterministic — never retry
+        assert _is_transient_web3_error(Exception("execution reverted: x")) is False
+        assert (
+            _is_transient_web3_error(Exception("Return amount is not enough")) is False
+        )
+        assert _is_transient_web3_error(ValueError("nonsense")) is False
+        # A digit substring that is not a standalone 5xx code must not retry —
+        # e.g. a contract revert reason like "value 5039 is invalid".
+        assert _is_transient_web3_error(Exception("value 5039 is invalid")) is False
+        # Untyped exception whose message just happens to contain "timeout"
+        # without a transient HTTP status no longer auto-retries.
+        assert (
+            _is_transient_web3_error(Exception("config timeout setting wrong")) is False
+        )
+
+    def test_call_with_web3_retries_succeeds_on_second_attempt(self) -> None:
+        """A transient error is retried; the second-attempt success returns."""
+        from packages.valory.skills.optimus_abci.handlers import _call_with_web3_retries
+
+        call_count = {"n": 0}
+
+        def flaky() -> str:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise requests.exceptions.Timeout("slow")
+            return "ok"
+
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            result = _call_with_web3_retries(flaky, max_retries=3, initial_delay=0.0)
+        assert result == "ok"
+        assert call_count["n"] == 2
+
+    def test_call_with_web3_retries_propagates_terminal_error(self) -> None:
+        """A non-transient error raises immediately without retrying."""
+        from packages.valory.skills.optimus_abci.handlers import _call_with_web3_retries
+
+        call_count = {"n": 0}
+
+        def reverting() -> None:
+            call_count["n"] += 1
+            raise Exception("execution reverted")
+
+        with pytest.raises(Exception, match="execution reverted"):
+            _call_with_web3_retries(reverting, max_retries=5, initial_delay=0.0)
+        assert call_count["n"] == 1
+
+    def test_call_with_web3_retries_exhausts_attempts(self) -> None:
+        """After max_retries transient failures, the last exception propagates."""
+        from packages.valory.skills.optimus_abci.handlers import _call_with_web3_retries
+
+        call_count = {"n": 0}
+
+        def always_timeout() -> None:
+            call_count["n"] += 1
+            raise requests.exceptions.Timeout("slow")
+
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            with pytest.raises(requests.exceptions.Timeout):
+                _call_with_web3_retries(
+                    always_timeout, max_retries=3, initial_delay=0.0
+                )
+        assert call_count["n"] == 3
+
+    def test_call_web3_with_breaker_short_circuits_when_open(self) -> None:
+        """When the breaker is open, the helper raises CircuitBreakerOpenError."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CircuitBreakerOpenError,
+            EndpointCircuitBreaker,
+        )
+
+        handler, _ = _make_http_handler()
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=1, recovery_timeout_seconds=10.0
+        )
+        breaker.on_failure()  # transitions to OPEN
+
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.get_circuit_breaker.return_value = breaker
+            mock_shared.return_value = mock_ss
+            with pytest.raises(CircuitBreakerOpenError):
+                handler._call_web3_with_breaker("optimism", lambda: "never")
+
+    def test_call_web3_with_breaker_records_failure(self) -> None:
+        """Underlying failures count against the breaker."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            EndpointCircuitBreaker,
+        )
+
+        handler, _ = _make_http_handler()
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=2, recovery_timeout_seconds=10.0
+        )
+
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.get_circuit_breaker.return_value = breaker
+            mock_shared.return_value = mock_ss
+
+            def revert() -> None:
+                raise Exception("execution reverted")
+
+            for _ in range(2):
+                with pytest.raises(Exception):
+                    handler._call_web3_with_breaker("optimism", revert)
+
+        assert breaker.state.value == "open"
+
+    def test_call_web3_with_breaker_records_success(self) -> None:
+        """A successful call is recorded against the breaker and returns the value."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            EndpointCircuitBreaker,
+        )
+
+        handler, _ = _make_http_handler()
+        breaker = EndpointCircuitBreaker(
+            failure_threshold=2, recovery_timeout_seconds=10.0
+        )
+        breaker.on_failure()  # one prior failure recorded
+
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.get_circuit_breaker.return_value = breaker
+            mock_shared.return_value = mock_ss
+            result = handler._call_web3_with_breaker("optimism", lambda: 42)
+        assert result == 42
+        assert breaker.state.value == "closed"
+
     def test_check_usdc_balance_no_web3(self) -> None:
         """Test _check_usdc_balance returns None when no web3 instance."""
         handler, ctx = _make_http_handler()
@@ -1301,13 +1635,28 @@ class TestHttpHandlerMethods:
         assert result is None
 
     def test_check_usdc_balance_exception(self) -> None:
-        """Test _check_usdc_balance returns None on exception."""
+        """Test _check_usdc_balance returns None on a transient network error."""
         handler, ctx = _make_http_handler()
         handler._get_web3_instance = MagicMock(
-            side_effect=Exception("Connection error")
+            side_effect=requests.exceptions.ConnectionError("Connection error")
         )
         result = handler._check_usdc_balance("0xaddr", "optimism", "0xusdc")
         assert result is None
+
+    def test_check_usdc_balance_propagates_circuit_breaker_open(self) -> None:
+        """CircuitBreakerOpenError must propagate; the catch-all does not eat it."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CircuitBreakerOpenError,
+        )
+
+        handler, _ = _make_http_handler()
+        mock_w3 = MagicMock()
+        handler._get_web3_instance = MagicMock(return_value=mock_w3)
+        handler._call_web3_with_breaker = MagicMock(
+            side_effect=CircuitBreakerOpenError("optimism")
+        )
+        with pytest.raises(CircuitBreakerOpenError):
+            handler._check_usdc_balance("0x" + "0" * 40, "optimism", "0x" + "0" * 40)
 
     def test_get_nonce_and_gas_web3_no_web3(self) -> None:
         """Test _get_nonce_and_gas_web3 returns None, None when no web3."""
@@ -1376,13 +1725,13 @@ class TestHttpHandlerMethods:
         assert result is False
 
     def test_estimate_gas_no_web3(self) -> None:
-        """Test _estimate_gas returns False when no web3."""
+        """Test _estimate_gas returns None when no web3 instance is available."""
         handler, ctx = _make_http_handler()
         handler._get_web3_instance = MagicMock(return_value=None)
         result = handler._estimate_gas(
             {"value": "0x0", "to": "0x0", "data": "0x"}, "0xaddr", "optimism"
         )
-        assert result is False
+        assert result is None
 
     def test_estimate_gas_exception_return_amount(self) -> None:
         """Test _estimate_gas returns None on 'Return amount' error."""
@@ -2265,6 +2614,43 @@ class TestHttpHandlerMethods:
             handler._delayed_write_kv_extended(data)
         handler._write_kv.assert_not_called()
 
+    def test_delayed_write_kv_extended_skips_when_lock_held(self) -> None:
+        """A duplicate concurrent KV write must short-circuit."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, ctx = _make_http_handler()
+        handler._write_kv = MagicMock()
+        ctx.state.request_queue = ["req1"]
+        ctx.params.default_acceptance_time = 0
+        acquired = handlers_mod._KV_WRITE_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True
+            handler._delayed_write_kv_extended({"trading_type": "balanced"})
+        finally:
+            handlers_mod._KV_WRITE_LOCK.release()
+        handler._write_kv.assert_not_called()
+        ctx.logger.info.assert_called()
+
+    def test_delayed_write_kv_extended_releases_lock_after_exception(
+        self,
+    ) -> None:
+        """The KV-write lock is released even when the wrapped body raises."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, ctx = _make_http_handler()
+        handler._write_kv = MagicMock(side_effect=RuntimeError("boom"))
+        ctx.state.request_queue = ["req1"]
+        ctx.params.default_acceptance_time = 0
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            with pytest.raises(RuntimeError):
+                handler._delayed_write_kv_extended({"trading_type": "balanced"})
+        acquired = handlers_mod._KV_WRITE_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True, "lock leaked across exception"
+        finally:
+            if acquired:
+                handlers_mod._KV_WRITE_LOCK.release()
+
     def test_handle_get_withdrawal_amount_success(self) -> None:
         """Test _handle_get_withdrawal_amount with valid portfolio data."""
         handler, ctx = _make_http_handler()
@@ -2776,6 +3162,41 @@ class TestHttpHandlerMethods:
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
 
+    def test_ensure_sufficient_funds_skips_when_lock_held(self) -> None:
+        """A duplicate concurrent x402 topup must short-circuit."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, ctx = _make_http_handler()
+        handler._get_eoa_account = MagicMock()
+        acquired = handlers_mod._X402_TOPUP_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True
+            handler._ensure_sufficient_funds_for_x402_payments()
+        finally:
+            handlers_mod._X402_TOPUP_LOCK.release()
+        # The function returned before doing any work.
+        handler._get_eoa_account.assert_not_called()
+        ctx.logger.info.assert_called()
+
+    def test_ensure_sufficient_funds_releases_lock_after_exception(self) -> None:
+        """The x402 topup lock is released even when the wrapped body raises."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        handler._get_eoa_account = MagicMock(side_effect=RuntimeError("boom"))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_shared.return_value = MagicMock()
+            handler._ensure_sufficient_funds_for_x402_payments()
+        acquired = handlers_mod._X402_TOPUP_LOCK.acquire(blocking=False)
+        try:
+            assert acquired is True, "lock leaked across exception"
+        finally:
+            if acquired:
+                handlers_mod._X402_TOPUP_LOCK.release()
+
     def test_ensure_sufficient_funds_no_eoa(self) -> None:
         """Test _ensure_sufficient_funds_for_x402_payments when no EOA account."""
         handler, ctx = _make_http_handler()
@@ -2819,6 +3240,28 @@ class TestHttpHandlerMethods:
             mock_shared.return_value = mock_ss
             handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is True
+
+    def test_ensure_sufficient_funds_breaker_open_marks_insufficient(self) -> None:
+        """A breaker-open during balance check flips sufficient to False."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CircuitBreakerOpenError,
+        )
+
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        mock_account = MagicMock()
+        mock_account.address = "0xaddr"
+        handler._get_eoa_account = MagicMock(return_value=mock_account)
+        handler._check_usdc_balance = MagicMock(
+            side_effect=CircuitBreakerOpenError("optimism")
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+            assert mock_ss.sufficient_funds_for_x402_payments is False
 
     def test_ensure_sufficient_funds_balance_sufficient(self) -> None:
         """Test _ensure_sufficient_funds_for_x402_payments when balance is sufficient."""

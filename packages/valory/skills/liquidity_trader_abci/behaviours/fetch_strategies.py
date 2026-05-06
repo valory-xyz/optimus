@@ -91,6 +91,10 @@ TRANSFER_EVENT_SIGNATURE = (
 ZERO_ADDRESS_PADDED = (
     "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
+# Hard cap on pagination loops against external APIs. The round timeout is
+# the primary protection; this is a backstop against an API that returns a
+# non-empty next-page cursor indefinitely.
+MAX_PAGINATION_PAGES = 100
 
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
@@ -3376,7 +3380,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         existing_data: dict,
     ) -> Generator[None, None, None]:
         """Fetch token transfers from Mode blockchain explorer."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        base_url = self.params.mode_conduit_explorer_url
         processed_count = 0
 
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
@@ -3495,11 +3499,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         fetch_all_till_date: bool = False,
     ) -> Generator[None, None, bool]:
         """Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        base_url = self.params.mode_conduit_explorer_url
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
 
         has_more_pages = True
+        pages_processed = 0
         params = {"filter": "to"}  # Only fetch incoming transfers
 
         # Check if we have existing mode events and get latest date
@@ -3515,13 +3520,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
+            if pages_processed >= MAX_PAGINATION_PAGES:
+                self.context.logger.warning(
+                    f"Mode token transfers pagination hit cap of "
+                    f"{MAX_PAGINATION_PAGES} pages; stopping early"
+                )
+                break
+            pages_processed += 1
             try:
                 response = requests.get(
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
             except (requests.RequestException, ValueError, TypeError) as e:
                 self.context.logger.error(
@@ -3643,10 +3655,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         fetch_till_date: bool,
     ) -> bool:
         """Fetch ETH balance history from Mode blockchain explorer."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        base_url = self.params.mode_conduit_explorer_url
         endpoint = f"{base_url}/addresses/{address}/coin-balance-history"
 
         has_more_pages = True
+        pages_processed = 0
         params = {}
         processed_count = 0
 
@@ -3663,13 +3676,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
+            if pages_processed >= MAX_PAGINATION_PAGES:
+                self.context.logger.warning(
+                    f"Mode coin balance history pagination hit cap of "
+                    f"{MAX_PAGINATION_PAGES} pages; stopping early"
+                )
+                break
+            pages_processed += 1
             try:
                 response = requests.get(
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
             except (requests.RequestException, ValueError, TypeError) as e:
                 self.context.logger.error(
@@ -3807,7 +3827,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         existing_data: dict,
     ) -> Generator[None, None, None]:
         """Fetch Optimism transfers using SafeGlobal API."""
-        base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+        base_url = self.params.safe_api_v1_url
 
         try:
             self.context.logger.info(
@@ -4022,7 +4042,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint="https://mainnet.optimism.io",
+                endpoint=self.params.optimism_ledger_rpc,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4042,7 +4062,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 is_eoa = True
             else:
                 # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
+                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{from_address}/"
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4103,7 +4123,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint="https://mainnet.optimism.io",
+                endpoint=self.params.optimism_ledger_rpc,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4123,7 +4143,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 is_eoa = True
             else:
                 # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{to_address}/"
+                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{to_address}/"
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4453,7 +4473,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         try:
             # Use SafeGlobal API for Optimism transfers
-            base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+            base_url = self.params.safe_api_v1_url
             transfers_url = f"{base_url}/safes/{address}/transfers/"
 
             processed_count = 0
@@ -4597,7 +4617,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 return all_transfers
 
             # Use SafeGlobal API for Optimism transfers
-            base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+            base_url = self.params.safe_api_v1_url
             transfers_url = f"{base_url}/safes/{safe_address}/transfers/"
 
             processed_count = 0
@@ -4729,7 +4749,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             all_transfers = {"incoming": {}, "outgoing": {}}
 
             # Use Mode internal transactions API
-            base_url = "https://explorer.mode.network/api"
+            base_url = self.params.mode_native_explorer_url
             params = {
                 "module": "account",
                 "action": "txlistinternal",
@@ -4744,7 +4764,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 params=params,
                 headers={"Accept": "application/json"},
                 timeout=self.params.request_timeout,
-                verify=False,  # nosec B501
+                verify=self.params.tls_verify,
             )
 
             if response.status_code != 200:
@@ -4844,20 +4864,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             all_transfers = {"outgoing": {}}
 
             # Use Mode Explorer API (same as _fetch_token_transfers_mode)
-            base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+            base_url = self.params.mode_conduit_explorer_url
             endpoint = f"{base_url}/addresses/{safe_address}/token-transfers"
             params = {"filter": "from"}  # Only fetch outgoing transfers
 
             has_more_pages = True
+            pages_processed = 0
             processed_count = 0
 
             while has_more_pages:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Mode ERC20 transfers pagination hit cap of "
+                        f"{MAX_PAGINATION_PAGES} pages; stopping early"
+                    )
+                    break
+                pages_processed += 1
                 response = requests.get(
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
 
                 if response.status_code != 200:

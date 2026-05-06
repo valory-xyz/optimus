@@ -746,6 +746,9 @@ class TestParams:
             "lifi_quote_to_amount_url": "https://lifi.example.com/quote",
             "request_timeout": 20.0,
             "tls_verify": True,
+            "mode_conduit_explorer_url": "https://conduit.example.com/api/v2",
+            "safe_api_v1_url": "https://safe.example.com/api/v1",
+            "mode_native_explorer_url": "https://explorer.example.com/api",
             "skill_context": MagicMock(),
         }
 

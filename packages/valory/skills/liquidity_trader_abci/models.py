@@ -635,9 +635,7 @@ class Params(BaseParams):
         self.mode_conduit_explorer_url: str = self._ensure(
             "mode_conduit_explorer_url", kwargs, str
         )
-        self.safe_api_v1_url: str = self._ensure(
-            "safe_api_v1_url", kwargs, str
-        )
+        self.safe_api_v1_url: str = self._ensure("safe_api_v1_url", kwargs, str)
         self.mode_native_explorer_url: str = self._ensure(
             "mode_native_explorer_url", kwargs, str
         )

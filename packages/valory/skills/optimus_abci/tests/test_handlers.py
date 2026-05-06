@@ -1489,9 +1489,7 @@ class TestHttpHandlerMethods:
         )
         # HTTP statuses matched only on word boundaries.
         # Includes Cloudflare-fronted RPC range (520-525).
-        for status in (
-            408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525
-        ):
+        for status in (408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525):
             assert (
                 _is_transient_web3_error(Exception(f"HTTP {status} from rpc")) is True
             ), f"status {status} should retry"

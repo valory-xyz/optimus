@@ -255,6 +255,47 @@ class TestCheckStakingKPIMetWithdrawalGate:
         assert captured["payload"].tx_hash is None
         obj.set_done.assert_called_once()
 
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal KPI path emit a non-withdrawal payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return False
+
+        def fake_is_kpi_met():
+            yield
+            return True  # short-circuits to "KPI already met for the day"
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._read_investing_paused = fake_read_investing_paused
+        obj._is_staking_kpi_met = fake_is_kpi_met
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            _drive(obj.async_act())
+
+        assert captured["payload"].event is None
+        assert captured["payload"].tx_hash is None  # KPI already met → no vanity tx
+        obj.set_done.assert_called_once()
+
 
 class TestPrepareVanityTx:
     """Tests for _prepare_vanity_tx."""

@@ -127,6 +127,40 @@ class TestFetchStrategiesWithdrawalGate:
         assert decoded["event"] == "withdrawal_initiated"
         obj.set_done.assert_called_once()
 
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal fetch flow run; no withdrawal payload sent."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = []
+
+        def fake_send(payload):
+            captured.append(payload)
+            yield
+
+        sd = MagicMock()
+        sd.period_count = 0  # forces the post-gate path that yields _validate_velodrome
+        obj._read_investing_paused = _gen_return(False)
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = _gen_none
+        obj.set_done = MagicMock()
+        obj._validate_velodrome_v2_pool_addresses = MagicMock(
+            side_effect=RuntimeError("past_gate_sentinel")
+        )
+
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=sd,
+        ):
+            with pytest.raises(RuntimeError, match="past_gate_sentinel"):
+                _drive(obj.async_act())
+
+        # Reaching the sentinel proves the gate fell through; no withdrawal payload was emitted.
+        assert captured == []
+
 
 class TestIsTimeUpdateDue:
     def test_due(self):

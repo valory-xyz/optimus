@@ -77,6 +77,23 @@ class TestCheckStakingKPIMetRound:
 
         assert result == (mock_synced, Event.WITHDRAWAL_INITIATED)
 
+    def test_end_block_threshold_reached_event_none_falls_through(self) -> None:
+        """Threshold reached with no withdrawal event must delegate to super()."""
+        round_obj = self._stub_round(
+            threshold=True,
+            payload_values=(None, None, None, None, None, None),
+        )
+        mock_synced = MagicMock(spec=SynchronizedData)
+        mock_synced.is_staking_kpi_met = True
+        mock_synced.most_voted_tx_hash = None
+        with patch.object(
+            CollectSameUntilThresholdRound,
+            "end_block",
+            return_value=(mock_synced, Event.DONE),
+        ):
+            result = round_obj.end_block()
+        assert result == (mock_synced, Event.STAKING_KPI_MET)
+
     def test_end_block_none_from_super(self) -> None:
         """Test end_block returns None when super returns None."""
         round_obj = self._stub_round(threshold=False)

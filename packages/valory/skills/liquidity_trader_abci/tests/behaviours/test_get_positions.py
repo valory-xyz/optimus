@@ -180,3 +180,46 @@ class TestGetPositionsWithdrawalGate:
         assert captured["payload"].event == "withdrawal_initiated"
         assert captured["payload"].positions is None
         obj.set_done.assert_called_once()
+
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal positions path emit a non-withdrawal payload."""
+        obj = _make_behaviour()
+        obj.current_positions = []
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return False
+
+        def fake_get_positions():
+            yield
+            return None  # routes through ERROR_PAYLOAD path, no further yields
+
+        def fake_adjust(*args, **kwargs):
+            yield
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._read_investing_paused = fake_read_investing_paused
+        obj.get_positions = fake_get_positions
+        obj._adjust_current_positions_for_backward_compatibility = fake_adjust
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event is None
+        # positions ended up serialized from ERROR_PAYLOAD ({}), not None
+        assert captured["payload"].positions == json.dumps(
+            GetPositionsRound.ERROR_PAYLOAD, sort_keys=True, ensure_ascii=True
+        )
+        obj.set_done.assert_called_once()

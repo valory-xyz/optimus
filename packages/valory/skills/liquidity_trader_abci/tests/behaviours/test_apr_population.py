@@ -194,6 +194,41 @@ class TestAPRPopulationWithdrawalGate:
         assert "withdrawal" in captured["payload"].context
         obj.set_done.assert_called_once()
 
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal APR path emit a non-withdrawal payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return False
+
+        def fake_should_calc():
+            yield
+            return False
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._read_investing_paused = fake_read_investing_paused
+        obj._should_calculate_apr = fake_should_calc
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event is None
+        assert captured["payload"].context == "APR Population"
+        obj.set_done.assert_called_once()
+
 
 class TestShouldCalculateApr:
     """Tests for _should_calculate_apr."""

@@ -19,7 +19,10 @@
 
 """This module contains the GetPositionsRound of LiquidityTraderAbciApp."""
 
+from typing import Any, Dict, Optional, Tuple
+
 from packages.valory.skills.abstract_round_abci.base import (
+    BaseSynchronizedData,
     CollectSameUntilThresholdRound,
     get_name,
 )
@@ -27,6 +30,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import GetPositionsPa
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
+    peek_withdrawal_event,
 )
 
 
@@ -38,10 +42,14 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
     none_event: Event = Event.NONE
-    withdrawal_initiated: Event = Event.WITHDRAWAL_INITIATED
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
     selection_key = get_name(SynchronizedData.positions)
 
-    ERROR_PAYLOAD = {}
+    ERROR_PAYLOAD: Dict[str, Any] = {}
 
-    # Event.ROUND_TIMEOUT
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
+        """Process the end of the block."""
+        if peek_withdrawal_event(self) == Event.WITHDRAWAL_INITIATED.value:
+            return self.synchronized_data, Event.WITHDRAWAL_INITIATED
+
+        return super().end_block()

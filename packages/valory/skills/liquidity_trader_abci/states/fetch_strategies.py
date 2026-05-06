@@ -46,8 +46,6 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
     collection_key = get_name(SynchronizedData.participant_to_strategies_round)
     selection_key = (get_name(SynchronizedData.chain_id),)
 
-    ERROR_PAYLOAD = {}
-
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.threshold_reached:

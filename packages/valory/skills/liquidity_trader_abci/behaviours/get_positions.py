@@ -27,6 +27,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
+    Event,
     GetPositionsPayload,
     GetPositionsRound,
 )
@@ -41,6 +42,21 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
+                payload = GetPositionsPayload(
+                    sender=self.context.agent_address,
+                    positions=None,
+                    event=Event.WITHDRAWAL_INITIATED.value,
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             positions = yield from self.get_positions()
             yield from self._adjust_current_positions_for_backward_compatibility(
                 self.current_positions

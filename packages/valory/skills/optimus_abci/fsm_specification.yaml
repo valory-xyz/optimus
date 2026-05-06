@@ -142,7 +142,6 @@ transition_func:
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
     (PostTxSettlementRound, WITHDRAWAL_COMPLETED): FetchStrategiesRound
-    (PostTxSettlementRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (RandomnessTransactionSubmissionRound, DONE): SelectKeeperTransactionSubmissionARound
     (RandomnessTransactionSubmissionRound, NONE): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound

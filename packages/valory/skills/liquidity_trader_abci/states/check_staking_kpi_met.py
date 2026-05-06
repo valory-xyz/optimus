@@ -32,6 +32,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
+    peek_withdrawal_event,
 )
 
 
@@ -54,15 +55,14 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
+        if peek_withdrawal_event(self) == Event.WITHDRAWAL_INITIATED.value:
+            return self.synchronized_data, Event.WITHDRAWAL_INITIATED
+
         res = super().end_block()
         if res is None:
             return None
 
         synced_data, event = cast(Tuple[SynchronizedData, Event], res)
-
-        # Check if this is a withdrawal initiation event
-        if event == Event.WITHDRAWAL_INITIATED:
-            return synced_data, Event.WITHDRAWAL_INITIATED
 
         if event != Event.DONE:
             return res

@@ -62,7 +62,7 @@ EventToTimeoutMappingType = Dict[
     float,
 ]
 
-Coingecko = Coingecko
+Coingecko = Coingecko  # re-export: skill.yaml looks up `Coingecko` on this module
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
 

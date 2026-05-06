@@ -1465,19 +1465,30 @@ class TestHttpHandlerMethods:
             _is_transient_web3_error,
         )
 
-        # Transient
+        # Typed transient
         assert _is_transient_web3_error(requests.exceptions.Timeout("slow")) is True
         assert (
             _is_transient_web3_error(requests.exceptions.ConnectionError("dns")) is True
         )
-        assert _is_transient_web3_error(Exception("HTTP 502 bad gateway")) is True
-        assert _is_transient_web3_error(Exception("connection reset")) is True
+        # HTTP statuses matched only on word boundaries
+        for status in (408, 429, 502, 503, 504):
+            assert (
+                _is_transient_web3_error(Exception(f"HTTP {status} from rpc")) is True
+            ), f"status {status} should retry"
         # Deterministic — never retry
         assert _is_transient_web3_error(Exception("execution reverted: x")) is False
         assert (
             _is_transient_web3_error(Exception("Return amount is not enough")) is False
         )
         assert _is_transient_web3_error(ValueError("nonsense")) is False
+        # A digit substring that is not a standalone 5xx code must not retry —
+        # e.g. a contract revert reason like "value 5039 is invalid".
+        assert _is_transient_web3_error(Exception("value 5039 is invalid")) is False
+        # Untyped exception whose message just happens to contain "timeout"
+        # without a transient HTTP status no longer auto-retries.
+        assert (
+            _is_transient_web3_error(Exception("config timeout setting wrong")) is False
+        )
 
     def test_call_with_web3_retries_succeeds_on_second_attempt(self) -> None:
         """A transient error is retried; the second-attempt success returns."""
@@ -1613,6 +1624,21 @@ class TestHttpHandlerMethods:
         )
         result = handler._check_usdc_balance("0xaddr", "optimism", "0xusdc")
         assert result is None
+
+    def test_check_usdc_balance_propagates_circuit_breaker_open(self) -> None:
+        """CircuitBreakerOpenError must propagate; the catch-all does not eat it."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CircuitBreakerOpenError,
+        )
+
+        handler, _ = _make_http_handler()
+        mock_w3 = MagicMock()
+        handler._get_web3_instance = MagicMock(return_value=mock_w3)
+        handler._call_web3_with_breaker = MagicMock(
+            side_effect=CircuitBreakerOpenError("optimism")
+        )
+        with pytest.raises(CircuitBreakerOpenError):
+            handler._check_usdc_balance("0x" + "0" * 40, "optimism", "0x" + "0" * 40)
 
     def test_get_nonce_and_gas_web3_no_web3(self) -> None:
         """Test _get_nonce_and_gas_web3 returns None, None when no web3."""
@@ -3157,6 +3183,28 @@ class TestHttpHandlerMethods:
             mock_shared.return_value = mock_ss
             handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is True
+
+    def test_ensure_sufficient_funds_breaker_open_marks_insufficient(self) -> None:
+        """A breaker-open during balance check flips sufficient to False."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CircuitBreakerOpenError,
+        )
+
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        mock_account = MagicMock()
+        mock_account.address = "0xaddr"
+        handler._get_eoa_account = MagicMock(return_value=mock_account)
+        handler._check_usdc_balance = MagicMock(
+            side_effect=CircuitBreakerOpenError("optimism")
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+            assert mock_ss.sufficient_funds_for_x402_payments is False
 
     def test_ensure_sufficient_funds_balance_sufficient(self) -> None:
         """Test _ensure_sufficient_funds_for_x402_payments when balance is sufficient."""

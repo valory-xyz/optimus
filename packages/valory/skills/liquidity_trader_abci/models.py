@@ -22,7 +22,7 @@
 import json
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from time import time
@@ -85,6 +85,7 @@ class EndpointCircuitBreaker:
         self._recovery_timeout = recovery_timeout_seconds
         self._consecutive_failures = 0
         self._opened_at: Optional[float] = None
+        self._half_open_at: Optional[float] = None
         self._state = CircuitBreakerState.CLOSED
         self._lock = threading.Lock()
 
@@ -94,19 +95,27 @@ class EndpointCircuitBreaker:
         return self._state
 
     def allow(self) -> bool:
-        """Return True if a call is permitted; transition OPEN→HALF_OPEN if cooldown elapsed."""
+        """Return True if a call is permitted."""
         with self._lock:
+            now = time()
             if self._state == CircuitBreakerState.CLOSED:
                 return True
             if self._state == CircuitBreakerState.OPEN:
                 if (
                     self._opened_at is not None
-                    and (time() - self._opened_at) >= self._recovery_timeout
+                    and (now - self._opened_at) >= self._recovery_timeout
                 ):
                     self._state = CircuitBreakerState.HALF_OPEN
+                    self._half_open_at = now
                     return True
                 return False
-            # HALF_OPEN: only the probe that triggered the transition is in flight
+            if (
+                self._half_open_at is not None
+                and (now - self._half_open_at) >= self._recovery_timeout
+            ):
+                self._state = CircuitBreakerState.OPEN
+                self._opened_at = now
+                self._half_open_at = None
             return False
 
     def on_success(self) -> None:
@@ -115,14 +124,15 @@ class EndpointCircuitBreaker:
             self._consecutive_failures = 0
             self._state = CircuitBreakerState.CLOSED
             self._opened_at = None
+            self._half_open_at = None
 
     def on_failure(self) -> None:
         """Record a failed call. Opens the breaker once the threshold is hit."""
         with self._lock:
             if self._state == CircuitBreakerState.HALF_OPEN:
-                # Probe failed; re-open immediately
                 self._state = CircuitBreakerState.OPEN
                 self._opened_at = time()
+                self._half_open_at = None
                 return
             self._consecutive_failures += 1
             if self._consecutive_failures >= self._failure_threshold:
@@ -205,6 +215,7 @@ class CoingeckoRateLimiter:
     """
 
     _PERSIST_FILENAME = "coingecko_credits_used.json"
+    _PERSIST_EVERY_N_BURNS = 10
 
     def __init__(
         self,
@@ -306,7 +317,7 @@ class CoingeckoRateLimiter:
     @staticmethod
     def _current_month() -> str:
         """Return the current month as a YYYY-MM key."""
-        return datetime.utcnow().strftime("%Y-%m")
+        return datetime.now(timezone.utc).strftime("%Y-%m")
 
     def _load_credits_used_for_month(self, month: str) -> int:
         """Load credits_used for the given month from disk, or 0 if none."""
@@ -332,21 +343,29 @@ class CoingeckoRateLimiter:
             "month": self._current_month(),
             "credits_used": credits_used,
         }
+        tmp_path = self._persistence_path.with_suffix(
+            self._persistence_path.suffix + ".tmp"
+        )
         try:
             self._persistence_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._persistence_path, "w", encoding="utf-8") as fh:
+            with open(tmp_path, "w", encoding="utf-8") as fh:
                 json.dump(payload, fh)
+            os.replace(tmp_path, self._persistence_path)
         except OSError:
-            # Persistence is best-effort. If the disk is full or read-only the
-            # in-memory counter still enforces the cap for the current process.
-            pass
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError:
+                pass
 
     def _burn_credit(self) -> None:
         """Use one credit."""
         self._remaining_limit -= 1
         self._remaining_credits -= 1
         self._last_request_time = time()
-        self._persist_credits_used()
+        credits_used = self._credits - self._remaining_credits
+        if credits_used % self._PERSIST_EVERY_N_BURNS == 0:
+            self._persist_credits_used()
 
     def check_and_burn(self) -> bool:
         """Check whether we can perform a new request, and if yes, update the remaining limit and credits."""

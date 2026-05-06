@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeiccfjcgjq7dkul4jlypspgwqyoe3747ucsy73psam5lpk2aw6kpya
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiahdvhuguydh6cxsb7cmvqadiaymz3ynkwas5lkotcsy7movemmkq
+  models.py: bafybeicz4wrjvlwb6edyqaxz6uaeqciily5qtgu6ys2v6x3mrqpd7asaxy
   payloads.py: bafybeidlhh4j2rtj4lef27i2mornxwf6p4su3fr66a5vdu5of5z6axgn5q
   pool_behaviour.py: bafybeigztdzmnzkkbyjdpbfxt25v73fezgdg5vckr75jujcjzckd3grzw4
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -54,7 +54,7 @@ fingerprint:
   tests/behaviours/test_check_staking_kpi_met.py: bafybeigdit7k6unkklhzvober2ayhqpxk5gv6iyhhw5cxz7qmt5bzw3eji
   tests/behaviours/test_decision_making.py: bafybeibc5gcijhqeren36pzoz5qqo7bicjg6o3vigtszywquy5cnurwthu
   tests/behaviours/test_evaluate_strategy.py: bafybeian2ibadkndupa35kavvvhtuxpz3cqjrg7imysg6f3dn7vwy5ga2q
-  tests/behaviours/test_fetch_strategies.py: bafybeievckc6a3arl5sinnfodpty6zgxafp4vjemt7vocec7mkb6bqxsty
+  tests/behaviours/test_fetch_strategies.py: bafybeibkramw3dlnabskelhxfi3b4zgvzrshfwtcd5weh7tissf4czlevu
   tests/behaviours/test_get_positions.py: bafybeigou32kaqhgcyfy4htooxphvb3wvyfcj4wwdvtfjewyhlgkmehqc4
   tests/behaviours/test_post_tx_settlement.py: bafybeib57kgsv7yziyg3u4n3vtd6bwb3scwscuhcffkinhmrlt6bzb7zdq
   tests/behaviours/test_round_behaviour.py: bafybeie3eqpc3t7ejy2wrc2jbrwk36vbdviuamvywmtmge4zl25ydswemq
@@ -80,7 +80,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeiavjne6xwgk22nkewkn7niqx7dczezlmvjhjqcaa6gqq5vom5oeyq
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeidoqeizzyccfxmhdg4rxbjfl5prbifcvd32lwpkd7y7aw6ai7f2ky
+  tests/test_models.py: bafybeibzjmnsg7la2e6yzhi6ojvgtw5pb4mkn6ancadu3pz3gvbduc2b6a
   tests/test_payloads.py: bafybeiaf7qt6walp35kum4kevlyon2265ryffbtcikz7oiwx5kfahr4tym
   tests/test_pool_behaviour.py: bafybeig3owl32ylgbmn57s225bkzeswvnttlhmn5ltd7kopesezsbenghi
   tests/test_rounds.py: bafybeiesx7mrtnc32ews6mw4qpdjzr6rq5xpjbk5ypyzerimw5ijaefi7q

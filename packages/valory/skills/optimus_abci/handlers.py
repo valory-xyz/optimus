@@ -147,12 +147,11 @@ _KV_WRITE_LOCK = threading.Lock()
 _WITHDRAWAL_WRITE_LOCK = threading.Lock()
 
 
-def _is_transient_web3_error(exc: BaseException) -> bool:
-    """Return True for transient Web3 read failures worth retrying.
+_TRANSIENT_HTTP_STATUS_RE = re.compile(r"\b(408|429|502|503|504)\b")
 
-    Connection errors and timeouts are retried; deterministic failures
-    such as contract reverts and caller-side errors propagate immediately.
-    """
+
+def _is_transient_web3_error(exc: BaseException) -> bool:
+    """Return True for transient Web3 read failures worth retrying."""
     if isinstance(
         exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)
     ):
@@ -160,7 +159,7 @@ def _is_transient_web3_error(exc: BaseException) -> bool:
     msg = str(exc).lower()
     if "execution reverted" in msg or "return amount is not enough" in msg:
         return False
-    if "timeout" in msg or "connection" in msg or "503" in msg or "502" in msg:
+    if _TRANSIENT_HTTP_STATUS_RE.search(msg):
         return True
     return False
 
@@ -560,6 +559,8 @@ class HttpHandler(BaseHttpHandler):
             balance = self._call_web3_with_breaker(chain, balance_fn.call)
             return balance
 
+        except CircuitBreakerOpenError:
+            raise
         except Exception as e:
             self.context.logger.error(f"Error checking USDC balance: {str(e)}")
             return None
@@ -748,7 +749,17 @@ class HttpHandler(BaseHttpHandler):
                 self.shared_state.sufficient_funds_for_x402_payments = False
                 return
 
-            usdc_balance = self._check_usdc_balance(eoa_address, chain, usdc_address)
+            try:
+                usdc_balance = self._check_usdc_balance(
+                    eoa_address, chain, usdc_address
+                )
+            except CircuitBreakerOpenError:
+                self.context.logger.warning(
+                    f"Circuit breaker open for {chain}; "
+                    "marking x402 funds insufficient until recovery"
+                )
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             if usdc_balance is None:
                 self.context.logger.warning("Could not check USDC balance, skipping")

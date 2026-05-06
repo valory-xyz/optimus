@@ -27,7 +27,7 @@ import time as time_module
 from datetime import datetime
 from pathlib import Path
 from time import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -328,6 +328,93 @@ class TestCoingeckoRateLimiterPersistence:
                 # limiter must continue to count the burn in memory.
                 assert limiter.check_and_burn() is True
             assert limiter.remaining_credits == 99
+
+    def test_attach_persistence_path_restores_credits_used(self) -> None:
+        """attach_persistence_path restores credits_used from disk after construction."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
+            with open(persist_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "month": datetime.utcnow().strftime("%Y-%m"),
+                        "credits_used": 25,
+                    },
+                    fh,
+                )
+            limiter = CoingeckoRateLimiter(limit=30, credits_=100)
+            assert limiter.remaining_credits == 100
+            limiter.attach_persistence_path(Path(tmpdir))
+            assert limiter.remaining_credits == 75
+
+
+class TestCoingeckoSetup:
+    """Tests for the Coingecko model's setup() persistence wiring."""
+
+    def _make_kwargs(self) -> dict:
+        return {
+            "token_price_endpoint": "https://example.com/token",
+            "coin_price_endpoint": "https://example.com/coin",
+            "historical_price_endpoint": "https://example.com/history",
+            "historical_market_data_endpoint": "https://example.com/history-md",
+            "coin_from_address_endpoint": "https://example.com/coin-from-addr",
+            "api_key": "test_key",
+            "rate_limited_code": 429,
+            "requests_per_minute": 30,
+            "credits": 1000,
+            "chain_to_platform_id_mapping": json.dumps(
+                {"optimism": "optimistic-ethereum"}
+            ),
+            "use_x402": False,
+            "coingecko_server_base_url": "https://example.com",
+            "coingecko_x402_server_base_url": "https://example.com/x402",
+            "network_selector": "optimism",
+            "skill_context": MagicMock(),
+        }
+
+    def test_setup_attaches_persistence_path_from_params(self) -> None:
+        """Coingecko.setup() restores credits_used via context.params.store_path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            persist_path = Path(tmpdir) / "coingecko_credits_used.json"
+            with open(persist_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "month": datetime.utcnow().strftime("%Y-%m"),
+                        "credits_used": 7,
+                    },
+                    fh,
+                )
+            coingecko = object.__new__(Coingecko)
+            kwargs = self._make_kwargs()
+            with patch.object(Coingecko.__bases__[0], "__init__", return_value=None):
+                coingecko.__init__(**kwargs)
+            assert coingecko.rate_limiter.remaining_credits == 1000
+
+            mock_context = MagicMock()
+            mock_context.params.store_path = tmpdir
+            with patch.object(
+                type(coingecko), "context", new_callable=PropertyMock
+            ) as mock_ctx:
+                mock_ctx.return_value = mock_context
+                with patch.object(Coingecko.__bases__[0], "setup", return_value=None):
+                    coingecko.setup()
+            assert coingecko.rate_limiter.remaining_credits == 993
+
+    def test_setup_skips_persistence_when_store_path_missing(self) -> None:
+        """If params.store_path is None, setup() does not crash and persistence stays off."""
+        coingecko = object.__new__(Coingecko)
+        kwargs = self._make_kwargs()
+        with patch.object(Coingecko.__bases__[0], "__init__", return_value=None):
+            coingecko.__init__(**kwargs)
+
+        mock_context = MagicMock()
+        mock_context.params.store_path = None
+        with patch.object(
+            type(coingecko), "context", new_callable=PropertyMock
+        ) as mock_ctx:
+            mock_ctx.return_value = mock_context
+            with patch.object(Coingecko.__bases__[0], "setup", return_value=None):
+                coingecko.setup()  # Must not raise
+        assert coingecko.rate_limiter._persistence_path is None
 
 
 class TestEndpointCircuitBreaker:

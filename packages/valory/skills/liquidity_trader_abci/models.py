@@ -289,6 +289,20 @@ class CoingeckoRateLimiter:
         if self.can_reset_credits:
             self._remaining_credits = self.credits
 
+    def attach_persistence_path(self, store_path: Path) -> None:
+        """Attach an on-disk persistence path after construction.
+
+        Used when ``store_path`` is not available at limiter construction
+        time (e.g., when the agent's params are wired up later in the
+        skill lifecycle). Restores the month-keyed credit counter so a
+        process restart does not re-grant the full monthly allowance.
+
+        :param store_path: directory under which the persistence file is read/written.
+        """
+        self._persistence_path = store_path / self._PERSIST_FILENAME
+        used = self._load_credits_used_for_month(self._current_month())
+        self._remaining_credits = max(0, self._credits - used)
+
     @staticmethod
     def _current_month() -> str:
         """Return the current month as a YYYY-MM key."""
@@ -365,15 +379,9 @@ class Coingecko(Model, TypeCheckMixin):
         )
         limit: int = self._ensure("requests_per_minute", kwargs, int)
         credits_: int = self._ensure("credits", kwargs, int)
-        store_path_raw = kwargs.get("store_path")
-        credits_persistence_path: Optional[Path] = (
-            Path(store_path_raw) if isinstance(store_path_raw, str) else None
-        )
-        self.rate_limiter = CoingeckoRateLimiter(
-            limit,
-            credits_,
-            credits_persistence_path=credits_persistence_path,
-        )
+        # The credit counter's persistence path is wired in setup() once the
+        # skill context is attached and Params.store_path is reachable.
+        self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
         self.network_selector = self._ensure("network_selector", kwargs, str)
         self.coingecko_server_base_url = self._ensure(
@@ -421,6 +429,19 @@ class Coingecko(Model, TypeCheckMixin):
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")
             return False, {"exception": str(exc)}
+
+    def setup(self) -> None:
+        """Wire the rate limiter's on-disk credit counter to the agent's store_path.
+
+        Runs after the skill context is attached, so ``self.context.params``
+        is reachable. Persistence is best-effort: if the path is unset the
+        rate limiter stays in-memory only.
+        """
+        super().setup()
+        store_path = getattr(self.context.params, "store_path", None)
+        if store_path is None:
+            return
+        self.rate_limiter.attach_persistence_path(Path(store_path))
 
 
 class Params(BaseParams):

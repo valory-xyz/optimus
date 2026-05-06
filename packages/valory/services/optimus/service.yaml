@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeib3ongiao7nhdvtiu5sslbohg6apeqsijgvs64rceyekdjvsazvpu
+agent: valory/optimus:0.1.0:bafybeihmnmn2fy4xlll7gfm3ma4tzum454m2ocgtfg4t4atuiu33ner65a
 number_of_agents: 1
 deployment:
   agent:
@@ -138,7 +138,6 @@ models:
       coingecko_server_base_url: ${COINGECKO_SERVER_BASE_URL:str:https://api.coingecko.com}
       coingecko_x402_server_base_url: ${COINGECKO_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
       network_selector: ${GENAI_NETWORK_SELECTOR:str:optimism}
-      store_path: ${STORE_PATH:str:/data/}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

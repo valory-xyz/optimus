@@ -196,7 +196,7 @@ class TestGetPositionsWithdrawalGate:
 
         def fake_get_positions():
             yield
-            return None  # routes through ERROR_PAYLOAD path, no further yields
+            return None
 
         def fake_adjust(*args, **kwargs):
             yield
@@ -218,7 +218,6 @@ class TestGetPositionsWithdrawalGate:
         _drive(obj.async_act())
 
         assert captured["payload"].event is None
-        # positions ended up serialized from ERROR_PAYLOAD ({}), not None
         assert captured["payload"].positions == json.dumps(
             GetPositionsRound.ERROR_PAYLOAD, sort_keys=True, ensure_ascii=True
         )

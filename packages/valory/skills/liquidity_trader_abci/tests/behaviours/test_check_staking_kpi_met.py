@@ -269,7 +269,7 @@ class TestCheckStakingKPIMetWithdrawalGate:
 
         def fake_is_kpi_met():
             yield
-            return True  # short-circuits to "KPI already met for the day"
+            return True
 
         def fake_send(payload):
             captured["payload"] = payload
@@ -293,7 +293,7 @@ class TestCheckStakingKPIMetWithdrawalGate:
             _drive(obj.async_act())
 
         assert captured["payload"].event is None
-        assert captured["payload"].tx_hash is None  # KPI already met → no vanity tx
+        assert captured["payload"].tx_hash is None
         obj.set_done.assert_called_once()
 
 

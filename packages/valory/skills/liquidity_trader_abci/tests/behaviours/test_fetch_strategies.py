@@ -140,7 +140,7 @@ class TestFetchStrategiesWithdrawalGate:
             yield
 
         sd = MagicMock()
-        sd.period_count = 0  # forces the post-gate path that yields _validate_velodrome
+        sd.period_count = 0
         obj._read_investing_paused = _gen_return(False)
         obj.send_a2a_transaction = fake_send
         obj.wait_until_round_end = _gen_none
@@ -158,7 +158,6 @@ class TestFetchStrategiesWithdrawalGate:
             with pytest.raises(RuntimeError, match="past_gate_sentinel"):
                 _drive(obj.async_act())
 
-        # Reaching the sentinel proves the gate fell through; no withdrawal payload was emitted.
         assert captured == []
 
 

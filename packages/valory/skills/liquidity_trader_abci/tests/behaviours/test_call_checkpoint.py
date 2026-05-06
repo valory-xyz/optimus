@@ -254,7 +254,7 @@ class TestCallCheckpointWithdrawalGate:
         """investing_paused=False lets the normal staking-state path run."""
         obj = _make_behaviour()
         params_mock = MagicMock()
-        params_mock.staking_chain = None  # short-circuits to UNSTAKED branch
+        params_mock.staking_chain = None
         params_mock.safe_contract_addresses = {}
 
         captured = self._drive_with_gate(obj, params_mock, paused=False)

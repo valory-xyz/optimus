@@ -68,6 +68,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
+    Event,
     FetchStrategiesPayload,
     FetchStrategiesRound,
 )
@@ -101,6 +102,27 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
+                payload = FetchStrategiesPayload(
+                    sender=self.context.agent_address,
+                    content=json.dumps(
+                        {
+                            "event": Event.WITHDRAWAL_INITIATED.value,
+                            "updates": {},
+                        },
+                        sort_keys=True,
+                        ensure_ascii=True,
+                    ),
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             # Normal fetch strategies logic
             sender = self.context.agent_address
 
@@ -5030,28 +5052,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "Failed to get service owner from service registry"
             )
             return None
-
-    def _read_investing_paused(self) -> Generator[None, None, bool]:
-        """Read investing_paused flag from KV store."""
-        try:
-            result = yield from self._read_kv(("investing_paused",))
-            if result is None:
-                self.context.logger.warning(
-                    "No response from KV store for investing_paused flag"
-                )
-                return False
-
-            investing_paused_value = result.get("investing_paused")
-            if investing_paused_value is None:
-                self.context.logger.warning(
-                    "investing_paused value is None in KV store"
-                )
-                return False
-
-            return investing_paused_value.lower() == "true"
-        except Exception as e:
-            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
-            return False
 
     def check_is_valid_safe_address(
         self, safe_address: str, operating_chain: str

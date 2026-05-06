@@ -33,12 +33,19 @@ from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import 
 )
 
 
+def _gen_return_false(*args, **kwargs):
+    """Generator function that yields once and returns False."""
+    yield
+    return False
+
+
 def _make_behaviour():
     """Create a CallCheckpointBehaviour without __init__."""
     obj = object.__new__(CallCheckpointBehaviour)
     ctx = MagicMock()
     obj.__dict__["_context"] = ctx
     obj.service_staking_state = StakingState.UNSTAKED
+    obj._read_investing_paused = _gen_return_false
     return obj
 
 
@@ -197,6 +204,69 @@ class TestCallCheckpointBehaviour:
 
         obj._get_service_staking_state = fake_get_staking_state
         self._run_async_act(obj, params_mock)
+        obj.set_done.assert_called_once()
+
+
+class TestCallCheckpointWithdrawalGate:
+    """Verify the gate at the top of async_act emits a withdrawal payload."""
+
+    def _drive_with_gate(self, obj, params_mock, paused: bool):
+        """Drive async_act with _read_investing_paused stubbed to ``paused``."""
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return paused
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._read_investing_paused = fake_read_investing_paused
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            obj.context.benchmark_tool.measure.return_value = MagicMock()
+            obj.context.agent_address = "0xagent"
+            _drive(obj.async_act())
+
+        return captured
+
+    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
+        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        obj._get_service_staking_state = MagicMock(
+            side_effect=AssertionError(
+                "staking-state lookup must not run when investing is paused"
+            )
+        )
+
+        captured = self._drive_with_gate(obj, params_mock, paused=True)
+
+        assert captured["payload"].event == "withdrawal_initiated"
+        assert captured["payload"].tx_hash is None
+        obj.set_done.assert_called_once()
+
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal staking-state path run."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = None
+        params_mock.safe_contract_addresses = {}
+
+        captured = self._drive_with_gate(obj, params_mock, paused=False)
+
+        assert captured["payload"].event is None
         obj.set_done.assert_called_once()
 
 

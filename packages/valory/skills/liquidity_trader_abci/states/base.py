@@ -20,14 +20,45 @@
 """Base classes for the LiquidityTraderAbciApp."""
 
 import json
+from dataclasses import fields
 from enum import Enum
 from typing import Any, Dict, List, Optional, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
+    BaseTxPayload,
+    CollectSameUntilThresholdRound,
     CollectionRound,
     DeserializedCollection,
 )
+
+# BaseTxPayload.values strips sender / round_count / id_ before returning the
+# consensus tuple. Computing from `fields()` keeps the offset honest if the
+# framework ever adds or removes a base field.
+_BASE_PAYLOAD_FIELDS = len(fields(BaseTxPayload))
+
+
+def peek_withdrawal_event(
+    round_obj: CollectSameUntilThresholdRound,
+) -> Optional[str]:
+    """Return the consensus payload's `event` field by name, or None."""
+    if not round_obj.threshold_reached:
+        return None
+
+    payload_class = round_obj.payload_class
+    if payload_class is None:
+        return None
+
+    field_names = [f.name for f in fields(payload_class)]
+    if "event" not in field_names:
+        return None
+
+    event_index = field_names.index("event") - _BASE_PAYLOAD_FIELDS
+    payload_values = round_obj.most_voted_payload_values
+    if event_index < 0 or event_index >= len(payload_values):
+        return None
+
+    return cast(Optional[str], payload_values[event_index])
 
 
 class StakingState(Enum):

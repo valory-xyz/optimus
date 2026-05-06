@@ -934,7 +934,6 @@ class TestReadInvestingPaused:
         assert result is True
 
     def test_result_none(self) -> None:
-        """Test returns False when result is None."""
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
@@ -942,12 +941,11 @@ class TestReadInvestingPaused:
             return None
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
+        obj.context.logger.error.assert_called_once()
 
     def test_value_none(self) -> None:
-        """Test returns False when investing_paused value is None."""
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
@@ -955,12 +953,11 @@ class TestReadInvestingPaused:
             return {"investing_paused": None}
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
 
-    def test_exception(self) -> None:
-        """Test returns False when exception occurs."""
+    def test_unexpected_exception_propagates(self) -> None:
+        """The narrowed handler does not swallow exceptions it never expected."""
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
@@ -968,6 +965,5 @@ class TestReadInvestingPaused:
             yield  # noqa: unreachable
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
-        assert result is False
+        with pytest.raises(ValueError, match="boom"):
+            _drive(obj._read_investing_paused())

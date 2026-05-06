@@ -98,6 +98,69 @@ def _gen_none(*a, **kw):
     yield
 
 
+class TestFetchStrategiesWithdrawalGate:
+    """Verify the gate at the top of async_act emits a withdrawal payload."""
+
+    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
+        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        obj._read_investing_paused = _gen_return(True)
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = _gen_none
+        obj.set_done = MagicMock()
+        obj._validate_velodrome_v2_pool_addresses = MagicMock(
+            side_effect=AssertionError("no fetch work when investing is paused")
+        )
+
+        _drive(obj.async_act())
+
+        decoded = json.loads(captured["payload"].content)
+        assert decoded["event"] == "withdrawal_initiated"
+        obj.set_done.assert_called_once()
+
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal fetch flow run; no withdrawal payload sent."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = []
+
+        def fake_send(payload):
+            captured.append(payload)
+            yield
+
+        sd = MagicMock()
+        sd.period_count = 0
+        obj._read_investing_paused = _gen_return(False)
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = _gen_none
+        obj.set_done = MagicMock()
+        obj._validate_velodrome_v2_pool_addresses = MagicMock(
+            side_effect=RuntimeError("past_gate_sentinel")
+        )
+
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=sd,
+        ):
+            with pytest.raises(RuntimeError, match="past_gate_sentinel"):
+                _drive(obj.async_act())
+
+        assert captured == []
+
+
 class TestIsTimeUpdateDue:
     def test_due(self):
         obj = _mk()
@@ -1855,8 +1918,9 @@ class TestReadInvestingPaused:
     def test_none_result(self):
         obj = _mk()
         obj._read_kv = _gen_return(None)
-        gen = obj._read_investing_paused()
-        assert _drive(gen) is False
+        result = _drive(obj._read_investing_paused())
+        assert result is False
+        obj.context.logger.error.assert_called_once()
 
     def test_none_value(self):
         obj = _mk()
@@ -1864,7 +1928,8 @@ class TestReadInvestingPaused:
         gen = obj._read_investing_paused()
         assert _drive(gen) is False
 
-    def test_exception(self):
+    def test_unexpected_exception_propagates(self):
+        """The narrowed handler does not swallow exceptions it never expected."""
         obj = _mk()
 
         def boom(*a, **kw):
@@ -1872,8 +1937,8 @@ class TestReadInvestingPaused:
             yield  # noqa
 
         obj._read_kv = boom
-        gen = obj._read_investing_paused()
-        assert _drive(gen) is False
+        with pytest.raises(RuntimeError, match="fail"):
+            _drive(obj._read_investing_paused())
 
 
 class TestCheckIsValidSafeAddress:
@@ -4877,7 +4942,7 @@ class TestAsyncAct:
                 obj.set_done.assert_called_once()
 
     def test_invalid_last_updated_timestamp(self):
-        """Cover lines 208-212: ValueError on int(last_updated)."""
+        """Cover the ValueError branch on int(last_updated)."""
         obj = _mk()
         bm = MagicMock()
         bm.local.return_value.__enter__ = MagicMock(return_value=None)
@@ -4898,6 +4963,7 @@ class TestAsyncAct:
             obj.params.available_strategies = {}
 
             obj._get_native_balance = _gen_return(1.0)
+            obj._read_investing_paused = _gen_return(False)
 
             read_call = [0]
 

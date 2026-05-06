@@ -21,7 +21,59 @@
 
 # pylint: skip-file
 
+from packages.valory.skills.liquidity_trader_abci.rounds import (
+    APRPopulationRound,
+    CallCheckpointRound,
+    CheckStakingKPIMetRound,
+    DecisionMakingRound,
+    EvaluateStrategyRound,
+    Event,
+    FetchStrategiesRound,
+    GetPositionsRound,
+    LiquidityTraderAbciApp,
+    PostTxSettlementRound,
+    WithdrawFundsRound,
+)
+
 
 def test_import() -> None:
     """Test that the rounds module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.rounds  # noqa
+
+
+class TestWithdrawalTransitionMap:
+    """Verify which rounds expose a WITHDRAWAL_INITIATED transition."""
+
+    def test_withdrawal_initiated_wired_from_seven_rounds(self) -> None:
+        """Every cycle round except PostTxSettlement routes WITHDRAWAL_INITIATED to WithdrawFunds."""
+        expected = {
+            FetchStrategiesRound,
+            CallCheckpointRound,
+            CheckStakingKPIMetRound,
+            GetPositionsRound,
+            APRPopulationRound,
+            EvaluateStrategyRound,
+            DecisionMakingRound,
+        }
+        wired = {
+            cls
+            for cls, transitions in LiquidityTraderAbciApp.transition_function.items()
+            if Event.WITHDRAWAL_INITIATED in transitions
+        }
+        assert wired == expected
+
+    def test_post_tx_settlement_does_not_route_withdrawal(self) -> None:
+        """A freshly settled tx must not be preempted by withdrawal."""
+        assert (
+            Event.WITHDRAWAL_INITIATED
+            not in LiquidityTraderAbciApp.transition_function[PostTxSettlementRound]
+        )
+
+    def test_withdrawal_initiated_targets_withdraw_funds_round(self) -> None:
+        """All WITHDRAWAL_INITIATED transitions go to the same target."""
+        targets = {
+            transitions[Event.WITHDRAWAL_INITIATED]
+            for transitions in LiquidityTraderAbciApp.transition_function.values()
+            if Event.WITHDRAWAL_INITIATED in transitions
+        }
+        assert targets == {WithdrawFundsRound}

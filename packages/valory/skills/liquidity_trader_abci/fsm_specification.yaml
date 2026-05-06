@@ -112,9 +112,7 @@ transition_func:
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
     (PostTxSettlementRound, WITHDRAWAL_COMPLETED): FetchStrategiesRound
-    (PostTxSettlementRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (WithdrawFundsRound, DONE): DecisionMakingRound
     (WithdrawFundsRound, NONE): WithdrawFundsRound
     (WithdrawFundsRound, NO_MAJORITY): WithdrawFundsRound
     (WithdrawFundsRound, ROUND_TIMEOUT): WithdrawFundsRound
-

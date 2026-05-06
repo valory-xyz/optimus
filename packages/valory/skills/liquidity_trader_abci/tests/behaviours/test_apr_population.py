@@ -36,6 +36,12 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 
 
+def _gen_return_false(*args, **kwargs):
+    """Generator function that yields once and returns False."""
+    yield
+    return False
+
+
 def _make_behaviour():
     """Create an APRPopulationBehaviour without __init__."""
     obj = object.__new__(APRPopulationBehaviour)
@@ -43,6 +49,7 @@ def _make_behaviour():
     obj.__dict__["_context"] = ctx
     obj._initial_value = None
     obj._final_value = None
+    obj._read_investing_paused = _gen_return_false
     return obj
 
 
@@ -155,6 +162,78 @@ class TestAPRPopulationBehaviour:
         gen = obj.async_act()
         _drive(gen)
         obj.context.logger.error.assert_called()
+        obj.set_done.assert_called_once()
+
+
+class TestAPRPopulationWithdrawalGate:
+    """Verify the gate at the top of async_act emits a withdrawal payload."""
+
+    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
+        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return True
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._should_calculate_apr = MagicMock(
+            side_effect=AssertionError("APR calc must not run when investing is paused")
+        )
+        obj._read_investing_paused = fake_read_investing_paused
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event == "withdrawal_initiated"
+        assert "withdrawal" in captured["payload"].context
+        obj.set_done.assert_called_once()
+
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal APR path emit a non-withdrawal payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return False
+
+        def fake_should_calc():
+            yield
+            return False
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._read_investing_paused = fake_read_investing_paused
+        obj._should_calculate_apr = fake_should_calc
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event is None
+        assert captured["payload"].context == "APR Population"
         obj.set_done.assert_called_once()
 
 
@@ -924,62 +1003,77 @@ class TestAdjustAprForEthPrice:
 class TestReadInvestingPaused:
     """Tests for _read_investing_paused."""
 
-    def test_result_none(self) -> None:
+    def _real_helper_obj(self):
+        """Build a behaviour with the real `_read_investing_paused` (the factory stubs it)."""
         obj = _make_behaviour()
+        del obj._read_investing_paused
+        return obj
+
+    def test_result_none_returns_false(self) -> None:
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return None
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
+        obj.context.logger.error.assert_called_once()
 
     def test_value_none(self) -> None:
-        obj = _make_behaviour()
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return {"investing_paused": None}
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
 
     def test_value_true(self) -> None:
-        obj = _make_behaviour()
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return {"investing_paused": "true"}
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is True
 
     def test_value_false(self) -> None:
-        obj = _make_behaviour()
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return {"investing_paused": "false"}
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
 
-    def test_exception(self) -> None:
-        obj = _make_behaviour()
+    def test_value_non_string_returns_false(self) -> None:
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
-            raise ValueError("test")
+            yield
+            return {"investing_paused": 1}
+
+        obj._read_kv = fake_read_kv
+        result = _drive(obj._read_investing_paused())
+        assert result is False
+        obj.context.logger.error.assert_called_once()
+
+    def test_unexpected_exception_propagates(self) -> None:
+        """The narrowed handler does not swallow exceptions it never expected."""
+        obj = self._real_helper_obj()
+
+        def fake_read_kv(keys):
+            raise ValueError("boom")
             yield  # noqa
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
-        assert result is False
+        with pytest.raises(ValueError, match="boom"):
+            _drive(obj._read_investing_paused())

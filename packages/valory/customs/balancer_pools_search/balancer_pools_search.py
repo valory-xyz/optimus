@@ -86,6 +86,7 @@ CHAIN_URLS = {
 
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
 LP = "lp"
+WEB3_HTTP_TIMEOUT_SECONDS = 30
 
 # Thread-local storage for errors
 _thread_local = threading.local()
@@ -299,7 +300,12 @@ def create_web3_connection(chain_name: str):
     chain_url = CHAIN_URLS.get(chain_name)
     if not chain_url:
         return None
-    web3 = Web3(Web3.HTTPProvider(chain_url))
+    web3 = Web3(
+        Web3.HTTPProvider(
+            chain_url,
+            request_kwargs={"timeout": WEB3_HTTP_TIMEOUT_SECONDS},
+        )
+    )
     return web3 if web3.is_connected() else None
 
 

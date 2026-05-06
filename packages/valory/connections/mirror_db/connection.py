@@ -43,26 +43,62 @@ from packages.valory.protocols.srr.message import SrrMessage
 PUBLIC_ID = PublicId.from_str("valory/mirror_db:0.1.0")
 
 
+class MirrorDBHTTPError(Exception):
+    """HTTP error raised by mirror_db with the response status code attached."""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        """Initialize with a status code and message."""
+        super().__init__(message)
+        self.status_code = status_code
+
+
+_RETRYABLE_NETWORK_EXCEPTIONS: tuple = (
+    aiohttp.ClientConnectorError,
+    aiohttp.ServerTimeoutError,
+    asyncio.TimeoutError,
+)
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Return True if the exception is a transient failure worth retrying."""
+    if isinstance(exc, MirrorDBHTTPError):
+        return exc.status_code == 429 or 500 <= exc.status_code < 600
+    return isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS)
+
+
 def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_factor=2):  # type: ignore
-    """Retry a function with exponential backoff."""
+    """Retry a function with exponential backoff on transient failures.
+
+    Retries 429, 5xx, and transient network errors (ClientConnectorError,
+    ServerTimeoutError, asyncio.TimeoutError). All other exceptions propagate
+    immediately.
+    """
 
     def decorator(func):  # type: ignore
         @wraps(func)
         async def wrapper(*args, **kwargs):  # type: ignore
             delay = initial_delay
-            last_exception: Optional[Exception] = None
+            last_exception: Optional[BaseException] = None
+            logger = getattr(args[0], "logger", None) if args else None
             for attempt in range(max_retries):
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
-                    if "rate limit exceeded" not in str(e).lower():
+                    if not _is_retryable(e):
                         raise
                     if attempt < max_retries - 1:
-                        print(f"Retrying in {delay} seconds due to rate limit...")
+                        if logger is not None:
+                            logger.warning(
+                                f"Retrying mirror_db request in {delay}s "
+                                f"(attempt {attempt + 1}/{max_retries}): {e}"
+                            )
                         await asyncio.sleep(delay)
                         delay *= backoff_factor
-            print("Max retries reached. Could not complete the request.")
+            if logger is not None:
+                logger.error(
+                    f"Max retries ({max_retries}) reached for mirror_db request"
+                )
             raise last_exception  # type: ignore
 
         return wrapper
@@ -254,7 +290,13 @@ class GenericMirrorDBConnection(Connection):
         :param task: The completed task
         """
         request = self.task_to_request.pop(task)
-        response_message: Optional[Message] = task.result()
+        try:
+            response_message: Optional[Message] = task.result()
+        except Exception as e:  # pylint: disable=broad-except
+            self.logger.exception(
+                f"Unhandled exception in mirror_db task: {e}"
+            )
+            response_message = None
 
         response_envelope = None
         if response_message is not None:
@@ -284,7 +326,14 @@ class GenericMirrorDBConnection(Connection):
                 f"Performative `{srr_message.performative.value}` is not supported.",
             )
 
-        payload = json.loads(srr_message.payload)
+        try:
+            payload = json.loads(srr_message.payload)
+        except (json.JSONDecodeError, TypeError) as e:
+            return self.prepare_error_message(
+                srr_message,
+                dialogue,
+                f"Failed to parse request payload: {e}",
+            )
         method_name = payload.get("method")
 
         if method_name not in self._ALLOWED_METHODS:
@@ -303,13 +352,13 @@ class GenericMirrorDBConnection(Connection):
                 f"Method {method_name} is not available.",
             )
 
-        # Log endpoint and payload (safe print that handles Unicode characters)
+        # Log endpoint and payload (safe log that handles Unicode characters)
         endpoint = payload.get("kwargs", {}).get("endpoint")
         try:
-            print(f"endpoint,payload : {endpoint,payload}")
+            self.logger.info(f"endpoint,payload : {endpoint,payload}")
         except UnicodeEncodeError:
             safe_payload = str(payload).encode("ascii", "replace").decode("ascii")
-            print(f"endpoint,payload : {endpoint},{safe_payload}")
+            self.logger.info(f"endpoint,payload : {endpoint},{safe_payload}")
 
         try:
             response = await method(**payload.get("kwargs", {}))
@@ -337,13 +386,16 @@ class GenericMirrorDBConnection(Connection):
 
         :param response: The HTTP response
         :param action: The action being performed (for error messages)
-        :raises Exception: If the response status is not 200
+        :raises MirrorDBHTTPError: If the response status is not 200
         """
         if response.status == 200:
             return
         error_content = await response.json()
         detail = error_content.get("detail", error_content)
-        raise Exception(f"Error {action}: {detail} (HTTP {response.status})")
+        raise MirrorDBHTTPError(
+            response.status,
+            f"Error {action}: {detail} (HTTP {response.status})",
+        )
 
     @retry_with_exponential_backoff()
     async def create_(self, method_name: str, endpoint: str, data: Dict) -> Dict:

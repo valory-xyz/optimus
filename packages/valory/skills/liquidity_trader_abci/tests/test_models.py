@@ -543,6 +543,25 @@ class TestParams:
             assert params.tenderly_account_slug == ""
             assert params.tenderly_project_slug == ""
 
+    def test_tls_verify_defaults_to_true(self) -> None:
+        """tls_verify is True when not provided in kwargs (secure default)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                params.__init__(**kwargs)
+            assert params.tls_verify is True
+
+    def test_tls_verify_can_be_disabled(self) -> None:
+        """tls_verify honours an explicit False override."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["tls_verify"] = False
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                params.__init__(**kwargs)
+            assert params.tls_verify is False
+
     def test_get_store_path_valid(self) -> None:
         """Test get_store_path with a valid path."""
         with tempfile.TemporaryDirectory() as tmpdir:

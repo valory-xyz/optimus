@@ -321,6 +321,21 @@ class TestCreateWeb3Connection:
         result = create_web3_connection("optimism")
         assert result is None
 
+    @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.Web3")
+    def test_provider_constructed_with_request_timeout(self, mock_web3):
+        """Web3 HTTPProvider must be built with the documented request timeout."""
+        mock_instance = MagicMock()
+        mock_instance.is_connected.return_value = True
+        mock_web3.return_value = mock_instance
+        mock_web3.HTTPProvider = MagicMock()
+        bal_mod.create_web3_connection.cache_clear()
+        create_web3_connection("optimism")
+        provider_call = mock_web3.HTTPProvider.call_args
+        assert provider_call.kwargs["request_kwargs"] == {
+            "timeout": bal_mod.WEB3_HTTP_TIMEOUT_SECONDS
+        }
+        assert bal_mod.WEB3_HTTP_TIMEOUT_SECONDS == 30
+
 
 class TestFetchTokenNameFromContract:
     """Tests for fetch_token_name_from_contract function."""

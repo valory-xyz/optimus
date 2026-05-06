@@ -3499,7 +3499,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
             except (requests.RequestException, ValueError, TypeError) as e:
                 self.context.logger.error(
@@ -3647,7 +3647,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
             except (requests.RequestException, ValueError, TypeError) as e:
                 self.context.logger.error(
@@ -4722,7 +4722,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 params=params,
                 headers={"Accept": "application/json"},
                 timeout=self.params.request_timeout,
-                verify=False,  # nosec B501
+                verify=self.params.tls_verify,
             )
 
             if response.status_code != 200:
@@ -4835,7 +4835,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
 
                 if response.status_code != 200:

@@ -315,6 +315,8 @@ CACHE_METRICS = {
 # Thread-local storage for errors
 _thread_local = threading.local()
 
+WEB3_HTTP_TIMEOUT_SECONDS = 30
+
 
 def get_errors():
     """Get thread-local error list."""
@@ -404,7 +406,12 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 @lru_cache(maxsize=8)
 def get_web3_connection(rpc_url):
     """Get or create a Web3 connection with caching."""
-    return Web3(Web3.HTTPProvider(rpc_url))
+    return Web3(
+        Web3.HTTPProvider(
+            rpc_url,
+            request_kwargs={"timeout": WEB3_HTTP_TIMEOUT_SECONDS},
+        )
+    )
 
 
 @lru_cache(None)

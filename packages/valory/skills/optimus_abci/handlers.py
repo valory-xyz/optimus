@@ -134,6 +134,7 @@ NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
 ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
+WEB3_HTTP_TIMEOUT_SECONDS = 30
 USDC_ADDRESSES = {
     "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
 }
@@ -164,6 +165,7 @@ class HttpCode(Enum):
     OK_CODE = 200
     NOT_FOUND_CODE = 404
     BAD_REQUEST_CODE = 400
+    INTERNAL_SERVER_ERROR = 500
     NOT_READY = 503
 
 
@@ -435,7 +437,12 @@ class HttpHandler(BaseHttpHandler):
 
             # Note that you should create only one HTTPProvider with the same provider URL per python process,
             # as the HTTPProvider recycles underlying TCP/IP network connections, for better performance. Multiple HTTPProviders with different URLs will work as expected.
-            return Web3(Web3.HTTPProvider(rpc_url))
+            return Web3(
+                Web3.HTTPProvider(
+                    rpc_url,
+                    request_kwargs={"timeout": WEB3_HTTP_TIMEOUT_SECONDS},
+                )
+            )
         except Exception as e:
             self.context.logger.error(f"Error creating Web3 instance: {str(e)}")
             return None
@@ -590,7 +597,7 @@ class HttpHandler(BaseHttpHandler):
                 self.context.logger.error(
                     "Failed to get Web3 instance for gas estimation"
                 )
-                return False
+                return None
 
             tx_value = (
                 int(tx_request["value"], 16)
@@ -1181,7 +1188,23 @@ class HttpHandler(BaseHttpHandler):
                 http_msg.body,
             )
         )
-        handler(http_msg, http_dialogue, **kwargs)
+        try:
+            handler(http_msg, http_dialogue, **kwargs)
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.exception(
+                f"Unhandled exception while dispatching HTTP handler for "
+                f"{http_msg.method} {http_msg.url}: {e}"
+            )
+            try:
+                self._handle_internal_error(
+                    http_msg,
+                    http_dialogue,
+                    error_msg=f"Internal server error: {e}",
+                )
+            except Exception as reply_exc:  # pylint: disable=broad-except
+                self.context.logger.exception(
+                    f"Failed to send error reply for {http_msg.url}: {reply_exc}"
+                )
 
     def _handle_bad_request(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg=None
@@ -1203,6 +1226,25 @@ class HttpHandler(BaseHttpHandler):
         )
 
         # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
+
+    def _handle_internal_error(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        error_msg: Optional[str] = None,
+    ) -> None:
+        """Send an HTTP 500 response for an unhandled handler exception."""
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=HttpCode.INTERNAL_SERVER_ERROR.value,
+            status_text="Internal server error",
+            headers=http_msg.headers,
+            body=b"" if not error_msg else error_msg.encode("utf-8"),
+        )
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
 

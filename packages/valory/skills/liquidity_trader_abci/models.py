@@ -447,6 +447,7 @@ class Params(BaseParams):
         self.lifi_quote_to_amount_url = self._ensure(
             "lifi_quote_to_amount_url", kwargs, str
         )
+        self.tls_verify: bool = kwargs.get("tls_verify", True)
         self.stoploss_threshold_multiplier = kwargs.get(
             "stoploss_threshold_multiplier", 0.43
         )

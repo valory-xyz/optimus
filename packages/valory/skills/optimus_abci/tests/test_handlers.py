@@ -1169,6 +1169,56 @@ class TestHttpHandlerMethods:
         call_kwargs = mock_dialogue.reply.call_args[1]
         assert call_kwargs["status_code"] == HttpCode.NOT_FOUND_CODE.value
 
+    def test_handle_internal_error_sends_500(self) -> None:
+        """_handle_internal_error sends an HTTP 500 response."""
+        handler, _ = _make_http_handler()
+        mock_msg = MagicMock()
+        mock_msg.version = "1.1"
+        mock_msg.headers = "Host: localhost"
+        mock_dialogue = MagicMock()
+
+        handler._handle_internal_error(mock_msg, mock_dialogue, error_msg="boom")
+
+        mock_dialogue.reply.assert_called_once()
+        call_kwargs = mock_dialogue.reply.call_args[1]
+        assert call_kwargs["status_code"] == HttpCode.INTERNAL_SERVER_ERROR.value
+        assert call_kwargs["status_text"] == "Internal server error"
+        assert call_kwargs["body"] == b"boom"
+
+    def test_handle_dispatch_catches_handler_exception(self) -> None:
+        """A handler that raises must trigger an HTTP 500 reply, not propagate."""
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+        from packages.valory.protocols.http.message import HttpMessage
+
+        handler, ctx = _make_http_handler()
+
+        raising_handler = MagicMock(side_effect=RuntimeError("kaboom"))
+        handler._get_handler = MagicMock(return_value=(raising_handler, {}))
+
+        http_msg = MagicMock(spec=HttpMessage)
+        http_msg.performative = HttpMessage.Performative.REQUEST
+        http_msg.method = "GET"
+        http_msg.url = "http://localhost/test"
+        http_msg.body = b""
+        http_msg.version = "1.1"
+        http_msg.headers = "Host: localhost"
+        http_msg.sender = str(HTTP_SERVER_PUBLIC_ID.without_hash())
+
+        mock_dialogue = MagicMock()
+        ctx.http_dialogues.update.return_value = mock_dialogue
+
+        with patch.object(handler, "_handle_internal_error") as mock_internal_error:
+            handler.handle(http_msg)
+
+        raising_handler.assert_called_once()
+        mock_internal_error.assert_called_once()
+        call_args = mock_internal_error.call_args
+        assert call_args.args[0] is http_msg
+        assert call_args.args[1] is mock_dialogue
+        assert "kaboom" in call_args.kwargs["error_msg"]
+
     def test_synchronized_data_property(self) -> None:
         """Test synchronized_data property."""
         handler, ctx = _make_http_handler()
@@ -1293,6 +1343,26 @@ class TestHttpHandlerMethods:
             result = handler._get_web3_instance("optimism")
         assert result is mock_web3
 
+    def test_get_web3_instance_passes_timeout_to_provider(self) -> None:
+        """Web3 provider must be constructed with a request timeout."""
+        from packages.valory.skills.optimus_abci.handlers import (
+            WEB3_HTTP_TIMEOUT_SECONDS,
+        )
+
+        handler, ctx = _make_http_handler()
+        ctx.params.optimism_ledger_rpc = "https://rpc.example.com"
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.Web3"
+        ) as mock_web3_cls:
+            handler._get_web3_instance("optimism")
+
+        provider_call = mock_web3_cls.HTTPProvider.call_args
+        assert provider_call.args[0] == "https://rpc.example.com"
+        assert provider_call.kwargs["request_kwargs"] == {
+            "timeout": WEB3_HTTP_TIMEOUT_SECONDS
+        }
+        assert WEB3_HTTP_TIMEOUT_SECONDS == 30
+
     def test_check_usdc_balance_no_web3(self) -> None:
         """Test _check_usdc_balance returns None when no web3 instance."""
         handler, ctx = _make_http_handler()
@@ -1376,13 +1446,13 @@ class TestHttpHandlerMethods:
         assert result is False
 
     def test_estimate_gas_no_web3(self) -> None:
-        """Test _estimate_gas returns False when no web3."""
+        """Test _estimate_gas returns None when no web3 instance is available."""
         handler, ctx = _make_http_handler()
         handler._get_web3_instance = MagicMock(return_value=None)
         result = handler._estimate_gas(
             {"value": "0x0", "to": "0x0", "data": "0x"}, "0xaddr", "optimism"
         )
-        assert result is False
+        assert result is None
 
     def test_estimate_gas_exception_return_amount(self) -> None:
         """Test _estimate_gas returns None on 'Return amount' error."""

@@ -1219,6 +1219,43 @@ class TestHttpHandlerMethods:
         assert call_args.args[1] is mock_dialogue
         assert "kaboom" in call_args.kwargs["error_msg"]
 
+    def test_handle_dispatch_swallows_error_reply_exception(self) -> None:
+        """If _handle_internal_error itself raises, the failure is logged, not propagated."""
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+        from packages.valory.protocols.http.message import HttpMessage
+
+        handler, ctx = _make_http_handler()
+
+        raising_handler = MagicMock(side_effect=RuntimeError("kaboom"))
+        handler._get_handler = MagicMock(return_value=(raising_handler, {}))
+
+        http_msg = MagicMock(spec=HttpMessage)
+        http_msg.performative = HttpMessage.Performative.REQUEST
+        http_msg.method = "GET"
+        http_msg.url = "http://localhost/test"
+        http_msg.body = b""
+        http_msg.version = "1.1"
+        http_msg.headers = "Host: localhost"
+        http_msg.sender = str(HTTP_SERVER_PUBLIC_ID.without_hash())
+
+        mock_dialogue = MagicMock()
+        ctx.http_dialogues.update.return_value = mock_dialogue
+
+        with patch.object(
+            handler,
+            "_handle_internal_error",
+            side_effect=RuntimeError("reply failed"),
+        ):
+            handler.handle(http_msg)
+
+        # Two .exception calls: one for the original handler error, one for the reply error.
+        assert ctx.logger.exception.call_count == 2
+        log_messages = [call.args[0] for call in ctx.logger.exception.call_args_list]
+        assert any("Failed to send error reply" in m for m in log_messages)
+        assert any("reply failed" in m for m in log_messages)
+
     def test_synchronized_data_property(self) -> None:
         """Test synchronized_data property."""
         handler, ctx = _make_http_handler()

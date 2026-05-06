@@ -95,7 +95,7 @@ fingerprint:
   utils/tick_math.py: bafybeiehijphwni4zfu57rhhbgdyxn5evyokvvckiwzmldmrbzg3nd7cmy
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeic3qnsdmcew5pzmswy4y4t6o65crsmtu3ugcllzid5zopbmjtizme
+- valory/mirror_db:0.1.0:bafybeifrsqarbutimru3us5gg5eifoba6plkgpg3twa7eoxh4ucndroppm
 - valory/kv_store:0.1.0:bafybeigtbb7qch5et2wked5h7riozxfw2rui3yp47lfdkhin7zcmpsosbi
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:

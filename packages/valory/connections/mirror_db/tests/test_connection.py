@@ -686,8 +686,8 @@ class TestGetResponse:
         assert "Connection failed" in payload["error"]
 
     @pytest.mark.asyncio
-    async def test_endpoint_print_unicode_error(self) -> None:
-        """Test _get_response handles UnicodeEncodeError in print."""
+    async def test_endpoint_log_unicode_error(self) -> None:
+        """Test _get_response handles UnicodeEncodeError in the endpoint log."""
         msg, dialogue = self._make_request_and_dialogue(
             {
                 "method": "read_",
@@ -699,26 +699,31 @@ class TestGetResponse:
 
         call_count = 0
 
-        def mock_print_fn(*args, **kwargs):
+        def mock_log_info(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise UnicodeEncodeError("utf-8", "test", 0, 1, "err")
-            # second call succeeds
+            # second call (the ascii-safe fallback) succeeds
+
+        mock_logger = MagicMock()
+        mock_logger.info.side_effect = mock_log_info
 
         with patch.object(
             self.connection,
             "read_",
             new_callable=AsyncMock,
             return_value=mock_result,
-        ), patch(
-            "builtins.print",
-            side_effect=mock_print_fn,
+        ), patch.object(
+            type(self.connection),
+            "logger",
+            new=mock_logger,
         ):
             result = await self.connection._get_response(msg, dialogue)
 
         payload = json.loads(result.payload)
         assert payload["response"] == mock_result
+        assert call_count == 2
 
     @pytest.mark.asyncio
     async def test_create_method_call(self) -> None:

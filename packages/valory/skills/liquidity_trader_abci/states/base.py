@@ -26,10 +26,16 @@ from typing import Any, Dict, List, Optional, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
+    BaseTxPayload,
     CollectSameUntilThresholdRound,
     CollectionRound,
     DeserializedCollection,
 )
+
+# BaseTxPayload.values strips sender / round_count / id_ before returning the
+# consensus tuple. Computing from `fields()` keeps the offset honest if the
+# framework ever adds or removes a base field.
+_BASE_PAYLOAD_FIELDS = len(fields(BaseTxPayload))
 
 
 def peek_withdrawal_event(
@@ -47,8 +53,7 @@ def peek_withdrawal_event(
     if "event" not in field_names:
         return None
 
-    # BaseTxPayload.values is astuple(self)[3:], dropping sender / round_count / id_.
-    event_index = field_names.index("event") - 3
+    event_index = field_names.index("event") - _BASE_PAYLOAD_FIELDS
     payload_values = round_obj.most_voted_payload_values
     if event_index < 0 or event_index >= len(payload_values):
         return None

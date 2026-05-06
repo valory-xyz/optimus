@@ -219,7 +219,22 @@ class TestReadWithdrawalStatus:
         result = _exhaust(b._read_withdrawal_status())
         assert result == "unknown"
 
-    def test_returns_unknown_on_exception(self):
+    def test_returns_unknown_when_kv_unreachable(self):
+        b = _make_behaviour()
+        b._read_kv = _make_gen_method(None)
+        result = _exhaust(b._read_withdrawal_status())
+        assert result == "unknown"
+        b.context.logger.error.assert_called_once()
+
+    def test_returns_unknown_when_value_non_string(self):
+        b = _make_behaviour()
+        b._read_kv = _make_gen_method({"withdrawal_status": 42})
+        result = _exhaust(b._read_withdrawal_status())
+        assert result == "unknown"
+        b.context.logger.error.assert_called_once()
+
+    def test_unexpected_exception_propagates(self):
+        """The narrowed handler does not swallow exceptions it never expected."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
@@ -227,8 +242,8 @@ class TestReadWithdrawalStatus:
             yield  # noqa
 
         b._read_kv = raise_gen
-        result = _exhaust(b._read_withdrawal_status())
-        assert result == "unknown"
+        with pytest.raises(RuntimeError, match="fail"):
+            _exhaust(b._read_withdrawal_status())
 
 
 class TestGetNextEvent:

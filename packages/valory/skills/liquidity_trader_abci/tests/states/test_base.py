@@ -378,6 +378,11 @@ class TestPeekWithdrawalEvent:
         )
         return round_obj
 
+    def test_returns_none_when_threshold_not_reached(self) -> None:
+        """Below consensus threshold the helper short-circuits to None."""
+        round_obj = self._stub_round(threshold=False, payload_class=None)
+        assert peek_withdrawal_event(round_obj) is None
+
     def test_returns_none_when_payload_class_missing(self) -> None:
         """Defensive: a round whose subclass has not set payload_class returns None."""
         round_obj = self._stub_round(threshold=True, payload_class=None)

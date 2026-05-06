@@ -87,10 +87,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            # Check if investing is paused due to withdrawal (read from KV store)
             investing_paused = yield from self._read_investing_paused()
             if investing_paused:
-                # Check the withdrawal status from KV store
+                # DecisionMaking only preempts on INITIATED, not on every paused
+                # state. Sister rounds preempt unconditionally; DecisionMaking
+                # must keep running during WITHDRAWING to drain the queued
+                # exit/swap/transfer actions back through tx settlement.
                 withdrawal_status = yield from self._read_withdrawal_status()
                 if withdrawal_status == "INITIATED":
                     self.context.logger.info(
@@ -134,13 +136,27 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.set_done()
 
     def _read_withdrawal_status(self) -> Generator[None, None, str]:
-        """Read withdrawal_status from KV store."""
-        try:
-            result = yield from self._read_kv(("withdrawal_status",))
-            return result.get("withdrawal_status", "unknown")
-        except Exception as e:
-            self.context.logger.error(f"Error reading withdrawal_status: {str(e)}")
+        """Read withdrawal_status from the KV store."""
+        result = yield from self._read_kv(("withdrawal_status",))
+        if result is None:
+            self.context.logger.error(
+                "KV store unreachable while reading withdrawal_status"
+            )
             return "unknown"
+
+        raw = result.get("withdrawal_status")
+        if raw is None:
+            return "unknown"
+
+        if not isinstance(raw, str):
+            self.context.logger.error(
+                "withdrawal_status has unexpected type %s: %r",
+                type(raw).__name__,
+                raw,
+            )
+            return "unknown"
+
+        return raw
 
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""

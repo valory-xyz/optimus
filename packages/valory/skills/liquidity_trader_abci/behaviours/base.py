@@ -1624,6 +1624,9 @@ class LiquidityTraderBaseBehaviour(
 
         raw = result.get("investing_paused")
         if raw is None:
+            self.context.logger.debug(
+                "investing_paused key absent in KV store; treating as not paused"
+            )
             return False
 
         if not isinstance(raw, str):

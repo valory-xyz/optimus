@@ -1199,7 +1199,7 @@ class HttpHandler(BaseHttpHandler):
                 self._handle_internal_error(
                     http_msg,
                     http_dialogue,
-                    error_msg=f"Internal server error: {e}",
+                    error_msg="Internal server error",
                 )
             except Exception as reply_exc:  # pylint: disable=broad-except
                 self.context.logger.exception(

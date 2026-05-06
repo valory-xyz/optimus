@@ -86,6 +86,9 @@ CHAIN_URLS = {
 
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
 LP = "lp"
+# Mirror of WEB3_HTTP_TIMEOUT_SECONDS in skills/optimus_abci/handlers.py and
+# customs/velodrome_pools_search. Customs are loaded via exec() so they cannot
+# import from each other — keep all three values in sync when changing.
 WEB3_HTTP_TIMEOUT_SECONDS = 30
 
 # Thread-local storage for errors

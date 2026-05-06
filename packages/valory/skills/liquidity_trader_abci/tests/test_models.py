@@ -485,6 +485,7 @@ class TestParams:
             "optimism_ledger_rpc": "https://optimism.rpc.example.com",
             "lifi_quote_to_amount_url": "https://lifi.example.com/quote",
             "request_timeout": 20.0,
+            "tls_verify": True,
             "skill_context": MagicMock(),
         }
 
@@ -543,10 +544,11 @@ class TestParams:
             assert params.tenderly_account_slug == ""
             assert params.tenderly_project_slug == ""
 
-    def test_tls_verify_defaults_to_true(self) -> None:
-        """tls_verify is True when not provided in kwargs (secure default)."""
+    def test_tls_verify_passes_through_when_true(self) -> None:
+        """tls_verify=True from yaml is read into the Params attribute."""
         with tempfile.TemporaryDirectory() as tmpdir:
             kwargs = self._make_kwargs(tmpdir)
+            kwargs["tls_verify"] = True
             params = object.__new__(Params)
             with patch.object(Params.__bases__[0], "__init__", return_value=None):
                 params.__init__(**kwargs)
@@ -561,6 +563,16 @@ class TestParams:
             with patch.object(Params.__bases__[0], "__init__", return_value=None):
                 params.__init__(**kwargs)
             assert params.tls_verify is False
+
+    def test_tls_verify_missing_kwarg_raises(self) -> None:
+        """Missing tls_verify in kwargs surfaces a config error via _ensure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs.pop("tls_verify", None)
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(Exception):
+                    params.__init__(**kwargs)
 
     def test_get_store_path_valid(self) -> None:
         """Test get_store_path with a valid path."""

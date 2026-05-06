@@ -22,6 +22,7 @@
 
 import asyncio
 import json
+import logging
 import ssl
 from functools import wraps
 from typing import Any, Dict, Optional, Union, cast
@@ -41,6 +42,8 @@ from packages.valory.protocols.srr.message import SrrMessage
 
 
 PUBLIC_ID = PublicId.from_str("valory/mirror_db:0.1.0")
+
+_MODULE_LOGGER = logging.getLogger(__name__)
 
 
 class MirrorDBHTTPError(Exception):
@@ -62,14 +65,17 @@ _RETRYABLE_NETWORK_EXCEPTIONS: tuple = (
 def _is_retryable(exc: BaseException) -> bool:
     """Return True if the exception is a transient failure worth retrying."""
     if isinstance(exc, MirrorDBHTTPError):
-        return exc.status_code == 429 or 500 <= exc.status_code < 600
+        return (
+            exc.status_code in (408, 429)
+            or 500 <= exc.status_code < 600
+        )
     return isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS)
 
 
 def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_factor=2):  # type: ignore
     """Retry a function with exponential backoff on transient failures.
 
-    Retries 429, 5xx, and transient network errors (ClientConnectorError,
+    Retries 408, 429, 5xx, and transient network errors (ClientConnectorError,
     ServerTimeoutError, asyncio.TimeoutError). All other exceptions propagate
     immediately.
     """
@@ -78,8 +84,10 @@ def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_facto
         @wraps(func)
         async def wrapper(*args, **kwargs):  # type: ignore
             delay = initial_delay
-            last_exception: Optional[BaseException] = None
+            last_exception: Optional[Exception] = None
             logger = getattr(args[0], "logger", None) if args else None
+            if logger is None:
+                logger = _MODULE_LOGGER
             for attempt in range(max_retries):
                 try:
                     return await func(*args, **kwargs)
@@ -88,17 +96,15 @@ def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_facto
                     if not _is_retryable(e):
                         raise
                     if attempt < max_retries - 1:
-                        if logger is not None:
-                            logger.warning(
-                                f"Retrying mirror_db request in {delay}s "
-                                f"(attempt {attempt + 1}/{max_retries}): {e}"
-                            )
+                        logger.warning(
+                            f"Retrying mirror_db request in {delay}s "
+                            f"(attempt {attempt + 1}/{max_retries}): {e}"
+                        )
                         await asyncio.sleep(delay)
                         delay *= backoff_factor
-            if logger is not None:
-                logger.error(
-                    f"Max retries ({max_retries}) reached for mirror_db request"
-                )
+            logger.error(
+                f"Max retries ({max_retries}) reached for mirror_db request"
+            )
             raise last_exception  # type: ignore
 
         return wrapper
@@ -289,25 +295,50 @@ class GenericMirrorDBConnection(Connection):
 
         :param task: The completed task
         """
-        request = self.task_to_request.pop(task)
+        request = None
         try:
-            response_message: Optional[Message] = task.result()
-        except Exception as e:  # pylint: disable=broad-except
+            request = self.task_to_request.pop(task)
+            try:
+                response_message: Optional[Message] = task.result()
+            except Exception as e:  # pylint: disable=broad-except
+                self.logger.exception(
+                    "Unhandled exception in mirror_db task "
+                    f"(to={request.to}, sender={request.sender}): {e}"
+                )
+                response_message = self._build_typed_error_message(request, e)
+
+            envelope: Optional[Envelope] = None
+            if response_message is not None:
+                envelope = Envelope(
+                    to=request.sender,
+                    sender=request.to,
+                    message=response_message,
+                    context=request.context,
+                )
+            self.response_envelopes.put_nowait(envelope)
+        except Exception as outer_exc:  # pylint: disable=broad-except
             self.logger.exception(
-                f"Unhandled exception in mirror_db task: {e}"
+                f"Unrecoverable failure in _handle_done_task: {outer_exc}"
             )
-            response_message = None
+            self.response_envelopes.put_nowait(None)
 
-        response_envelope = None
-        if response_message is not None:
-            response_envelope = Envelope(
-                to=request.sender,
-                sender=request.to,
-                message=response_message,
-                context=request.context,
+    def _build_typed_error_message(
+        self, request: Envelope, exc: Exception
+    ) -> Optional[Message]:
+        """Build an SRR error reply for a failed task."""
+        try:
+            srr_message = cast(SrrMessage, request.message)
+            dialogue = self.dialogues.update(srr_message)
+            return self.prepare_error_message(
+                srr_message,
+                dialogue,
+                f"Backend task failed: {exc}",
             )
-
-        self.response_envelopes.put_nowait(response_envelope)
+        except Exception as build_exc:  # pylint: disable=broad-except
+            self.logger.exception(
+                f"Failed to build typed error message: {build_exc}"
+            )
+            return None
 
     async def _get_response(
         self, srr_message: SrrMessage, dialogue: Optional[BaseDialogue]
@@ -329,6 +360,9 @@ class GenericMirrorDBConnection(Connection):
         try:
             payload = json.loads(srr_message.payload)
         except (json.JSONDecodeError, TypeError) as e:
+            self.logger.error(
+                f"Failed to parse mirror_db request payload: {e}"
+            )
             return self.prepare_error_message(
                 srr_message,
                 dialogue,

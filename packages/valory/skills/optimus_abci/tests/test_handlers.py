@@ -1217,7 +1217,47 @@ class TestHttpHandlerMethods:
         call_args = mock_internal_error.call_args
         assert call_args.args[0] is http_msg
         assert call_args.args[1] is mock_dialogue
-        assert "kaboom" in call_args.kwargs["error_msg"]
+        # Body must be generic — no exception text leaks to the HTTP caller.
+        assert call_args.kwargs["error_msg"] == "Internal server error"
+        # The exception detail is preserved in the server-side log only.
+        log_args = ctx.logger.exception.call_args_list[0]
+        assert "kaboom" in log_args.args[0]
+
+    def test_handle_dispatch_writes_500_to_outbox_end_to_end(self) -> None:
+        """A raising handler results in a 500 envelope on outbox.put_message."""
+        from packages.valory.connections.http_server.connection import (
+            PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
+        )
+        from packages.valory.protocols.http.message import HttpMessage
+
+        handler, ctx = _make_http_handler()
+
+        raising_handler = MagicMock(side_effect=RuntimeError("internal-detail"))
+        handler._get_handler = MagicMock(return_value=(raising_handler, {}))
+
+        http_msg = MagicMock(spec=HttpMessage)
+        http_msg.performative = HttpMessage.Performative.REQUEST
+        http_msg.method = "GET"
+        http_msg.url = "http://localhost/test"
+        http_msg.body = b""
+        http_msg.version = "1.1"
+        http_msg.headers = "Host: localhost"
+        http_msg.sender = str(HTTP_SERVER_PUBLIC_ID.without_hash())
+
+        reply_msg = MagicMock()
+        mock_dialogue = MagicMock()
+        mock_dialogue.reply.return_value = reply_msg
+        ctx.http_dialogues.update.return_value = mock_dialogue
+
+        handler.handle(http_msg)
+
+        mock_dialogue.reply.assert_called_once()
+        reply_kwargs = mock_dialogue.reply.call_args.kwargs
+        assert reply_kwargs["status_code"] == HttpCode.INTERNAL_SERVER_ERROR.value
+        assert reply_kwargs["body"] == b"Internal server error"
+        # The internal exception text is NOT echoed in the response body.
+        assert b"internal-detail" not in reply_kwargs["body"]
+        ctx.outbox.put_message.assert_called_once_with(message=reply_msg)
 
     def test_handle_dispatch_swallows_error_reply_exception(self) -> None:
         """If _handle_internal_error itself raises, the failure is logged, not propagated."""

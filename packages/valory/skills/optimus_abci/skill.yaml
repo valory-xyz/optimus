@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeihia2xwr4qylgejq5cclfbuaxbmqnjojl37kc4j5qlpl3ssm5ujha
   fsm_specification.yaml: bafybeiclrv7v4i2dvig7uea3fjxqfwwfqp3vsnumy5647dulgfhha6mlea
-  handlers.py: bafybeifv3qcasgw26l7kwm5r6dsiusatc6wclnvbo2f324kpqdvpdyjx7u
+  handlers.py: bafybeidisykbancnbzrkjf74ttiqceshntibipyrgsaq5tdpgde73oe34y
   models.py: bafybeib6hdrjjemlrllw4zr3famqllxzbon4pobpk62jmqpo2b2nk244se
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -108,7 +108,7 @@ fingerprint:
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
   tests/test_dialogues.py: bafybeicy5zraajbp3siswp37fzwezj24bmyt7jwgjswp3unenfiqumy2t4
-  tests/test_handlers.py: bafybeibqhttxrhhtupxmqj6gnaeuujm6376h3suam5b2dlfyyvy23r4sju
+  tests/test_handlers.py: bafybeifikt7dp727plnldvdq3esoj63dg5hg5kk35ae7blckypco572ndq
   tests/test_models.py: bafybeietsbgersz54hmngxuimwozsn4rorhkbzzsftnhy2a47e3zu64nke
   tests/test_prompts.py: bafybeialrz3mvpiu2xruv3dtnhxolgduom5izwo2q343oiazfoh44usmam
 fingerprint_ignore_patterns: []
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeidywralavqvrmzxomdgnthngqfzhbpop6n23pwf67lg2p6ndvt3fy
 - valory/reset_pause_abci:0.1.0:bafybeiahbkc4gfcmcvifbs6dvhtcj6wtjr7bvvdxunhxxquglkv365lu3e
 - valory/termination_abci:0.1.0:bafybeic7wo6vp7ag2yhirxgftim6mjmo225v2lixfxuj5q6rdp7mj6ujqy
-- valory/liquidity_trader_abci:0.1.0:bafybeicai2sxawmd7jxpoxt3e5lyjbz6gh5plwagljxwppzuays4taab2q
+- valory/liquidity_trader_abci:0.1.0:bafybeic4wlq6nu73kf7nq22m3hoy3hfe3uasusqsceqthvtau7a2wzy6da
 - valory/transaction_settlement_abci:0.1.0:bafybeiemyjkxj2ifzjr5kubtebpyezocl33zxt7gwf7yongg6zlbfjilte
 - valory/funds_manager:0.1.0:bafybeiebmb72sxx3odmxzpn7qy4la3i6n5vf4di4vbkt4mt4kuybosftay
 behaviours:

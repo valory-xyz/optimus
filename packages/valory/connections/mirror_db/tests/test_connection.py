@@ -225,6 +225,48 @@ class TestRetryWithExponentialBackoff:
             await failing_func()
         assert call_count == 1
 
+    @pytest.mark.asyncio
+    async def test_backoff_progression_doubles_each_attempt(self) -> None:
+        """The sleep duration must grow by backoff_factor between attempts."""
+        sleeps: list = []
+
+        async def fake_sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        @retry_with_exponential_backoff(
+            max_retries=4, initial_delay=1, backoff_factor=2
+        )
+        async def always_429() -> str:
+            raise MirrorDBHTTPError(429, "Too Many Requests")
+
+        with patch.object(asyncio, "sleep", side_effect=fake_sleep):
+            with pytest.raises(MirrorDBHTTPError):
+                await always_429()
+        # Three sleeps for max_retries=4 (no sleep after the final attempt).
+        # Doubling pattern asserts backoff_factor is actually applied.
+        assert sleeps == [1, 2, 4]
+
+    @pytest.mark.asyncio
+    async def test_logger_attribute_emits_retry_warnings(self) -> None:
+        """When the wrapped object exposes a logger, retry warnings reach it."""
+        mock_logger = MagicMock()
+
+        class _Owner:
+            logger = mock_logger
+
+            @retry_with_exponential_backoff(max_retries=3, initial_delay=0.0)
+            async def call(self) -> str:
+                raise MirrorDBHTTPError(429, "Too Many Requests")
+
+        with pytest.raises(MirrorDBHTTPError):
+            await _Owner().call()
+        assert mock_logger.warning.call_count >= 1
+        first_call = mock_logger.warning.call_args_list[0]
+        assert "Retrying mirror_db request" in first_call.args[0]
+        # Final exhaustion log lands on .error
+        mock_logger.error.assert_called_once()
+        assert "Max retries" in mock_logger.error.call_args.args[0]
+
 
 class TestIsRetryable:
     """Tests for the _is_retryable predicate."""
@@ -232,6 +274,10 @@ class TestIsRetryable:
     def test_429_is_retryable(self) -> None:
         """HTTP 429 (too many requests) should retry."""
         assert _is_retryable(MirrorDBHTTPError(429, "x")) is True
+
+    def test_408_is_retryable(self) -> None:
+        """HTTP 408 (request timeout) should retry."""
+        assert _is_retryable(MirrorDBHTTPError(408, "x")) is True
 
     @pytest.mark.parametrize("status", [500, 502, 503, 504, 599])
     def test_5xx_is_retryable(self, status: int) -> None:
@@ -534,8 +580,44 @@ class TestHandleDoneTask:
             await connection.disconnect()
 
     @pytest.mark.asyncio
-    async def test_handle_done_task_swallows_task_result_exception(self) -> None:
-        """Task.result() raising must not block the response_envelopes queue."""
+    async def test_handle_done_task_queues_typed_error_on_task_failure(
+        self,
+    ) -> None:
+        """task.result() raising puts a typed error envelope on the queue."""
+        connection = _make_connection()
+        await connection.connect()
+        try:
+            mock_task = MagicMock(spec=asyncio.Future)
+            mock_task.result.side_effect = RuntimeError("simulated task failure")
+
+            srr_message = MagicMock(spec=SrrMessage)
+            request_envelope = MagicMock(
+                to=str(PUBLIC_ID),
+                sender=ANY_SKILL,
+                context=None,
+                message=srr_message,
+            )
+            connection.task_to_request[mock_task] = request_envelope
+
+            mock_dialogue = _make_mock_dialogue()
+            with patch.object(
+                connection.dialogues, "update", return_value=mock_dialogue
+            ):
+                connection._handle_done_task(mock_task)
+
+            assert mock_task not in connection.task_to_request
+            envelope = connection.response_envelopes.get_nowait()
+            assert envelope is not None
+            payload = json.loads(envelope.message.payload)
+            assert "Backend task failed" in payload.get("error", "")
+        finally:
+            await connection.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_handle_done_task_falls_back_to_none_when_build_fails(
+        self,
+    ) -> None:
+        """If error-message building itself raises, queue None instead of crashing."""
         connection = _make_connection()
         await connection.connect()
         try:
@@ -545,15 +627,30 @@ class TestHandleDoneTask:
             request_envelope = MagicMock(
                 to=str(PUBLIC_ID),
                 sender=ANY_SKILL,
-                context=MagicMock(),
+                context=None,
+                message=MagicMock(spec=SrrMessage),
             )
             connection.task_to_request[mock_task] = request_envelope
 
-            connection._handle_done_task(mock_task)
+            with patch.object(
+                connection.dialogues,
+                "update",
+                side_effect=RuntimeError("build failure"),
+            ):
+                connection._handle_done_task(mock_task)
+            envelope = connection.response_envelopes.get_nowait()
+            assert envelope is None
+        finally:
+            await connection.disconnect()
 
-            assert mock_task not in connection.task_to_request
-            # Even though task.result() raised, the queue must receive a
-            # placeholder envelope (None) so the caller is unblocked.
+    @pytest.mark.asyncio
+    async def test_handle_done_task_recovers_from_pop_failure(self) -> None:
+        """Even if pop raises (duplicate callback), the queue does not starve."""
+        connection = _make_connection()
+        await connection.connect()
+        try:
+            mock_task = MagicMock(spec=asyncio.Future)
+            connection._handle_done_task(mock_task)
             envelope = connection.response_envelopes.get_nowait()
             assert envelope is None
         finally:

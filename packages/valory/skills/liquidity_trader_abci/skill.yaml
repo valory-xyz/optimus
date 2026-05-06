@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeiccfjcgjq7dkul4jlypspgwqyoe3747ucsy73psam5lpk2aw6kpya
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiax6c2djooqmazruoovjww7jl6mmmj4utluxjf3enechlhmdk3aoa
+  models.py: bafybeif5zc5j2ycvgn3egceto6k6l3agj26dk67mxysz7igx6uutv62rgu
   payloads.py: bafybeiefg35dfa2b6tl6mhtq6pmlqzud4qm6axvpqefkz7qg2w23yub2om
   pool_behaviour.py: bafybeigztdzmnzkkbyjdpbfxt25v73fezgdg5vckr75jujcjzckd3grzw4
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -80,7 +80,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeiavjne6xwgk22nkewkn7niqx7dczezlmvjhjqcaa6gqq5vom5oeyq
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeibd2n6p6l2743v74qxal6oihlb2kx4fkmrd7unq5a3ngih2c6tjfi
+  tests/test_models.py: bafybeiccvjneriehs7kkrdd345bndwt6rfvs2p3jnd7zudnjcnfc2nmzeu
   tests/test_payloads.py: bafybeiaf7qt6walp35kum4kevlyon2265ryffbtcikz7oiwx5kfahr4tym
   tests/test_pool_behaviour.py: bafybeig3owl32ylgbmn57s225bkzeswvnttlhmn5ltd7kopesezsbenghi
   tests/test_rounds.py: bafybeihgjnzzbxvtfhmc2muqxkv32vvuwnl6haxw47yb4aatcesm4qgndu
@@ -95,7 +95,7 @@ fingerprint:
   utils/tick_math.py: bafybeiehijphwni4zfu57rhhbgdyxn5evyokvvckiwzmldmrbzg3nd7cmy
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeifrsqarbutimru3us5gg5eifoba6plkgpg3twa7eoxh4ucndroppm
+- valory/mirror_db:0.1.0:bafybeic3hqwgs6n4t7isgysb56uyffpdjqydgnhlgeqgas5ukch2mgk6ge
 - valory/kv_store:0.1.0:bafybeigtbb7qch5et2wked5h7riozxfw2rui3yp47lfdkhin7zcmpsosbi
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:

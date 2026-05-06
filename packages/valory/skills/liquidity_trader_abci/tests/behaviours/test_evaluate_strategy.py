@@ -788,6 +788,7 @@ class TestReadInvestingPaused:
         b._read_kv = _gen_return(None)
         result = _drive(b._read_investing_paused(), sends=[None])
         assert result is False
+        b.context.logger.error.assert_called_once()
 
     def test_returns_false_for_none_value(self):
         b = _mk()
@@ -795,7 +796,8 @@ class TestReadInvestingPaused:
         result = _drive(b._read_investing_paused(), sends=[None])
         assert result is False
 
-    def test_exception_returns_false(self):
+    def test_unexpected_exception_propagates(self):
+        """The narrowed handler does not swallow exceptions it never expected."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -803,8 +805,8 @@ class TestReadInvestingPaused:
             yield  # noqa: unreachable
 
         b._read_kv = _bad
-        result = _drive(b._read_investing_paused())
-        assert result is False
+        with pytest.raises(Exception, match="boom"):
+            _drive(b._read_investing_paused())
 
 
 class TestSendActions:

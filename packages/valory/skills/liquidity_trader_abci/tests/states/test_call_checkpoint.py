@@ -182,3 +182,31 @@ class TestCallCheckpointRound:
             result = round_obj.end_block()
         # Falls through all conditions, returns original res
         assert result == (mock_synced, Event.DONE)
+
+    def test_end_block_empty_payload_values_falls_through(self) -> None:
+        """Empty consensus tuple does not crash; falls through to super()."""
+        round_obj = self._stub_round(threshold=True, payload_values=())
+        mock_synced = MagicMock(spec=SynchronizedData)
+        with patch.object(
+            CollectSameUntilThresholdRound,
+            "end_block",
+            return_value=(mock_synced, Event.NO_MAJORITY),
+        ):
+            result = round_obj.end_block()
+        assert result == (mock_synced, Event.NO_MAJORITY)
+
+    def test_end_block_unknown_event_string_falls_through(self) -> None:
+        """An unknown event string (e.g. typo) does not match and falls through."""
+        round_obj = self._stub_round(
+            threshold=True,
+            payload_values=(None, None, None, None, 0, None, "withdrawal_init"),
+        )
+        mock_synced = MagicMock(spec=SynchronizedData)
+        mock_synced.service_staking_state = StakingState.UNSTAKED.value
+        with patch.object(
+            CollectSameUntilThresholdRound,
+            "end_block",
+            return_value=(mock_synced, Event.DONE),
+        ):
+            result = round_obj.end_block()
+        assert result == (mock_synced, Event.SERVICE_NOT_STAKED)

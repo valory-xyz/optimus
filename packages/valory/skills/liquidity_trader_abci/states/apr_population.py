@@ -30,6 +30,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import APRPopulationP
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
+    peek_withdrawal_event,
 )
 
 
@@ -46,10 +47,7 @@ class APRPopulationRound(CollectSameUntilThresholdRound):
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if (
-            self.threshold_reached
-            and self.most_voted_payload_values[-1] == Event.WITHDRAWAL_INITIATED.value
-        ):
+        if peek_withdrawal_event(self) == Event.WITHDRAWAL_INITIATED.value:
             return self.synchronized_data, Event.WITHDRAWAL_INITIATED
 
         return super().end_block()

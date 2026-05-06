@@ -36,6 +36,12 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 
 
+def _gen_return_false(*args, **kwargs):
+    """Generator function that yields once and returns False."""
+    yield
+    return False
+
+
 def _make_behaviour():
     """Create an APRPopulationBehaviour without __init__."""
     obj = object.__new__(APRPopulationBehaviour)
@@ -43,6 +49,7 @@ def _make_behaviour():
     obj.__dict__["_context"] = ctx
     obj._initial_value = None
     obj._final_value = None
+    obj._read_investing_paused = _gen_return_false
     return obj
 
 
@@ -996,62 +1003,77 @@ class TestAdjustAprForEthPrice:
 class TestReadInvestingPaused:
     """Tests for _read_investing_paused."""
 
-    def test_result_none(self) -> None:
+    def _real_helper_obj(self):
+        """Build a behaviour with the real `_read_investing_paused` (the factory stubs it)."""
         obj = _make_behaviour()
+        del obj._read_investing_paused
+        return obj
+
+    def test_result_none_returns_false(self) -> None:
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return None
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
+        obj.context.logger.error.assert_called_once()
 
     def test_value_none(self) -> None:
-        obj = _make_behaviour()
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return {"investing_paused": None}
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
 
     def test_value_true(self) -> None:
-        obj = _make_behaviour()
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return {"investing_paused": "true"}
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is True
 
     def test_value_false(self) -> None:
-        obj = _make_behaviour()
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
             yield
             return {"investing_paused": "false"}
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
+        result = _drive(obj._read_investing_paused())
         assert result is False
 
-    def test_exception(self) -> None:
-        obj = _make_behaviour()
+    def test_value_non_string_returns_false(self) -> None:
+        obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
-            raise ValueError("test")
+            yield
+            return {"investing_paused": 1}
+
+        obj._read_kv = fake_read_kv
+        result = _drive(obj._read_investing_paused())
+        assert result is False
+        obj.context.logger.error.assert_called_once()
+
+    def test_unexpected_exception_propagates(self) -> None:
+        """The narrowed handler does not swallow exceptions it never expected."""
+        obj = self._real_helper_obj()
+
+        def fake_read_kv(keys):
+            raise ValueError("boom")
             yield  # noqa
 
         obj._read_kv = fake_read_kv
-        gen = obj._read_investing_paused()
-        result = _drive(gen)
-        assert result is False
+        with pytest.raises(ValueError, match="boom"):
+            _drive(obj._read_investing_paused())

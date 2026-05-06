@@ -1918,8 +1918,9 @@ class TestReadInvestingPaused:
     def test_none_result(self):
         obj = _mk()
         obj._read_kv = _gen_return(None)
-        gen = obj._read_investing_paused()
-        assert _drive(gen) is False
+        result = _drive(obj._read_investing_paused())
+        assert result is False
+        obj.context.logger.error.assert_called_once()
 
     def test_none_value(self):
         obj = _mk()
@@ -1927,7 +1928,8 @@ class TestReadInvestingPaused:
         gen = obj._read_investing_paused()
         assert _drive(gen) is False
 
-    def test_exception(self):
+    def test_unexpected_exception_propagates(self):
+        """The narrowed handler does not swallow exceptions it never expected."""
         obj = _mk()
 
         def boom(*a, **kw):
@@ -1935,8 +1937,8 @@ class TestReadInvestingPaused:
             yield  # noqa
 
         obj._read_kv = boom
-        gen = obj._read_investing_paused()
-        assert _drive(gen) is False
+        with pytest.raises(RuntimeError, match="fail"):
+            _drive(obj._read_investing_paused())
 
 
 class TestCheckIsValidSafeAddress:

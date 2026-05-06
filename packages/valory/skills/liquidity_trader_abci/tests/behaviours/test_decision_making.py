@@ -183,6 +183,7 @@ class TestReadInvestingPaused:
         b._read_kv = _make_gen_method(None)
         result = _exhaust(b._read_investing_paused())
         assert result is False
+        b.context.logger.error.assert_called_once()
 
     def test_returns_false_when_value_is_none(self):
         b = _make_behaviour()
@@ -190,7 +191,8 @@ class TestReadInvestingPaused:
         result = _exhaust(b._read_investing_paused())
         assert result is False
 
-    def test_returns_false_on_exception(self):
+    def test_unexpected_exception_propagates(self):
+        """The narrowed handler does not swallow exceptions it never expected."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
@@ -198,8 +200,8 @@ class TestReadInvestingPaused:
             yield  # noqa
 
         b._read_kv = raise_gen
-        result = _exhaust(b._read_investing_paused())
-        assert result is False
+        with pytest.raises(RuntimeError, match="boom"):
+            _exhaust(b._read_investing_paused())
 
 
 class TestReadWithdrawalStatus:

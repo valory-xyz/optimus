@@ -35,11 +35,18 @@ from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
 )
 
 
+def _gen_return_false(*args, **kwargs):
+    """Generator function that yields once and returns False."""
+    yield
+    return False
+
+
 def _make_behaviour():
     """Create a GetPositionsBehaviour without __init__."""
     obj = object.__new__(GetPositionsBehaviour)
     ctx = MagicMock()
     obj.__dict__["_context"] = ctx
+    obj._read_investing_paused = _gen_return_false
     return obj
 
 

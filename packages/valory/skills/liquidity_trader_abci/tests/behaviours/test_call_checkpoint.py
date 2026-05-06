@@ -33,12 +33,19 @@ from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import 
 )
 
 
+def _gen_return_false(*args, **kwargs):
+    """Generator function that yields once and returns False."""
+    yield
+    return False
+
+
 def _make_behaviour():
     """Create a CallCheckpointBehaviour without __init__."""
     obj = object.__new__(CallCheckpointBehaviour)
     ctx = MagicMock()
     obj.__dict__["_context"] = ctx
     obj.service_staking_state = StakingState.UNSTAKED
+    obj._read_investing_paused = _gen_return_false
     return obj
 
 

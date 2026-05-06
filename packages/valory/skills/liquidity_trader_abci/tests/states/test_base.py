@@ -22,9 +22,18 @@
 # pylint: skip-file
 
 import json
+from dataclasses import dataclass
+from unittest.mock import MagicMock, PropertyMock
 
-from packages.valory.skills.abstract_round_abci.base import AbciAppDB
-from packages.valory.skills.liquidity_trader_abci.states.base import SynchronizedData
+from packages.valory.skills.abstract_round_abci.base import (
+    AbciAppDB,
+    BaseTxPayload,
+    CollectSameUntilThresholdRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    SynchronizedData,
+    peek_withdrawal_event,
+)
 
 
 def test_import() -> None:
@@ -348,3 +357,37 @@ class TestSynchronizedData:
         data = self._make_collection_data("participant_to_withdraw_funds")
         result = data.participant_to_withdraw_funds
         assert isinstance(result, dict)
+
+
+@dataclass(frozen=True)
+class _PayloadWithoutEvent(BaseTxPayload):
+    """A subclass without an `event` field, for negative-path coverage."""
+
+    value: str = ""
+
+
+class TestPeekWithdrawalEvent:
+    """Direct tests for the peek_withdrawal_event helper."""
+
+    def _stub_round(self, threshold, payload_class, payload_values=()):
+        round_obj = MagicMock(spec=CollectSameUntilThresholdRound)
+        type(round_obj).threshold_reached = PropertyMock(return_value=threshold)
+        round_obj.payload_class = payload_class
+        type(round_obj).most_voted_payload_values = PropertyMock(
+            return_value=payload_values
+        )
+        return round_obj
+
+    def test_returns_none_when_payload_class_missing(self) -> None:
+        """Defensive: a round whose subclass has not set payload_class returns None."""
+        round_obj = self._stub_round(threshold=True, payload_class=None)
+        assert peek_withdrawal_event(round_obj) is None
+
+    def test_returns_none_when_payload_has_no_event_field(self) -> None:
+        """A payload class without an `event` field returns None (not a crash)."""
+        round_obj = self._stub_round(
+            threshold=True,
+            payload_class=_PayloadWithoutEvent,
+            payload_values=("anything",),
+        )
+        assert peek_withdrawal_event(round_obj) is None

@@ -94,6 +94,33 @@ class TestGetPositionsRound:
             result = round_obj.end_block()
         assert result is None
 
+    def test_end_block_empty_payload_values_falls_through(self) -> None:
+        """Empty consensus tuple does not crash; falls through to super()."""
+        round_obj = self._stub_round(threshold=True, payload_values=())
+        mock_synced = MagicMock(spec=SynchronizedData)
+        with patch.object(
+            CollectSameUntilThresholdRound,
+            "end_block",
+            return_value=(mock_synced, Event.NO_MAJORITY),
+        ):
+            result = round_obj.end_block()
+        assert result == (mock_synced, Event.NO_MAJORITY)
+
+    def test_end_block_unknown_event_string_falls_through(self) -> None:
+        """An unknown event string (e.g. typo) does not match and falls through."""
+        round_obj = self._stub_round(
+            threshold=True,
+            payload_values=('{"chain": "balances"}', "withdrawal_init"),
+        )
+        mock_synced = MagicMock(spec=SynchronizedData)
+        with patch.object(
+            CollectSameUntilThresholdRound,
+            "end_block",
+            return_value=(mock_synced, Event.DONE),
+        ):
+            result = round_obj.end_block()
+        assert result == (mock_synced, Event.DONE)
+
     def test_error_payload_constant_preserved(self) -> None:
         """ERROR_PAYLOAD class attribute remains for behaviour/test consumers."""
         assert GetPositionsRound.ERROR_PAYLOAD == {}

@@ -1614,26 +1614,27 @@ class LiquidityTraderBaseBehaviour(
         return data
 
     def _read_investing_paused(self) -> Generator[None, None, bool]:
-        """Read investing_paused flag from KV store."""
-        try:
-            result = yield from self._read_kv(("investing_paused",))
-            if result is None:
-                self.context.logger.warning(
-                    "No response from KV store for investing_paused flag"
-                )
-                return False
-
-            investing_paused_value = result.get("investing_paused")
-            if investing_paused_value is None:
-                self.context.logger.warning(
-                    "investing_paused value is None in KV store"
-                )
-                return False
-
-            return investing_paused_value.lower() == "true"
-        except Exception as e:
-            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+        """Read the investing_paused flag from the KV store."""
+        result = yield from self._read_kv(("investing_paused",))
+        if result is None:
+            self.context.logger.error(
+                "KV store unreachable while reading investing_paused"
+            )
             return False
+
+        raw = result.get("investing_paused")
+        if raw is None:
+            return False
+
+        if not isinstance(raw, str):
+            self.context.logger.error(
+                "investing_paused has unexpected type %s: %r",
+                type(raw).__name__,
+                raw,
+            )
+            return False
+
+        return raw.lower() == "true"
 
     def _write_kv(
         self,

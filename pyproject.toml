@@ -55,6 +55,17 @@ default-groups = "all"
 prerelease = "allow"
 
 [tool.tomte]
+# `customs/velodrome_pools_search` and `connections/mirror_db` carry the
+# bulk of the slim-canonical lint debt landed on `main` via the issue-280
+# resilience PRs (#284 / #285) — Google-style docstrings that darglint
+# rejects under sphinx style, commented-out code, late module-level
+# imports, etc. Excluded here so the migration can land alongside the
+# dep bumps; lint retrofit on those two paths is the same follow-up
+# tracked for the `liquidity_trader_abci` test suites.
+service_specific_packages_exclude = [
+    "packages/valory/customs/velodrome_pools_search",
+    "packages/valory/connections/mirror_db",
+]
 upstream_pins = [
     "valory-xyz/mech-interact@v0.30.0",
     "valory-xyz/genai@v7.0.0",

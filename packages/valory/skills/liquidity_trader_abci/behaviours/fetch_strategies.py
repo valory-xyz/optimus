@@ -797,7 +797,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:  # pragma: no cover
             self.context.logger.error(f"Error filtering portfolio breakdown: {e}")
             # Keep original list in case of error
-            pass
 
         for entry in portfolio_breakdown:
             if total_value > 0 and total_ratio > 0:

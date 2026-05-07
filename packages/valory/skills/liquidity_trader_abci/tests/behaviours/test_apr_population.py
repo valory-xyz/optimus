@@ -21,7 +21,6 @@
 
 # pylint: skip-file
 
-import os
 from decimal import Decimal
 from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -74,13 +73,16 @@ class TestAPRPopulationBehaviour:
         obj.context.agent_address = "0xagent"
 
         def fake_should_calc():
+            """Fake should calc."""
             yield
             return False
 
         def fake_send(*args, **kwargs):
+            """Fake send."""
             yield
 
         def fake_wait(*args, **kwargs):
+            """Fake wait."""
             yield
 
         obj._should_calculate_apr = fake_should_calc
@@ -100,28 +102,35 @@ class TestAPRPopulationBehaviour:
         obj.context.agent_address = "0xagent"
 
         def fake_should_calc():
+            """Fake should calc."""
             yield
             return True
 
         def fake_get_agent_type(sender):
+            """Fake get agent type."""
             yield
             return {"type_id": "t1"}
 
         def fake_get_agent_reg():
+            """Fake get agent reg."""
             yield
             return {"agent_id": "a1"}
 
         def fake_get_attr_def(type_id, agent_id):
+            """Fake get attr def."""
             yield
             return {"attr_def_id": "ad1"}
 
         def fake_calc_and_store(agent_id, attr_def_id):
+            """Fake calc and store."""
             yield
 
         def fake_send(*args, **kwargs):
+            """Fake send."""
             yield
 
         def fake_wait(*args, **kwargs):
+            """Fake wait."""
             yield
 
         obj._should_calculate_apr = fake_should_calc
@@ -145,13 +154,16 @@ class TestAPRPopulationBehaviour:
         obj.context.agent_address = "0xagent"
 
         def fake_should_calc():
+            """Fake should calc."""
             raise ValueError("test error")
             yield  # noqa
 
         def fake_send(*args, **kwargs):
+            """Fake send."""
             yield
 
         def fake_wait(*args, **kwargs):
+            """Fake wait."""
             yield
 
         obj._should_calculate_apr = fake_should_calc
@@ -177,14 +189,17 @@ class TestAPRPopulationWithdrawalGate:
         captured = {}
 
         def fake_read_investing_paused():
+            """Fake read investing paused."""
             yield
             return True
 
         def fake_send(payload):
+            """Fake send."""
             captured["payload"] = payload
             yield
 
         def fake_wait():
+            """Fake wait."""
             yield
 
         obj._should_calculate_apr = MagicMock(
@@ -210,18 +225,22 @@ class TestAPRPopulationWithdrawalGate:
         captured = {}
 
         def fake_read_investing_paused():
+            """Fake read investing paused."""
             yield
             return False
 
         def fake_should_calc():
+            """Fake should calc."""
             yield
             return False
 
         def fake_send(payload):
+            """Fake send."""
             captured["payload"] = payload
             yield
 
         def fake_wait():
+            """Fake wait."""
             yield
 
         obj._read_investing_paused = fake_read_investing_paused
@@ -246,6 +265,7 @@ class TestShouldCalculateApr:
         obj.current_positions = []
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return None
 
@@ -262,6 +282,7 @@ class TestShouldCalculateApr:
         obj.current_positions = []
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "invalid"}
 
@@ -278,6 +299,7 @@ class TestShouldCalculateApr:
         obj.current_positions = []
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -295,6 +317,7 @@ class TestShouldCalculateApr:
         obj.current_positions = []
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -319,6 +342,7 @@ class TestShouldCalculateApr:
         ]
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -340,6 +364,7 @@ class TestShouldCalculateApr:
         ]
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -362,6 +387,7 @@ class TestShouldCalculateApr:
         ]
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -384,6 +410,7 @@ class TestShouldCalculateApr:
         ]
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -407,6 +434,7 @@ class TestShouldCalculateApr:
         ]
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": "1700000000"}
 
@@ -428,6 +456,7 @@ class TestShouldCalculateApr:
         ]
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"last_apr_calculation": None}
 
@@ -448,6 +477,7 @@ class TestCalculateAndStoreApr:
         obj.portfolio_data = {"portfolio_value": 100}
 
         def fake_calc_actual_apr(pv):
+            """Fake calc actual apr."""
             yield
             return None
 
@@ -464,6 +494,7 @@ class TestCalculateAndStoreApr:
         obj.portfolio_data = {"portfolio_value": 100}
 
         def fake_calc_actual_apr(pv):
+            """Fake calc actual apr."""
             yield
             return {"total_actual_apr": None, "adjusted_apr": 5.0}
 
@@ -485,14 +516,17 @@ class TestCalculateAndStoreApr:
         shared.selected_protocols = ["uniswap"]
 
         def fake_calc_actual_apr(pv):
+            """Fake calc actual apr."""
             yield
             return {"total_actual_apr": 0.0, "adjusted_apr": 0.0}
 
         def fake_create_agent_attr(agent_id, attr_def_id, data):
+            """Fake create agent attr."""
             yield
             return {"id": "attr1"}
 
         def fake_write_kv(data):
+            """Fake write kv."""
             yield
 
         obj.calculate_actual_apr = fake_calc_actual_apr
@@ -516,6 +550,7 @@ class TestCalculateAndStoreApr:
         obj.portfolio_data = {"portfolio_value": 100}
 
         def fake_calc_actual_apr(pv):
+            """Fake calc actual apr."""
             yield
             return {"total_actual_apr": None, "adjusted_apr": 5.0}
 
@@ -537,14 +572,17 @@ class TestCalculateAndStoreApr:
         shared.selected_protocols = ["uniswap"]
 
         def fake_calc_actual_apr(pv):
+            """Fake calc actual apr."""
             yield
             return {"total_actual_apr": 12.5, "adjusted_apr": 10.0}
 
         def fake_create_agent_attr(agent_id, attr_def_id, data):
+            """Fake create agent attr."""
             yield
             return {"id": "attr1"}
 
         def fake_write_kv(data):
+            """Fake write kv."""
             yield
 
         obj.calculate_actual_apr = fake_calc_actual_apr
@@ -566,21 +604,25 @@ class TestConvertDecimals:
     """Tests for _convert_decimals."""
 
     def test_dict(self) -> None:
+        """Test dict."""
         obj = _make_behaviour()
         result = obj._convert_decimals({"a": Decimal("1.5"), "b": "hello"})
         assert result == {"a": 1.5, "b": "hello"}
 
     def test_list(self) -> None:
+        """Test list."""
         obj = _make_behaviour()
         result = obj._convert_decimals([Decimal("1.5"), "hello", 42])
         assert result == [1.5, "hello", 42]
 
     def test_decimal(self) -> None:
+        """Test decimal."""
         obj = _make_behaviour()
         result = obj._convert_decimals(Decimal("3.14"))
         assert result == 3.14
 
     def test_plain_value(self) -> None:
+        """Test plain value."""
         obj = _make_behaviour()
         assert obj._convert_decimals(42) == 42
         assert obj._convert_decimals("hello") == "hello"
@@ -590,25 +632,30 @@ class TestToDecimal:
     """Tests for _to_decimal."""
 
     def test_none(self) -> None:
+        """Test none."""
         obj = _make_behaviour()
         assert obj._to_decimal(None) is None
 
     def test_decimal(self) -> None:
+        """Test decimal."""
         obj = _make_behaviour()
         d = Decimal("1.5")
         assert obj._to_decimal(d) is d
 
     def test_float(self) -> None:
+        """Test float."""
         obj = _make_behaviour()
         result = obj._to_decimal(1.5)
         assert result == Decimal("1.5")
 
     def test_int(self) -> None:
+        """Test int."""
         obj = _make_behaviour()
         result = obj._to_decimal(100)
         assert result == Decimal("100")
 
     def test_invalid(self) -> None:
+        """Test invalid."""
         obj = _make_behaviour()
         result = obj._to_decimal("not_a_number")
         assert result is None
@@ -618,6 +665,7 @@ class TestCreatePortfolioSnapshot:
     """Tests for _create_portfolio_snapshot."""
 
     def test_snapshot(self) -> None:
+        """Test snapshot."""
         obj = _make_behaviour()
         obj.portfolio_data = {"value": Decimal("100")}
         obj.current_positions = [{"amount": Decimal("50")}]
@@ -707,9 +755,11 @@ class TestSignMessage:
     """Tests for sign_message."""
 
     def test_sign_success(self) -> None:
+        """Test sign success."""
         obj = _make_behaviour()
 
         def fake_get_signature(msg_bytes):
+            """Fake get signature."""
             yield
             return "0xabcdef"
 
@@ -719,9 +769,11 @@ class TestSignMessage:
         assert result == "abcdef"
 
     def test_sign_failure(self) -> None:
+        """Test sign failure."""
         obj = _make_behaviour()
 
         def fake_get_signature(msg_bytes):
+            """Fake get signature."""
             yield
             return None
 
@@ -735,6 +787,7 @@ class TestCalculateActualApr:
     """Tests for calculate_actual_apr."""
 
     def test_no_valid_portfolio_data(self) -> None:
+        """Test no valid portfolio data."""
         obj = _make_behaviour()
         obj.portfolio_data = None
         gen = obj.calculate_actual_apr(100)
@@ -742,10 +795,12 @@ class TestCalculateActualApr:
         assert result is None
 
     def test_no_initial_investment(self) -> None:
+        """Test no initial investment."""
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100, "initial_investment": None}
 
         def fake_adjust(*a, **kw):
+            """Fake adjust."""
             yield
 
         obj._adjust_apr_for_eth_price = fake_adjust
@@ -754,12 +809,14 @@ class TestCalculateActualApr:
         assert result is None
 
     def test_success(self) -> None:
+        """Test success."""
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100, "initial_investment": 90}
         obj.current_positions = [{"timestamp": 1700000000}]
         obj._get_current_timestamp = MagicMock(return_value=1700000000 + 100000)
 
         def fake_adjust(*a, **kw):
+            """Fake adjust."""
             yield
 
         obj._adjust_apr_for_eth_price = fake_adjust
@@ -773,16 +830,19 @@ class TestGetStoredInitialInvestment:
     """Tests for get_stored_initial_investment."""
 
     def test_no_portfolio_data(self) -> None:
+        """Test no portfolio data."""
         obj = _make_behaviour()
         obj.portfolio_data = None
         assert obj.get_stored_initial_investment() is None
 
     def test_no_initial_investment(self) -> None:
+        """Test no initial investment."""
         obj = _make_behaviour()
         obj.portfolio_data = {"other": "data"}
         assert obj.get_stored_initial_investment() is None
 
     def test_has_initial_investment(self) -> None:
+        """Test has initial investment."""
         obj = _make_behaviour()
         obj.portfolio_data = {"initial_investment": 100}
         assert obj.get_stored_initial_investment() == 100.0
@@ -792,16 +852,19 @@ class TestHasValidPortfolioData:
     """Tests for _has_valid_portfolio_data."""
 
     def test_no_portfolio_data(self) -> None:
+        """Test no portfolio data."""
         obj = _make_behaviour()
         obj.portfolio_data = None
         assert obj._has_valid_portfolio_data() is False
 
     def test_no_portfolio_value(self) -> None:
+        """Test no portfolio value."""
         obj = _make_behaviour()
         obj.portfolio_data = {"other": "data"}
         assert obj._has_valid_portfolio_data() is False
 
     def test_valid(self) -> None:
+        """Test valid."""
         obj = _make_behaviour()
         obj.portfolio_data = {"portfolio_value": 100}
         assert obj._has_valid_portfolio_data() is True
@@ -811,16 +874,19 @@ class TestGetFirstInvestmentTimestamp:
     """Tests for _get_first_investment_timestamp."""
 
     def test_timestamp_field(self) -> None:
+        """Test timestamp field."""
         obj = _make_behaviour()
         obj.current_positions = [{"timestamp": 1700000000}]
         assert obj._get_first_investment_timestamp() == 1700000000
 
     def test_enter_timestamp_field(self) -> None:
+        """Test enter timestamp field."""
         obj = _make_behaviour()
         obj.current_positions = [{"enter_timestamp": 1700000000}]
         assert obj._get_first_investment_timestamp() == 1700000000
 
     def test_no_timestamp_fallback(self) -> None:
+        """Test no timestamp fallback."""
         obj = _make_behaviour()
         obj.current_positions = [{"no_ts": True}]
         obj._get_current_timestamp = MagicMock(return_value=1700000000.5)
@@ -832,6 +898,7 @@ class TestCalculateApr:
     """Tests for _calculate_apr."""
 
     def test_zero_final_value(self) -> None:
+        """Test zero final value."""
         obj = _make_behaviour()
         obj._final_value = 0
         obj._initial_value = 100
@@ -840,6 +907,7 @@ class TestCalculateApr:
         assert ret == 0.0
 
     def test_zero_initial_value(self) -> None:
+        """Test zero initial value."""
         obj = _make_behaviour()
         obj._final_value = 100
         obj._initial_value = 0
@@ -859,6 +927,7 @@ class TestCalculateApr:
         assert "total_actual_apr" in result
 
     def test_positive_apr(self) -> None:
+        """Test positive apr."""
         obj = _make_behaviour()
         obj._final_value = 110
         obj._initial_value = 100
@@ -900,13 +969,16 @@ class TestAdjustAprForEthPrice:
     """Tests for _adjust_apr_for_eth_price."""
 
     def test_both_prices_none(self) -> None:
+        """Test both prices none."""
         obj = _make_behaviour()
 
         def fake_fetch_zero(*a, **kw):
+            """Fake fetch zero."""
             yield
             return None
 
         def fake_fetch_hist(*a, **kw):
+            """Fake fetch hist."""
             yield
             return None
 
@@ -919,13 +991,16 @@ class TestAdjustAprForEthPrice:
         assert "adjusted_apr" not in result
 
     def test_success(self) -> None:
+        """Test success."""
         obj = _make_behaviour()
 
         def fake_fetch_zero(*a, **kw):
+            """Fake fetch zero."""
             yield
             return 2000.0
 
         def fake_fetch_hist(*a, **kw):
+            """Fake fetch hist."""
             yield
             return 1800.0
 
@@ -943,10 +1018,12 @@ class TestAdjustAprForEthPrice:
         obj = _make_behaviour()
 
         def fake_fetch_zero(*a, **kw):
+            """Fake fetch zero."""
             yield
             return 2000.0
 
         def fake_fetch_hist(*a, **kw):
+            """Fake fetch hist."""
             yield
             return 0.0
 
@@ -963,10 +1040,12 @@ class TestAdjustAprForEthPrice:
         obj = _make_behaviour()
 
         def fake_fetch_zero(*a, **kw):
+            """Fake fetch zero."""
             yield
             return "not_a_number"
 
         def fake_fetch_hist(*a, **kw):
+            """Fake fetch hist."""
             yield
             return 1800.0
 
@@ -984,10 +1063,12 @@ class TestAdjustAprForEthPrice:
         obj = _make_behaviour()
 
         def fake_fetch_zero(*a, **kw):
+            """Fake fetch zero."""
             yield
             return 2000.0
 
         def fake_fetch_hist(*a, **kw):
+            """Fake fetch hist."""
             yield
             return 1800.0
 
@@ -1010,9 +1091,11 @@ class TestReadInvestingPaused:
         return obj
 
     def test_result_none_returns_false(self) -> None:
+        """Test result none returns false."""
         obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return None
 
@@ -1022,9 +1105,11 @@ class TestReadInvestingPaused:
         obj.context.logger.error.assert_called_once()
 
     def test_value_none(self) -> None:
+        """Test value none."""
         obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": None}
 
@@ -1033,9 +1118,11 @@ class TestReadInvestingPaused:
         assert result is False
 
     def test_value_true(self) -> None:
+        """Test value true."""
         obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": "true"}
 
@@ -1044,9 +1131,11 @@ class TestReadInvestingPaused:
         assert result is True
 
     def test_value_false(self) -> None:
+        """Test value false."""
         obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": "false"}
 
@@ -1055,9 +1144,11 @@ class TestReadInvestingPaused:
         assert result is False
 
     def test_value_non_string_returns_false(self) -> None:
+        """Test value non string returns false."""
         obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": 1}
 
@@ -1071,6 +1162,7 @@ class TestReadInvestingPaused:
         obj = self._real_helper_obj()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             raise ValueError("boom")
             yield  # noqa
 

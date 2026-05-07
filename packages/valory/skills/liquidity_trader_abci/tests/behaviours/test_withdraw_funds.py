@@ -21,8 +21,7 @@
 
 # pylint: skip-file
 
-import json
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -72,27 +71,34 @@ class TestWithdrawFundsBehaviour:
         obj.context.agent_address = "0xagent"
 
         def fake_read_investing_paused():
+            """Fake read investing paused."""
             yield
             return investing_paused
 
         def fake_read_withdrawal_data():
+            """Fake read withdrawal data."""
             yield
             return withdrawal_data
 
         def fake_update_withdrawal_status(status, message):
+            """Fake update withdrawal status."""
             yield
 
         def fake_reset_withdrawal_flags():
+            """Fake reset withdrawal flags."""
             yield
 
         def fake_prepare_withdrawal_actions(positions_, target_addr_, portfolio_data_):
+            """Fake prepare withdrawal actions."""
             yield
             return withdrawal_actions if withdrawal_actions is not None else []
 
         def fake_send(*args, **kwargs):
+            """Fake send."""
             yield
 
         def fake_wait(*args, **kwargs):
+            """Fake wait."""
             yield
 
         obj._read_investing_paused = fake_read_investing_paused
@@ -195,6 +201,7 @@ class TestReadWithdrawalData:
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"withdrawal_id": "123", "withdrawal_target_address": "0x1"}
 
@@ -208,6 +215,7 @@ class TestReadWithdrawalData:
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return None
 
@@ -221,6 +229,7 @@ class TestReadWithdrawalData:
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             raise ValueError("boom")
             yield  # noqa: unreachable
 
@@ -244,10 +253,12 @@ class TestPrepareWithdrawalActions:
         obj = _make_behaviour()
 
         def fake_prepare_unstaking(_positions):
+            """Fake prepare unstaking."""
             yield
             return unstake_actions or []
 
         def fake_prepare_swap(_portfolio_data):
+            """Fake prepare swap."""
             yield
             return swap_actions or []
 
@@ -259,9 +270,11 @@ class TestPrepareWithdrawalActions:
         )
 
         def fake_update_status(status, message):
+            """Fake update status."""
             yield
 
         def fake_reset_flags():
+            """Fake reset flags."""
             yield
 
         obj._update_withdrawal_status = fake_update_status
@@ -521,10 +534,12 @@ class TestPrepareSwapToUsdcActionsStandard:
         balances = {(k or "").lower(): v for k, v in (balances or {}).items()}
 
         def fake_get_token_balance(chain, account, asset_address):
+            """Fake get token balance."""
             yield
             return balances.get((asset_address or "").lower(), 0)
 
         def fake_get_token_decimals(chain, asset_address):
+            """Fake get token decimals."""
             yield
             return decimals
 
@@ -693,7 +708,7 @@ class TestPrepareSwapToUsdcActionsStandard:
         obj._build_swap_to_usdc_action.assert_not_called()
 
     def test_safe_held_backstop_dedupes_against_portfolio(self) -> None:
-        """A token already queued from portfolio_breakdown is not re-queued from the
+        """A token already queued from portfolio_breakdown is not re-queued from the # noqa: D205,D209
         on-chain backstop."""
         ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
         obj = self._make_obj(balances={ousdt: 5_000_000})
@@ -717,7 +732,7 @@ class TestPrepareSwapToUsdcActionsStandard:
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
         portfolio = {"portfolio_breakdown": []}
-        result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
+        _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         # USDC is skipped by address; OLAS is not in WHITELISTED_ASSETS["optimism"]
         # so the backstop should never even ask for it.
         for call in obj._build_swap_to_usdc_action.call_args_list:
@@ -725,7 +740,7 @@ class TestPrepareSwapToUsdcActionsStandard:
             assert from_addr != usdc
 
     def test_safe_held_backstop_skips_when_no_safe_address(self) -> None:
-        """If the chain has no safe address configured, the backstop is skipped
+        """If the chain has no safe address configured, the backstop is skipped # noqa: D205,D209
         entirely (no on-chain reads, no swaps from backstop)."""
         obj = self._make_obj()
         obj.context.params.safe_contract_addresses = {}  # no safe for any chain
@@ -753,6 +768,7 @@ class TestPrepareSwapToUsdcActionsStandard:
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
         def fake_decimals_none(chain, asset_address):
+            """Fake decimals none."""
             yield
             return None
 
@@ -807,6 +823,7 @@ class TestUpdateWithdrawalStatus:
         written = {}
 
         def fake_write_kv(data):
+            """Fake write kv."""
             written.update(data)
             yield
 
@@ -822,6 +839,7 @@ class TestUpdateWithdrawalStatus:
         written = {}
 
         def fake_write_kv(data):
+            """Fake write kv."""
             written.update(data)
             yield
 
@@ -837,6 +855,7 @@ class TestUpdateWithdrawalStatus:
         written = {}
 
         def fake_write_kv(data):
+            """Fake write kv."""
             written.update(data)
             yield
 
@@ -851,6 +870,7 @@ class TestUpdateWithdrawalStatus:
         obj = _make_behaviour()
 
         def fake_write_kv(data):
+            """Fake write kv."""
             raise ValueError("write error")
             yield  # noqa: unreachable
 
@@ -869,6 +889,7 @@ class TestResetWithdrawalFlags:
         written = {}
 
         def fake_write_kv(data):
+            """Fake write kv."""
             written.update(data)
             yield
 
@@ -882,6 +903,7 @@ class TestResetWithdrawalFlags:
         obj = _make_behaviour()
 
         def fake_write_kv(data):
+            """Fake write kv."""
             raise ValueError("write error")
             yield  # noqa: unreachable
 
@@ -899,6 +921,7 @@ class TestReadInvestingPaused:
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": "true"}
 
@@ -912,6 +935,7 @@ class TestReadInvestingPaused:
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": "false"}
 
@@ -925,6 +949,7 @@ class TestReadInvestingPaused:
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": "True"}
 
@@ -934,9 +959,11 @@ class TestReadInvestingPaused:
         assert result is True
 
     def test_result_none(self) -> None:
+        """Test result none."""
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return None
 
@@ -946,9 +973,11 @@ class TestReadInvestingPaused:
         obj.context.logger.error.assert_called_once()
 
     def test_value_none(self) -> None:
+        """Test value none."""
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {"investing_paused": None}
 
@@ -961,6 +990,7 @@ class TestReadInvestingPaused:
         obj = _make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             raise ValueError("boom")
             yield  # noqa: unreachable
 

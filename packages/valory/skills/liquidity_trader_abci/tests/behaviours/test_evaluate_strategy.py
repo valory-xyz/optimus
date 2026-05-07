@@ -23,7 +23,6 @@
 import json
 import math
 import time
-from typing import Any, Dict, Generator, List, Optional, Tuple
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -32,8 +31,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     DexType,
     METRICS_UPDATE_INTERVAL,
-    MIN_TIME_IN_POSITION,
-    OLAS_ADDRESSES,
     PositionStatus,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
@@ -126,7 +123,7 @@ def _drive(gen, sends=None):
     val = None
     while True:
         try:
-            yielded = gen.send(val)
+            gen.send(val)
             if idx < len(sends):
                 val = sends[idx]
                 idx += 1
@@ -155,11 +152,13 @@ class TestValidateAndPrepareVelodromeInputs:
     """Tests for validate_and_prepare_velodrome_inputs."""
 
     def test_empty_tick_bands_returns_none(self):
+        """Test empty tick bands returns none."""
         b = _mk()
         result = b.validate_and_prepare_velodrome_inputs([], 1.0)
         assert result is None
 
     def test_negative_price_returns_none(self):
+        """Test negative price returns none."""
         b = _mk()
         result = b.validate_and_prepare_velodrome_inputs(
             [{"tick_lower": 0, "tick_upper": 10, "allocation": 1}], -1.0
@@ -167,6 +166,7 @@ class TestValidateAndPrepareVelodromeInputs:
         assert result is None
 
     def test_zero_price_returns_none(self):
+        """Test zero price returns none."""
         b = _mk()
         result = b.validate_and_prepare_velodrome_inputs(
             [{"tick_lower": 0, "tick_upper": 10, "allocation": 1}], 0
@@ -174,18 +174,21 @@ class TestValidateAndPrepareVelodromeInputs:
         assert result is None
 
     def test_no_positive_allocation_returns_none(self):
+        """Test no positive allocation returns none."""
         b = _mk()
         bands = [{"tick_lower": 0, "tick_upper": 10, "allocation": 0}]
         result = b.validate_and_prepare_velodrome_inputs(bands, 1.5)
         assert result is None
 
     def test_invalid_band_tick_lower_gte_upper(self):
+        """Test invalid band tick lower gte upper."""
         b = _mk()
         bands = [{"tick_lower": 10, "tick_upper": 5, "allocation": 1}]
         result = b.validate_and_prepare_velodrome_inputs(bands, 1.5)
         assert result is None  # all bands filtered out
 
     def test_valid_single_band(self):
+        """Test valid single band."""
         b = _mk()
         bands = [{"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}]
         result = b.validate_and_prepare_velodrome_inputs(bands, 1.5)
@@ -195,6 +198,7 @@ class TestValidateAndPrepareVelodromeInputs:
         assert "current_tick" in result
 
     def test_tick_spacing_alignment_warning(self):
+        """Test tick spacing alignment warning."""
         b = _mk()
         bands = [{"tick_lower": 3, "tick_upper": 7, "allocation": 1.0}]
         result = b.validate_and_prepare_velodrome_inputs(bands, 1.5, tick_spacing=5)
@@ -202,6 +206,7 @@ class TestValidateAndPrepareVelodromeInputs:
         assert len(result["warnings"]) > 0
 
     def test_mixed_valid_and_invalid_bands(self):
+        """Test mixed valid and invalid bands."""
         b = _mk()
         bands = [
             {"tick_lower": -100, "tick_upper": 100, "allocation": 0.5},
@@ -213,6 +218,7 @@ class TestValidateAndPrepareVelodromeInputs:
         assert len(result["warnings"]) > 0
 
     def test_all_invalid_bands_after_validation(self):
+        """Test all invalid bands after validation."""
         b = _mk()
         bands = [
             {"tick_lower": 100, "tick_upper": 50, "allocation": 0.5},
@@ -230,6 +236,7 @@ class TestValidateAndPrepareVelodromeInputs:
         assert result is None
 
     def test_multiple_valid_bands(self):
+        """Test multiple valid bands."""
         b = _mk()
         bands = [
             {"tick_lower": -200, "tick_upper": -50, "allocation": 0.3},
@@ -245,22 +252,26 @@ class TestCalculatePositionYieldPerDay:
     """Tests for _calculate_position_yield_per_day."""
 
     def test_apr_none(self):
+        """Test apr none."""
         b = _mk()
         result = b._calculate_position_yield_per_day({})
         assert result is None
 
     def test_apr_zero(self):
+        """Test apr zero."""
         b = _mk()
         result = b._calculate_position_yield_per_day({"apr": 0})
         assert result == 0.0
 
     def test_apr_positive(self):
+        """Test apr positive."""
         b = _mk()
         result = b._calculate_position_yield_per_day({"apr": 36.5})
         expected = (36.5 / 100) / 365
         assert abs(result - expected) < 1e-10
 
     def test_apr_negative(self):
+        """Test apr negative."""
         b = _mk()
         result = b._calculate_position_yield_per_day({"apr": -10.0})
         expected = (-10.0 / 100) / 365
@@ -271,16 +282,19 @@ class TestCalculateMinReqPositionValue:
     """Tests for _calculate_min_req_position_value."""
 
     def test_no_entry_apr(self):
+        """Test no entry apr."""
         b = _mk()
         result = b._calculate_min_req_position_value({}, 0.6)
         assert result is None
 
     def test_no_enter_timestamp(self):
+        """Test no enter timestamp."""
         b = _mk()
         result = b._calculate_min_req_position_value({"entry_apr": 20.0}, 0.6)
         assert result is None
 
     def test_fallback_to_apr(self):
+        """Test fallback to apr."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -290,6 +304,7 @@ class TestCalculateMinReqPositionValue:
         assert result > 1.0  # Always > 1 due to formula
 
     def test_valid_calculation(self):
+        """Test valid calculation."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -305,6 +320,7 @@ class TestCalculateMinReqPositionValue:
         assert abs(result - expected) < 1e-6
 
     def test_exception_returns_none(self):
+        """Test exception returns none."""
         b = _mk()
         b._get_current_timestamp = MagicMock(side_effect=Exception("boom"))
         pos = {"entry_apr": 20.0, "enter_timestamp": 1000}
@@ -316,26 +332,31 @@ class TestGetBestAvailableOpportunityYield:
     """Tests for _get_best_available_opportunity_yield."""
 
     def test_no_opportunities(self):
+        """Test no opportunities."""
         b = _mk()
         b.trading_opportunities = []
         assert b._get_best_available_opportunity_yield() is None
 
     def test_best_apr_none(self):
+        """Test best apr none."""
         b = _mk()
         b.trading_opportunities = [{}]
         assert b._get_best_available_opportunity_yield() is None
 
     def test_best_apr_zero(self):
+        """Test best apr zero."""
         b = _mk()
         b.trading_opportunities = [{"apr": 0}]
         assert b._get_best_available_opportunity_yield() is None
 
     def test_best_apr_negative(self):
+        """Test best apr negative."""
         b = _mk()
         b.trading_opportunities = [{"apr": -5}]
         assert b._get_best_available_opportunity_yield() is None
 
     def test_valid_apr(self):
+        """Test valid apr."""
         b = _mk()
         b.trading_opportunities = [{"apr": 36.5}, {"apr": 10.0}]
         result = b._get_best_available_opportunity_yield()
@@ -343,6 +364,7 @@ class TestGetBestAvailableOpportunityYield:
         assert abs(result - expected) < 1e-10
 
     def test_exception_returns_none(self):
+        """Test exception returns none."""
         b = _mk()
         # Make sorted() fail by providing a non-iterable
         b.trading_opportunities = None
@@ -354,11 +376,13 @@ class TestCheckFunds:
     """Tests for check_funds."""
 
     def test_open_position_returns_true(self):
+        """Test open position returns true."""
         b = _mk()
         b.current_positions = [{"status": PositionStatus.OPEN.value}]
         assert b.check_funds() is True
 
     def test_no_open_positions_no_funds(self):
+        """Test no open positions no funds."""
         b = _mk()
         b.current_positions = [{"status": PositionStatus.CLOSED.value}]
         synced_mock = MagicMock()
@@ -372,6 +396,7 @@ class TestCheckFunds:
             assert b.check_funds() is False
 
     def test_no_open_positions_with_funds(self):
+        """Test no open positions with funds."""
         b = _mk()
         b.current_positions = [{"status": PositionStatus.CLOSED.value}]
         synced_mock = MagicMock()
@@ -385,6 +410,7 @@ class TestCheckFunds:
             assert b.check_funds() is True
 
     def test_empty_positions_no_funds(self):
+        """Test empty positions no funds."""
         b = _mk()
         b.current_positions = []
         synced_mock = MagicMock()
@@ -402,6 +428,7 @@ class TestUpdatePositionMetrics:
     """Tests for update_position_metrics."""
 
     def test_no_eligible_positions(self):
+        """Test no eligible positions."""
         b = _mk()
         b.positions_eligible_for_exit = []
         b.store_current_positions = MagicMock()
@@ -409,6 +436,7 @@ class TestUpdatePositionMetrics:
         b.store_current_positions.assert_not_called()
 
     def test_skips_closed_positions(self):
+        """Test skips closed positions."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -420,6 +448,7 @@ class TestUpdatePositionMetrics:
         b.store_current_positions.assert_called_once()
 
     def test_no_strategy_for_dex_type(self):
+        """Test no strategy for dex type."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -436,6 +465,7 @@ class TestUpdatePositionMetrics:
         b.store_current_positions.assert_called_once()
 
     def test_metrics_update_interval_not_reached(self):
+        """Test metrics update interval not reached."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -453,6 +483,7 @@ class TestUpdatePositionMetrics:
         b.get_returns_metrics_for_opportunity.assert_not_called()
 
     def test_metrics_update_interval_reached(self):
+        """Test metrics update interval reached."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -471,6 +502,7 @@ class TestUpdatePositionMetrics:
         b.store_current_positions.assert_called_once()
 
     def test_metrics_update_returns_none(self):
+        """Test metrics update returns none."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -500,6 +532,7 @@ class TestCheckTipExitConditions:
         return b, now
 
     def test_legacy_no_timestamp(self):
+        """Test legacy no timestamp."""
         b, now = self._make_b()
         pos = {"entry_cost": 0}
         can_exit, reason = _drive(b._check_tip_exit_conditions(pos))
@@ -507,6 +540,7 @@ class TestCheckTipExitConditions:
         assert "No TiP data" in reason
 
     def test_legacy_past_21_days(self):
+        """Test legacy past 21 days."""
         b, now = self._make_b()
         pos = {"entry_cost": 0, "enter_timestamp": now - 86400 * 25}
         can_exit, reason = _drive(b._check_tip_exit_conditions(pos))
@@ -514,6 +548,7 @@ class TestCheckTipExitConditions:
         assert "Legacy position" in reason
 
     def test_legacy_not_past_21_days(self):
+        """Test legacy not past 21 days."""
         b, now = self._make_b()
         pos = {"entry_cost": 0, "enter_timestamp": now - 86400 * 5}
         can_exit, reason = _drive(b._check_tip_exit_conditions(pos))
@@ -521,6 +556,7 @@ class TestCheckTipExitConditions:
         assert "Legacy position must hold" in reason
 
     def test_21_day_global_cap(self):
+        """Test 21 day global cap."""
         b, now = self._make_b()
         pos = {
             "entry_cost": 100,
@@ -532,6 +568,7 @@ class TestCheckTipExitConditions:
         assert "21-day global temporal cap" in reason
 
     def test_minimum_time_not_met(self):
+        """Test minimum time not met."""
         b, now = self._make_b()
         b._check_minimum_time_met = lambda pos: False
         pos = {
@@ -544,6 +581,7 @@ class TestCheckTipExitConditions:
         assert "Minimum time not met" in reason
 
     def test_no_apr_data(self):
+        """Test no apr data."""
         b, now = self._make_b()
         pos = {
             "entry_cost": 100,
@@ -555,6 +593,7 @@ class TestCheckTipExitConditions:
         assert "No APR data" in reason
 
     def test_no_current_apr(self):
+        """Test no current apr."""
         b, now = self._make_b()
         pos = {
             "entry_cost": 100,
@@ -567,6 +606,7 @@ class TestCheckTipExitConditions:
         assert "No current APR" in reason
 
     def test_trailing_stoploss_triggered(self):
+        """Test trailing stoploss triggered."""
         b, now = self._make_b()
         pos = {
             "entry_cost": 100,
@@ -614,6 +654,7 @@ class TestCheckTipExitConditions:
         assert "Opportunity cost check" in reason
 
     def test_cost_recovered_triggers_exit(self):
+        """Test cost recovered triggers exit."""
         b, now = self._make_b()
         pos = {
             "entry_cost": 100,
@@ -630,6 +671,7 @@ class TestCheckTipExitConditions:
         assert "Costs recovered" in reason
 
     def test_costs_not_recovered(self):
+        """Test costs not recovered."""
         b, now = self._make_b()
         pos = {
             "entry_cost": 100,
@@ -647,6 +689,7 @@ class TestCheckTipExitConditions:
         assert "costs not recovered" in reason
 
     def test_exception_path(self):
+        """Test exception path."""
         b, now = self._make_b()
         b._calculate_days_since_entry = MagicMock(side_effect=Exception("boom"))
         pos = {"entry_cost": 100, "enter_timestamp": now - 86400 * 15}
@@ -694,12 +737,14 @@ class TestApplyTipFiltersToExitDecisions:
     """Tests for _apply_tip_filters_to_exit_decisions."""
 
     def test_no_positions(self):
+        """Test no positions."""
         b = _mk()
         should_proceed, eligible = _drive(b._apply_tip_filters_to_exit_decisions())
         assert should_proceed is True
         assert eligible == []
 
     def test_all_positions_closed(self):
+        """Test all positions closed."""
         b = _mk()
         b.current_positions = [{"status": PositionStatus.CLOSED.value}]
         should_proceed, eligible = _drive(b._apply_tip_filters_to_exit_decisions())
@@ -707,6 +752,7 @@ class TestApplyTipFiltersToExitDecisions:
         assert eligible == []
 
     def test_open_position_eligible(self):
+        """Test open position eligible."""
         b = _mk()
         pos = {"status": PositionStatus.OPEN.value, "pool_address": "0xpool"}
         b.current_positions = [pos]
@@ -718,6 +764,7 @@ class TestApplyTipFiltersToExitDecisions:
         assert len(eligible) == 1
 
     def test_open_position_blocked(self):
+        """Test open position blocked."""
         b = _mk()
         pos = {"status": PositionStatus.OPEN.value, "pool_address": "0xpool"}
         b.current_positions = [pos]
@@ -729,6 +776,7 @@ class TestApplyTipFiltersToExitDecisions:
         assert len(eligible) == 0
 
     def test_exception_returns_open_positions(self):
+        """Test exception returns open positions."""
         b = _mk()
         pos = {"status": PositionStatus.OPEN.value}
         b.current_positions = [pos]
@@ -744,6 +792,7 @@ class TestApplyTipFiltersToExitDecisions:
         assert len(eligible) == 1
 
     def test_mixed_eligible_and_blocked(self):
+        """Test mixed eligible and blocked."""
         b = _mk()
         pos1 = {"status": PositionStatus.OPEN.value, "pool_address": "0x1"}
         pos2 = {"status": PositionStatus.OPEN.value, "pool_address": "0x2"}
@@ -772,18 +821,21 @@ class TestReadInvestingPaused:
     """Tests for _read_investing_paused."""
 
     def test_returns_true(self):
+        """Test returns true."""
         b = _mk()
         b._read_kv = _gen_return({"investing_paused": "true"})
         result = _drive(b._read_investing_paused(), sends=[None])
         assert result is True
 
     def test_returns_false_for_false_value(self):
+        """Test returns false for false value."""
         b = _mk()
         b._read_kv = _gen_return({"investing_paused": "false"})
         result = _drive(b._read_investing_paused(), sends=[None])
         assert result is False
 
     def test_returns_false_for_none_response(self):
+        """Test returns false for none response."""
         b = _mk()
         b._read_kv = _gen_return(None)
         result = _drive(b._read_investing_paused(), sends=[None])
@@ -791,6 +843,7 @@ class TestReadInvestingPaused:
         b.context.logger.error.assert_called_once()
 
     def test_returns_false_for_none_value(self):
+        """Test returns false for none value."""
         b = _mk()
         b._read_kv = _gen_return({"investing_paused": None})
         result = _drive(b._read_investing_paused(), sends=[None])
@@ -813,6 +866,7 @@ class TestSendActions:
     """Tests for send_actions."""
 
     def test_send_actions_none(self):
+        """Test send actions none."""
         b = _mk()
         b.send_a2a_transaction = _gen_none
         b.wait_until_round_end = _gen_none
@@ -821,6 +875,7 @@ class TestSendActions:
         b.set_done.assert_called_once()
 
     def test_send_actions_with_list(self):
+        """Test send actions with list."""
         b = _mk()
         b.send_a2a_transaction = _gen_none
         b.wait_until_round_end = _gen_none
@@ -844,12 +899,14 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         return result
 
     def test_no_usdc_address(self):
+        """Test no usdc address."""
         b = _mk()
         b._get_usdc_address = MagicMock(return_value=None)
         result = self._call(b)
         assert result == []
 
     def test_no_positions(self):
+        """Test no positions."""
         b = _mk()
         b._get_usdc_address = MagicMock(return_value="0xusdc")
         synced_mock = MagicMock()
@@ -864,6 +921,7 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         assert result == []
 
     def test_skips_whitelisted_token(self):
+        """Test skips whitelisted token."""
         b = _mk()
         b._get_usdc_address = MagicMock(return_value="0xusdc")
         chain = "optimism"
@@ -889,6 +947,7 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         assert result == []
 
     def test_skips_zero_balance(self):
+        """Test skips zero balance."""
         b = _mk()
         b._get_usdc_address = MagicMock(return_value="0xusdc")
         synced_mock = MagicMock()
@@ -910,6 +969,7 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         assert result == []
 
     def test_swaps_non_whitelisted_token(self):
+        """Test swaps non whitelisted token."""
         b = _mk()
         b._get_usdc_address = MagicMock(return_value="0xusdc")
         synced_mock = MagicMock()
@@ -938,6 +998,7 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         assert result[0] == swap_action
 
     def test_swap_action_fails(self):
+        """Test swap action fails."""
         b = _mk()
         b._get_usdc_address = MagicMock(return_value="0xusdc")
         synced_mock = MagicMock()
@@ -964,6 +1025,7 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         assert result == []
 
     def test_exception_returns_empty(self):
+        """Test exception returns empty."""
         b = _mk()
         b._get_usdc_address = MagicMock(side_effect=Exception("boom"))
         result = self._call(b)
@@ -974,12 +1036,14 @@ class TestCalculateAggregateTokenRatios:
     """Tests for _calculate_aggregate_token_ratios."""
 
     def test_empty_list(self):
+        """Test empty list."""
         b = _mk()
         r0, r1 = b._calculate_aggregate_token_ratios([])
         assert r0 == 0.5
         assert r1 == 0.5
 
     def test_single_band_full_token0(self):
+        """Test single band full token0."""
         b = _mk()
         reqs = [{"allocation": 1.0, "token0_ratio": 1.0, "token1_ratio": 0.0}]
         r0, r1 = b._calculate_aggregate_token_ratios(reqs)
@@ -987,6 +1051,7 @@ class TestCalculateAggregateTokenRatios:
         assert r1 == 0.0
 
     def test_single_band_full_token1(self):
+        """Test single band full token1."""
         b = _mk()
         reqs = [{"allocation": 1.0, "token0_ratio": 0.0, "token1_ratio": 1.0}]
         r0, r1 = b._calculate_aggregate_token_ratios(reqs)
@@ -994,6 +1059,7 @@ class TestCalculateAggregateTokenRatios:
         assert r1 == 1.0
 
     def test_equal_allocation_equal_ratios(self):
+        """Test equal allocation equal ratios."""
         b = _mk()
         reqs = [
             {"allocation": 1.0, "token0_ratio": 0.5, "token1_ratio": 0.5},
@@ -1004,6 +1070,7 @@ class TestCalculateAggregateTokenRatios:
         assert abs(r1 - 0.5) < 1e-10
 
     def test_weighted_allocation(self):
+        """Test weighted allocation."""
         b = _mk()
         reqs = [
             {"allocation": 3.0, "token0_ratio": 1.0, "token1_ratio": 0.0},
@@ -1014,6 +1081,7 @@ class TestCalculateAggregateTokenRatios:
         assert abs(r1 - 0.25) < 1e-10
 
     def test_zero_total_weight(self):
+        """Test zero total weight."""
         b = _mk()
         reqs = [{"allocation": 0, "token0_ratio": 0, "token1_ratio": 0}]
         r0, r1 = b._calculate_aggregate_token_ratios(reqs)
@@ -1021,6 +1089,7 @@ class TestCalculateAggregateTokenRatios:
         assert r1 == 0.5
 
     def test_missing_keys_defaults(self):
+        """Test missing keys defaults."""
         b = _mk()
         reqs = [{}]  # missing allocation, token0_ratio, token1_ratio
         r0, r1 = b._calculate_aggregate_token_ratios(reqs)
@@ -1032,6 +1101,7 @@ class TestCalculateMaxAmountsIn:
     """Tests for _calculate_max_amounts_in."""
 
     def test_token0_is_limiting(self):
+        """Test token0 is limiting."""
         b = _mk()
         amounts, msg = b._calculate_max_amounts_in(
             token0_balance=100,
@@ -1044,6 +1114,7 @@ class TestCalculateMaxAmountsIn:
         assert amounts[1] <= 1000
 
     def test_token1_is_limiting(self):
+        """Test token1 is limiting."""
         b = _mk()
         amounts, msg = b._calculate_max_amounts_in(
             token0_balance=1000,
@@ -1055,6 +1126,7 @@ class TestCalculateMaxAmountsIn:
         assert amounts[0] <= 1000
 
     def test_both_tokens_sufficient(self):
+        """Test both tokens sufficient."""
         b = _mk()
         amounts, msg = b._calculate_max_amounts_in(
             token0_balance=500,
@@ -1066,6 +1138,7 @@ class TestCalculateMaxAmountsIn:
         assert amounts[1] == 500
 
     def test_100_percent_token0(self):
+        """Test 100 percent token0."""
         b = _mk()
         amounts, msg = b._calculate_max_amounts_in(
             token0_balance=1000,
@@ -1082,22 +1155,26 @@ class TestBuildEnterPoolAction:
     """Tests for _build_enter_pool_action."""
 
     def test_none_opportunity(self):
+        """Test none opportunity."""
         b = _mk()
         result = b._build_enter_pool_action(None)
         assert result is None
 
     def test_empty_opportunity(self):
+        """Test empty opportunity."""
         b = _mk()
         result = b._build_enter_pool_action({})
         assert result is None
 
     def test_sturdy_dex_type(self):
+        """Test sturdy dex type."""
         b = _mk()
         opp = {"dex_type": DexType.STURDY.value, "pool_address": "0x1", "apr": 10}
         result = b._build_enter_pool_action(opp)
         assert result["action"] == Action.DEPOSIT.value
 
     def test_velodrome_dex_type(self):
+        """Test velodrome dex type."""
         b = _mk()
         opp = {"dex_type": "velodrome", "pool_address": "0x1", "apr": 20}
         result = b._build_enter_pool_action(opp)
@@ -1105,6 +1182,7 @@ class TestBuildEnterPoolAction:
         assert result["opportunity_apr"] == 20
 
     def test_percent_in_bounds_default(self):
+        """Test percent in bounds default."""
         b = _mk()
         opp = {"dex_type": "velodrome", "pool_address": "0x1"}
         result = b._build_enter_pool_action(opp)
@@ -1115,6 +1193,7 @@ class TestBuildClaimRewardAction:
     """Tests for _build_claim_reward_action."""
 
     def test_basic_claim(self):
+        """Test basic claim."""
         b = _mk()
         rewards = {
             "users": ["0xuser"],
@@ -1133,6 +1212,7 @@ class TestGetRequiredTokens:
     """Tests for _get_required_tokens."""
 
     def test_non_sturdy_two_tokens(self):
+        """Test non sturdy two tokens."""
         b = _mk()
         opp = {
             "token0": "0xA",
@@ -1147,6 +1227,7 @@ class TestGetRequiredTokens:
         assert result[1] == ("0xB", "B")
 
     def test_sturdy_one_token(self):
+        """Test sturdy one token."""
         b = _mk()
         opp = {
             "token0": "0xA",
@@ -1159,6 +1240,7 @@ class TestGetRequiredTokens:
         assert len(result) == 1
 
     def test_missing_tokens(self):
+        """Test missing tokens."""
         b = _mk()
         result = b._get_required_tokens({})
         assert result == []
@@ -1168,10 +1250,12 @@ class TestGroupTokensByChain:
     """Tests for _group_tokens_by_chain."""
 
     def test_empty(self):
+        """Test empty."""
         b = _mk()
         assert b._group_tokens_by_chain([]) == {}
 
     def test_single_chain(self):
+        """Test single chain."""
         b = _mk()
         tokens = [{"chain": "optimism", "token": "0xA"}]
         result = b._group_tokens_by_chain(tokens)
@@ -1179,6 +1263,7 @@ class TestGroupTokensByChain:
         assert len(result["optimism"]) == 1
 
     def test_multiple_chains(self):
+        """Test multiple chains."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xA"},
@@ -1194,6 +1279,7 @@ class TestIdentifyMissingTokens:
     """Tests for _identify_missing_tokens."""
 
     def test_all_available(self):
+        """Test all available."""
         b = _mk()
         required = [("0xA", "A"), ("0xB", "B")]
         available = {"0xA": {}, "0xB": {}}
@@ -1201,6 +1287,7 @@ class TestIdentifyMissingTokens:
         assert result == []
 
     def test_some_missing(self):
+        """Test some missing."""
         b = _mk()
         required = [("0xA", "A"), ("0xB", "B")]
         available = {"0xA": {}}
@@ -1209,6 +1296,7 @@ class TestIdentifyMissingTokens:
         assert result[0] == ("0xB", "B")
 
     def test_all_missing(self):
+        """Test all missing."""
         b = _mk()
         required = [("0xA", "A"), ("0xB", "B")]
         result = b._identify_missing_tokens(required, {}, "optimism")
@@ -1219,6 +1307,7 @@ class TestBuildTokensFromPosition:
     """Tests for _build_tokens_from_position."""
 
     def test_one_token(self):
+        """Test one token."""
         b = _mk()
         pos = {"chain": "optimism", "token0": "0xA", "token0_symbol": "A"}
         result = b._build_tokens_from_position(pos, 1)
@@ -1226,6 +1315,7 @@ class TestBuildTokensFromPosition:
         assert result[0]["token"] == "0xA"
 
     def test_two_tokens(self):
+        """Test two tokens."""
         b = _mk()
         pos = {
             "chain": "optimism",
@@ -1238,6 +1328,7 @@ class TestBuildTokensFromPosition:
         assert len(result) == 2
 
     def test_invalid_num_tokens(self):
+        """Test invalid num tokens."""
         b = _mk()
         result = b._build_tokens_from_position({}, 3)
         assert result is None
@@ -1247,16 +1338,19 @@ class TestMergeDuplicateBridgeSwapActions:
     """Tests for _merge_duplicate_bridge_swap_actions."""
 
     def test_empty_actions(self):
+        """Test empty actions."""
         b = _mk()
         assert b._merge_duplicate_bridge_swap_actions([]) == []
 
     def test_no_bridge_actions(self):
+        """Test no bridge actions."""
         b = _mk()
         actions = [{"action": "EnterPool"}]
         result = b._merge_duplicate_bridge_swap_actions(actions)
         assert result == actions
 
     def test_single_bridge_action(self):
+        """Test single bridge action."""
         b = _mk()
         actions = [
             {
@@ -1272,6 +1366,7 @@ class TestMergeDuplicateBridgeSwapActions:
         assert len(result) == 1
 
     def test_duplicate_bridge_actions_merged(self):
+        """Test duplicate bridge actions merged."""
         b = _mk()
         action = {
             "action": Action.FIND_BRIDGE_ROUTE.value,
@@ -1287,6 +1382,7 @@ class TestMergeDuplicateBridgeSwapActions:
         assert result[0]["funds_percentage"] == 0.6
 
     def test_redundant_same_chain_same_token_removed(self):
+        """Test redundant same chain same token removed."""
         b = _mk()
         actions = [
             {
@@ -1302,6 +1398,7 @@ class TestMergeDuplicateBridgeSwapActions:
         assert len(result) == 0
 
     def test_none_actions_returns_none(self):
+        """Test none actions returns none."""
         b = _mk()
         result = b._merge_duplicate_bridge_swap_actions(None)
         assert result is None
@@ -1311,18 +1408,21 @@ class TestBuildExitPoolAction:
     """Tests for _build_exit_pool_action."""
 
     def test_no_position_to_exit(self):
+        """Test no position to exit."""
         b = _mk()
         b.position_to_exit = None
         result = b._build_exit_pool_action([], 2)
         assert result is None
 
     def test_not_enough_tokens(self):
+        """Test not enough tokens."""
         b = _mk()
         b.position_to_exit = {"pool_address": "0x1"}
         result = b._build_exit_pool_action([{"token": "0xA"}], 2)
         assert result is None
 
     def test_valid_exit(self):
+        """Test valid exit."""
         b = _mk()
         b.position_to_exit = {"pool_address": "0x1"}
         tokens = [{"token": "0xA"}, {"token": "0xB"}]
@@ -1336,6 +1436,7 @@ class TestGetAssetSymbol:
     """Tests for _get_asset_symbol."""
 
     def test_found(self):
+        """Test found."""
         b = _mk()
         synced_mock = MagicMock()
         synced_mock.positions = [
@@ -1353,6 +1454,7 @@ class TestGetAssetSymbol:
             assert b._get_asset_symbol("optimism", "0xA") == "TKN"
 
     def test_not_found_chain(self):
+        """Test not found chain."""
         b = _mk()
         synced_mock = MagicMock()
         synced_mock.positions = [
@@ -1367,6 +1469,7 @@ class TestGetAssetSymbol:
             assert b._get_asset_symbol("optimism", "0xA") is None
 
     def test_not_found_address(self):
+        """Test not found address."""
         b = _mk()
         synced_mock = MagicMock()
         synced_mock.positions = [
@@ -1385,10 +1488,12 @@ class TestShouldAddStakingActions:
     """Tests for _should_add_staking_actions."""
 
     def test_non_velodrome(self):
+        """Test non velodrome."""
         b = _mk()
         assert b._should_add_staking_actions({"dex_type": "uniswap"}) is False
 
     def test_velodrome_with_voter(self):
+        """Test velodrome with voter."""
         b = _mk()
         assert (
             b._should_add_staking_actions(
@@ -1398,6 +1503,7 @@ class TestShouldAddStakingActions:
         )
 
     def test_velodrome_no_voter(self):
+        """Test velodrome no voter."""
         b = _mk()
         b.params.velodrome_voter_contract_addresses = {}
         assert (
@@ -1412,6 +1518,7 @@ class TestBuildStakeLpTokensAction:
     """Tests for _build_stake_lp_tokens_action."""
 
     def test_non_velodrome(self):
+        """Test non velodrome."""
         b = _mk()
         result = b._build_stake_lp_tokens_action(
             {"dex_type": "uniswap", "chain": "optimism", "pool_address": "0x1"}
@@ -1419,11 +1526,13 @@ class TestBuildStakeLpTokensAction:
         assert result is None
 
     def test_missing_params(self):
+        """Test missing params."""
         b = _mk()
         result = b._build_stake_lp_tokens_action({"dex_type": "velodrome"})
         assert result is None
 
     def test_cl_pool(self):
+        """Test cl pool."""
         b = _mk()
         result = b._build_stake_lp_tokens_action(
             {
@@ -1438,6 +1547,7 @@ class TestBuildStakeLpTokensAction:
         assert result["is_cl_pool"] is True
 
     def test_regular_pool(self):
+        """Test regular pool."""
         b = _mk()
         result = b._build_stake_lp_tokens_action(
             {
@@ -1451,6 +1561,7 @@ class TestBuildStakeLpTokensAction:
         assert result["is_cl_pool"] is False
 
     def test_cl_pool_no_safe_address(self):
+        """Test cl pool no safe address."""
         b = _mk()
         b.params.safe_contract_addresses = {}
         result = b._build_stake_lp_tokens_action(
@@ -1464,6 +1575,7 @@ class TestBuildStakeLpTokensAction:
         assert result is None
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
         # Force an exception inside the try block by making get() raise
         b.params.safe_contract_addresses = {"optimism": "0x" + "aa" * 20}
@@ -1482,16 +1594,19 @@ class TestBuildClaimStakingRewardsAction:
     """Tests for _build_claim_staking_rewards_action."""
 
     def test_non_velodrome(self):
+        """Test non velodrome."""
         b = _mk()
         result = b._build_claim_staking_rewards_action({"dex_type": "uniswap"})
         assert result is None
 
     def test_missing_params(self):
+        """Test missing params."""
         b = _mk()
         result = b._build_claim_staking_rewards_action({"dex_type": "velodrome"})
         assert result is None
 
     def test_valid_with_gauge(self):
+        """Test valid with gauge."""
         b = _mk()
         result = b._build_claim_staking_rewards_action(
             {
@@ -1505,6 +1620,7 @@ class TestBuildClaimStakingRewardsAction:
         assert result["gauge_address"] == "0xgauge"
 
     def test_valid_without_gauge(self):
+        """Test valid without gauge."""
         b = _mk()
         result = b._build_claim_staking_rewards_action(
             {
@@ -1517,6 +1633,7 @@ class TestBuildClaimStakingRewardsAction:
         assert "gauge_address" not in result
 
     def test_no_safe_address(self):
+        """Test no safe address."""
         b = _mk()
         b.params.safe_contract_addresses = {}
         result = b._build_claim_staking_rewards_action(
@@ -1533,21 +1650,25 @@ class TestHasOpenPositions:
     """Tests for _has_open_positions."""
 
     def test_no_positions(self):
+        """Test no positions."""
         b = _mk()
         b.current_positions = []
         assert b._has_open_positions() is False
 
     def test_only_closed(self):
+        """Test only closed."""
         b = _mk()
         b.current_positions = [{"status": "closed"}]
         assert b._has_open_positions() is False
 
     def test_has_open(self):
+        """Test has open."""
         b = _mk()
         b.current_positions = [{"status": "open"}]
         assert b._has_open_positions() is True
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
         b.current_positions = None  # Will cause TypeError
         assert b._has_open_positions() is False
@@ -1557,6 +1678,7 @@ class TestFormatOpportunityForTracking:
     """Tests for _format_opportunity_for_tracking."""
 
     def test_basic_formatting(self):
+        """Test basic formatting."""
         b = _mk()
         b._get_current_timestamp = lambda: 12345
         opp = {
@@ -1573,6 +1695,7 @@ class TestFormatOpportunityForTracking:
         assert result["timestamp"] == 12345
 
     def test_missing_keys_default_to_none(self):
+        """Test missing keys default to none."""
         b = _mk()
         b._get_current_timestamp = lambda: 0
         result = b._format_opportunity_for_tracking({}, "test")
@@ -1584,6 +1707,7 @@ class TestCanClaimRewards:
     """Tests for _can_claim_rewards."""
 
     def test_no_last_claimed(self):
+        """Test no last claimed."""
         b = _mk()
         synced_mock = MagicMock()
         synced_mock.last_reward_claimed_timestamp = None
@@ -1599,6 +1723,7 @@ class TestCanClaimRewards:
             assert b._can_claim_rewards() is True
 
     def test_enough_time_elapsed(self):
+        """Test enough time elapsed."""
         b = _mk()
         synced_mock = MagicMock()
         synced_mock.last_reward_claimed_timestamp = 100
@@ -1615,6 +1740,7 @@ class TestCanClaimRewards:
             assert b._can_claim_rewards() is True
 
     def test_not_enough_time(self):
+        """Test not enough time."""
         b = _mk()
         synced_mock = MagicMock()
         synced_mock.last_reward_claimed_timestamp = 100
@@ -1635,17 +1761,20 @@ class TestExecuteStrategy:
     """Tests for execute_strategy."""
 
     def test_no_strategy_kwarg(self):
+        """Test no strategy kwarg."""
         b = _mk()
         result = b.execute_strategy()
         assert result is None
 
     def test_no_executable(self):
+        """Test no executable."""
         b = _mk()
         b.strategy_exec = MagicMock(return_value=None)
         result = b.execute_strategy(strategy="test")
         assert result is None
 
     def test_callable_not_found(self):
+        """Test callable not found."""
         b = _mk()
         # strategy_exec returns (exec_code, callable_method)
         b.strategy_exec = MagicMock(return_value=("", "nonexistent_method"))
@@ -1657,12 +1786,14 @@ class TestStrategyExec:
     """Tests for strategy_exec."""
 
     def test_found(self):
+        """Test found."""
         b = _mk()
         b.shared_state.strategies_executables = {"mystrategy": ("code", "method")}
         result = b.strategy_exec("mystrategy")
         assert result == ("code", "method")
 
     def test_not_found(self):
+        """Test not found."""
         b = _mk()
         b.shared_state.strategies_executables = {}
         result = b.strategy_exec("mystrategy")
@@ -1673,27 +1804,32 @@ class TestBuildBridgeSwapActions:
     """Tests for _build_bridge_swap_actions."""
 
     def test_none_opportunity(self):
+        """Test none opportunity."""
         b = _mk()
         result = b._build_bridge_swap_actions(None, [])
         assert result is None
 
     def test_empty_opportunity(self):
+        """Test empty opportunity."""
         b = _mk()
         result = b._build_bridge_swap_actions({}, [])
         assert result is None
 
     def test_incomplete_opportunity(self):
+        """Test incomplete opportunity."""
         b = _mk()
         result = b._build_bridge_swap_actions({"chain": "optimism"}, [])
         assert result is None
 
     def test_no_required_tokens(self):
+        """Test no required tokens."""
         b = _mk()
         # Missing token0
         result = b._build_bridge_swap_actions({"chain": "optimism", "token0": ""}, [])
         assert result is None
 
     def test_all_tokens_available(self):
+        """Test all tokens available."""
         b = _mk()
         opp = {
             "chain": "optimism",
@@ -1712,6 +1848,7 @@ class TestBuildBridgeSwapActions:
         assert isinstance(result, list)
 
     def test_all_tokens_needed(self):
+        """Test all tokens needed."""
         b = _mk()
         opp = {
             "chain": "optimism",
@@ -1734,6 +1871,7 @@ class TestAddBridgeSwapAction:
     """Tests for _add_bridge_swap_action."""
 
     def test_different_chain(self):
+        """Test different chain."""
         b = _mk()
         actions = []
         token = {"chain": "mode", "token": "0xA", "token_symbol": "A"}
@@ -1742,6 +1880,7 @@ class TestAddBridgeSwapAction:
         assert actions[0]["action"] == Action.FIND_BRIDGE_ROUTE.value
 
     def test_same_chain_different_token(self):
+        """Test same chain different token."""
         b = _mk()
         actions = []
         token = {"chain": "optimism", "token": "0xA", "token_symbol": "A"}
@@ -1749,6 +1888,7 @@ class TestAddBridgeSwapAction:
         assert len(actions) == 1
 
     def test_same_chain_same_token(self):
+        """Test same chain same token."""
         b = _mk()
         actions = []
         token = {"chain": "optimism", "token": "0xA", "token_symbol": "A"}
@@ -1756,6 +1896,7 @@ class TestAddBridgeSwapAction:
         assert len(actions) == 0
 
     def test_incomplete_token_data(self):
+        """Test incomplete token data."""
         b = _mk()
         actions = []
         token = {"chain": None, "token": "0xA", "token_symbol": "A"}
@@ -1767,6 +1908,7 @@ class TestGetPositionTokenBalances:
     """Tests for _get_position_token_balances."""
 
     def test_stored_balances_used(self):
+        """Test stored balances used."""
         b = _mk()
         pos = {
             "pool_address": "0xpool",
@@ -1777,6 +1919,7 @@ class TestGetPositionTokenBalances:
         assert result["0xB"] == 200.0
 
     def test_stored_balances_with_velo_rewards(self):
+        """Test stored balances with velo rewards."""
         b = _mk()
         pos = {
             "pool_address": "0xpool",
@@ -1790,6 +1933,7 @@ class TestGetPositionTokenBalances:
         assert result["0xVELO"] == 50.0
 
     def test_fallback_no_safe_address(self):
+        """Test fallback no safe address."""
         b = _mk()
         b.params.safe_contract_addresses = {}
         pos = {"pool_address": "0xpool", "token0": "0xA", "token1": "0xB"}
@@ -1797,6 +1941,7 @@ class TestGetPositionTokenBalances:
         assert result == {}
 
     def test_fallback_gets_balances(self):
+        """Test fallback gets balances."""
         b = _mk()
         pos = {"pool_address": "0xpool", "token0": "0xA", "token1": "0xB"}
         b._get_token_balance = _gen_return(1000)
@@ -1812,11 +1957,13 @@ class TestCalculateCurrentValueRatio:
     """Tests for _calculate_current_value_ratio."""
 
     def test_missing_token_addresses(self):
+        """Test missing token addresses."""
         b = _mk()
         result = _drive(b._calculate_current_value_ratio({}, "optimism"))
         assert result is None
 
     def test_no_balances(self):
+        """Test no balances."""
         b = _mk()
         pos = {"token0": "0xA", "token1": "0xB"}
         b._get_position_token_balances = _gen_return({})
@@ -1824,6 +1971,7 @@ class TestCalculateCurrentValueRatio:
         assert result is None
 
     def test_zero_entry_amounts(self):
+        """Test zero entry amounts."""
         b = _mk()
         pos = {"token0": "0xA", "token1": "0xB", "amount0": 0, "amount1": 0}
         b._get_position_token_balances = _gen_return({"0xA": 100, "0xB": 200})
@@ -1831,6 +1979,7 @@ class TestCalculateCurrentValueRatio:
         assert result is None
 
     def test_no_token_decimals(self):
+        """Test no token decimals."""
         b = _mk()
         pos = {"token0": "0xA", "token1": "0xB", "amount0": 1000, "amount1": 2000}
         b._get_position_token_balances = _gen_return({"0xA": 100, "0xB": 200})
@@ -1841,6 +1990,7 @@ class TestCalculateCurrentValueRatio:
         assert result is None
 
     def test_no_sma_prices(self):
+        """Test no sma prices."""
         b = _mk()
         pos = {"token0": "0xA", "token1": "0xB", "amount0": 1000, "amount1": 2000}
         b._get_position_token_balances = _gen_return({"0xA": 100, "0xB": 200})
@@ -1852,6 +2002,7 @@ class TestCalculateCurrentValueRatio:
         assert result is None
 
     def test_valid_calculation(self):
+        """Test valid calculation."""
         b = _mk()
         pos = {
             "token0": "0xA",
@@ -1868,11 +2019,12 @@ class TestCalculateCurrentValueRatio:
         )
         # denominator = Q1_entry*SMA1 + Q0_entry*SMA0 = 2.0*1.0 + 1.0*1.0 = 3.0
         # numerator = denominator + yield_usd = 3.0 + 10.0 = 13.0
-        # ratio = 13.0 / 3.0
+        # ratio = 13.0 / 3.0 # noqa: E800
         assert result is not None
         assert abs(result - (13.0 / 3.0)) < 1e-6
 
     def test_zero_denominator(self):
+        """Test zero denominator."""
         b = _mk()
         pos = {
             "token0": "0xA",
@@ -1890,6 +2042,7 @@ class TestCalculateCurrentValueRatio:
         assert result is None
 
     def test_exception_returns_none(self):
+        """Test exception returns none."""
         b = _mk()
         pos = {"token0": "0xA", "token1": "0xB", "amount0": 1000, "amount1": 2000}
 
@@ -1906,6 +2059,7 @@ class TestHandleVelodromeTokenAllocation:
     """Tests for _handle_velodrome_token_allocation."""
 
     def test_non_velodrome_passthrough(self):
+        """Test non velodrome passthrough."""
         b = _mk()
         actions = [{"action": "test"}]
         enter_action = {"dex_type": "uniswap"}
@@ -1913,6 +2067,7 @@ class TestHandleVelodromeTokenAllocation:
         assert result == actions
 
     def test_velodrome_no_token_requirements(self):
+        """Test velodrome no token requirements."""
         b = _mk()
         actions = [{"action": "test"}]
         enter_action = {"dex_type": "velodrome"}
@@ -1920,6 +2075,7 @@ class TestHandleVelodromeTokenAllocation:
         assert result == actions
 
     def test_velodrome_100_percent_token0(self):
+        """Test velodrome 100 percent token0."""
         b = _mk()
         actions = [
             {
@@ -1950,6 +2106,7 @@ class TestHandleVelodromeTokenAllocation:
         assert result[0]["funds_percentage"] == 1.0
 
     def test_velodrome_100_percent_token1(self):
+        """Test velodrome 100 percent token1."""
         b = _mk()
         actions = [
             {
@@ -2053,11 +2210,13 @@ class TestCalculateVelodromeClTokenRequirements:
     """Tests for calculate_velodrome_cl_token_requirements."""
 
     def test_invalid_inputs_returns_none(self):
+        """Test invalid inputs returns none."""
         b = _mk()
         result = _drive(b.calculate_velodrome_cl_token_requirements([], 0))
         assert result is None
 
     def test_valid_inputs_calls_calculate_ratios(self):
+        """Test valid inputs calls calculate ratios."""
         b = _mk()
         bands = [{"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}]
         expected_result = {"position_requirements": [], "recommendation": "test"}
@@ -2068,6 +2227,7 @@ class TestCalculateVelodromeClTokenRequirements:
         assert result == expected_result
 
     def test_with_sqrt_price_x96(self):
+        """Test with sqrt price x96."""
         b = _mk()
         bands = [{"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}]
         expected_result = {"position_requirements": []}
@@ -2085,6 +2245,7 @@ class TestInitializeEntryCostsForNewPosition:
     """Tests for _initialize_entry_costs_for_new_position."""
 
     def test_valid_action(self):
+        """Test valid action."""
         b = _mk()
         b._initialize_position_entry_costs = _gen_none
         action = {"chain": "optimism", "pool_address": "0xpool"}
@@ -2092,12 +2253,14 @@ class TestInitializeEntryCostsForNewPosition:
         # Should complete without error
 
     def test_missing_chain(self):
+        """Test missing chain."""
         b = _mk()
         action = {"pool_address": "0xpool"}
         _drive(b._initialize_entry_costs_for_new_position(action))
         # Should log warning but not crash
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -2114,6 +2277,7 @@ class TestHandleGetStrategy:
     """Tests for _handle_get_strategy."""
 
     def test_no_inflight_request(self):
+        """Test no inflight request."""
         b = _mk()
         b._inflight_strategy_req = None
         msg = MagicMock()
@@ -2121,6 +2285,7 @@ class TestHandleGetStrategy:
         b.context.logger.error.assert_called()
 
     def test_valid_response(self):
+        """Test valid response."""
         b = _mk()
         b._inflight_strategy_req = "test_strategy"
         b.shared_state.strategy_to_filehash = {"test_strategy": "hash123"}
@@ -2142,6 +2307,7 @@ class TestSendMessage:
     """Tests for send_message."""
 
     def test_send_message(self):
+        """Test send message."""
         b = _mk()
         b.shared_state.req_to_callback = {}
         msg = MagicMock()
@@ -2157,6 +2323,7 @@ class TestDownloadNextStrategy:
     """Tests for download_next_strategy."""
 
     def test_inflight_request_exists(self):
+        """Test inflight request exists."""
         b = _mk()
         b._inflight_strategy_req = "existing"
         b.shared_state.strategy_to_filehash = {"test": "hash"}
@@ -2164,6 +2331,7 @@ class TestDownloadNextStrategy:
         # Should return early without starting a new request
 
     def test_no_strategies_pending(self):
+        """Test no strategies pending."""
         b = _mk()
         b._inflight_strategy_req = None
         b.shared_state.strategy_to_filehash = {}
@@ -2171,6 +2339,7 @@ class TestDownloadNextStrategy:
         # Should return early
 
     def test_starts_download(self):
+        """Test starts download."""
         b = _mk()
         b._inflight_strategy_req = None
         b.shared_state.strategy_to_filehash = {"strategy_a": "hash_a"}
@@ -2185,6 +2354,7 @@ class TestGetReturnsMetricsForOpportunity:
     """Tests for get_returns_metrics_for_opportunity."""
 
     def test_no_metrics(self):
+        """Test no metrics."""
         b = _mk()
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
@@ -2195,6 +2365,7 @@ class TestGetReturnsMetricsForOpportunity:
         assert result is None
 
     def test_error_in_metrics(self):
+        """Test error in metrics."""
         b = _mk()
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
@@ -2205,6 +2376,7 @@ class TestGetReturnsMetricsForOpportunity:
         assert result is None
 
     def test_valid_metrics(self):
+        """Test valid metrics."""
         b = _mk()
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
@@ -2220,6 +2392,7 @@ class TestTrackOpportunities:
     """Tests for _track_opportunities."""
 
     def test_no_existing_data(self):
+        """Test no existing data."""
         b = _mk()
         b._get_current_timestamp = lambda: 12345
         b._read_kv = _gen_return(None)
@@ -2236,6 +2409,7 @@ class TestTrackOpportunities:
             _drive(b._track_opportunities(opps, "raw_with_metrics"), sends=[None] * 5)
 
     def test_with_existing_tracking_data(self):
+        """Test with existing tracking data."""
         b = _mk()
         b._get_current_timestamp = lambda: 12345
         existing = {"round_1": {"old_stage": {}}}
@@ -2253,6 +2427,7 @@ class TestTrackOpportunities:
             _drive(b._track_opportunities(opps, "basic_filtered"), sends=[None] * 5)
 
     def test_exception_handled(self):
+        """Test exception handled."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -2264,6 +2439,7 @@ class TestTrackOpportunities:
         b.context.logger.error.assert_called()
 
     def test_invalid_json_in_tracking_data(self):
+        """Test invalid json in tracking data."""
         b = _mk()
         b._get_current_timestamp = lambda: 12345
         b._read_kv = _gen_return({"opportunity_tracking": "not valid json{{{"})
@@ -2285,12 +2461,14 @@ class TestPrepareStrategyActions:
     """Tests for prepare_strategy_actions."""
 
     def test_no_opportunities(self):
+        """Test no opportunities."""
         b = _mk()
         b.trading_opportunities = []
         result = _drive(b.prepare_strategy_actions())
         assert result == []
 
     def test_with_opportunities_none_selected(self):
+        """Test with opportunities none selected."""
         b = _mk()
         b.trading_opportunities = [{"apr": 10}]
         b.execute_hyper_strategy = _gen_none
@@ -2304,16 +2482,19 @@ class TestCreateOpportunityAttrDef:
     """Tests for _create_opportunity_attr_def."""
 
     def test_empty_agent_type(self):
+        """Test empty agent type."""
         b = _mk()
         result = _drive(b._create_opportunity_attr_def("agent_id", {}))
         assert result is None
 
     def test_missing_type_id(self):
+        """Test missing type id."""
         b = _mk()
         result = _drive(b._create_opportunity_attr_def("agent_id", {"name": "test"}))
         assert result is None
 
     def test_valid_creation(self):
+        """Test valid creation."""
         b = _mk()
         b.create_attribute_definition = _gen_return({"attr_def_id": "123"})
         result = _drive(
@@ -2323,6 +2504,7 @@ class TestCreateOpportunityAttrDef:
         assert result == {"attr_def_id": "123"}
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -2340,11 +2522,13 @@ class TestCacheEnterPoolActionForClPool:
     """Tests for _cache_enter_pool_action_for_cl_pool."""
 
     def test_no_chain(self):
+        """Test no chain."""
         b = _mk()
         _drive(b._cache_enter_pool_action_for_cl_pool({}, {"action": "EnterPool"}))
         # Should return early
 
     def test_no_cached_data(self):
+        """Test no cached data."""
         b = _mk()
         b._get_cached_cl_pool_data = _gen_return(None)
         _drive(
@@ -2355,6 +2539,7 @@ class TestCacheEnterPoolActionForClPool:
         )
 
     def test_valid_cache(self):
+        """Test valid cache."""
         b = _mk()
         cached = {"pool_address": "0xpool"}
         b._get_cached_cl_pool_data = _gen_return(cached)
@@ -2368,6 +2553,7 @@ class TestCacheEnterPoolActionForClPool:
         assert cached["enter_pool_action"] == {"action": "EnterPool"}
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -2385,11 +2571,13 @@ class TestGetGaugeAddressForPosition:
     """Tests for _get_gauge_address_for_position."""
 
     def test_missing_chain(self):
+        """Test missing chain."""
         b = _mk()
         result = _drive(b._get_gauge_address_for_position({}))
         assert result is None
 
     def test_no_voter_address(self):
+        """Test no voter address."""
         b = _mk()
         b.params.velodrome_voter_contract_addresses = {}
         result = _drive(
@@ -2400,6 +2588,7 @@ class TestGetGaugeAddressForPosition:
         assert result is None
 
     def test_no_pool_behaviour(self):
+        """Test no pool behaviour."""
         b = _mk()
         b.pools = {}
         result = _drive(
@@ -2410,6 +2599,7 @@ class TestGetGaugeAddressForPosition:
         assert result is None
 
     def test_valid_gauge(self):
+        """Test valid gauge."""
         b = _mk()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _gen_return("0xgauge")
@@ -2423,6 +2613,7 @@ class TestGetGaugeAddressForPosition:
         assert result == "0xgauge"
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -2444,6 +2635,7 @@ class TestConstants:
     """Tests for module-level constants."""
 
     def test_min_swap_value_usd(self):
+        """Test min swap value usd."""
         assert MIN_SWAP_VALUE_USD == 0.5
 
 
@@ -2461,6 +2653,7 @@ class TestAsyncAct:
         return _mock_send_actions, calls
 
     def test_investing_paused(self):
+        """Test investing paused."""
         b = _mk()
         b._read_investing_paused = _gen_return(True)
         b.send_a2a_transaction = _gen_none
@@ -2482,6 +2675,7 @@ class TestAsyncAct:
         assert len(calls) == 2
 
     def test_tip_filters_block(self):
+        """Test tip filters block."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
@@ -2492,6 +2686,7 @@ class TestAsyncAct:
         assert len(calls) == 1  # send_actions() with no args
 
     def test_no_funds(self):
+        """Test no funds."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
@@ -2503,6 +2698,7 @@ class TestAsyncAct:
         assert len(calls) == 1
 
     def test_cached_opportunity_used(self):
+        """Test cached opportunity used."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
@@ -2518,6 +2714,7 @@ class TestAsyncAct:
         assert calls[0] == [{"action": "cached"}]
 
     def test_normal_flow_no_cache(self):
+        """Test normal flow no cache."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
@@ -2538,11 +2735,13 @@ class TestCalculateVelodromeTokenRatios:
     """Tests for calculate_velodrome_token_ratios."""
 
     def test_none_validated_data(self):
+        """Test none validated data."""
         b = _mk()
         result = _drive(b.calculate_velodrome_token_ratios(None))
         assert result is None
 
     def test_price_below_range(self):
+        """Test price below range."""
         b = _mk()
         validated_data = {
             "validated_bands": [
@@ -2565,6 +2764,7 @@ class TestCalculateVelodromeTokenRatios:
         assert result["position_requirements"][0]["status"] == "BELOW_RANGE"
 
     def test_price_above_range(self):
+        """Test price above range."""
         b = _mk()
         validated_data = {
             "validated_bands": [
@@ -2586,6 +2786,7 @@ class TestCalculateVelodromeTokenRatios:
         assert result["position_requirements"][0]["status"] == "ABOVE_RANGE"
 
     def test_price_in_range(self):
+        """Test price in range."""
         b = _mk()
         sqrt_price = int(math.sqrt(1.0) * (2**96))
         validated_data = {
@@ -2617,6 +2818,7 @@ class TestCalculateVelodromeTokenRatios:
         assert result["position_requirements"][0]["status"] == "IN_RANGE"
 
     def test_with_sqrt_price_x96_provided(self):
+        """Test with sqrt price x96 provided."""
         b = _mk()
         validated_data = {
             "validated_bands": [
@@ -2635,6 +2837,7 @@ class TestCalculateVelodromeTokenRatios:
         assert result is not None
 
     def test_in_range_zero_amounts(self):
+        """Test in range zero amounts."""
         b = _mk()
         sqrt_price = int(math.sqrt(1.0) * (2**96))
         validated_data = {
@@ -2667,6 +2870,7 @@ class TestCalculateVelodromeTokenRatios:
         assert result["position_requirements"][0]["token0_ratio"] == 0.5
 
     def test_calculation_exception_fallback(self):
+        """Test calculation exception fallback."""
         b = _mk()
         sqrt_price = int(math.sqrt(1.0) * (2**96))
         validated_data = {
@@ -2703,6 +2907,7 @@ class TestCalculateVelodromeTokenRatios:
         assert result["position_requirements"][0]["status"] == "ERROR"
 
     def test_mixed_statuses_recommendation(self):
+        """Test mixed statuses recommendation."""
         b = _mk()
         validated_data = {
             "validated_bands": [
@@ -2739,6 +2944,7 @@ class TestExecuteHyperStrategy:
     """Tests for execute_hyper_strategy."""
 
     def test_basic_flow(self):
+        """Test basic flow."""
         b = _mk()
         b._read_kv = _gen_return({"composite_score": "0.5"})
         b.execute_strategy = MagicMock(
@@ -2761,6 +2967,7 @@ class TestExecuteHyperStrategy:
         assert b.selected_opportunities is None
 
     def test_composite_score_from_kv(self):
+        """Test composite score from kv."""
         b = _mk()
         b._read_kv = _gen_return({"composite_score": "0.75"})
         b.execute_strategy = MagicMock(
@@ -2790,6 +2997,7 @@ class TestExecuteHyperStrategy:
         assert b.selected_opportunities is not None
 
     def test_kv_read_exception(self):
+        """Test kv read exception."""
         b = _mk()
 
         def _bad_kv(*a, **kw):
@@ -2816,6 +3024,7 @@ class TestExecuteHyperStrategy:
             _drive(b.execute_hyper_strategy(), sends=[None] * 5)
 
     def test_composite_score_not_float(self):
+        """Test composite score not float."""
         b = _mk()
         b._read_kv = _gen_return({"composite_score": "not_a_number"})
         b.execute_strategy = MagicMock(
@@ -2837,6 +3046,7 @@ class TestExecuteHyperStrategy:
             _drive(b.execute_hyper_strategy(), sends=[None] * 5)
 
     def test_composite_score_none_uses_default(self):
+        """Test composite score none uses default."""
         b = _mk()
         b._read_kv = _gen_return(None)
         b.execute_strategy = MagicMock(
@@ -2862,6 +3072,7 @@ class TestGetResult:
     """Tests for get_result."""
 
     def test_future_done_immediately(self):
+        """Test future done immediately."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -2871,6 +3082,7 @@ class TestGetResult:
         assert result == "value"
 
     def test_future_with_exception(self):
+        """Test future with exception."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -2880,6 +3092,7 @@ class TestGetResult:
         assert result is None
 
     def test_future_not_done_yet(self):
+        """Test future not done yet."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -2899,6 +3112,7 @@ class TestGetRewards:
     """Tests for _get_rewards."""
 
     def test_http_error(self):
+        """Test http error."""
         b = _mk()
         resp = MagicMock()
         resp.status_code = 500
@@ -2908,6 +3122,7 @@ class TestGetRewards:
         assert result is None
 
     def test_no_tokens_to_claim(self):
+        """Test no tokens to claim."""
         b = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -2917,6 +3132,7 @@ class TestGetRewards:
         assert result is None
 
     def test_all_claims_zero(self):
+        """Test all claims zero."""
         b = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -2935,6 +3151,7 @@ class TestGetRewards:
         assert result is None
 
     def test_all_unclaimed_zero(self):
+        """Test all unclaimed zero."""
         b = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -2953,6 +3170,7 @@ class TestGetRewards:
         assert result is None
 
     def test_valid_rewards(self):
+        """Test valid rewards."""
         b = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -2972,6 +3190,7 @@ class TestGetRewards:
         assert result["tokens"] == ["0xtoken"]
 
     def test_parse_error(self):
+        """Test parse error."""
         b = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -2985,6 +3204,7 @@ class TestGetAvailableTokens:
     """Tests for _get_available_tokens."""
 
     def test_empty_positions(self):
+        """Test empty positions."""
         b = _mk()
         synced_mock = MagicMock()
         synced_mock.positions = []
@@ -2999,6 +3219,7 @@ class TestGetAvailableTokens:
         assert result == []
 
     def test_filters_reward_tokens(self):
+        """Test filters reward tokens."""
         b = _mk()
         synced_mock = MagicMock()
         # Use a reward token address from REWARD_TOKEN_ADDRESSES
@@ -3037,6 +3258,7 @@ class TestGetAvailableTokens:
         assert result == []
 
     def test_investable_balance_zero_address(self):
+        """Test investable balance zero address."""
         b = _mk()
         b.params.min_investment_amount = 0.0  # no minimum
         synced_mock = MagicMock()
@@ -3061,6 +3283,7 @@ class TestGetAvailableTokens:
         assert result[0]["token"] == ZERO_ADDRESS
 
     def test_filters_below_min_investment(self):
+        """Test filters below min investment."""
         b = _mk()
         b.params.min_investment_amount = 100.0
         synced_mock = MagicMock()
@@ -3089,11 +3312,13 @@ class TestGetInvestableBalance:
     """Tests for _get_investable_balance."""
 
     def test_not_reward_token(self):
+        """Test not reward token."""
         b = _mk()
         result = _drive(b._get_investable_balance("optimism", "0x" + "ab" * 20, 1000))
         assert result == 1000
 
     def test_pure_reward_token(self):
+        """Test pure reward token."""
         b = _mk()
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
             REWARD_TOKEN_ADDRESSES,
@@ -3121,6 +3346,7 @@ class TestPrepareTokensForInvestment:
     """Tests for _prepare_tokens_for_investment."""
 
     def test_no_position_to_exit(self):
+        """Test no position to exit."""
         b = _mk()
         b.position_to_exit = None
         b._get_available_tokens = _gen_return([{"chain": "optimism", "token": "0xA"}])
@@ -3129,6 +3355,7 @@ class TestPrepareTokensForInvestment:
         assert len(result) == 1
 
     def test_position_to_exit_insufficient_tokens(self):
+        """Test position to exit insufficient tokens."""
         b = _mk()
         b.position_to_exit = {"dex_type": "velodrome", "chain": "optimism"}
         b._build_tokens_from_position = MagicMock(return_value=None)
@@ -3136,6 +3363,7 @@ class TestPrepareTokensForInvestment:
         assert result is None
 
     def test_no_tokens_available(self):
+        """Test no tokens available."""
         b = _mk()
         b.position_to_exit = None
         b._get_available_tokens = _gen_return(None)
@@ -3143,6 +3371,7 @@ class TestPrepareTokensForInvestment:
         assert result is None
 
     def test_position_to_exit_with_tokens(self):
+        """Test position to exit with tokens."""
         b = _mk()
         b.position_to_exit = {
             "dex_type": "velodrome",
@@ -3162,12 +3391,14 @@ class TestGetOrderOfTransactions:
     """Tests for get_order_of_transactions."""
 
     def test_no_selected_opportunities(self):
+        """Test no selected opportunities."""
         b = _mk()
         b.selected_opportunities = None
         result = _drive(b.get_order_of_transactions())
         assert result == []
 
     def test_basic_enter_flow(self):
+        """Test basic enter flow."""
         b = _mk()
         b.selected_opportunities = [
             {
@@ -3199,6 +3430,7 @@ class TestGetOrderOfTransactions:
         assert result is not None
 
     def test_exit_with_staking(self):
+        """Test exit with staking."""
         b = _mk()
         b.selected_opportunities = [
             {
@@ -3241,6 +3473,7 @@ class TestGetOrderOfTransactions:
         assert result is not None
 
     def test_bridge_swap_returns_none(self):
+        """Test bridge swap returns none."""
         b = _mk()
         b.selected_opportunities = [
             {
@@ -3267,6 +3500,7 @@ class TestGetOrderOfTransactions:
         assert result is None
 
     def test_prepare_tokens_returns_none(self):
+        """Test prepare tokens returns none."""
         b = _mk()
         b.selected_opportunities = [{"dex_type": "uniswap"}]
         b.position_to_exit = None
@@ -3279,12 +3513,14 @@ class TestApplyInvestmentCapToActions:
     """Tests for _apply_investment_cap_to_actions."""
 
     def test_no_current_positions(self):
+        """Test no current positions."""
         b = _mk()
         b.current_positions = []
         result = _drive(b._apply_investment_cap_to_actions([{"action": "test"}]))
         assert result == [{"action": "test"}]
 
     def test_threshold_reached_no_exit(self):
+        """Test threshold reached no exit."""
         b = _mk()
         b.current_positions = [{"status": "open"}]
         b.sleep = _gen_none
@@ -3294,6 +3530,7 @@ class TestApplyInvestmentCapToActions:
         assert result == []
 
     def test_threshold_reached_with_exit(self):
+        """Test threshold reached with exit."""
         b = _mk()
         b.current_positions = [{"status": "open"}]
         b.sleep = _gen_none
@@ -3304,6 +3541,7 @@ class TestApplyInvestmentCapToActions:
         assert result[0]["action"] == "ExitPool"
 
     def test_under_threshold_adjust_enter(self):
+        """Test under threshold adjust enter."""
         b = _mk()
         b.current_positions = [{"status": "open"}]
         b.sleep = _gen_none
@@ -3313,6 +3551,7 @@ class TestApplyInvestmentCapToActions:
         assert result[0]["invested_amount"] == 500
 
     def test_vinitial_none_retries(self):
+        """Test vinitial none retries."""
         b = _mk()
         b.current_positions = [{"status": "open"}]
         b.sleep = _gen_none
@@ -3333,6 +3572,7 @@ class TestApplyInvestmentCapToActions:
         assert result[0].get("invested_amount") == 900
 
     def test_invested_zero_but_has_positions(self):
+        """Test invested zero but has positions."""
         b = _mk()
         b.current_positions = [{"status": "open"}]
         b.sleep = _gen_none
@@ -3347,6 +3587,7 @@ class TestProcessRewards:
     """Tests for _process_rewards."""
 
     def test_no_rewards(self):
+        """Test no rewards."""
         b = _mk()
         b._get_rewards = _gen_return(None)
         actions = []
@@ -3354,6 +3595,7 @@ class TestProcessRewards:
         assert actions == []
 
     def test_with_rewards(self):
+        """Test with rewards."""
         b = _mk()
         rewards = {
             "users": ["0xuser"],
@@ -3373,11 +3615,13 @@ class TestHandleAllTokensAvailable:
     """Tests for _handle_all_tokens_available."""
 
     def test_no_required_tokens(self):
+        """Test no required tokens."""
         b = _mk()
         result = b._handle_all_tokens_available([], [], "optimism", 1.0, {})
         assert result == []
 
     def test_other_chain_tokens(self):
+        """Test other chain tokens."""
         b = _mk()
         tokens = [{"chain": "mode", "token": "0xC", "token_symbol": "C"}]
         required = [("0xA", "A")]
@@ -3387,6 +3631,7 @@ class TestHandleAllTokensAvailable:
         assert len(result) == 1
 
     def test_unnecessary_tokens_on_dest_chain(self):
+        """Test unnecessary tokens on dest chain."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xC", "token_symbol": "C", "value": 100},
@@ -3400,6 +3645,7 @@ class TestHandleAllTokensAvailable:
         assert isinstance(result, list)
 
     def test_surplus_rebalance(self):
+        """Test surplus rebalance."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xA", "token_symbol": "A", "value": 200},
@@ -3417,6 +3663,7 @@ class TestHandleSomeTokensAvailable:
     """Tests for _handle_some_tokens_available."""
 
     def test_basic_flow(self):
+        """Test basic flow."""
         b = _mk()
         tokens = [
             {"chain": "mode", "token": "0xC", "token_symbol": "C"},
@@ -3431,6 +3678,7 @@ class TestHandleSomeTokensAvailable:
         assert isinstance(result, list)
 
     def test_unnecessary_tokens_converted(self):
+        """Test unnecessary tokens converted."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xC", "token_symbol": "C", "value": 100},
@@ -3445,6 +3693,7 @@ class TestHandleSomeTokensAvailable:
         assert isinstance(result, list)
 
     def test_no_unnecessary_tokens_convert_required(self):
+        """Test no unnecessary tokens convert required."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xA", "token_symbol": "A", "value": 200},
@@ -3458,6 +3707,7 @@ class TestHandleSomeTokensAvailable:
         assert isinstance(result, list)
 
     def test_surplus_rebalance(self):
+        """Test surplus rebalance."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xA", "token_symbol": "A", "value": 300},
@@ -3476,6 +3726,7 @@ class TestHandleAllTokensNeeded:
     """Tests for _handle_all_tokens_needed."""
 
     def test_basic_flow(self):
+        """Test basic flow."""
         b = _mk()
         tokens = [
             {"chain": "mode", "token": "0xC", "token_symbol": "C"},
@@ -3486,6 +3737,7 @@ class TestHandleAllTokensNeeded:
         assert isinstance(result, list)
 
     def test_with_dest_chain_tokens(self):
+        """Test with dest chain tokens."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xC", "token_symbol": "C", "value": 100},
@@ -3496,6 +3748,7 @@ class TestHandleAllTokensNeeded:
         assert isinstance(result, list)
 
     def test_available_required_on_dest(self):
+        """Test available required on dest."""
         b = _mk()
         tokens = [
             {"chain": "optimism", "token": "0xA", "token_symbol": "A", "value": 100},
@@ -3510,12 +3763,14 @@ class TestCheckAndUseCachedClOpportunity:
     """Tests for _check_and_use_cached_cl_opportunity."""
 
     def test_open_positions_bypass_cache(self):
+        """Test open positions bypass cache."""
         b = _mk()
         b.current_positions = [{"status": "open"}]
         result = _drive(b._check_and_use_cached_cl_opportunity())
         assert result is None
 
     def test_no_cached_data(self):
+        """Test no cached data."""
         b = _mk()
         b.current_positions = []
         b._get_cached_cl_pool_data = _gen_return(None)
@@ -3523,6 +3778,7 @@ class TestCheckAndUseCachedClOpportunity:
         assert result is None
 
     def test_cache_expired(self):
+        """Test cache expired."""
         b = _mk()
         b.current_positions = []
         b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1"})
@@ -3531,6 +3787,7 @@ class TestCheckAndUseCachedClOpportunity:
         assert result is None
 
     def test_cache_valid_with_actions(self):
+        """Test cache valid with actions."""
         b = _mk()
         b.current_positions = []
         cached = {"pool_address": "0x1"}
@@ -3544,6 +3801,7 @@ class TestCheckAndUseCachedClOpportunity:
         assert result == [{"action": "EnterPool"}]
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
         b.current_positions = None  # will cause exception in _has_open_positions
         b._has_open_positions = MagicMock(side_effect=Exception("boom"))
@@ -3562,11 +3820,13 @@ class TestReconstructActionsFromCachedClPool:
     """Tests for _reconstruct_actions_from_cached_cl_pool."""
 
     def test_no_cached_enter_action(self):
+        """Test no cached enter action."""
         b = _mk()
         result = _drive(b._reconstruct_actions_from_cached_cl_pool({}, "optimism"))
         assert result is None
 
     def test_no_safe_address(self):
+        """Test no safe address."""
         b = _mk()
         b.params.safe_contract_addresses = {}
         cached = {"enter_pool_action": {"action": "EnterPool"}}
@@ -3574,6 +3834,7 @@ class TestReconstructActionsFromCachedClPool:
         assert result is None
 
     def test_valid_reconstruction_token0_heavy(self):
+        """Test valid reconstruction token0 heavy."""
         b = _mk()
         cached = {
             "enter_pool_action": {
@@ -3604,6 +3865,7 @@ class TestReconstructActionsFromCachedClPool:
         assert len(result) == 2  # enter + stake
 
     def test_valid_reconstruction_token1_heavy(self):
+        """Test valid reconstruction token1 heavy."""
         b = _mk()
         cached = {
             "enter_pool_action": {
@@ -3630,6 +3892,7 @@ class TestReconstructActionsFromCachedClPool:
         assert result is not None
 
     def test_valid_reconstruction_mixed_ratios(self):
+        """Test valid reconstruction mixed ratios."""
         b = _mk()
         cached = {
             "enter_pool_action": {
@@ -3656,6 +3919,7 @@ class TestReconstructActionsFromCachedClPool:
         assert result is not None
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
         cached = {"enter_pool_action": {"action": "EnterPool"}}
         b.params.safe_contract_addresses = MagicMock(side_effect=Exception("boom"))
@@ -3667,12 +3931,14 @@ class TestGetCachedClPoolData:
     """Tests for _get_cached_cl_pool_data."""
 
     def test_no_data(self):
+        """Test no data."""
         b = _mk()
         b._read_kv = _gen_return(None)
         result = _drive(b._get_cached_cl_pool_data("optimism"), sends=[None])
         assert result is None
 
     def test_valid_cached_data(self):
+        """Test valid cached data."""
         b = _mk()
         b._read_kv = _gen_return(
             {"velodrome_cl_pool_optimism": json.dumps({"pool_address": "0x1"})}
@@ -3682,6 +3948,7 @@ class TestGetCachedClPoolData:
         assert result["pool_address"] == "0x1"
 
     def test_invalidated_cache(self):
+        """Test invalidated cache."""
         b = _mk()
         b._read_kv = _gen_return(
             {"velodrome_cl_pool_optimism": json.dumps({"invalidated": True})}
@@ -3690,12 +3957,14 @@ class TestGetCachedClPoolData:
         assert result is None
 
     def test_json_parse_error(self):
+        """Test json parse error."""
         b = _mk()
         b._read_kv = _gen_return({"velodrome_cl_pool_optimism": "not json{{"})
         result = _drive(b._get_cached_cl_pool_data("optimism"), sends=[None])
         assert result is None
 
     def test_empty_value(self):
+        """Test empty value."""
         b = _mk()
         b._read_kv = _gen_return({"velodrome_cl_pool_optimism": None})
         result = _drive(b._get_cached_cl_pool_data("optimism"), sends=[None])
@@ -3706,6 +3975,7 @@ class TestShouldUseCachedClData:
     """Tests for _should_use_cached_cl_data."""
 
     def test_cache_valid(self):
+        """Test cache valid."""
         b = _mk()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 1000
@@ -3714,6 +3984,7 @@ class TestShouldUseCachedClData:
         assert b._should_use_cached_cl_data(cached) is True
 
     def test_cache_expired(self):
+        """Test cache expired."""
         b = _mk()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 200000
@@ -3726,6 +3997,7 @@ class TestUpdateClPoolRoundTracking:
     """Tests for _update_cl_pool_round_tracking."""
 
     def test_timestamp_increased(self):
+        """Test timestamp increased."""
         b = _mk()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 2000
@@ -3737,6 +4009,7 @@ class TestUpdateClPoolRoundTracking:
         assert cached["last_round_timestamp"] == 2000
 
     def test_timestamp_not_increased(self):
+        """Test timestamp not increased."""
         b = _mk()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 500
@@ -3750,6 +4023,7 @@ class TestCacheClPoolData:
     """Tests for _cache_cl_pool_data."""
 
     def test_basic_cache(self):
+        """Test basic cache."""
         b = _mk()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 1000
@@ -3768,6 +4042,7 @@ class TestCacheClPoolData:
         )
 
     def test_cache_with_all_optional(self):
+        """Test cache with all optional."""
         b = _mk()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 1000
@@ -3802,11 +4077,13 @@ class TestInitializePositionEntryCosts:
     """Tests for _initialize_position_entry_costs."""
 
     def test_valid(self):
+        """Test valid."""
         b = _mk()
         b._store_entry_costs = _gen_none
         _drive(b._initialize_position_entry_costs("optimism", "0x1"), sends=[None])
 
     def test_exception(self):
+        """Test exception."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -3822,15 +4099,17 @@ class TestDownloadStrategies:
     """Tests for download_strategies."""
 
     def test_no_strategies(self):
+        """Test no strategies."""
         b = _mk()
         b.shared_state.strategy_to_filehash = {}
         _drive(b.download_strategies())
 
     def test_with_strategy_downloads(self):
+        """Test with strategy downloads."""
         b = _mk()
         # After first iteration, clear the dict so loop ends
         call_count = [0]
-        orig_download = MagicMock()
+        MagicMock()
 
         def _mock_download():
             call_count[0] += 1
@@ -3847,6 +4126,7 @@ class TestExecuteStrategyExecPath:
     """Tests for execute_strategy exec path."""
 
     def test_callable_found_and_executed(self):
+        """Test callable found and executed."""
         b = _mk()
         code = "def my_strategy(**kwargs): return {'result': 'ok'}"
         b.shared_state.strategies_executables = {"test_strat": (code, "my_strategy")}
@@ -3868,17 +4148,20 @@ class TestPushOpportunityMetricsToMirrordb:
     """Tests for _push_opportunity_metrics_to_mirrordb."""
 
     def test_no_tracking_data(self):
+        """Test no tracking data."""
         b = _mk()
         b._read_kv = _gen_return(None)
         _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None])
 
     def test_no_agent_registry(self):
+        """Test no agent registry."""
         b = _mk()
         b._read_kv = _gen_return({"opportunity_tracking": json.dumps({"data": "test"})})
         b._get_or_create_agent_registry = _gen_return(None)
         _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 5)
 
     def test_no_agent_type(self):
+        """Test no agent type."""
         b = _mk()
         b._read_kv = _gen_return({"opportunity_tracking": json.dumps({"data": "test"})})
         b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
@@ -3886,6 +4169,7 @@ class TestPushOpportunityMetricsToMirrordb:
         _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 5)
 
     def test_no_attr_def_creates_new(self):
+        """Test no attr def creates new."""
         b = _mk()
         tracking_data = json.dumps({"r1": {"raw": {}}})
         call_count = [0]
@@ -3921,6 +4205,7 @@ class TestPushOpportunityMetricsToMirrordb:
             _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
 
     def test_attr_def_exists(self):
+        """Test attr def exists."""
         b = _mk()
         tracking_data = json.dumps({"r1": {"raw": {}}})
         call_count = [0]
@@ -3955,6 +4240,7 @@ class TestPushOpportunityMetricsToMirrordb:
             _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
 
     def test_attr_def_value_none_creates_new(self):
+        """Test attr def value none creates new."""
         b = _mk()
         tracking_data = json.dumps({"r1": {"raw": {}}})
         call_count = [0]
@@ -3990,6 +4276,7 @@ class TestPushOpportunityMetricsToMirrordb:
             _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
 
     def test_attr_def_bad_json_creates_new(self):
+        """Test attr def bad json creates new."""
         b = _mk()
         tracking_data = json.dumps({"r1": {"raw": {}}})
         call_count = [0]
@@ -4025,6 +4312,7 @@ class TestPushOpportunityMetricsToMirrordb:
             _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
 
     def test_create_attr_def_fails(self):
+        """Test create attr def fails."""
         b = _mk()
         tracking_data = json.dumps({"r1": {"raw": {}}})
         call_count = [0]
@@ -4045,6 +4333,7 @@ class TestPushOpportunityMetricsToMirrordb:
         _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 15)
 
     def test_push_fails(self):
+        """Test push fails."""
         b = _mk()
         tracking_data = json.dumps({"r1": {"raw": {}}})
         call_count = [0]
@@ -4078,6 +4367,7 @@ class TestPushOpportunityMetricsToMirrordb:
             _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
 
     def test_exception_handled(self):
+        """Test exception handled."""
         b = _mk()
 
         def _bad(*a, **kw):
@@ -4092,6 +4382,7 @@ class TestFetchAllTradingOpportunities:
     """Tests for fetch_all_trading_opportunities."""
 
     def test_no_strategies(self):
+        """Test no strategies."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -4114,6 +4405,7 @@ class TestFetchAllTradingOpportunities:
         assert b.trading_opportunities == []
 
     def test_exception_in_main_loop(self):
+        """Test exception in main loop."""
         b = _mk()
         b.download_strategies = _gen_none
         synced_mock = MagicMock()
@@ -4134,6 +4426,7 @@ class TestFetchAllTradingOpportunities:
         assert b.trading_opportunities == []
 
     def test_with_valid_results(self):
+        """Test with valid results."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -4174,6 +4467,7 @@ class TestFetchAllTradingOpportunities:
         assert len(b.trading_opportunities) == 1
 
     def test_with_error_result(self):
+        """Test with error result."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -4196,6 +4490,7 @@ class TestFetchAllTradingOpportunities:
         assert b.trading_opportunities == []
 
     def test_with_no_result(self):
+        """Test with no result."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -4218,6 +4513,7 @@ class TestFetchAllTradingOpportunities:
         assert b.trading_opportunities == []
 
     def test_with_invalid_opportunity_format(self):
+        """Test with invalid opportunity format."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -4255,6 +4551,7 @@ class TestFetchAllTradingOpportunities:
         assert len(b.trading_opportunities) == 1  # only the dict one
 
     def test_with_empty_opportunities(self):
+        """Test with empty opportunities."""
         from concurrent.futures import Future
 
         b = _mk()
@@ -4281,6 +4578,7 @@ class TestBuildBridgeSwapActionsBranches:
     """Additional branching tests for _build_bridge_swap_actions."""
 
     def test_cl_pool_with_position_requirements(self):
+        """Test cl pool with position requirements."""
         b = _mk()
         opp = {
             "chain": "optimism",
@@ -4305,6 +4603,7 @@ class TestBuildBridgeSwapActionsBranches:
         assert isinstance(result, list)
 
     def test_some_tokens_needed(self):
+        """Test some tokens needed."""
         b = _mk()
         opp = {
             "chain": "optimism",
@@ -4322,6 +4621,7 @@ class TestBuildBridgeSwapActionsBranches:
         assert isinstance(result, list)
 
     def test_no_required_tokens(self):
+        """Test no required tokens."""
         b = _mk()
         opp = {
             "chain": "optimism",
@@ -4337,12 +4637,14 @@ class TestGetVelodromePositionRequirements:
     """Tests for get_velodrome_position_requirements."""
 
     def test_no_cl_pools(self):
+        """Test no cl pools."""
         b = _mk()
         b.selected_opportunities = [{"dex_type": "uniswap"}]
         result = _drive(b.get_velodrome_position_requirements())
         assert result == {}
 
     def test_cl_pool_no_tick_spacing(self):
+        """Test cl pool no tick spacing."""
         b = _mk()
         mock_pool = MagicMock()
         mock_pool._get_tick_spacing_velodrome = _gen_return(None)
@@ -4360,6 +4662,7 @@ class TestGetVelodromePositionRequirements:
         assert result == {}
 
     def test_cl_pool_no_tick_bands(self):
+        """Test cl pool no tick bands."""
         b = _mk()
         mock_pool = MagicMock()
         mock_pool._get_tick_spacing_velodrome = _gen_return(60)
@@ -4377,6 +4680,7 @@ class TestGetVelodromePositionRequirements:
         assert result == {}
 
     def test_cl_pool_no_current_price(self):
+        """Test cl pool no current price."""
         b = _mk()
         mock_pool = MagicMock()
         mock_pool._get_tick_spacing_velodrome = _gen_return(60)
@@ -4402,6 +4706,7 @@ class TestGetVelodromePositionRequirements:
         assert result == {}
 
     def test_cl_pool_full_flow(self):
+        """Test cl pool full flow."""
         b = _mk()
         mock_pool = MagicMock()
         mock_pool._get_tick_spacing_velodrome = _gen_return(60)
@@ -4447,6 +4752,7 @@ class TestGetVelodromePositionRequirements:
         assert "0x1" in result
 
     def test_cl_pool_exception(self):
+        """Test cl pool exception."""
         b = _mk()
         mock_pool = MagicMock()
 
@@ -4940,12 +5246,12 @@ class TestCalculateCurrentValueRatioBranches:
             # amount0_raw > 0 but after 10**18 conversion rounds to 0
             # Q0_entry = 1 / 10**18 = ~0 (but not zero in float)
             # Actually we need amount0_raw > 0 but the code does:
-            # Q0_entry = amount0_raw / (10**token0_decimals) if amount0_raw > 0 else 0
+            # Q0_entry = amount0_raw / (10**token0_decimals) if amount0_raw > 0 else 0 # noqa: E800
             # So with amount0=1 and decimals=18, Q0_entry = 1e-18 which is not 0
             # We need amount0_raw=0 AND amount1_raw=0 which is caught at 1013-1017
             # Lines 1034-1037 need: amount0_raw > 0 initially but Q0_entry ends up 0
             # This means amount0_raw > 0 (passes 1013 check) but Q0_entry = 0
-            # Q0_entry = amount0_raw / 10**decimals if amount0_raw > 0 else 0
+            # Q0_entry = amount0_raw / 10**decimals if amount0_raw > 0 else 0 # noqa: E800
             # So we need an amount where int division gives 0 somehow... but float division never gives 0
             # Actually: Q0_entry = 0 when amount0_raw == 0 (the else branch)
             # So to hit 1033: amount0_raw > 0 but somehow Q0=Q1=0 after conversion
@@ -5176,7 +5482,7 @@ class TestFetchAllTradingOpportunitiesInnerBranches:
 
         call_count = [0]
         f = ConcFuture()
-        original_done = f.done
+        f.done
 
         def _mock_done():
             call_count[0] += 1
@@ -5423,7 +5729,7 @@ class TestMergeDuplicateBranchesExtra:
             "to_token": "0xB" * 5,
         }
         # Duplicate to force merge
-        a2 = dict(a1)
+        dict(a1)
         # Make get() on second action raise during merge
         # Actually the merge accesses group[0] and group[1:], so we need 2+ identical keys
         # The easiest way: make funds_percentage raise
@@ -5873,9 +6179,6 @@ class TestGetAvailableTokensBranches:
 
     def test_reward_token_filtered(self):
         """Cover lines 2713-2722: reward token is filtered out."""
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-            REWARD_TOKEN_ADDRESSES,
-        )
 
         b = _mk()
         # Use VELO on mode which is reward-only (not in WHITELISTED_ASSETS)
@@ -5912,7 +6215,7 @@ class TestHandleAllTokensAvailableRebalance:
         ]
         required_tokens = [("0xA", "A"), ("0xB", "B")]
         target_ratios = {"0xA": 0.5, "0xB": 0.5}
-        result = b._handle_all_tokens_available(
+        result = b._handle_all_tokens_available(  # noqa: F841
             tokens, required_tokens, "optimism", 1.0, target_ratios
         )
         # Should have called _add_bridge_swap_action for rebalancing
@@ -5982,7 +6285,7 @@ class TestHandleSomeTokensAvailableBranches:
         required_tokens = [("0xA", "A"), ("0xB", "B")]
         tokens_we_need = [("0xB", "B")]
         target_ratios = {"0xA": 0.5, "0xB": 0.5}
-        result = b._handle_some_tokens_available(
+        result = b._handle_some_tokens_available(  # noqa: F841
             tokens, required_tokens, tokens_we_need, "optimism", 1.0, target_ratios
         )
         assert b._add_bridge_swap_action.called
@@ -6015,7 +6318,7 @@ class TestHandleAllTokensNeededBranches:
         ]
         required_tokens = [("0xA", "A"), ("0xB", "B")]
         target_ratios = {"0xA": 0.5, "0xB": 0.5}
-        result = b._handle_all_tokens_needed(
+        result = b._handle_all_tokens_needed(  # noqa: F841
             tokens, required_tokens, "optimism", 1.0, target_ratios
         )
         assert b._add_bridge_swap_action.called
@@ -6029,7 +6332,7 @@ class TestHandleAllTokensNeededBranches:
         ]
         required_tokens = [("0xA", "A"), ("0xB", "B")]
         target_ratios = {"0xA": 0.5, "0xB": 0.5}
-        result = b._handle_all_tokens_needed(
+        result = b._handle_all_tokens_needed(  # noqa: F841
             tokens, required_tokens, "optimism", 1.0, target_ratios
         )
         assert b._add_bridge_swap_action.called
@@ -6047,7 +6350,7 @@ class TestHandleAllTokensNeededBranches:
         required_tokens = [("0xA", "A"), ("0xB", "B")]
         target_ratios = {"0xA": 0.5, "0xB": 0.5}
         # Both required available on dest => missing=[], available=both
-        # target_tokens = available_required_tokens
+        # target_tokens = available_required_tokens # noqa: E800
         result = b._handle_all_tokens_needed(
             tokens, required_tokens, "optimism", 1.0, target_ratios
         )
@@ -6677,11 +6980,13 @@ class TestIsInStrategyBackoff:
     """Tests for _is_in_strategy_backoff."""
 
     def test_no_backoff_when_count_zero(self):
+        """Test no backoff when count zero."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 0
         assert b._is_in_strategy_backoff() is False
 
     def test_in_backoff_when_within_window(self):
+        """Test in backoff when within window."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 1
         b.shared_state.last_strategy_evaluation_time = time.time()  # just now
@@ -6689,6 +6994,7 @@ class TestIsInStrategyBackoff:
         b.context.logger.info.assert_called()
 
     def test_backoff_elapsed(self):
+        """Test backoff elapsed."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 1
         # Set last eval far in the past (base=1800s, so 2000s ago is enough)
@@ -6697,6 +7003,7 @@ class TestIsInStrategyBackoff:
         b.context.logger.info.assert_called()
 
     def test_exponential_growth_capped(self):
+        """Test exponential growth capped."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 10  # 2^9 * 1800 >> max
         b.shared_state.last_strategy_evaluation_time = time.time()
@@ -6707,6 +7014,7 @@ class TestUpdateStrategyBackoff:
     """Tests for _update_strategy_backoff."""
 
     def test_actions_present_resets_count(self):
+        """Test actions present resets count."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 5
         b._update_strategy_backoff([{"action": "enter"}])
@@ -6714,6 +7022,7 @@ class TestUpdateStrategyBackoff:
         assert b.shared_state.last_strategy_evaluation_time > 0
 
     def test_actions_present_logs_reset_when_count_was_nonzero(self):
+        """Test actions present logs reset when count was nonzero."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 3
         b._update_strategy_backoff([{"action": "enter"}])
@@ -6721,6 +7030,7 @@ class TestUpdateStrategyBackoff:
         assert b.shared_state.consecutive_no_action_count == 0
 
     def test_no_actions_increments_count(self):
+        """Test no actions increments count."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 0
         b._update_strategy_backoff(None)
@@ -6728,18 +7038,21 @@ class TestUpdateStrategyBackoff:
         b.context.logger.info.assert_called()
 
     def test_no_actions_increments_from_existing(self):
+        """Test no actions increments from existing."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 4
         b._update_strategy_backoff([])
         assert b.shared_state.consecutive_no_action_count == 5
 
     def test_empty_list_treated_as_no_actions(self):
+        """Test empty list treated as no actions."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 0
         b._update_strategy_backoff([])
         assert b.shared_state.consecutive_no_action_count == 1
 
     def test_actions_present_with_zero_count_no_reset_log(self):
+        """Test actions present with zero count no reset log."""
         b = _mk()
         b.shared_state.consecutive_no_action_count = 0
         b.context.logger.info.reset_mock()
@@ -6757,12 +7070,14 @@ class TestAsyncActBackoff:
         calls = []
 
         def send_actions(actions=None):
+            """Send actions."""
             calls.append(actions)
             yield
 
         return send_actions, calls
 
     def test_backoff_causes_early_return(self):
+        """Test backoff causes early return."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])

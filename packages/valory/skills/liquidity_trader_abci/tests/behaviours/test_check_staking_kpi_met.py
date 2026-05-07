@@ -23,8 +23,6 @@
 
 from unittest.mock import MagicMock, PropertyMock, patch
 
-import pytest
-
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
@@ -75,9 +73,11 @@ class TestCheckStakingKPIMetBehaviour:
             obj.context.agent_address = "0xagent"
 
             def fake_send(*args, **kwargs):
+                """Fake send."""
                 yield
 
             def fake_wait(*args, **kwargs):
+                """Fake wait."""
                 yield
 
             obj.send_a2a_transaction = fake_send
@@ -96,6 +96,7 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock = MagicMock()
 
         def fake_is_kpi_met():
+            """Fake is kpi met."""
             yield
             return None
 
@@ -113,6 +114,7 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock = MagicMock()
 
         def fake_is_kpi_met():
+            """Fake is kpi met."""
             yield
             return True
 
@@ -133,6 +135,7 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.period_number_at_last_cp = 0
 
         def fake_is_kpi_met():
+            """Fake is kpi met."""
             yield
             return False
 
@@ -154,14 +157,17 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.min_num_of_safe_tx_required = 5
 
         def fake_is_kpi_met():
+            """Fake is kpi met."""
             yield
             return False
 
         def fake_get_nonces(chain, multisig):
+            """Fake get nonces."""
             yield
             return 2
 
         def fake_prepare_vanity_tx(chain):
+            """Fake prepare vanity tx."""
             yield
             return "0xvanity_hash"
 
@@ -185,10 +191,12 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.min_num_of_safe_tx_required = None
 
         def fake_is_kpi_met():
+            """Fake is kpi met."""
             yield
             return False
 
         def fake_get_nonces(chain, multisig):
+            """Fake get nonces."""
             yield
             return None
 
@@ -211,10 +219,12 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.min_num_of_safe_tx_required = 5
 
         def fake_is_kpi_met():
+            """Fake is kpi met."""
             yield
             return False
 
         def fake_get_nonces(chain, multisig):
+            """Fake get nonces."""
             yield
             return 10  # 5 - 10 = -5
 
@@ -236,14 +246,17 @@ class TestCheckStakingKPIMetWithdrawalGate:
         captured = {}
 
         def fake_read_investing_paused():
+            """Fake read investing paused."""
             yield
             return True
 
         def fake_send(payload):
+            """Fake send."""
             captured["payload"] = payload
             yield
 
         def fake_wait():
+            """Fake wait."""
             yield
 
         obj._is_staking_kpi_met = MagicMock(
@@ -271,18 +284,22 @@ class TestCheckStakingKPIMetWithdrawalGate:
         captured = {}
 
         def fake_read_investing_paused():
+            """Fake read investing paused."""
             yield
             return False
 
         def fake_is_kpi_met():
+            """Fake is kpi met."""
             yield
             return True
 
         def fake_send(payload):
+            """Fake send."""
             captured["payload"] = payload
             yield
 
         def fake_wait():
+            """Fake wait."""
             yield
 
         obj._read_investing_paused = fake_read_investing_paused
@@ -314,6 +331,7 @@ class TestPrepareVanityTx:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return "0x" + "ab" * 32
 
@@ -333,6 +351,7 @@ class TestPrepareVanityTx:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return None
 
@@ -352,6 +371,7 @@ class TestPrepareVanityTx:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             raise ValueError("boom")
             yield  # noqa: unreachable
 
@@ -371,6 +391,7 @@ class TestPrepareVanityTx:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return "0x" + "ab" * 32
 
@@ -381,6 +402,7 @@ class TestPrepareVanityTx:
         original_hash = mod.hash_payload_to_hex
 
         def bad_hash(**kwargs):
+            """Bad hash."""
             raise ValueError("bad hash")
 
         mod.hash_payload_to_hex = bad_hash

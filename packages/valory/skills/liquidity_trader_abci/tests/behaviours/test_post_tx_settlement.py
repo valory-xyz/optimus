@@ -74,13 +74,16 @@ class TestPostTxSettlementBehaviour:
         ):
 
             def fake_fetch_gas() -> Generator[Any, Any, Any]:
+                """Fake fetch gas."""
                 yield
                 return None
 
             def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake send."""
                 yield
 
             def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake wait."""
                 yield
 
             obj.fetch_and_log_gas_details = fake_fetch_gas
@@ -112,13 +115,16 @@ class TestPostTxSettlementBehaviour:
             gas_called = []
 
             def fake_fetch_gas() -> Generator[Any, Any, Any]:
+                """Fake fetch gas."""
                 gas_called.append(True)
                 yield
 
             def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake send."""
                 yield
 
             def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake wait."""
                 yield
 
             obj.fetch_and_log_gas_details = fake_fetch_gas
@@ -173,6 +179,7 @@ class TestFetchAndLogGasDetails:
         ):
 
             def fake_get_receipt(**kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake get receipt."""
                 yield
                 return None
 
@@ -201,6 +208,7 @@ class TestFetchAndLogGasDetails:
         ):
 
             def fake_get_receipt(**kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake get receipt."""
                 yield
                 return {"effectiveGasPrice": None, "gasUsed": None}
 
@@ -230,6 +238,7 @@ class TestFetchAndLogGasDetails:
         ):
 
             def fake_get_receipt(**kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake get receipt."""
                 yield
                 return {"effectiveGasPrice": 50, "gasUsed": 21000}
 
@@ -258,6 +267,7 @@ class TestFetchAndLogGasDetails:
         ):
 
             def fake_get_receipt(**kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake get receipt."""
                 yield
                 return {"effectiveGasPrice": 50, "gasUsed": 21000}
 
@@ -287,6 +297,7 @@ class TestFetchAndLogGasDetails:
         ):
 
             def fake_get_receipt(**kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake get receipt."""
                 yield
                 return {"effectiveGasPrice": None, "gasUsed": 21000}
 
@@ -315,6 +326,7 @@ class TestFetchAndLogGasDetails:
         ):
 
             def fake_get_receipt(**kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake get receipt."""
                 yield
                 return {"effectiveGasPrice": 50, "gasUsed": None}
 

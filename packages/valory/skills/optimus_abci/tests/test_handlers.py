@@ -85,10 +85,12 @@ def _make_concrete_base_handler() -> Any:
     """Create a concrete subclass of BaseHandler for testing."""
 
     class ConcreteHandler(BaseHandler):
+        """ConcreteHandler."""
+
         SUPPORTED_PROTOCOL = None
 
         def handle(self, message: Any) -> None:
-            pass
+            """Handle."""
 
     handler = ConcreteHandler.__new__(ConcreteHandler)
     mock_context = MagicMock()
@@ -1514,6 +1516,7 @@ class TestHttpHandlerMethods:
         call_count = {"n": 0}
 
         def flaky() -> str:
+            """Flaky."""
             call_count["n"] += 1
             if call_count["n"] == 1:
                 raise requests.exceptions.Timeout("slow")
@@ -1531,6 +1534,7 @@ class TestHttpHandlerMethods:
         call_count = {"n": 0}
 
         def reverting() -> None:
+            """Reverting."""
             call_count["n"] += 1
             raise Exception("execution reverted")
 
@@ -1545,6 +1549,7 @@ class TestHttpHandlerMethods:
         call_count = {"n": 0}
 
         def always_timeout() -> None:
+            """Always timeout."""
             call_count["n"] += 1
             raise requests.exceptions.Timeout("slow")
 
@@ -1596,6 +1601,7 @@ class TestHttpHandlerMethods:
             mock_shared.return_value = mock_ss
 
             def revert() -> None:
+                """Revert."""
                 raise Exception("execution reverted")
 
             for _ in range(2):
@@ -1643,7 +1649,7 @@ class TestHttpHandlerMethods:
         assert result is None
 
     def test_check_usdc_balance_propagates_circuit_breaker_open(self) -> None:
-        """CircuitBreakerOpenError must propagate; the catch-all does not eat it."""
+        """CircuitBreakerOpenError must propagate; the catch-all does not eat it."""  # noqa: D403
         from packages.valory.skills.liquidity_trader_abci.models import (
             CircuitBreakerOpenError,
         )

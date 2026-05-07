@@ -157,6 +157,7 @@ def _make_gen(return_value: Any) -> Any:
     """Create a generator function that yields once and returns return_value."""
 
     def method(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        """Method."""
         yield
         return return_value
 
@@ -167,6 +168,7 @@ def _make_gen_none() -> Any:
     """Generator that returns None."""
 
     def method(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        """Method."""
         if False:
             yield
         return None
@@ -1759,6 +1761,7 @@ class TestAirdropRewards:
         call_count = [0]
 
         def fake_read_kv(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Fake read kv."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -1828,6 +1831,7 @@ class TestCalculateInitialInvestment:
         call_count = [0]
 
         def fake_calc(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Fake calc."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -1928,6 +1932,7 @@ class TestFetchOusdtBalance:
         b = _make_behaviour()
 
         def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -2043,6 +2048,7 @@ class TestInvalidateClPoolCache:
         b = _make_behaviour()
 
         def bad_write(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad write."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -3261,6 +3267,7 @@ class TestGetAllEntryCostsException:
         b = _make_behaviour()
 
         def bad_read(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad read."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -3636,11 +3643,13 @@ class TestBuildUnstakeActionVerified:
         class _Pool:
             @staticmethod
             def get_gauge_address(behaviour, pool_address, **kwargs):
+                """Get gauge address."""
                 yield
                 return gauge_address
 
             @staticmethod
             def is_cl_token_staked(behaviour, account, token_id, **kwargs):
+                """Is cl token staked."""
                 yield
                 return is_staked_map.get(token_id)
 
@@ -3667,6 +3676,7 @@ class TestBuildUnstakeActionVerified:
         assert result["action"] == "UnstakeLpTokens"
 
     def test_all_tokens_staked_on_chain_emits_full_action(self) -> None:
+        """Test all tokens staked on chain emits full action."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: True})}
         result = _exhaust(
@@ -3686,6 +3696,7 @@ class TestBuildUnstakeActionVerified:
         assert result is None
 
     def test_partial_staked_filters_token_ids(self) -> None:
+        """Test partial staked filters token ids."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: False})}
         result = _exhaust(
@@ -3695,7 +3706,7 @@ class TestBuildUnstakeActionVerified:
         assert result["token_ids"] == [1]
 
     def test_partial_staked_drops_stale_top_level_token_id(self) -> None:
-        """A position carrying both a positions list and a top-level token_id
+        """A position carrying both a positions list and a top-level token_id # noqa: D205,D209
         for an unstaked entry must not leave the stale top-level token_id on
         the filtered position."""
         b = _make_behaviour()
@@ -3718,6 +3729,7 @@ class TestBuildUnstakeActionVerified:
         assert result["token_ids"] == [1, 2]
 
     def test_resolves_missing_gauge_via_voter(self) -> None:
+        """Test resolves missing gauge via voter."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: True})}
         pos = self._cl_position()
@@ -3777,6 +3789,7 @@ class TestBuildUnstakeActionVerified:
         assert result["token_ids"] == [1, 2]
 
     def test_falls_back_when_gauge_unresolvable(self) -> None:
+        """Test falls back when gauge unresolvable."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: True}, gauge_address=None)}
         pos = self._cl_position()
@@ -3965,6 +3978,7 @@ class TestGetOrCreateAgentRegistry:
         b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
 
         def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -3981,6 +3995,7 @@ class TestUpdateAirdropRewardsException:
         b = _make_behaviour()
 
         def bad_read(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad read."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -4037,6 +4052,7 @@ class TestFetchRewardBalancesNoSafe:
         b = _make_behaviour()
 
         def bad_balance(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad balance."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -4071,6 +4087,7 @@ class TestGetLastKnownPrice:
 
         # We need to mock _read_kv to return data for any cache key
         def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock read."""
             keys = args[0] if args else kwargs.get("keys", ())
             k = keys[0]
             yield
@@ -4092,6 +4109,7 @@ class TestGetLastKnownPrice:
         b = _make_behaviour()
 
         def bad_read(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad read."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -4104,6 +4122,7 @@ class TestGetLastKnownPrice:
         b = _make_behaviour()
 
         def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock read."""
             keys = args[0] if args else kwargs.get("keys", ())
             k = keys[0]
             yield
@@ -4145,6 +4164,7 @@ class TestFetchOusdtBalanceNoSafe:
         b = _make_behaviour()
 
         def bad_balance(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad balance."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -4272,6 +4292,7 @@ class TestStoreEntryCosts:
         b = _make_behaviour()
 
         def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
@@ -4332,6 +4353,7 @@ class TestUpdateAirdropRewardsFull:
         call_count = [0]
 
         def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock read."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4436,6 +4458,7 @@ class TestCalcInitInvestEdge:
         call_count = [0]
 
         def mock_decimals(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock decimals."""
             call_count[0] += 1
             yield
             return 18 if call_count[0] == 1 else None
@@ -4568,6 +4591,7 @@ class TestGetLastKnownPriceHistorical:
             cache_data = json.dumps({date_str: 42.5})
 
             def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Mock read."""
                 keys = args[0] if args else kwargs.get("keys", ())
                 k = keys[0]
                 yield
@@ -4600,6 +4624,7 @@ class TestPaginationMultiPage:
         call_count = [0]
 
         def mock_request(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock request."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4619,6 +4644,7 @@ class TestPaginationMultiPage:
         call_count = [0]
 
         def mock_request(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock request."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4648,6 +4674,7 @@ class TestRequestWithRetriesMultiIteration:
         call_count = [0]
 
         def mock_http(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock http."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4678,6 +4705,7 @@ class TestRequestWithRetriesMultiIteration:
         call_count = [0]
 
         def mock_http(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock http."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4708,6 +4736,7 @@ class TestRequestWithRetriesMultiIteration:
         call_count = [0]
 
         def mock_http(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock http."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4777,6 +4806,7 @@ class TestFetchOusdtBalanceExceptionInner:
         b = _make_behaviour()
 
         def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("contract error")
             yield  # noqa: unreachable
 
@@ -5047,6 +5077,7 @@ class TestGetLastKnownPriceHistoricalBranch:
             cache_data = json.dumps({date_str: 42.5})
 
             def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Mock read."""
                 keys = args[0] if args else kwargs.get("keys", ())
                 k = keys[0]
                 yield

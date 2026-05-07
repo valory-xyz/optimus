@@ -125,5 +125,5 @@ class TestPostTxSettlementRound:
         assert result is None
 
     def test_no_withdrawal_initiated_class_attribute(self) -> None:
-        """PostTxSettlement does not expose a withdrawal_initiated transition anchor."""
+        """PostTxSettlement does not expose a withdrawal_initiated transition anchor."""  # noqa: D403
         assert "withdrawal_initiated" not in vars(PostTxSettlementRound)

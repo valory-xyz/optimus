@@ -25,19 +25,12 @@ import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    Chain,
-    DexType,
     OLAS_ADDRESSES,
-    PORTFOLIO_UPDATE_INTERVAL,
-    PositionStatus,
-    TradingType,
-    WHITELISTED_ASSETS,
     ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
@@ -74,7 +67,7 @@ def _drive(gen, sends=None):
     val = None
     while True:
         try:
-            yielded = gen.send(val)
+            yielded = gen.send(val)  # noqa: F841
             if idx < len(sends):
                 val = sends[idx]
                 idx += 1
@@ -110,6 +103,7 @@ class TestFetchStrategiesWithdrawalGate:
         captured = {}
 
         def fake_send(payload):
+            """Fake send."""
             captured["payload"] = payload
             yield
 
@@ -136,6 +130,7 @@ class TestFetchStrategiesWithdrawalGate:
         captured = []
 
         def fake_send(payload):
+            """Fake send."""
             captured.append(payload)
             yield
 
@@ -162,13 +157,17 @@ class TestFetchStrategiesWithdrawalGate:
 
 
 class TestIsTimeUpdateDue:
+    """TestIsTimeUpdateDue."""
+
     def test_due(self):
+        """Test due."""
         obj = _mk()
         obj._get_current_timestamp = lambda: 10000
         obj.portfolio_data = {"last_updated": 0}
         assert obj._is_time_update_due() is True
 
     def test_not_due(self):
+        """Test not due."""
         obj = _mk()
         obj._get_current_timestamp = lambda: 100
         obj.portfolio_data = {"last_updated": 100}
@@ -176,17 +175,22 @@ class TestIsTimeUpdateDue:
 
 
 class TestHavePositionsChanged:
+    """TestHavePositionsChanged."""
+
     def test_no_last_data(self):
+        """Test no last data."""
         obj = _mk()
         obj.current_positions = []
         assert obj._have_positions_changed({}) is True
 
     def test_no_allocations_key(self):
+        """Test no allocations key."""
         obj = _mk()
         obj.current_positions = []
         assert obj._have_positions_changed({"foo": 1}) is True
 
     def test_count_changed(self):
+        """Test count changed."""
         obj = _mk()
         obj.current_positions = [
             {"pool_address": "0x1", "dex_type": "a", "status": "open"}
@@ -194,6 +198,7 @@ class TestHavePositionsChanged:
         assert obj._have_positions_changed({"allocations": []}) is True
 
     def test_no_change(self):
+        """Test no change."""
         obj = _mk()
         obj.current_positions = [
             {"pool_address": "0x1", "dex_type": "uniswapV3", "status": "open"}
@@ -202,6 +207,7 @@ class TestHavePositionsChanged:
         assert obj._have_positions_changed(last) is False
 
     def test_new_positions(self):
+        """Test new positions."""
         obj = _mk()
         obj.current_positions = [
             {"pool_address": "0x1", "dex_type": "a", "status": "open"},
@@ -211,6 +217,7 @@ class TestHavePositionsChanged:
         assert obj._have_positions_changed(last) is True
 
     def test_closed_positions(self):
+        """Test closed positions."""
         obj = _mk()
         obj.current_positions = [
             {"pool_address": "0x1", "dex_type": "a", "status": "closed"}
@@ -220,19 +227,24 @@ class TestHavePositionsChanged:
 
 
 class TestUpdatePortfolioBreakdownRatios:
+    """TestUpdatePortfolioBreakdownRatios."""
+
     def test_empty_breakdown(self):
+        """Test empty breakdown."""
         obj = _mk()
         bd = []
         obj._update_portfolio_breakdown_ratios(bd, Decimal(100))
         assert bd == []
 
     def test_zero_total(self):
+        """Test zero total."""
         obj = _mk()
         bd = [{"value_usd": 10, "balance": 1, "price": 10}]
         obj._update_portfolio_breakdown_ratios(bd, Decimal(0))
         assert bd[0]["ratio"] == 0.0
 
     def test_normal(self):
+        """Test normal."""
         obj = _mk()
         bd = [
             {"value_usd": 50, "balance": 5, "price": 10},
@@ -243,6 +255,7 @@ class TestUpdatePortfolioBreakdownRatios:
         assert isinstance(bd[0]["value_usd"], float)
 
     def test_filters_small_values(self):
+        """Test filters small values."""
         obj = _mk()
         bd = [
             {"value_usd": 0.001, "balance": 0.0001, "price": 10},
@@ -266,25 +279,34 @@ class TestUpdatePortfolioBreakdownRatios:
 
 
 class TestAdjustForDecimals:
+    """TestAdjustForDecimals."""
+
     def test_basic(self):
+        """Test basic."""
         obj = _mk()
         assert obj._adjust_for_decimals(1000000, 6) == Decimal("1")
 
 
 class TestIsGnosisSafe:
+    """TestIsGnosisSafe."""
+
     def test_none(self):
+        """Test none."""
         obj = _mk()
         assert obj._is_gnosis_safe(None) is False
 
     def test_not_contract(self):
+        """Test not contract."""
         obj = _mk()
         assert obj._is_gnosis_safe({"is_contract": False}) is False
 
     def test_wrong_name(self):
+        """Test wrong name."""
         obj = _mk()
         assert obj._is_gnosis_safe({"is_contract": True, "name": "Foo"}) is False
 
     def test_is_safe(self):
+        """Test is safe."""
         obj = _mk()
         assert (
             obj._is_gnosis_safe({"is_contract": True, "name": "GnosisSafeProxy"})
@@ -293,11 +315,15 @@ class TestIsGnosisSafe:
 
 
 class TestShouldIncludeTransfer:
+    """TestShouldIncludeTransfer."""
+
     def test_no_from(self):
+        """Test no from."""
         obj = _mk()
         assert obj._should_include_transfer(None) is False
 
     def test_zero_address(self):
+        """Test zero address."""
         obj = _mk()
         assert (
             obj._should_include_transfer(
@@ -307,10 +333,12 @@ class TestShouldIncludeTransfer:
         )
 
     def test_empty_hash(self):
+        """Test empty hash."""
         obj = _mk()
         assert obj._should_include_transfer({"hash": ""}) is False
 
     def test_eth_transfer_bad_status(self):
+        """Test eth transfer bad status."""
         obj = _mk()
         assert (
             obj._should_include_transfer(
@@ -322,6 +350,7 @@ class TestShouldIncludeTransfer:
         )
 
     def test_eth_transfer_zero_value(self):
+        """Test eth transfer zero value."""
         obj = _mk()
         assert (
             obj._should_include_transfer(
@@ -333,6 +362,7 @@ class TestShouldIncludeTransfer:
         )
 
     def test_eoa(self):
+        """Test eoa."""
         obj = _mk()
         assert (
             obj._should_include_transfer({"hash": "0x123", "is_contract": False})
@@ -340,6 +370,7 @@ class TestShouldIncludeTransfer:
         )
 
     def test_contract_not_safe(self):
+        """Test contract not safe."""
         obj = _mk()
         assert (
             obj._should_include_transfer(
@@ -349,6 +380,7 @@ class TestShouldIncludeTransfer:
         )
 
     def test_contract_safe(self):
+        """Test contract safe."""
         obj = _mk()
         assert (
             obj._should_include_transfer(
@@ -359,15 +391,20 @@ class TestShouldIncludeTransfer:
 
 
 class TestShouldIncludeTransferMode:
+    """TestShouldIncludeTransferMode."""
+
     def test_no_from(self):
+        """Test no from."""
         obj = _mk()
         assert obj._should_include_transfer_mode(None) is False
 
     def test_zero(self):
+        """Test zero."""
         obj = _mk()
         assert obj._should_include_transfer_mode({"hash": "0x0"}) is False
 
     def test_eoa(self):
+        """Test eoa."""
         obj = _mk()
         assert (
             obj._should_include_transfer_mode({"hash": "0xabc", "is_contract": False})
@@ -375,6 +412,7 @@ class TestShouldIncludeTransferMode:
         )
 
     def test_eth_bad(self):
+        """Test eth bad."""
         obj = _mk()
         assert (
             obj._should_include_transfer_mode(
@@ -387,42 +425,53 @@ class TestShouldIncludeTransferMode:
 
 
 class TestGetDatetimeFromTimestamp:
+    """TestGetDatetimeFromTimestamp."""
+
     def test_z_suffix(self):
+        """Test z suffix."""
         obj = _mk()
         dt = obj._get_datetime_from_timestamp("2024-01-01T00:00:00Z")
         assert dt is not None
         assert dt.tzinfo is not None
 
     def test_plus_tz(self):
+        """Test plus tz."""
         obj = _mk()
         dt = obj._get_datetime_from_timestamp("2024-01-01T00:00:00+00:00")
         assert dt is not None
 
     def test_no_tz(self):
+        """Test no tz."""
         obj = _mk()
         dt = obj._get_datetime_from_timestamp("2024-01-01T00:00:00")
         assert dt is not None
         assert dt.tzinfo == timezone.utc
 
     def test_invalid(self):
+        """Test invalid."""
         obj = _mk()
         dt = obj._get_datetime_from_timestamp("not-a-date")
         assert dt is None
 
     def test_utc_suffix(self):
+        """Test utc suffix."""
         obj = _mk()
         dt = obj._get_datetime_from_timestamp("2024-01-01T00:00:00UTC")
         assert dt is not None
 
 
 class TestGetVeloTokenAddress:
+    """TestGetVeloTokenAddress."""
+
     def test_found(self):
+        """Test found."""
         obj = _mk()
 
         obj.params.velo_token_contract_addresses = {"optimism": "0xVELO"}
         assert obj._get_velo_token_address("optimism") == "0xVELO"
 
     def test_not_found(self):
+        """Test not found."""
         obj = _mk()
 
         obj.params.velo_token_contract_addresses = {}
@@ -430,13 +479,17 @@ class TestGetVeloTokenAddress:
 
 
 class TestIsAirdropTransfer:
+    """TestIsAirdropTransfer."""
+
     def test_not_started(self):
+        """Test not started."""
         obj = _mk()
 
         obj.params.airdrop_started = False
         assert obj._is_airdrop_transfer({}) is False
 
     def test_no_contract(self):
+        """Test no contract."""
         obj = _mk()
 
         obj.params.airdrop_started = True
@@ -444,6 +497,7 @@ class TestIsAirdropTransfer:
         assert obj._is_airdrop_transfer({}) is False
 
     def test_match(self):
+        """Test match."""
         obj = _mk()
 
         obj.params.airdrop_started = True
@@ -456,6 +510,7 @@ class TestIsAirdropTransfer:
         assert obj._is_airdrop_transfer(tx) is True
 
     def test_no_match_wrong_symbol(self):
+        """Test no match wrong symbol."""
         obj = _mk()
 
         obj.params.airdrop_started = True
@@ -469,12 +524,16 @@ class TestIsAirdropTransfer:
 
 
 class TestCheckAndUpdateZeroLiquidityPositions:
+    """TestCheckAndUpdateZeroLiquidityPositions."""
+
     def test_no_positions(self):
+        """Test no positions."""
         obj = _mk()
         obj.current_positions = None
         obj.check_and_update_zero_liquidity_positions()  # no crash
 
     def test_close_zero_liquidity(self):
+        """Test close zero liquidity."""
         obj = _mk()
         obj.current_positions = [
             {"status": "open", "dex_type": "UniswapV3", "current_liquidity": 0}
@@ -484,6 +543,7 @@ class TestCheckAndUpdateZeroLiquidityPositions:
         assert obj.current_positions[0]["status"] == "closed"
 
     def test_keep_nonzero(self):
+        """Test keep nonzero."""
         obj = _mk()
         obj.current_positions = [
             {"status": "open", "dex_type": "UniswapV3", "current_liquidity": 100}
@@ -493,6 +553,7 @@ class TestCheckAndUpdateZeroLiquidityPositions:
         assert obj.current_positions[0]["status"] == "open"
 
     def test_skip_closed(self):
+        """Test skip closed."""
         obj = _mk()
         obj.current_positions = [
             {"status": "closed", "dex_type": "UniswapV3", "current_liquidity": 0}
@@ -502,6 +563,7 @@ class TestCheckAndUpdateZeroLiquidityPositions:
         assert obj.current_positions[0]["status"] == "closed"
 
     def test_velodrome_cl_all_zero(self):
+        """Test velodrome cl all zero."""
         obj = _mk()
         obj.current_positions = [
             {
@@ -519,6 +581,7 @@ class TestCheckAndUpdateZeroLiquidityPositions:
         assert obj.current_positions[0]["status"] == "closed"
 
     def test_velodrome_cl_some_nonzero(self):
+        """Test velodrome cl some nonzero."""
         obj = _mk()
         obj.current_positions = [
             {
@@ -536,6 +599,7 @@ class TestCheckAndUpdateZeroLiquidityPositions:
         assert obj.current_positions[0]["status"] == "open"
 
     def test_velodrome_cl_none_token_id(self):
+        """Test velodrome cl none token id."""
         obj = _mk()
         obj.current_positions = [
             {
@@ -550,6 +614,7 @@ class TestCheckAndUpdateZeroLiquidityPositions:
         assert obj.current_positions[0]["status"] == "closed"
 
     def test_default_liquidity_avoids_false_close(self):
+        """Test default liquidity avoids false close."""
         obj = _mk()
         obj.current_positions = [
             {"status": "open", "dex_type": "UniswapV3"}  # no current_liquidity key
@@ -560,7 +625,10 @@ class TestCheckAndUpdateZeroLiquidityPositions:
 
 
 class TestAddToPortfolioBreakdown:
+    """TestAddToPortfolioBreakdown."""
+
     def test_new_entry(self):
+        """Test new entry."""
         obj = _mk()
         bd = []
         obj._add_to_portfolio_breakdown(
@@ -570,6 +638,7 @@ class TestAddToPortfolioBreakdown:
         assert bd[0]["asset"] == "TKN"
 
     def test_existing_entry(self):
+        """Test existing entry."""
         obj = _mk()
         bd = [
             {
@@ -606,6 +675,7 @@ class TestFetchHistoricalEthPrice:
         return obj
 
     def test_success_caches_result(self):
+        """Test success caches result."""
         obj = self._setup_obj(
             (True, {"market_data": {"current_price": {"usd": 3000.0}}}),
         )
@@ -613,6 +683,7 @@ class TestFetchHistoricalEthPrice:
         original_cache = _gen_none
 
         def tracking_cache(*args, **kwargs):
+            """Tracking cache."""
             cache_calls.append(args)
             return original_cache(*args, **kwargs)
 
@@ -623,6 +694,7 @@ class TestFetchHistoricalEthPrice:
         assert cache_calls[0] == ("ethereum", 3000.0, "01-01-2024")
 
     def test_returns_cached_price_without_api_call(self):
+        """Test returns cached price without api call."""
         obj = self._setup_obj(
             (False, {}),  # API would fail, but shouldn't be called
             cached_price=2500.0,
@@ -633,12 +705,14 @@ class TestFetchHistoricalEthPrice:
         obj.context.coingecko.request.assert_not_called()
 
     def test_api_failure_returns_none(self):
+        """Test api failure returns none."""
         obj = self._setup_obj((False, {}))
         obj.context.coingecko.api_key = None
         result = _drive(obj._fetch_historical_eth_price("01-01-2024"))
         assert result is None
 
     def test_no_price_in_response(self):
+        """Test no price in response."""
         obj = self._setup_obj(
             (True, {"market_data": {"current_price": {}}}),
         )
@@ -646,6 +720,7 @@ class TestFetchHistoricalEthPrice:
         assert result is None
 
     def test_x402(self):
+        """Test x402."""
         obj = self._setup_obj(
             (True, {"market_data": {"current_price": {"usd": 1.0}}}),
             use_x402=True,
@@ -661,7 +736,10 @@ class TestFetchHistoricalEthPrice:
 
 
 class TestGetHistoricalPriceForDate:
+    """TestGetHistoricalPriceForDate."""
+
     def test_zero_address(self):
+        """Test zero address."""
         obj = _mk()
         obj._fetch_historical_eth_price = _gen_return(2500.0)
         gen = obj._get_historical_price_for_date(
@@ -671,6 +749,7 @@ class TestGetHistoricalPriceForDate:
         assert result == 2500.0
 
     def test_no_coingecko_id(self):
+        """Test no coingecko id."""
         obj = _mk()
         obj.get_coin_id_from_symbol = lambda s, c: None
         gen = obj._get_historical_price_for_date("0xTOKEN", "FOO", "01-01-2024", "mode")
@@ -678,6 +757,7 @@ class TestGetHistoricalPriceForDate:
         assert result is None
 
     def test_with_coingecko_id(self):
+        """Test with coingecko id."""
         obj = _mk()
         obj.get_coin_id_from_symbol = lambda s, c: "foo-coin"
         obj._fetch_historical_token_price = _gen_return(42.0)
@@ -686,9 +766,11 @@ class TestGetHistoricalPriceForDate:
         assert result == 42.0
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
 
         def boom(s, c):
+            """Boom."""
             raise RuntimeError("fail")
 
         obj.get_coin_id_from_symbol = boom
@@ -698,7 +780,10 @@ class TestGetHistoricalPriceForDate:
 
 
 class TestUpdateAgentPerformanceMetrics:
+    """TestUpdateAgentPerformanceMetrics."""
+
     def test_with_data(self):
+        """Test with data."""
         obj = _mk()
         obj.portfolio_data = {
             "portfolio_value": 100.0,
@@ -712,6 +797,7 @@ class TestUpdateAgentPerformanceMetrics:
         assert len(obj.agent_performance["metrics"]) == 2
 
     def test_no_data(self):
+        """Test no data."""
         obj = _mk()
         obj.portfolio_data = {}
         obj.read_agent_performance = MagicMock()
@@ -722,13 +808,17 @@ class TestUpdateAgentPerformanceMetrics:
         assert "$0.00" in obj.agent_performance["metrics"][0]["value"]
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
         obj.read_agent_performance = MagicMock(side_effect=RuntimeError("boom"))
         obj._update_agent_performance_metrics()  # no crash
 
 
 class TestHandleBalancerPosition:
+    """TestHandleBalancerPosition."""
+
     def test_ok(self):
+        """Test ok."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -749,7 +839,10 @@ class TestHandleBalancerPosition:
 
 
 class TestHandleUniswapPosition:
+    """TestHandleUniswapPosition."""
+
     def test_ok(self):
+        """Test ok."""
         obj = _mk()
         position = {
             "pool_address": "0xPool",
@@ -767,7 +860,10 @@ class TestHandleUniswapPosition:
 
 
 class TestHandleSturdyPosition:
+    """TestHandleSturdyPosition."""
+
     def test_ok(self):
+        """Test ok."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -785,7 +881,10 @@ class TestHandleSturdyPosition:
 
 
 class TestHandleVelodromePosition:
+    """TestHandleVelodromePosition."""
+
     def test_not_staked(self):
+        """Test not staked."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -809,6 +908,7 @@ class TestHandleVelodromePosition:
         assert "Pool" in result[1]
 
     def test_staked_with_rewards(self):
+        """Test staked with rewards."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -836,7 +936,10 @@ class TestHandleVelodromePosition:
 
 
 class TestGetTickRanges:
+    """TestGetTickRanges."""
+
     def test_non_cl_dex(self):
+        """Test non cl dex."""
         obj = _mk()
         position = {"dex_type": "balancerPool"}
         gen = obj._get_tick_ranges(position, "optimism")
@@ -844,6 +947,7 @@ class TestGetTickRanges:
         assert result == []
 
     def test_velodrome_non_cl(self):
+        """Test velodrome non cl."""
         obj = _mk()
         position = {"dex_type": "velodrome", "is_cl_pool": False}
         gen = obj._get_tick_ranges(position, "optimism")
@@ -851,6 +955,7 @@ class TestGetTickRanges:
         assert result == []
 
     def test_no_pool_address(self):
+        """Test no pool address."""
         obj = _mk()
         position = {"dex_type": "UniswapV3", "pool_address": None}
         gen = obj._get_tick_ranges(position, "optimism")
@@ -858,6 +963,7 @@ class TestGetTickRanges:
         assert result == []
 
     def test_slot0_fail(self):
+        """Test slot0 fail."""
         obj = _mk()
 
         obj.params.uniswap_position_manager_contract_addresses = {"optimism": "0xPM"}
@@ -868,6 +974,7 @@ class TestGetTickRanges:
         assert result == []
 
     def test_no_position_manager(self):
+        """Test no position manager."""
         obj = _mk()
 
         obj.params.uniswap_position_manager_contract_addresses = {}
@@ -879,7 +986,10 @@ class TestGetTickRanges:
 
 
 class TestCalculatePositionValue:
+    """TestCalculatePositionValue."""
+
     def test_basic(self):
+        """Test basic."""
         obj = _mk()
         position = {"pool_address": "0xP"}
         token_info = {"0xT0": "TKN0", "0xT1": "TKN1"}
@@ -895,6 +1005,7 @@ class TestCalculatePositionValue:
         assert len(bd) == 2
 
     def test_missing_balance(self):
+        """Test missing balance."""
         obj = _mk()
         position = {"pool_address": "0xP"}
         token_info = {"0xT0": "TKN0"}
@@ -908,6 +1019,7 @@ class TestCalculatePositionValue:
         assert result == Decimal(0)
 
     def test_missing_price(self):
+        """Test missing price."""
         obj = _mk()
         position = {"pool_address": "0xP"}
         token_info = {"0xT0": "TKN0"}
@@ -921,6 +1033,7 @@ class TestCalculatePositionValue:
         assert result == Decimal(0)
 
     def test_existing_asset_update(self):
+        """Test existing asset update."""
         obj = _mk()
         position = {"pool_address": "0xP"}
         token_info = {"0xT0": "TKN0"}
@@ -944,13 +1057,17 @@ class TestCalculatePositionValue:
 
 
 class TestUpdatePositionAmounts:
+    """TestUpdatePositionAmounts."""
+
     def test_no_positions(self):
+        """Test no positions."""
         obj = _mk()
         obj.current_positions = None
         gen = obj.update_position_amounts()
         _drive(gen)
 
     def test_skip_closed(self):
+        """Test skip closed."""
         obj = _mk()
         obj.current_positions = [
             {"status": "closed", "dex_type": "UniswapV3", "chain": "optimism"}
@@ -960,6 +1077,7 @@ class TestUpdatePositionAmounts:
         _drive(gen)
 
     def test_missing_dex_type(self):
+        """Test missing dex type."""
         obj = _mk()
         obj.current_positions = [{"status": "open", "chain": "optimism"}]
         obj.store_current_positions = MagicMock()
@@ -967,6 +1085,7 @@ class TestUpdatePositionAmounts:
         _drive(gen)
 
     def test_unknown_dex(self):
+        """Test unknown dex."""
         obj = _mk()
         obj.current_positions = [
             {"status": "open", "dex_type": "unknown", "chain": "optimism"}
@@ -976,6 +1095,7 @@ class TestUpdatePositionAmounts:
         _drive(gen)
 
     def test_balancer(self):
+        """Test balancer."""
         obj = _mk()
         obj.current_positions = [
             {
@@ -992,6 +1112,7 @@ class TestUpdatePositionAmounts:
         obj.store_current_positions.assert_called_once()
 
     def test_uniswap(self):
+        """Test uniswap."""
         obj = _mk()
         obj.current_positions = [
             {"status": "open", "dex_type": "UniswapV3", "chain": "optimism"}
@@ -1002,6 +1123,7 @@ class TestUpdatePositionAmounts:
         _drive(gen)
 
     def test_velodrome(self):
+        """Test velodrome."""
         obj = _mk()
         obj.current_positions = [
             {"status": "open", "dex_type": "velodrome", "chain": "optimism"}
@@ -1012,6 +1134,7 @@ class TestUpdatePositionAmounts:
         _drive(gen)
 
     def test_sturdy(self):
+        """Test sturdy."""
         obj = _mk()
         obj.current_positions = [
             {"status": "open", "dex_type": "Sturdy", "chain": "mode"}
@@ -1023,7 +1146,10 @@ class TestUpdatePositionAmounts:
 
 
 class TestUpdateBalancerPosition:
+    """TestUpdateBalancerPosition."""
+
     def test_missing_params(self):
+        """Test missing params."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {}
@@ -1031,6 +1157,7 @@ class TestUpdateBalancerPosition:
         _drive(gen)
 
     def test_success(self):
+        """Test success."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -1041,6 +1168,7 @@ class TestUpdateBalancerPosition:
         assert pos["current_liquidity"] == 1000
 
     def test_none_balance(self):
+        """Test none balance."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -1052,12 +1180,16 @@ class TestUpdateBalancerPosition:
 
 
 class TestUpdateUniswapPosition:
+    """TestUpdateUniswapPosition."""
+
     def test_missing_params(self):
+        """Test missing params."""
         obj = _mk()
         gen = obj._update_uniswap_position({"chain": "optimism"})
         _drive(gen)
 
     def test_no_pm(self):
+        """Test no pm."""
         obj = _mk()
 
         obj.params.uniswap_position_manager_contract_addresses = {}
@@ -1065,6 +1197,7 @@ class TestUpdateUniswapPosition:
         _drive(gen)
 
     def test_success(self):
+        """Test success."""
         obj = _mk()
 
         obj.params.uniswap_position_manager_contract_addresses = {"optimism": "0xPM"}
@@ -1075,6 +1208,7 @@ class TestUpdateUniswapPosition:
         assert pos["current_liquidity"] == 500
 
     def test_no_data(self):
+        """Test no data."""
         obj = _mk()
 
         obj.params.uniswap_position_manager_contract_addresses = {"optimism": "0xPM"}
@@ -1084,7 +1218,7 @@ class TestUpdateUniswapPosition:
         _drive(gen)
 
     def test_zero_liquidity_writes_zero(self):
-        """On-chain liquidity of 0 must be written through, not treated as
+        """On-chain liquidity of 0 must be written through, not treated as # noqa: D205,D209
         a fetch failure that leaves the cached non-zero value intact."""
         obj = _mk()
 
@@ -1097,7 +1231,10 @@ class TestUpdateUniswapPosition:
 
 
 class TestUpdateSturdyPosition:
+    """TestUpdateSturdyPosition."""
+
     def test_missing(self):
+        """Test missing."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {}
@@ -1105,6 +1242,7 @@ class TestUpdateSturdyPosition:
         _drive(gen)
 
     def test_success(self):
+        """Test success."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -1115,6 +1253,7 @@ class TestUpdateSturdyPosition:
         assert pos["current_liquidity"] == 999
 
     def test_none(self):
+        """Test none."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -1125,12 +1264,16 @@ class TestUpdateSturdyPosition:
 
 
 class TestUpdateVelodromePosition:
+    """TestUpdateVelodromePosition."""
+
     def test_no_chain(self):
+        """Test no chain."""
         obj = _mk()
         gen = obj._update_velodrome_position({})
         _drive(gen)
 
     def test_cl_success(self):
+        """Test cl success."""
         obj = _mk()
 
         obj.params.velodrome_non_fungible_position_manager_contract_addresses = {
@@ -1147,7 +1290,7 @@ class TestUpdateVelodromePosition:
         assert pos["positions"][0]["current_liquidity"] == 42
 
     def test_cl_zero_liquidity_writes_zero(self):
-        """On-chain liquidity of 0 must be written through. A stale cached
+        """On-chain liquidity of 0 must be written through. A stale cached # noqa: D205,D209
         non-zero current_liquidity would otherwise prevent
         check_and_update_zero_liquidity_positions from closing the position."""
         obj = _mk()
@@ -1166,6 +1309,7 @@ class TestUpdateVelodromePosition:
         assert pos["positions"][0]["current_liquidity"] == 0
 
     def test_cl_no_token_id(self):
+        """Test cl no token id."""
         obj = _mk()
 
         obj.params.velodrome_non_fungible_position_manager_contract_addresses = {
@@ -1180,6 +1324,7 @@ class TestUpdateVelodromePosition:
         _drive(gen)
 
     def test_cl_no_pm(self):
+        """Test cl no pm."""
         obj = _mk()
 
         obj.params.velodrome_non_fungible_position_manager_contract_addresses = {}
@@ -1192,6 +1337,7 @@ class TestUpdateVelodromePosition:
         _drive(gen)
 
     def test_non_cl_success(self):
+        """Test non cl success."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -1202,6 +1348,7 @@ class TestUpdateVelodromePosition:
         assert pos["current_liquidity"] == 77
 
     def test_non_cl_missing(self):
+        """Test non cl missing."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {}
@@ -1211,29 +1358,36 @@ class TestUpdateVelodromePosition:
 
 
 class TestChainTotalInvestment:
+    """TestChainTotalInvestment."""
+
     def test_load_found(self):
+        """Test load found."""
         obj = _mk()
         obj._read_kv = _gen_return({"mode_total_investment": "123.45"})
         gen = obj._load_chain_total_investment("mode")
         assert _drive(gen) == 123.45
 
     def test_load_not_found(self):
+        """Test load not found."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         gen = obj._load_chain_total_investment("mode")
         assert _drive(gen) == 0.0
 
     def test_load_invalid(self):
+        """Test load invalid."""
         obj = _mk()
         obj._read_kv = _gen_return({"mode_total_investment": "not-a-number"})
         gen = obj._load_chain_total_investment("mode")
         assert _drive(gen) == 0.0
 
     def test_save(self):
+        """Test save."""
         obj = _mk()
         written = {}
 
         def fake_write(d):
+            """Fake write."""
             written.update(d)
             yield
 
@@ -1244,19 +1398,24 @@ class TestChainTotalInvestment:
 
 
 class TestLoadFundingEventsData:
+    """TestLoadFundingEventsData."""
+
     def test_found(self):
+        """Test found."""
         obj = _mk()
         obj._read_kv = _gen_return({"funding_events": json.dumps({"mode": {}})})
         gen = obj._load_funding_events_data()
         assert _drive(gen) == {"mode": {}}
 
     def test_not_found(self):
+        """Test not found."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         gen = obj._load_funding_events_data()
         assert _drive(gen) == {}
 
     def test_invalid_json(self):
+        """Test invalid json."""
         obj = _mk()
         obj._read_kv = _gen_return({"funding_events": "{{bad"})
         gen = obj._load_funding_events_data()
@@ -1264,11 +1423,15 @@ class TestLoadFundingEventsData:
 
 
 class TestSaveTransferData:
+    """TestSaveTransferData."""
+
     def test_mode(self):
+        """Test mode."""
         obj = _mk()
         written = {}
 
         def fake_write(d):
+            """Fake write."""
             written.update(d)
             yield
 
@@ -1278,10 +1441,12 @@ class TestSaveTransferData:
         assert "mode_transfer_data" in written
 
     def test_optimism(self):
+        """Test optimism."""
         obj = _mk()
         written = {}
 
         def fake_write(d):
+            """Fake write."""
             written.update(d)
             yield
 
@@ -1292,13 +1457,17 @@ class TestSaveTransferData:
 
 
 class TestContractNameGetters:
+    """TestContractNameGetters."""
+
     def test_aggregator(self):
+        """Test aggregator."""
         obj = _mk()
         obj.contract_interact = _gen_return("MyAgg")
         gen = obj._get_aggregator_name("0xAgg", "mode")
         assert _drive(gen) == "MyAgg"
 
     def test_balancer(self):
+        """Test balancer."""
         obj = _mk()
         obj.contract_interact = _gen_return("MyPool")
         gen = obj._get_balancer_pool_name("0xPool", "optimism")
@@ -1306,13 +1475,17 @@ class TestContractNameGetters:
 
 
 class TestGetUserShareValueVelodrome:
+    """TestGetUserShareValueVelodrome."""
+
     def test_missing_tokens(self):
+        """Test missing tokens."""
         obj = _mk()
         pos = {"token0": None, "token1": "0xT1", "is_cl_pool": False}
         gen = obj.get_user_share_value_velodrome("0xU", "0xP", 1, "optimism", pos)
         assert _drive(gen) == {}
 
     def test_cl(self):
+        """Test cl."""
         obj = _mk()
         pos = {"token0": "0xT0", "token1": "0xT1", "is_cl_pool": True}
         obj._get_user_share_value_velodrome_cl = _gen_return({"0xT0": Decimal(1)})
@@ -1320,6 +1493,7 @@ class TestGetUserShareValueVelodrome:
         assert _drive(gen) == {"0xT0": Decimal(1)}
 
     def test_non_cl(self):
+        """Test non cl."""
         obj = _mk()
         pos = {"token0": "0xT0", "token1": "0xT1", "is_cl_pool": False}
         obj._get_user_share_value_velodrome_non_cl = _gen_return({"0xT0": Decimal(2)})
@@ -1328,13 +1502,17 @@ class TestGetUserShareValueVelodrome:
 
 
 class TestGetUserShareValueUniswap:
+    """TestGetUserShareValueUniswap."""
+
     def test_missing_data(self):
+        """Test missing data."""
         obj = _mk()
         pos = {"token0": None, "token1": "0xT1"}
         gen = obj.get_user_share_value_uniswap("0xP", 1, "optimism", pos)
         assert _drive(gen) == {}
 
     def test_no_pm(self):
+        """Test no pm."""
         obj = _mk()
 
         obj.params.uniswap_position_manager_contract_addresses = {}
@@ -1344,7 +1522,10 @@ class TestGetUserShareValueUniswap:
 
 
 class TestGetUserShareValueBalancer:
+    """TestGetUserShareValueBalancer."""
+
     def test_no_vault(self):
+        """Test no vault."""
         obj = _mk()
 
         obj.params.balancer_vault_contract_addresses = {}
@@ -1352,6 +1533,7 @@ class TestGetUserShareValueBalancer:
         assert _drive(gen) == {}
 
     def test_no_pool_tokens(self):
+        """Test no pool tokens."""
         obj = _mk()
 
         obj.params.balancer_vault_contract_addresses = {"optimism": "0xV"}
@@ -1361,17 +1543,22 @@ class TestGetUserShareValueBalancer:
 
 
 class TestGetUserShareValueSturdy:
+    """TestGetUserShareValueSturdy."""
+
     def test_no_balance(self):
+        """Test no balance."""
         obj = _mk()
         obj.contract_interact = _gen_return(None)
         gen = obj.get_user_share_value_sturdy("0xU", "0xAgg", "0xA", "mode")
         assert _drive(gen) == {}
 
     def test_no_decimals(self):
+        """Test no decimals."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -1385,10 +1572,12 @@ class TestGetUserShareValueSturdy:
         assert _drive(gen) == {}
 
     def test_success(self):
+        """Test success."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -1405,7 +1594,10 @@ class TestGetUserShareValueSturdy:
 
 
 class TestCalculateAirdropRewardsValue:
+    """TestCalculateAirdropRewardsValue."""
+
     def test_non_mode(self):
+        """Test non mode."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -1413,6 +1605,7 @@ class TestCalculateAirdropRewardsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_zero_rewards(self):
+        """Test zero rewards."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1421,6 +1614,7 @@ class TestCalculateAirdropRewardsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_with_rewards(self):
+        """Test with rewards."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1432,6 +1626,7 @@ class TestCalculateAirdropRewardsValue:
         assert result == Decimal("1") * Decimal("1.0")
 
     def test_with_rewards_no_price(self):
+        """Test with rewards no price."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1445,7 +1640,10 @@ class TestCalculateAirdropRewardsValue:
 
 
 class TestCalculateStakingRewardsValue:
+    """TestCalculateStakingRewardsValue."""
+
     def test_no_olas_address(self):
+        """Test no olas address."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["unknown"]
@@ -1454,6 +1652,7 @@ class TestCalculateStakingRewardsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_zero_rewards(self):
+        """Test zero rewards."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1463,6 +1662,7 @@ class TestCalculateStakingRewardsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_with_rewards(self):
+        """Test with rewards."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1474,6 +1674,7 @@ class TestCalculateStakingRewardsValue:
         assert result == Decimal("1") * Decimal("5.0")
 
     def test_no_price(self):
+        """Test no price."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1485,7 +1686,10 @@ class TestCalculateStakingRewardsValue:
 
 
 class TestCalculateWithdrawalsValue:
+    """TestCalculateWithdrawalsValue."""
+
     def test_unsupported_chain(self):
+        """Test unsupported chain."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["base"]
@@ -1493,6 +1697,7 @@ class TestCalculateWithdrawalsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_mode_none_transfers(self):
+        """Test mode none transfers."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1502,6 +1707,7 @@ class TestCalculateWithdrawalsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_mode_with_transfers(self):
+        """Test mode with transfers."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
@@ -1514,6 +1720,7 @@ class TestCalculateWithdrawalsValue:
         assert _drive(gen) == Decimal("50")
 
     def test_optimism_no_transfers(self):
+        """Test optimism no transfers."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -1523,6 +1730,7 @@ class TestCalculateWithdrawalsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_optimism_with_transfers(self):
+        """Test optimism with transfers."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -1534,12 +1742,16 @@ class TestCalculateWithdrawalsValue:
 
 
 class TestTrackWithdrawalMode:
+    """TestTrackWithdrawalMode."""
+
     def test_empty(self):
+        """Test empty."""
         obj = _mk()
         gen = obj._track_and_calculate_withdrawal_value_mode({})
         assert _drive(gen) == Decimal(0)
 
     def test_with_usdc(self):
+        """Test with usdc."""
         obj = _mk()
         transfers = {
             "2024-01-01": [
@@ -1551,9 +1763,11 @@ class TestTrackWithdrawalMode:
         assert _drive(gen) == Decimal("10")
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("fail")
             yield  # noqa: unreachable
 
@@ -1568,12 +1782,16 @@ class TestTrackWithdrawalMode:
 
 
 class TestTrackWithdrawalOptimism:
+    """TestTrackWithdrawalOptimism."""
+
     def test_empty(self):
+        """Test empty."""
         obj = _mk()
         gen = obj._track_and_calculate_withdrawal_value_optimism({})
         assert _drive(gen) == Decimal(0)
 
     def test_with_usdc(self):
+        """Test with usdc."""
         obj = _mk()
         transfers = {
             "2024-01-01": [
@@ -1591,6 +1809,7 @@ class TestTrackWithdrawalOptimism:
         assert _drive(gen) == Decimal("10")
 
     def test_filter_contracts(self):
+        """Test filter contracts."""
         obj = _mk()
         transfers = {
             "2024-01-01": [
@@ -1609,17 +1828,22 @@ class TestTrackWithdrawalOptimism:
 
 
 class TestCalculateTotalWithdrawalValue:
+    """TestCalculateTotalWithdrawalValue."""
+
     def test_empty(self):
+        """Test empty."""
         obj = _mk()
         gen = obj._calculate_total_withdrawal_value([], chain="mode")
         assert _drive(gen) == Decimal(0)
 
     def test_no_timestamp(self):
+        """Test no timestamp."""
         obj = _mk()
         gen = obj._calculate_total_withdrawal_value([{"timestamp": ""}], chain="mode")
         assert _drive(gen) == Decimal(0)
 
     def test_bad_timestamp(self):
+        """Test bad timestamp."""
         obj = _mk()
         gen = obj._calculate_total_withdrawal_value(
             [{"timestamp": "not-a-date"}], chain="mode"
@@ -1627,6 +1851,7 @@ class TestCalculateTotalWithdrawalValue:
         assert _drive(gen) == Decimal(0)
 
     def test_no_coin_id(self):
+        """Test no coin id."""
         obj = _mk()
         obj.get_coin_id_from_symbol = lambda s, c: None
         gen = obj._calculate_total_withdrawal_value(
@@ -1635,6 +1860,7 @@ class TestCalculateTotalWithdrawalValue:
         assert _drive(gen) == Decimal(0)
 
     def test_with_price(self):
+        """Test with price."""
         obj = _mk()
         obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
         obj._fetch_historical_token_price = _gen_return(1.0)
@@ -1644,6 +1870,7 @@ class TestCalculateTotalWithdrawalValue:
         assert result == Decimal("100") * Decimal("1.0")
 
     def test_no_price(self):
+        """Test no price."""
         obj = _mk()
         obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
         obj._fetch_historical_token_price = _gen_return(None)
@@ -1653,7 +1880,10 @@ class TestCalculateTotalWithdrawalValue:
 
 
 class TestUpdatePositionWithCurrentValue:
+    """TestUpdatePositionWithCurrentValue."""
+
     def test_basic_cost_recovered(self):
+        """Test basic cost recovered."""
         obj = _mk()
         obj._get_current_timestamp = lambda: 1000
         obj._calculate_corrected_yield = _gen_return(Decimal("100"))
@@ -1671,6 +1901,7 @@ class TestUpdatePositionWithCurrentValue:
         assert pos["yield_usd"] == 100.0
 
     def test_not_recovered(self):
+        """Test not recovered."""
         obj = _mk()
         obj._get_current_timestamp = lambda: 1000
         obj._calculate_corrected_yield = _gen_return(Decimal("10"))
@@ -1687,6 +1918,7 @@ class TestUpdatePositionWithCurrentValue:
         assert pos["cost_recovered"] is False
 
     def test_no_balances(self):
+        """Test no balances."""
         obj = _mk()
         obj._get_current_timestamp = lambda: 1000
         obj._get_current_token_balances = _gen_return(None)
@@ -1696,6 +1928,7 @@ class TestUpdatePositionWithCurrentValue:
         assert pos["cost_recovered"] is False
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
         obj._get_current_timestamp = MagicMock(side_effect=RuntimeError("boom"))
         pos = {"pool_address": "0xP"}
@@ -1704,6 +1937,7 @@ class TestUpdatePositionWithCurrentValue:
         assert pos["cost_recovered"] is False
 
     def test_zero_entry_cost(self):
+        """Test zero entry cost."""
         obj = _mk()
         obj._get_current_timestamp = lambda: 1000
         obj._calculate_corrected_yield = _gen_return(Decimal("0"))
@@ -1721,7 +1955,10 @@ class TestUpdatePositionWithCurrentValue:
 
 
 class TestCalculateCorrectedYield:
+    """TestCalculateCorrectedYield."""
+
     def test_no_decimals(self):
+        """Test no decimals."""
         obj = _mk()
         obj._get_token_decimals = _gen_return(None)
         pos = {
@@ -1735,10 +1972,12 @@ class TestCalculateCorrectedYield:
         assert _drive(gen) == Decimal(0)
 
     def test_with_prices_in_cache(self):
+        """Test with prices in cache."""
         obj = _mk()
         call_count = [0]
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             call_count[0] += 1
             yield
             return 18
@@ -1762,10 +2001,12 @@ class TestCalculateCorrectedYield:
         assert result == Decimal("20")
 
     def test_fetch_prices(self):
+        """Test fetch prices."""
         obj = _mk()
         call_count = [0]
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             call_count[0] += 1
             yield
             return 18
@@ -1788,9 +2029,11 @@ class TestCalculateCorrectedYield:
         assert result == Decimal("20")
 
     def test_fetch_prices_fail(self):
+        """Test fetch prices fail."""
         obj = _mk()
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -1811,9 +2054,11 @@ class TestCalculateCorrectedYield:
         assert _drive(gen) == Decimal(0)
 
     def test_velo_rewards(self):
+        """Test velo rewards."""
         obj = _mk()
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -1841,7 +2086,10 @@ class TestCalculateCorrectedYield:
 
 
 class TestGetCurrentTokenBalances:
+    """TestGetCurrentTokenBalances."""
+
     def test_balancer(self):
+        """Test balancer."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -1856,6 +2104,7 @@ class TestGetCurrentTokenBalances:
         assert _drive(gen) == {"0xT": Decimal(1)}
 
     def test_uniswap(self):
+        """Test uniswap."""
         obj = _mk()
         obj.get_user_share_value_uniswap = _gen_return({"0xT": Decimal(2)})
         pos = {
@@ -1868,6 +2117,7 @@ class TestGetCurrentTokenBalances:
         assert _drive(gen) == {"0xT": Decimal(2)}
 
     def test_velodrome(self):
+        """Test velodrome."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -1882,6 +2132,7 @@ class TestGetCurrentTokenBalances:
         assert _drive(gen) == {"0xT": Decimal(3)}
 
     def test_sturdy(self):
+        """Test sturdy."""
         obj = _mk()
 
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -1896,6 +2147,7 @@ class TestGetCurrentTokenBalances:
         assert _drive(gen) == {"0xT": Decimal(4)}
 
     def test_unknown(self):
+        """Test unknown."""
         obj = _mk()
         pos = {"dex_type": "unknown"}
         gen = obj._get_current_token_balances(pos, "optimism")
@@ -1903,19 +2155,24 @@ class TestGetCurrentTokenBalances:
 
 
 class TestReadInvestingPaused:
+    """TestReadInvestingPaused."""
+
     def test_true(self):
+        """Test true."""
         obj = _mk()
         obj._read_kv = _gen_return({"investing_paused": "true"})
         gen = obj._read_investing_paused()
         assert _drive(gen) is True
 
     def test_false(self):
+        """Test false."""
         obj = _mk()
         obj._read_kv = _gen_return({"investing_paused": "false"})
         gen = obj._read_investing_paused()
         assert _drive(gen) is False
 
     def test_none_result(self):
+        """Test none result."""
         obj = _mk()
         obj._read_kv = _gen_return(None)
         result = _drive(obj._read_investing_paused())
@@ -1923,6 +2180,7 @@ class TestReadInvestingPaused:
         obj.context.logger.error.assert_called_once()
 
     def test_none_value(self):
+        """Test none value."""
         obj = _mk()
         obj._read_kv = _gen_return({"investing_paused": None})
         gen = obj._read_investing_paused()
@@ -1933,6 +2191,7 @@ class TestReadInvestingPaused:
         obj = _mk()
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -1942,22 +2201,28 @@ class TestReadInvestingPaused:
 
 
 class TestCheckIsValidSafeAddress:
+    """TestCheckIsValidSafeAddress."""
+
     def test_valid(self):
+        """Test valid."""
         obj = _mk()
         obj.contract_interact = _gen_return(["0xOwner"])
         gen = obj.check_is_valid_safe_address("0xSafe", "optimism")
         assert _drive(gen) is True
 
     def test_invalid(self):
+        """Test invalid."""
         obj = _mk()
         obj.contract_interact = _gen_return(None)
         gen = obj.check_is_valid_safe_address("0xSafe", "optimism")
         assert _drive(gen) is False
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("boom")
             yield  # noqa
 
@@ -1967,12 +2232,16 @@ class TestCheckIsValidSafeAddress:
 
 
 class TestGetVelodromePendingRewards:
+    """TestGetVelodromePendingRewards."""
+
     def test_no_pool_address(self):
+        """Test no pool address."""
         obj = _mk()
         gen = obj._get_velodrome_pending_rewards({}, "optimism", "0xU")
         assert _drive(gen) == Decimal(0)
 
     def test_no_pool_behaviour(self):
+        """Test no pool behaviour."""
         obj = _mk()
         obj.pools = {}
         gen = obj._get_velodrome_pending_rewards(
@@ -1981,6 +2250,7 @@ class TestGetVelodromePendingRewards:
         assert _drive(gen) == Decimal(0)
 
     def test_cl_pool_with_rewards(self):
+        """Test cl pool with rewards."""
         obj = _mk()
         pool_mock = MagicMock()
         pool_mock.get_gauge_address = _gen_return("0xGauge")
@@ -1996,6 +2266,7 @@ class TestGetVelodromePendingRewards:
         assert result == Decimal("1")
 
     def test_cl_pool_no_gauge(self):
+        """Test cl pool no gauge."""
         obj = _mk()
         pool_mock = MagicMock()
         pool_mock.get_gauge_address = _gen_return(None)
@@ -2005,6 +2276,7 @@ class TestGetVelodromePendingRewards:
         assert _drive(gen) == Decimal(0)
 
     def test_regular_pool(self):
+        """Test regular pool."""
         obj = _mk()
         pool_mock = MagicMock()
         pool_mock.get_pending_rewards = _gen_return(5 * 10**18)
@@ -2015,6 +2287,7 @@ class TestGetVelodromePendingRewards:
         assert result == Decimal("5")
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
         obj.pools = {"velodrome": MagicMock(side_effect=RuntimeError)}
         pos = {"pool_address": "0xP"}
@@ -2023,7 +2296,10 @@ class TestGetVelodromePendingRewards:
 
 
 class TestCreatePortfolioData:
+    """TestCreatePortfolioData."""
+
     def test_basic(self):
+        """Test basic."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2045,6 +2321,7 @@ class TestCreatePortfolioData:
         assert result["address"] == "0xSafe"
 
     def test_no_initial_investment(self):
+        """Test no initial investment."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2065,6 +2342,7 @@ class TestCreatePortfolioData:
         assert result["initial_investment"] is None
 
     def test_zero_initial(self):
+        """Test zero initial."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2084,6 +2362,7 @@ class TestCreatePortfolioData:
         assert result["total_roi"] is None
 
     def test_with_allocations_and_breakdown(self):
+        """Test with allocations and breakdown."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2126,6 +2405,7 @@ class TestCreatePortfolioData:
         assert len(result["portfolio_breakdown"]) == 1
 
     def test_tick_ranges_in_allocation(self):
+        """Test tick ranges in allocation."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2158,6 +2438,7 @@ class TestCreatePortfolioData:
         assert "tick_ranges" in result["allocations"][0]
 
     def test_olas_filtered(self):
+        """Test olas filtered."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2188,6 +2469,7 @@ class TestCreatePortfolioData:
         assert len(result["portfolio_breakdown"]) == 0
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
 
         obj.params.target_investment_chains = []  # will cause index error
@@ -2205,6 +2487,7 @@ class TestCreatePortfolioData:
         assert result == {}
 
     def test_allocation_error_skipped(self):
+        """Test allocation error skipped."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2225,6 +2508,7 @@ class TestCreatePortfolioData:
         assert len(result["allocations"]) == 0
 
     def test_breakdown_error_skipped(self):
+        """Test breakdown error skipped."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2246,7 +2530,10 @@ class TestCreatePortfolioData:
 
 
 class TestValidateVelodromeV2PoolAddresses:
+    """TestValidateVelodromeV2PoolAddresses."""
+
     def test_skip_non_velodrome(self):
+        """Test skip non velodrome."""
         obj = _mk()
         obj.current_positions = [
             {"dex_type": "UniswapV3", "is_cl_pool": False, "is_stable": True}
@@ -2256,6 +2543,7 @@ class TestValidateVelodromeV2PoolAddresses:
         _drive(gen)
 
     def test_skip_cl_pool(self):
+        """Test skip cl pool."""
         obj = _mk()
         obj.current_positions = [
             {"dex_type": "velodrome", "is_cl_pool": True, "is_stable": True}
@@ -2265,6 +2553,7 @@ class TestValidateVelodromeV2PoolAddresses:
         _drive(gen)
 
     def test_skip_not_stable(self):
+        """Test skip not stable."""
         obj = _mk()
         obj.current_positions = [
             {"dex_type": "velodrome", "is_cl_pool": False, "is_stable": False}
@@ -2274,6 +2563,7 @@ class TestValidateVelodromeV2PoolAddresses:
         _drive(gen)
 
     def test_validates(self):
+        """Test validates."""
         obj = _mk()
         obj.current_positions = [
             {
@@ -2291,17 +2581,22 @@ class TestValidateVelodromeV2PoolAddresses:
 
 
 class TestValidateVelodromeV2PoolAddress:
+    """TestValidateVelodromeV2PoolAddress."""
+
     def test_already_updated(self):
+        """Test already updated."""
         obj = _mk()
         gen = obj._validate_velodrome_v2_pool_address({"isUpdated": True})
         assert _drive(gen) is True
 
     def test_missing_data(self):
+        """Test missing data."""
         obj = _mk()
         gen = obj._validate_velodrome_v2_pool_address({"enter_tx_hash": None})
         assert _drive(gen) is False
 
     def test_no_receipt(self):
+        """Test no receipt."""
         obj = _mk()
         obj.get_transaction_receipt = _gen_return(None)
         pos = {"enter_tx_hash": "0xTX", "chain": "optimism", "pool_address": "0xP"}
@@ -2309,6 +2604,7 @@ class TestValidateVelodromeV2PoolAddress:
         assert _drive(gen) is False
 
     def test_no_mint_event(self):
+        """Test no mint event."""
         obj = _mk()
         obj.get_transaction_receipt = _gen_return({"logs": []})
         pos = {"enter_tx_hash": "0xTX", "chain": "optimism", "pool_address": "0xP"}
@@ -2316,6 +2612,7 @@ class TestValidateVelodromeV2PoolAddress:
         assert _drive(gen) is False
 
     def test_match(self):
+        """Test match."""
         obj = _mk()
         obj.get_transaction_receipt = _gen_return(
             {
@@ -2337,6 +2634,7 @@ class TestValidateVelodromeV2PoolAddress:
         assert pos["is_updated"] is True
 
     def test_mismatch(self):
+        """Test mismatch."""
         obj = _mk()
         obj.get_transaction_receipt = _gen_return(
             {
@@ -2358,9 +2656,11 @@ class TestValidateVelodromeV2PoolAddress:
         assert pos["pool_address"] == "0xnew"
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("boom")
             yield  # noqa
 
@@ -2371,7 +2671,10 @@ class TestValidateVelodromeV2PoolAddress:
 
 
 class TestCalculateTotalReversionValue:
+    """TestCalculateTotalReversionValue."""
+
     def test_basic(self):
+        """Test basic."""
         obj = _mk()
         obj._fetch_historical_eth_price = _gen_return(2000.0)
         eth_transfers = [
@@ -2383,6 +2686,7 @@ class TestCalculateTotalReversionValue:
         assert result == 0.5 * 2000.0
 
     def test_multiple_reversions(self):
+        """Test multiple reversions."""
         obj = _mk()
         obj._fetch_historical_eth_price = _gen_return(1000.0)
         eth_transfers = [
@@ -2394,6 +2698,7 @@ class TestCalculateTotalReversionValue:
         assert result == (0.3 + 0.2) * 1000.0
 
     def test_no_eth_price(self):
+        """Test no eth price."""
         obj = _mk()
         obj._fetch_historical_eth_price = _gen_return(None)
         eth_transfers = [{"timestamp": "2024-01-01T00:00:00Z", "amount": 1.0}]
@@ -2402,6 +2707,7 @@ class TestCalculateTotalReversionValue:
         assert result == 0.0
 
     def test_unix_timestamp(self):
+        """Test unix timestamp."""
         obj = _mk()
         obj._fetch_historical_eth_price = _gen_return(500.0)
         eth_transfers = [
@@ -2412,6 +2718,7 @@ class TestCalculateTotalReversionValue:
         assert result == 0.1 * 500.0
 
     def test_bad_timestamp(self):
+        """Test bad timestamp."""
         obj = _mk()
         obj._fetch_historical_eth_price = _gen_return(500.0)
         eth_transfers = [{"timestamp": "bad", "amount": 1.0}]
@@ -2422,12 +2729,16 @@ class TestCalculateTotalReversionValue:
 
 
 class TestShouldIncludeTransferOptimism:
+    """TestShouldIncludeTransferOptimism."""
+
     def test_empty(self):
+        """Test empty."""
         obj = _mk()
         gen = obj._should_include_transfer_optimism("")
         assert _drive(gen) is False
 
     def test_zero_addr(self):
+        """Test zero addr."""
         obj = _mk()
         gen = obj._should_include_transfer_optimism(
             "0x0000000000000000000000000000000000000000"
@@ -2435,6 +2746,7 @@ class TestShouldIncludeTransferOptimism:
         assert _drive(gen) is False
 
     def test_cached_eoa(self):
+        """Test cached eoa."""
         obj = _mk()
         cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_0xabc"
         obj._read_kv = _gen_return({cache_key: json.dumps({"is_eoa": True})})
@@ -2442,6 +2754,7 @@ class TestShouldIncludeTransferOptimism:
         assert _drive(gen) is True
 
     def test_cached_contract(self):
+        """Test cached contract."""
         obj = _mk()
         cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_0xabc"
         obj._read_kv = _gen_return({cache_key: json.dumps({"is_eoa": False})})
@@ -2449,6 +2762,7 @@ class TestShouldIncludeTransferOptimism:
         assert _drive(gen) is False
 
     def test_eoa_uncached(self):
+        """Test eoa uncached."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj._request_with_retries = _gen_return((True, {"result": "0x"}))
@@ -2460,15 +2774,18 @@ class TestShouldIncludeTransferOptimism:
         assert _drive(gen) is True
 
     def test_contract_not_safe(self):
+        """Test contract not safe."""
         obj = _mk()
         call_count = [0]
 
         def fake_read(*a, **kw):
+            """Fake read."""
             yield
             return {}
 
         def fake_req(*a, **kw):
-            nonlocal call_count
+            """Fake req."""
+            nonlocal call_count  # noqa: F824
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -2487,6 +2804,7 @@ class TestShouldIncludeTransferOptimism:
         assert _drive(gen) is False
 
     def test_rpc_fail(self):
+        """Test rpc fail."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj._request_with_retries = _gen_return((False, {}))
@@ -2497,11 +2815,13 @@ class TestShouldIncludeTransferOptimism:
         assert _drive(gen) is False
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
         # _read_kv succeeds, but _request_with_retries raises inside try block
         obj._read_kv = _gen_return({})
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -2513,12 +2833,16 @@ class TestShouldIncludeTransferOptimism:
 
 
 class TestIsNotOtherContractOptimism:
+    """TestIsNotOtherContractOptimism."""
+
     def test_empty(self):
+        """Test empty."""
         obj = _mk()
         gen = obj._is_not_other_contract_optimism("")
         assert _drive(gen) is False
 
     def test_zero(self):
+        """Test zero."""
         obj = _mk()
         gen = obj._is_not_other_contract_optimism(
             "0x0000000000000000000000000000000000000000"
@@ -2526,6 +2850,7 @@ class TestIsNotOtherContractOptimism:
         assert _drive(gen) is False
 
     def test_cached(self):
+        """Test cached."""
         obj = _mk()
         cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_0xabc"
         obj._read_kv = _gen_return({cache_key: json.dumps({"is_eoa": True})})
@@ -2533,6 +2858,7 @@ class TestIsNotOtherContractOptimism:
         assert _drive(gen) is True
 
     def test_eoa(self):
+        """Test eoa."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj._request_with_retries = _gen_return((True, {"result": "0x"}))
@@ -2544,11 +2870,13 @@ class TestIsNotOtherContractOptimism:
         assert _drive(gen) is True
 
     def test_contract_safe(self):
+        """Test contract safe."""
         obj = _mk()
         call_count = [0]
 
         def fake_req(*a, **kw):
-            nonlocal call_count
+            """Fake req."""
+            nonlocal call_count  # noqa: F824
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -2567,6 +2895,7 @@ class TestIsNotOtherContractOptimism:
         assert _drive(gen) is True
 
     def test_rpc_fail(self):
+        """Test rpc fail."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj._request_with_retries = _gen_return((False, {}))
@@ -2577,10 +2906,12 @@ class TestIsNotOtherContractOptimism:
         assert _drive(gen) is False
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
         obj._read_kv = _gen_return({})
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -2592,7 +2923,10 @@ class TestIsNotOtherContractOptimism:
 
 
 class TestGetMasterSafeAddress:
+    """TestGetMasterSafeAddress."""
+
     def test_no_service_id(self):
+        """Test no service id."""
         obj = _mk()
 
         obj.params.on_chain_service_id = None
@@ -2600,6 +2934,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) is None
 
     def test_no_chains(self):
+        """Test no chains."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2608,6 +2943,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) is None
 
     def test_staking_path_staked(self):
+        """Test staking path staked."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2625,6 +2961,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) == "0xMaster"
 
     def test_staking_path_unstaked_then_staked(self):
+        """Test staking path unstaked then staked."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2638,6 +2975,7 @@ class TestGetMasterSafeAddress:
         obj.service_staking_state = StakingState.UNSTAKED
 
         def fake_get_state(*a, **kw):
+            """Fake get state."""
             obj.service_staking_state = StakingState.STAKED
             yield
 
@@ -2648,6 +2986,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) == "0xMaster"
 
     def test_staking_invalid_addr(self):
+        """Test staking invalid addr."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2665,6 +3004,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) is None
 
     def test_staking_no_info(self):
+        """Test staking no info."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2681,6 +3021,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) is None
 
     def test_no_staking_registry(self):
+        """Test no staking registry."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2694,6 +3035,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) == "0xOwner"
 
     def test_no_registry_addr(self):
+        """Test no registry addr."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2705,6 +3047,7 @@ class TestGetMasterSafeAddress:
         assert _drive(gen) is None
 
     def test_registry_no_result(self):
+        """Test registry no result."""
         obj = _mk()
 
         obj.params.on_chain_service_id = 1
@@ -2718,7 +3061,10 @@ class TestGetMasterSafeAddress:
 
 
 class TestShouldRecalculatePortfolio:
+    """TestShouldRecalculatePortfolio."""
+
     def test_no_initial(self):
+        """Test no initial."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2727,6 +3073,7 @@ class TestShouldRecalculatePortfolio:
         assert _drive(gen) is True
 
     def test_no_final(self):
+        """Test no final."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2735,6 +3082,7 @@ class TestShouldRecalculatePortfolio:
         assert _drive(gen) is True
 
     def test_post_tx_round(self):
+        """Test post tx round."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2750,6 +3098,7 @@ class TestShouldRecalculatePortfolio:
         assert _drive(gen) is True
 
     def test_time_or_positions(self):
+        """Test time or positions."""
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -2764,7 +3113,10 @@ class TestShouldRecalculatePortfolio:
 
 
 class TestUpdatePortfolioMetrics:
+    """TestUpdatePortfolioMetrics."""
+
     def test_zero_value(self):
+        """Test zero value."""
         obj = _mk()
         obj._update_portfolio_breakdown_ratios = MagicMock()
         gen = obj._update_portfolio_metrics(Decimal(0), [], [], [])
@@ -2772,6 +3124,7 @@ class TestUpdatePortfolioMetrics:
         obj._update_portfolio_breakdown_ratios.assert_called_once()
 
     def test_positive_value(self):
+        """Test positive value."""
         obj = _mk()
         obj._update_portfolio_breakdown_ratios = MagicMock()
         obj._update_allocation_ratios = _gen_none
@@ -2780,7 +3133,10 @@ class TestUpdatePortfolioMetrics:
 
 
 class TestUpdateAllocationRatios:
+    """TestUpdateAllocationRatios."""
+
     def test_zero_total(self):
+        """Test zero total."""
         obj = _mk()
         allocs = []
         gen = obj._update_allocation_ratios([], Decimal(0), allocs)
@@ -2788,6 +3144,7 @@ class TestUpdateAllocationRatios:
         assert allocs == []
 
     def test_with_shares(self):
+        """Test with shares."""
         obj = _mk()
         obj.current_positions = [{"pool_address": "0xP", "dex_type": "UniswapV3"}]
         obj._get_tick_ranges = _gen_return([])
@@ -2811,6 +3168,7 @@ class TestUpdateAllocationRatios:
         assert allocs[0]["ratio"] == 100.0
 
     def test_with_tick_ranges(self):
+        """Test with tick ranges."""
         obj = _mk()
         obj.current_positions = [{"pool_address": "0xP", "dex_type": "UniswapV3"}]
         obj._get_tick_ranges = _gen_return([{"tick": 1}])
@@ -2834,12 +3192,16 @@ class TestUpdateAllocationRatios:
 
 
 class TestCalculatePositionAmounts:
+    """TestCalculatePositionAmounts."""
+
     def test_missing_details(self):
+        """Test missing details."""
         obj = _mk()
         gen = obj._calculate_position_amounts({}, 0, 0, {}, "UniswapV3", "optimism")
         assert _drive(gen) == (0, 0)
 
     def test_uniswap(self):
+        """Test uniswap."""
         obj = _mk()
         details = {
             "tickLower": -100,
@@ -2857,6 +3219,7 @@ class TestCalculatePositionAmounts:
         assert len(result) == 2
 
     def test_velodrome_with_pm(self):
+        """Test velodrome with pm."""
         obj = _mk()
 
         obj.params.velodrome_non_fungible_position_manager_contract_addresses = {
@@ -2878,6 +3241,7 @@ class TestCalculatePositionAmounts:
         assert result == (100, 200)
 
     def test_velodrome_no_pm(self):
+        """Test velodrome no pm."""
         obj = _mk()
 
         obj.params.velodrome_non_fungible_position_manager_contract_addresses = {}
@@ -2899,11 +3263,15 @@ class TestCalculatePositionAmounts:
 
 
 class TestGetTokenDecimalsPair:
+    """TestGetTokenDecimalsPair."""
+
     def test_both_ok(self):
+        """Test both ok."""
         obj = _mk()
         call_count = [0]
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             call_count[0] += 1
             yield
             return 18
@@ -2914,10 +3282,12 @@ class TestGetTokenDecimalsPair:
         assert result == (18, 18)
 
     def test_first_none(self):
+        """Test first none."""
         obj = _mk()
         call_count = [0]
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             call_count[0] += 1
             yield
             return None if call_count[0] == 1 else 18
@@ -2929,7 +3299,10 @@ class TestGetTokenDecimalsPair:
 
 
 class TestCalculateClPositionValue:
+    """TestCalculateClPositionValue."""
+
     def test_missing_params(self):
+        """Test missing params."""
         obj = _mk()
         gen = obj._calculate_cl_position_value(
             None, "optimism", {}, "0xT0", "0xT1", "0xPM", MagicMock(), "velodrome"
@@ -2937,6 +3310,7 @@ class TestCalculateClPositionValue:
         assert _drive(gen) == {}
 
     def test_no_slot0(self):
+        """Test no slot0."""
         obj = _mk()
         obj.contract_interact = _gen_return(None)
         gen = obj._calculate_cl_position_value(
@@ -2952,6 +3326,7 @@ class TestCalculateClPositionValue:
         assert _drive(gen) == {}
 
     def test_invalid_slot0(self):
+        """Test invalid slot0."""
         obj = _mk()
         obj.contract_interact = _gen_return({"tick": None})
         gen = obj._calculate_cl_position_value(
@@ -2967,10 +3342,12 @@ class TestCalculateClPositionValue:
         assert _drive(gen) == {}
 
     def test_no_decimals(self):
+        """Test no decimals."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -2980,6 +3357,7 @@ class TestCalculateClPositionValue:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return None
 
@@ -2998,10 +3376,12 @@ class TestCalculateClPositionValue:
         assert _drive(gen) == {}
 
     def test_success(self):
+        """Test success."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3019,12 +3399,14 @@ class TestCalculateClPositionValue:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
         obj._get_token_decimals = fake_dec
 
         def fake_amounts(*a, **kw):
+            """Fake amounts."""
             yield
             return (10**18, 2 * 10**18)
 
@@ -3039,10 +3421,12 @@ class TestCalculateClPositionValue:
         assert "0xT1" in result
 
     def test_position_no_token_id(self):
+        """Test position no token id."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             return {"sqrt_price_x96": 2**96, "tick": 0}
@@ -3050,6 +3434,7 @@ class TestCalculateClPositionValue:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -3063,10 +3448,12 @@ class TestCalculateClPositionValue:
         assert result["0xT0"] == Decimal(0)
 
     def test_position_details_fail(self):
+        """Test position details fail."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3076,6 +3463,7 @@ class TestCalculateClPositionValue:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -3089,10 +3477,12 @@ class TestCalculateClPositionValue:
         assert result["0xT0"] == Decimal(0)
 
     def test_multiple_positions(self):
+        """Test multiple positions."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3108,12 +3498,14 @@ class TestCalculateClPositionValue:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
         obj._get_token_decimals = fake_dec
 
         def fake_amounts(*a, **kw):
+            """Fake amounts."""
             yield
             return (10**18, 10**18)
 
@@ -3132,7 +3524,10 @@ class TestCalculateClPositionValue:
 
 
 class TestGetUserShareValueVelodromeCl:
+    """TestGetUserShareValueVelodromeCl."""
+
     def test_no_pm(self):
+        """Test no pm."""
         obj = _mk()
         obj.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         pos = {"token0": "0xT0", "token1": "0xT1", "is_cl_pool": True}
@@ -3142,6 +3537,7 @@ class TestGetUserShareValueVelodromeCl:
         assert _drive(gen) == {}
 
     def test_ok(self):
+        """Test ok."""
         obj = _mk()
         obj.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPM"
@@ -3155,7 +3551,10 @@ class TestGetUserShareValueVelodromeCl:
 
 
 class TestGetUserShareValueVelodromeNonCl:
+    """TestGetUserShareValueVelodromeNonCl."""
+
     def test_no_user_balance(self):
+        """Test no user balance."""
         obj = _mk()
         obj.contract_interact = _gen_return(None)
         pos = {"token0_symbol": "A", "token1_symbol": "B"}
@@ -3165,10 +3564,12 @@ class TestGetUserShareValueVelodromeNonCl:
         assert _drive(gen) == {}
 
     def test_no_total_supply(self):
+        """Test no total supply."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3183,10 +3584,12 @@ class TestGetUserShareValueVelodromeNonCl:
         assert _drive(gen) == {}
 
     def test_no_reserves(self):
+        """Test no reserves."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] <= 2:
@@ -3201,10 +3604,12 @@ class TestGetUserShareValueVelodromeNonCl:
         assert _drive(gen) == {}
 
     def test_success(self):
+        """Test success."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3218,6 +3623,7 @@ class TestGetUserShareValueVelodromeNonCl:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -3232,10 +3638,12 @@ class TestGetUserShareValueVelodromeNonCl:
         assert "0xT1" in result
 
     def test_no_decimals(self):
+        """Test no decimals."""
         obj = _mk()
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3249,6 +3657,7 @@ class TestGetUserShareValueVelodromeNonCl:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return None
 
@@ -3262,12 +3671,16 @@ class TestGetUserShareValueVelodromeNonCl:
 
 
 class TestGetUserShareValueBalancerFull:
+    """TestGetUserShareValueBalancerFull."""
+
     def test_zero_total_supply(self):
+        """Test zero total supply."""
         obj = _mk()
         obj.params.balancer_vault_contract_addresses = {"optimism": "0xV"}
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3283,11 +3696,13 @@ class TestGetUserShareValueBalancerFull:
         assert _drive(gen) == {}
 
     def test_success(self):
+        """Test success."""
         obj = _mk()
         obj.params.balancer_vault_contract_addresses = {"optimism": "0xV"}
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3301,6 +3716,7 @@ class TestGetUserShareValueBalancerFull:
         obj.contract_interact = fake_ci
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -3310,11 +3726,13 @@ class TestGetUserShareValueBalancerFull:
         assert len(result) == 1
 
     def test_no_user_balance(self):
+        """Test no user balance."""
         obj = _mk()
         obj.params.balancer_vault_contract_addresses = {"optimism": "0xV"}
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3329,7 +3747,10 @@ class TestGetUserShareValueBalancerFull:
 
 
 class TestCalculateSafeBalancesValue:
+    """TestCalculateSafeBalancesValue."""
+
     def test_no_safe_address(self):
+        """Test no safe address."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {}
@@ -3337,6 +3758,7 @@ class TestCalculateSafeBalancesValue:
         assert _drive(gen) == Decimal(0)
 
     def test_optimism_no_balances(self):
+        """Test optimism no balances."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3345,6 +3767,7 @@ class TestCalculateSafeBalancesValue:
         assert _drive(gen) == Decimal(0)
 
     def test_mode_no_balances(self):
+        """Test mode no balances."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -3353,6 +3776,7 @@ class TestCalculateSafeBalancesValue:
         assert _drive(gen) == Decimal(0)
 
     def test_zero_balance_skipped(self):
+        """Test zero balance skipped."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3363,6 +3787,7 @@ class TestCalculateSafeBalancesValue:
         assert _drive(gen) == Decimal(0)
 
     def test_olas_skipped(self):
+        """Test olas skipped."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3374,6 +3799,7 @@ class TestCalculateSafeBalancesValue:
         assert _drive(gen) == Decimal(0)
 
     def test_eth_balance(self):
+        """Test eth balance."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3387,6 +3813,7 @@ class TestCalculateSafeBalancesValue:
         assert result == Decimal("1") * Decimal("3000.0")
 
     def test_erc20_balance(self):
+        """Test erc20 balance."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3401,6 +3828,7 @@ class TestCalculateSafeBalancesValue:
         assert result == Decimal("1") * Decimal("1.0")
 
     def test_no_price(self):
+        """Test no price."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3414,6 +3842,7 @@ class TestCalculateSafeBalancesValue:
         assert _drive(gen) == Decimal(0)
 
     def test_no_decimals(self):
+        """Test no decimals."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3426,6 +3855,7 @@ class TestCalculateSafeBalancesValue:
         assert _drive(gen) == Decimal(0)
 
     def test_velo_balance(self):
+        """Test velo balance."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -3442,7 +3872,10 @@ class TestCalculateSafeBalancesValue:
 
 
 class TestCalculateTotalVolume:
+    """TestCalculateTotalVolume."""
+
     def test_cached(self):
+        """Test cached."""
         obj = _mk()
         obj._read_kv = _gen_return(
             {"initial_investment_values": json.dumps({"0xP_0xTX": 100.0})}
@@ -3456,6 +3889,7 @@ class TestCalculateTotalVolume:
         assert result == 100.0
 
     def test_no_cache(self):
+        """Test no cache."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj.current_positions = [
@@ -3481,6 +3915,7 @@ class TestCalculateTotalVolume:
         assert result > 0
 
     def test_missing_data(self):
+        """Test missing data."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj.current_positions = [
@@ -3491,6 +3926,7 @@ class TestCalculateTotalVolume:
         assert result is None
 
     def test_no_positions(self):
+        """Test no positions."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj.current_positions = []
@@ -3499,6 +3935,7 @@ class TestCalculateTotalVolume:
         assert result is None
 
     def test_no_price(self):
+        """Test no price."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj.current_positions = [
@@ -3519,6 +3956,7 @@ class TestCalculateTotalVolume:
         assert result is None
 
     def test_invalid_cache(self):
+        """Test invalid cache."""
         obj = _mk()
         obj._read_kv = _gen_return({"initial_investment_values": "{{bad json"})
         obj.current_positions = []
@@ -3527,6 +3965,7 @@ class TestCalculateTotalVolume:
         assert result is None
 
     def test_no_token0_decimals(self):
+        """Test no token0 decimals."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj.current_positions = [
@@ -3546,6 +3985,7 @@ class TestCalculateTotalVolume:
         assert result is None
 
     def test_with_token1(self):
+        """Test with token1."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj.current_positions = [
@@ -3570,6 +4010,7 @@ class TestCalculateTotalVolume:
         assert result is not None
 
     def test_no_token1_price(self):
+        """Test no token1 price."""
         obj = _mk()
         obj._read_kv = _gen_return({})
         obj.current_positions = [
@@ -3594,10 +4035,13 @@ class TestCalculateTotalVolume:
 
 
 class TestTrackEthTransfersMode:
+    """TestTrackEthTransfersMode."""
+
     @patch(
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_api_error(self, mock_requests):
+        """Test api error."""
         obj = _mk()
         mock_requests.get.return_value = MagicMock(status_code=500)
         result = obj._track_eth_transfers_mode("0xSafe", "2024-01-01")
@@ -3607,6 +4051,7 @@ class TestTrackEthTransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_api_bad_status(self, mock_requests):
+        """Test api bad status."""
         obj = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -3619,6 +4064,7 @@ class TestTrackEthTransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_success_incoming(self, mock_requests):
+        """Test success incoming."""
         obj = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -3642,6 +4088,7 @@ class TestTrackEthTransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_exception(self, mock_requests):
+        """Test exception."""
         obj = _mk()
         mock_requests.get.side_effect = RuntimeError("fail")
         result = obj._track_eth_transfers_mode("0xSafe", "2024-01-01")
@@ -3649,10 +4096,13 @@ class TestTrackEthTransfersMode:
 
 
 class TestTrackErc20TransfersMode:
+    """TestTrackErc20TransfersMode."""
+
     @patch(
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_api_error(self, mock_requests):
+        """Test api error."""
         obj = _mk()
         mock_requests.get.return_value = MagicMock(status_code=500)
         result = obj._track_erc20_transfers_mode("0xSafe", 1704067200)
@@ -3662,6 +4112,7 @@ class TestTrackErc20TransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_empty(self, mock_requests):
+        """Test empty."""
         obj = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -3674,6 +4125,7 @@ class TestTrackErc20TransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_exception(self, mock_requests):
+        """Test exception."""
         obj = _mk()
         mock_requests.get.side_effect = RuntimeError("fail")
         result = obj._track_erc20_transfers_mode("0xSafe", 1704067200)
@@ -3683,6 +4135,7 @@ class TestTrackErc20TransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_outgoing_usdc(self, mock_requests):
+        """Test outgoing usdc."""
         obj = _mk()
         resp = MagicMock()
         resp.status_code = 200
@@ -3716,6 +4169,7 @@ class TestTrackErc20TransfersMode:
         # Fake API: always returns one item plus a next-page cursor, so without
         # the cap the loop would never terminate.
         def make_response(*_args, **_kwargs):
+            """Make response."""
             resp = MagicMock()
             resp.status_code = 200
             resp.json.return_value = {
@@ -3752,10 +4206,13 @@ class TestTrackErc20TransfersMode:
 
 
 class TestFetchEthTransfersMode:
+    """TestFetchEthTransfersMode."""
+
     @patch(
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_api_error(self, mock_requests):
+        """Test api error."""
         obj = _mk()
         obj.funding_events = {"mode": {}}
         mock_requests.get.return_value = MagicMock(status_code=500)
@@ -3767,6 +4224,7 @@ class TestFetchEthTransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_empty(self, mock_requests):
+        """Test empty."""
         obj = _mk()
         obj.funding_events = {"mode": {}}
         resp = MagicMock()
@@ -3781,6 +4239,7 @@ class TestFetchEthTransfersMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
     )
     def test_with_data(self, mock_requests):
+        """Test with data."""
         obj = _mk()
         obj.funding_events = {"mode": {}}
         resp = MagicMock()
@@ -3805,12 +4264,16 @@ class TestFetchEthTransfersMode:
 
 
 class TestCheckAndCreateEthRevertTransactions:
+    """TestCheckAndCreateEthRevertTransactions."""
+
     def test_no_safe(self):
+        """Test no safe."""
         obj = _mk()
         gen = obj._check_and_create_eth_revert_transactions("optimism", None, "sender")
         _drive(gen)
 
     def test_zero_amount(self):
+        """Test zero amount."""
         obj = _mk()
         obj._track_eth_transfers_and_reversions = _gen_return(
             {"to_address": None, "reversion_amount": 0, "master_safe_address": None}
@@ -3821,6 +4284,7 @@ class TestCheckAndCreateEthRevertTransactions:
         _drive(gen)
 
     def test_positive_amount_no_master(self):
+        """Test positive amount no master."""
         obj = _mk()
         obj._track_eth_transfers_and_reversions = _gen_return(
             {"to_address": None, "reversion_amount": 0.5, "master_safe_address": None}
@@ -3831,6 +4295,7 @@ class TestCheckAndCreateEthRevertTransactions:
         _drive(gen)
 
     def test_positive_amount_with_tx(self):
+        """Test positive amount with tx."""
         obj = _mk()
         master_addr = "0x" + "aa" * 20  # 42 chars
         obj._track_eth_transfers_and_reversions = _gen_return(
@@ -3851,6 +4316,7 @@ class TestCheckAndCreateEthRevertTransactions:
         obj.set_done.assert_called_once()
 
     def test_positive_amount_no_hash(self):
+        """Test positive amount no hash."""
         obj = _mk()
         obj._track_eth_transfers_and_reversions = _gen_return(
             {
@@ -3867,7 +4333,10 @@ class TestCheckAndCreateEthRevertTransactions:
 
 
 class TestTrackWhitelistedAssets:
+    """TestTrackWhitelistedAssets."""
+
     def test_empty_chains(self):
+        """Test empty chains."""
         obj = _mk()
         obj.params.target_investment_chains = []
         obj.store_whitelisted_assets = MagicMock()
@@ -3875,6 +4344,7 @@ class TestTrackWhitelistedAssets:
         _drive(gen)
 
     def test_skip_non_target_chain(self):
+        """Test skip non target chain."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.store_whitelisted_assets = MagicMock()
@@ -3884,6 +4354,7 @@ class TestTrackWhitelistedAssets:
         _drive(gen)
 
     def test_price_drop(self):
+        """Test price drop."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
@@ -3893,6 +4364,7 @@ class TestTrackWhitelistedAssets:
         call_count = [0]
 
         def fake_price(*a, **kw):
+            """Fake price."""
             call_count[0] += 1
             yield
             return 100.0 if call_count[0] == 1 else 90.0
@@ -3902,6 +4374,7 @@ class TestTrackWhitelistedAssets:
         _drive(gen)
 
     def test_no_price(self):
+        """Test no price."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
@@ -3912,6 +4385,7 @@ class TestTrackWhitelistedAssets:
         _drive(gen)
 
     def test_price_exception(self):
+        """Test price exception."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
@@ -3919,6 +4393,7 @@ class TestTrackWhitelistedAssets:
         obj.sleep = _gen_none
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -3936,6 +4411,7 @@ class TestTrackWhitelistedAssets:
         call_count = [0]
 
         def fake_price(*a, **kw):
+            """Fake price."""
             call_count[0] += 1
             yield
             return 100.0 if call_count[0] == 1 else 98.0  # -2%, above -5%
@@ -3960,6 +4436,7 @@ class TestTrackWhitelistedAssets:
         call_count = [0]
 
         def fake_price(*a, **kw):
+            """Fake price."""
             call_count[0] += 1
             yield
             return 100.0 if call_count[0] == 1 else 80.0  # -20% drop
@@ -3978,7 +4455,10 @@ class TestTrackWhitelistedAssets:
 
 
 class TestHavePositionsChangedClosed:
+    """TestHavePositionsChangedClosed."""
+
     def test_closed_positions_detected(self):
+        """Test closed positions detected."""
         obj = _mk()
         # Last had 2 positions, current has only 1 open + 1 different
         obj.current_positions = [
@@ -3994,6 +4474,8 @@ class TestHavePositionsChangedClosed:
 
 
 class TestUpdatePortfolioBreakdownRatiosEdge:
+    """TestUpdatePortfolioBreakdownRatiosEdge."""
+
     def test_none_value_usd_entry_filtered(self):
         """Cover line 736: value_usd is None -> continue."""
         obj = _mk()
@@ -4022,6 +4504,8 @@ class TestUpdatePortfolioBreakdownRatiosEdge:
 
 
 class TestCreatePortfolioDataROIException:
+    """TestCreatePortfolioDataROIException."""
+
     def test_roi_calculation_error(self):
         """Cover lines 1001-1004: exception during ROI calculation."""
         obj = _mk()
@@ -4047,6 +4531,8 @@ class TestCreatePortfolioDataROIException:
 
 
 class TestGetTickRangesFull:
+    """TestGetTickRangesFull."""
+
     def test_success_with_data(self):
         """Cover lines 829-874: successful tick range retrieval."""
         obj = _mk()
@@ -4054,6 +4540,7 @@ class TestGetTickRangesFull:
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4084,6 +4571,7 @@ class TestGetTickRangesFull:
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4109,6 +4597,7 @@ class TestGetTickRangesFull:
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4128,6 +4617,7 @@ class TestGetTickRangesFull:
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             return {"tick": 50, "sqrt_price_x96": 2**96}
@@ -4140,6 +4630,8 @@ class TestGetTickRangesFull:
 
 
 class TestHandleVelodromePositionEdge:
+    """TestHandleVelodromePositionEdge."""
+
     def test_staked_zero_rewards(self):
         """Cover 1183->1193: velo_rewards == 0 -> skip adding."""
         obj = _mk()
@@ -4185,11 +4677,14 @@ class TestHandleVelodromePositionEdge:
 
 
 class TestCalculateCorrectedYieldVeloBranches:
+    """TestCalculateCorrectedYieldVeloBranches."""
+
     def test_velo_price_in_token_prices(self):
         """Cover line 1431: velo_price from token_prices cache."""
         obj = _mk()
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -4217,6 +4712,7 @@ class TestCalculateCorrectedYieldVeloBranches:
         obj = _mk()
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -4246,6 +4742,7 @@ class TestCalculateCorrectedYieldVeloBranches:
         obj = _mk()
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -4273,6 +4770,7 @@ class TestCalculateCorrectedYieldVeloBranches:
         obj = _mk()
 
         def fake_dec(*a, **kw):
+            """Fake dec."""
             yield
             return 18
 
@@ -4297,6 +4795,8 @@ class TestCalculateCorrectedYieldVeloBranches:
 
 
 class TestUpdateUniswapPositionWarning:
+    """TestUpdateUniswapPositionWarning."""
+
     def test_cl_no_data_warning(self):
         """Cover line 2815: position_data is None for Uniswap CL."""
         obj = _mk()
@@ -4310,6 +4810,8 @@ class TestUpdateUniswapPositionWarning:
 
 
 class TestUpdateVelodromePositionWarning:
+    """TestUpdateVelodromePositionWarning."""
+
     def test_non_cl_none_balance(self):
         """Cover line 2849: balance is None for Velodrome non-CL."""
         obj = _mk()
@@ -4337,6 +4839,8 @@ class TestUpdateVelodromePositionWarning:
 
 
 class TestGetMasterSafeAddressRegistryInvalid:
+    """TestGetMasterSafeAddressRegistryInvalid."""
+
     def test_registry_invalid_address(self):
         """Cover line 4801: registry returns owner but address is invalid."""
         obj = _mk()
@@ -4352,6 +4856,8 @@ class TestGetMasterSafeAddressRegistryInvalid:
 
 
 class TestGetMasterSafeAddressStakingStaysUnstaked:
+    """TestGetMasterSafeAddressStakingStaysUnstaked."""
+
     def test_staking_stays_unstaked(self):
         """Cover 4750->4772: after _get_service_staking_state, still UNSTAKED."""
         obj = _mk()
@@ -4373,6 +4879,8 @@ class TestGetMasterSafeAddressStakingStaysUnstaked:
 
 
 class TestVelodromePendingRewardsFalsy:
+    """TestVelodromePendingRewardsFalsy."""
+
     def test_cl_rewards_zero(self):
         """Cover 4895->4887: rewards is 0 (falsy)."""
         obj = _mk()
@@ -4405,6 +4913,8 @@ class TestVelodromePendingRewardsFalsy:
 
 
 class TestValidateVelodromeV2PoolAddressesFailure:
+    """TestValidateVelodromeV2PoolAddressesFailure."""
+
     def test_validation_fails(self):
         """Cover 4935->4926: validation returns False, no log."""
         obj = _mk()
@@ -4424,6 +4934,8 @@ class TestValidateVelodromeV2PoolAddressesFailure:
 
 
 class TestShouldIncludeTransferEthOk:
+    """TestShouldIncludeTransferEthOk."""
+
     def test_eth_transfer_ok(self):
         """Cover 3358->3361: eth transfer with status ok and value > 0."""
         obj = _mk()
@@ -4436,6 +4948,8 @@ class TestShouldIncludeTransferEthOk:
 
 
 class TestGetDatetimeFromTimestampTzAware:
+    """TestGetDatetimeFromTimestampTzAware."""
+
     def test_already_has_tzinfo(self):
         """Cover 3376->3379 false branch: dt already has tzinfo."""
         obj = _mk()
@@ -4447,7 +4961,10 @@ class TestGetDatetimeFromTimestampTzAware:
 
 
 class TestShouldIncludeTransferModeEthOk:
+    """TestShouldIncludeTransferModeEthOk."""
+
     def test_eth_transfer_ok(self):
+        """Test eth transfer ok."""
         obj = _mk()
         result = obj._should_include_transfer_mode(
             {"hash": "0xabc", "is_contract": False},
@@ -4458,6 +4975,8 @@ class TestShouldIncludeTransferModeEthOk:
 
 
 class TestCalculateSafeBalancesValueZeroBalance:
+    """TestCalculateSafeBalancesValueZeroBalance."""
+
     def test_zero_adjusted_balance(self):
         """Cover line 2155: adjusted_balance <= 0 -> continue."""
         obj = _mk()
@@ -4473,11 +4992,14 @@ class TestCalculateSafeBalancesValueZeroBalance:
 
 
 class TestTrackWithdrawalOptimismException:
+    """TestTrackWithdrawalOptimismException."""
+
     def test_exception(self):
         """Cover lines 2403-2407: exception in withdrawal calculation."""
         obj = _mk()
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("fail")
             yield  # noqa: unreachable
 
@@ -4497,6 +5019,8 @@ class TestTrackWithdrawalOptimismException:
 
 
 class TestShouldIncludeTransferOptimismCacheError:
+    """TestShouldIncludeTransferOptimismCacheError."""
+
     def test_cached_bad_json(self):
         """Cover lines 3860-3861: JSONDecodeError in cache."""
         obj = _mk()
@@ -4511,6 +5035,8 @@ class TestShouldIncludeTransferOptimismCacheError:
 
 
 class TestIsNotOtherContractOptimismCacheError:
+    """TestIsNotOtherContractOptimismCacheError."""
+
     def test_cached_bad_json(self):
         """Cover lines 3939-3940: JSONDecodeError in cache."""
         obj = _mk()
@@ -4529,7 +5055,8 @@ class TestIsNotOtherContractOptimismCacheError:
         call_count = [0]
 
         def fake_req(*a, **kw):
-            nonlocal call_count
+            """Fake req."""
+            nonlocal call_count  # noqa: F824
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -4548,6 +5075,8 @@ class TestIsNotOtherContractOptimismCacheError:
 
 
 class TestCalculatePositionAmountsOutOfRange:
+    """TestCalculatePositionAmountsOutOfRange."""
+
     def test_out_of_range(self):
         """Cover line 1756: tick out of range."""
         obj = _mk()
@@ -4568,6 +5097,8 @@ class TestCalculatePositionAmountsOutOfRange:
 
 
 class TestGetUserShareValueBalancerZeroSupplyDecimal:
+    """TestGetUserShareValueBalancerZeroSupplyDecimal."""
+
     def test_zero_total_supply_decimal(self):
         """Cover lines 1985-1987: total_supply_decimal == 0."""
         obj = _mk()
@@ -4575,6 +5106,7 @@ class TestGetUserShareValueBalancerZeroSupplyDecimal:
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4591,6 +5123,7 @@ class TestGetUserShareValueBalancerZeroSupplyDecimal:
         call_count2 = [0]
 
         def fake_ci2(*a, **kw):
+            """Fake ci2."""
             call_count2[0] += 1
             yield
             if call_count2[0] == 1:
@@ -4607,6 +5140,8 @@ class TestGetUserShareValueBalancerZeroSupplyDecimal:
 
 
 class TestGetUserShareValueBalancerNoDecimals:
+    """TestGetUserShareValueBalancerNoDecimals."""
+
     def test_token_no_decimals(self):
         """Cover lines 2000-2003: _get_token_decimals returns None."""
         obj = _mk()
@@ -4614,6 +5149,7 @@ class TestGetUserShareValueBalancerNoDecimals:
         call_count = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4632,6 +5168,8 @@ class TestGetUserShareValueBalancerNoDecimals:
 
 
 class TestGetUserShareValueUniswapSuccess:
+    """TestGetUserShareValueUniswapSuccess."""
+
     def test_success(self):
         """Cover line 1899: successful path through uniswap."""
         obj = _mk()
@@ -4644,6 +5182,8 @@ class TestGetUserShareValueUniswapSuccess:
 
 
 class TestCalculateUserShareValues:
+    """TestCalculateUserShareValues."""
+
     def test_no_positions(self):
         """No open positions -> only safe balances and metrics."""
         obj = _mk()
@@ -4773,6 +5313,7 @@ class TestCalculateUserShareValues:
         obj.store_current_positions = MagicMock()
 
         def boom(*a, **kw):
+            """Boom."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -4886,6 +5427,8 @@ class TestCalculateUserShareValues:
 
 
 class TestAsyncAct:
+    """TestAsyncAct."""
+
     def test_full_flow(self):
         """Cover async_act lines 102-253."""
         obj = _mk()
@@ -5015,6 +5558,7 @@ class TestAsyncAct:
             read_call = [0]
 
             def fake_read(*a, **kw):
+                """Fake read."""
                 read_call[0] += 1
                 yield
                 if read_call[0] == 1:
@@ -5052,6 +5596,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
     """Tests for calculate_initial_investment_value_from_funding_events."""
 
     def test_no_safe_address(self):
+        """Test no safe address."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.params.safe_contract_addresses = {}
@@ -5064,6 +5609,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_unsupported_chain(self):
+        """Test unsupported chain."""
         obj = _mk()
         obj.params.target_investment_chains = ["polygon"]
         obj.params.safe_contract_addresses = {"polygon": "0xSafe"}
@@ -5077,6 +5623,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_mode_airdrop_first_scan(self):
+        """Test mode airdrop first scan."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -5084,6 +5631,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         cc = [0]
 
         def fr(*a, **kw):
+            """Fr."""
             cc[0] += 1
             yield
             return {} if cc[0] == 1 else {}
@@ -5102,6 +5650,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_mode_airdrop_incremental(self):
+        """Test mode airdrop incremental."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -5119,6 +5668,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_optimism_no_previous_calc(self):
+        """Test optimism no previous calc."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -5137,6 +5687,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_cached_value_today(self):
+        """Test cached value today."""
         import calendar
         from datetime import datetime
 
@@ -5159,6 +5710,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_cached_value_today_zero(self):
+        """Test cached value today zero."""
         import calendar
         from datetime import datetime
 
@@ -5184,6 +5736,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_invalid_timestamp_format(self):
+        """Test invalid timestamp format."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -5201,6 +5754,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_no_transfers(self):
+        """Test no transfers."""
         obj = _mk()
         obj.params.target_investment_chains = ["mode"]
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
@@ -5237,6 +5791,7 @@ class TestCalculateChainInvestmentValue:
         return obj
 
     def test_eth_transfer_with_reversion(self):
+        """Test eth transfer with reversion."""
         obj = self._base(
             {
                 "reversion_amount": 0.5,
@@ -5257,6 +5812,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_usdc_non_eth(self):
+        """Test usdc non eth."""
         obj = self._base()
         obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
         obj._fetch_historical_token_price = _gen_return(1.0)
@@ -5272,6 +5828,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_airdrop_excluded(self):
+        """Test airdrop excluded."""
         obj = self._base()
         obj.params.airdrop_started = True
         obj.params.airdrop_contract_address = "0xAirdrop"
@@ -5295,6 +5852,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_no_coingecko_id(self):
+        """Test no coingecko id."""
         obj = self._base()
         obj.get_coin_id_from_symbol = lambda s, c: None
         assert (
@@ -5309,6 +5867,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_negative_amount(self):
+        """Test negative amount."""
         obj = self._base()
         assert (
             _drive(
@@ -5320,6 +5879,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_exception_in_transfer(self):
+        """Test exception in transfer."""
         obj = self._base()
         assert (
             _drive(
@@ -5331,6 +5891,7 @@ class TestCalculateChainInvestmentValue:
         )
 
     def test_reversion_no_date(self):
+        """Test reversion no date."""
         obj = self._base(
             {
                 "reversion_amount": 1.0,
@@ -5398,7 +5959,10 @@ class TestCalculateChainInvestmentValue:
 
 
 class TestFetchAllTransfersUntilDateMode:
+    """TestFetchAllTransfersUntilDateMode."""
+
     def test_success(self):
+        """Test success."""
         obj = _mk()
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
@@ -5412,6 +5976,7 @@ class TestFetchAllTransfersUntilDateMode:
         )
 
     def test_token_fetch_fails(self):
+        """Test token fetch fails."""
         obj = _mk()
         obj.funding_events = {"mode": {"2025-01-01": []}}
         obj.read_funding_events = lambda: obj.funding_events
@@ -5426,6 +5991,7 @@ class TestFetchAllTransfersUntilDateMode:
         )
 
     def test_backward_compat(self):
+        """Test backward compat."""
         obj = _mk()
         obj.read_funding_events = lambda: {"mode": {"2025-01-01": [{"type": "eth"}]}}
         obj.store_funding_events = MagicMock()
@@ -5439,11 +6005,13 @@ class TestFetchAllTransfersUntilDateMode:
         )
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
         obj.read_funding_events = lambda: {"mode": {}}
         obj.store_funding_events = MagicMock()
 
         def bad(*a, **kw):
+            """Bad."""
             yield
             raise RuntimeError("boom")
 
@@ -5457,7 +6025,10 @@ class TestFetchAllTransfersUntilDateMode:
 
 
 class TestFetchAllTransfersUntilDateOptimism:
+    """TestFetchAllTransfersUntilDateOptimism."""
+
     def test_success(self):
+        """Test success."""
         obj = _mk()
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
@@ -5468,10 +6039,12 @@ class TestFetchAllTransfersUntilDateOptimism:
         )
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
         obj.read_funding_events = lambda: {}
 
         def boom(*a, **kw):
+            """Boom."""
             yield
             raise RuntimeError("fail")
 
@@ -5483,7 +6056,10 @@ class TestFetchAllTransfersUntilDateOptimism:
 
 
 class TestFetchTokenTransfersBatch2:
+    """TestFetchTokenTransfersBatch2."""
+
     def test_request_fails(self):
+        """Test request fails."""
         obj = _mk()
         obj._request_with_retries = _gen_return((False, {}))
         obj.context.coingecko = MagicMock()
@@ -5501,6 +6077,7 @@ class TestFetchTokenTransfersBatch2:
         )
 
     def test_no_items(self):
+        """Test no items."""
         obj = _mk()
         obj._request_with_retries = _gen_return((True, {"items": []}))
         obj.context.coingecko = MagicMock()
@@ -5518,6 +6095,7 @@ class TestFetchTokenTransfersBatch2:
         )
 
     def test_processes(self):
+        """Test processes."""
         obj = _mk()
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
@@ -5538,6 +6116,7 @@ class TestFetchTokenTransfersBatch2:
         assert len(t) == 1
 
     def test_skip_future(self):
+        """Test skip future."""
         obj = _mk()
         tx = {
             "timestamp": "2025-06-01T10:00:00Z",
@@ -5557,6 +6136,7 @@ class TestFetchTokenTransfersBatch2:
         assert len(t) == 0
 
     def test_skip_existing(self):
+        """Test skip existing."""
         obj = _mk()
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
@@ -5577,10 +6157,13 @@ class TestFetchTokenTransfersBatch2:
 
 
 class TestFetchTokenTransfersModeBatch2:
+    """TestFetchTokenTransfersModeBatch2."""
+
     @patch(
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_non_200(self, m):
+        """Test non 200."""
         m.return_value = MagicMock(status_code=500)
         obj = _mk()
         obj.funding_events = {}
@@ -5597,6 +6180,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_empty(self, m):
+        """Test empty."""
         m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
         obj = _mk()
         obj.funding_events = {}
@@ -5613,6 +6197,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_usdc(self, m):
+        """Test usdc."""
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
             "from": {"hash": "0xS", "is_contract": False},
@@ -5642,6 +6227,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_self_transfer(self, m):
+        """Test self transfer."""
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
             "from": {"hash": "0xaddr"},
@@ -5666,6 +6252,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_airdrop(self, m):
+        """Test airdrop."""
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
             "from": {"hash": "0xS", "is_contract": False},
@@ -5694,6 +6281,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_pagination(self, m):
+        """Test pagination."""
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
             "from": {"hash": "0xS", "is_contract": False},
@@ -5704,6 +6292,7 @@ class TestFetchTokenTransfersModeBatch2:
         c = [0]
 
         def mj():
+            """Mj."""
             c[0] += 1
             if c[0] == 1:
                 return {
@@ -5732,6 +6321,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_incremental_stop(self, m):
+        """Test incremental stop."""
         tx = {
             "timestamp": "2020-01-01T10:00:00Z",
             "from": {"hash": "0xS"},
@@ -5756,6 +6346,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_zero_amount(self, m):
+        """Test zero amount."""
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
             "from": {"hash": "0xS", "is_contract": False},
@@ -5776,6 +6367,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_non_usdc(self, m):
+        """Test non usdc."""
         tx = {
             "timestamp": "2024-12-15T10:00:00Z",
             "from": {"hash": "0xS", "is_contract": False},
@@ -5802,6 +6394,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_bad_timestamp(self, m):
+        """Test bad timestamp."""
         tx = {"timestamp": "bad", "from": {"hash": "0xS"}, "token": {}, "total": {}}
         m.return_value = MagicMock(
             status_code=200, json=lambda: {"items": [tx], "next_page_params": None}
@@ -5821,6 +6414,7 @@ class TestFetchTokenTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_bad_date_key(self, m):
+        """Test bad date key."""
         m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
         obj = _mk()
         obj.funding_events = {"mode": {"bad-key": []}}
@@ -5904,10 +6498,13 @@ class TestFetchEthTransfersModePaginationCap:
 
 
 class TestFetchEthTransfersModeBatch2:
+    """TestFetchEthTransfersModeBatch2."""
+
     @patch(
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_non_200(self, m):
+        """Test non 200."""
         m.return_value = MagicMock(status_code=500)
         obj = _mk()
         obj.funding_events = {}
@@ -5922,6 +6519,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_empty(self, m):
+        """Test empty."""
         m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
         obj = _mk()
         obj.funding_events = {}
@@ -5936,6 +6534,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_processes(self, m):
+        """Test processes."""
         e = {
             "value": str(2 * 10**18),
             "delta": str(1 * 10**18),
@@ -5961,6 +6560,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_zero_val(self, m):
+        """Test zero val."""
         e = {
             "value": "0",
             "delta": str(10**18),
@@ -5982,6 +6582,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_neg_delta(self, m):
+        """Test neg delta."""
         e = {
             "value": str(10**18),
             "delta": str(-(10**18)),
@@ -6003,6 +6604,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_hash_present(self, m):
+        """Test hash present."""
         e = {
             "value": str(10**18),
             "delta": str(10**18),
@@ -6024,6 +6626,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_incremental(self, m):
+        """Test incremental."""
         e = {
             "value": str(2 * 10**18),
             "delta": str(1 * 10**18),
@@ -6047,6 +6650,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_pagination(self, m):
+        """Test pagination."""
         e = {
             "value": str(2 * 10**18),
             "delta": str(1 * 10**18),
@@ -6057,6 +6661,7 @@ class TestFetchEthTransfersModeBatch2:
         c = [0]
 
         def mj():
+            """Mj."""
             c[0] += 1
             if c[0] == 1:
                 return {
@@ -6081,6 +6686,7 @@ class TestFetchEthTransfersModeBatch2:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_bad_key(self, m):
+        """Test bad key."""
         m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
         obj = _mk()
         obj.funding_events = {"mode": {"not-a-date": []}}
@@ -6093,7 +6699,10 @@ class TestFetchEthTransfersModeBatch2:
 
 
 class TestFetchOptimismSafeglobalBatch2:
+    """TestFetchOptimismSafeglobalBatch2."""
+
     def test_fail(self):
+        """Test fail."""
         obj = _mk()
         obj._request_with_retries = _gen_return((False, {}))
         obj.context.coingecko = MagicMock()
@@ -6105,6 +6714,7 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
     def test_empty(self):
+        """Test empty."""
         obj = _mk()
         obj._request_with_retries = _gen_return((True, {"results": []}))
         obj.context.coingecko = MagicMock()
@@ -6116,6 +6726,7 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
     def test_erc20_usdc(self):
+        """Test erc20 usdc."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -6130,6 +6741,7 @@ class TestFetchOptimismSafeglobalBatch2:
         ci = [0]
 
         def fr(*a, **kw):
+            """Fr."""
             ci[0] += 1
             yield
             return (
@@ -6147,6 +6759,7 @@ class TestFetchOptimismSafeglobalBatch2:
         assert "2024-12-15" in t
 
     def test_ether(self):
+        """Test ether."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -6165,6 +6778,7 @@ class TestFetchOptimismSafeglobalBatch2:
         assert len(t["2024-12-15"]) == 1
 
     def test_erc721(self):
+        """Test erc721."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -6183,6 +6797,7 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
     def test_self(self):
+        """Test self."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xaddr",
@@ -6201,6 +6816,7 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
     def test_no_token_info_with_addr(self):
+        """Test no token info with addr."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -6214,6 +6830,7 @@ class TestFetchOptimismSafeglobalBatch2:
         ci = [0]
 
         def fr(*a, **kw):
+            """Fr."""
             ci[0] += 1
             yield
             return (
@@ -6233,6 +6850,7 @@ class TestFetchOptimismSafeglobalBatch2:
         assert "2024-12-15" in t
 
     def test_no_token_info_no_addr(self):
+        """Test no token info no addr."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -6254,6 +6872,7 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
     def test_zero_eth(self):
+        """Test zero eth."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -6273,6 +6892,7 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
     def test_bad_eth_value(self):
+        """Test bad eth value."""
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -6292,9 +6912,11 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
     def test_exception(self):
+        """Test exception."""
         obj = _mk()
 
         def bad(*a, **kw):
+            """Bad."""
             yield
             raise RuntimeError("boom")
 
@@ -6309,6 +6931,8 @@ class TestFetchOptimismSafeglobalBatch2:
 
 
 class TestTrackEthReversions:
+    """TestTrackEthReversions."""
+
     def _s(self, ch="optimism"):
         o = _mk()
         o.params.target_investment_chains = [ch]
@@ -6316,12 +6940,14 @@ class TestTrackEthReversions:
         return o
 
     def test_no_incoming(self):
+        """Test no incoming."""
         o = self._s()
         o._fetch_all_transfers_until_date_optimism = _gen_return({})
         o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
         assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism")) == {}
 
     def test_unsupported(self):
+        """Test unsupported."""
         assert (
             _drive(
                 self._s("polygon")._track_eth_transfers_and_reversions("0xS", "polygon")
@@ -6330,6 +6956,7 @@ class TestTrackEthReversions:
         )
 
     def test_no_master(self):
+        """Test no master."""
         o = self._s()
         o._fetch_all_transfers_until_date_optimism = _gen_return(
             {
@@ -6348,6 +6975,7 @@ class TestTrackEthReversions:
         assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism")) == {}
 
     def test_two_transfers(self):
+        """Test two transfers."""
         o = self._s()
         inc = {
             "d": [
@@ -6377,6 +7005,7 @@ class TestTrackEthReversions:
         )
 
     def test_reversion_done(self):
+        """Test reversion done."""
         o = self._s()
         inc = {
             "d": [
@@ -6414,6 +7043,7 @@ class TestTrackEthReversions:
         assert r["reversion_amount"] == 0 and r["historical_reversion_value"] == 500.0
 
     def test_mode(self):
+        """Test mode."""
         o = self._s("mode")
         o._track_eth_transfers_mode = MagicMock(
             return_value={
@@ -6440,6 +7070,7 @@ class TestTrackEthReversions:
         )
 
     def test_balance_cap(self):
+        """Test balance cap."""
         o = self._s()
         inc = {
             "d": [
@@ -6469,9 +7100,11 @@ class TestTrackEthReversions:
         )
 
     def test_exception(self):
+        """Test exception."""
         o = self._s()
 
         def boom(*a, **kw):
+            """Boom."""
             yield
             raise RuntimeError("f")
 
@@ -6484,6 +7117,7 @@ class TestTrackEthReversions:
         )
 
     def test_unix_ts(self):
+        """Test unix ts."""
         o = self._s()
         inc = {
             "d": [
@@ -6513,6 +7147,7 @@ class TestTrackEthReversions:
         )
 
     def test_bad_ts(self):
+        """Test bad ts."""
         o = self._s()
         inc = {
             "d": [
@@ -6543,7 +7178,10 @@ class TestTrackEthReversions:
 
 
 class TestCalcReversionValue:
+    """TestCalcReversionValue."""
+
     def test_iso(self):
+        """Test iso."""
         o = _mk()
         o._fetch_historical_eth_price = _gen_return(2000.0)
         assert (
@@ -6557,6 +7195,7 @@ class TestCalcReversionValue:
         )
 
     def test_unix(self):
+        """Test unix."""
         o = _mk()
         o._fetch_historical_eth_price = _gen_return(1000.0)
         assert (
@@ -6569,6 +7208,7 @@ class TestCalcReversionValue:
         )
 
     def test_bad(self):
+        """Test bad."""
         o = _mk()
         o._fetch_historical_eth_price = _gen_return(500.0)
         assert (
@@ -6581,6 +7221,7 @@ class TestCalcReversionValue:
         )
 
     def test_no_price(self):
+        """Test no price."""
         o = _mk()
         o._fetch_historical_eth_price = _gen_return(None)
         assert (
@@ -6594,7 +7235,10 @@ class TestCalcReversionValue:
 
 
 class TestOutgoingOptimism:
+    """TestOutgoingOptimism."""
+
     def test_no_addr(self):
+        """Test no addr."""
         assert (
             _drive(
                 _mk()._fetch_outgoing_transfers_until_date_optimism("", "2025-01-01")
@@ -6603,6 +7247,7 @@ class TestOutgoingOptimism:
         )
 
     def test_fail(self):
+        """Test fail."""
         o = _mk()
         o._request_with_retries = _gen_return((False, {}))
         o.context.coingecko = MagicMock()
@@ -6613,6 +7258,7 @@ class TestOutgoingOptimism:
         )
 
     def test_eth(self):
+        """Test eth."""
         t = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xaddr",
@@ -6630,6 +7276,7 @@ class TestOutgoingOptimism:
         )
 
     def test_zero(self):
+        """Test zero."""
         t = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xaddr",
@@ -6654,6 +7301,7 @@ class TestOutgoingOptimism:
         )
 
     def test_bad_val(self):
+        """Test bad val."""
         t = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xaddr",
@@ -6678,9 +7326,11 @@ class TestOutgoingOptimism:
         )
 
     def test_exception(self):
+        """Test exception."""
         o = _mk()
 
         def boom(*a, **kw):
+            """Boom."""
             yield
             raise RuntimeError("f")
 
@@ -6694,12 +7344,16 @@ class TestOutgoingOptimism:
 
 
 class TestErc20Optimism:
+    """TestErc20Optimism."""
+
     def test_no_addr(self):
+        """Test no addr."""
         assert _drive(_mk()._track_erc20_transfers_optimism("", 1704067200)) == {
             "outgoing": {}
         }
 
     def test_fail(self):
+        """Test fail."""
         o = _mk()
         o._request_with_retries = _gen_return((False, {}))
         o.context.coingecko = MagicMock()
@@ -6709,6 +7363,7 @@ class TestErc20Optimism:
         }
 
     def test_usdc(self):
+        """Test usdc."""
         t = {
             "executionDate": "2024-01-01T10:00:00Z",
             "from": "0xaddr",
@@ -6731,9 +7386,11 @@ class TestErc20Optimism:
         )
 
     def test_exception(self):
+        """Test exception."""
         o = _mk()
 
         def boom(*a, **kw):
+            """Boom."""
             yield
             raise RuntimeError("f")
 
@@ -6746,10 +7403,13 @@ class TestErc20Optimism:
 
 
 class TestTrackEthMode:
+    """TestTrackEthMode."""
+
     @patch(
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_non_200(self, m):
+        """Test non 200."""
         m.return_value = MagicMock(status_code=500)
         assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {
             "incoming": {},
@@ -6760,6 +7420,7 @@ class TestTrackEthMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_status_0(self, m):
+        """Test status 0."""
         m.return_value = MagicMock(
             status_code=200, json=lambda: {"status": "0", "message": "err"}
         )
@@ -6772,6 +7433,7 @@ class TestTrackEthMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_ok(self, m):
+        """Test ok."""
         txs = [
             {
                 "timeStamp": "1704067200",
@@ -6791,6 +7453,7 @@ class TestTrackEthMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_outgoing(self, m):
+        """Test outgoing."""
         txs = [
             {
                 "timeStamp": "1704067200",
@@ -6810,6 +7473,7 @@ class TestTrackEthMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_zero(self, m):
+        """Test zero."""
         m.return_value = MagicMock(
             status_code=200,
             json=lambda: {
@@ -6833,6 +7497,7 @@ class TestTrackEthMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_future(self, m):
+        """Test future."""
         m.return_value = MagicMock(
             status_code=200,
             json=lambda: {
@@ -6856,6 +7521,7 @@ class TestTrackEthMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_bad_ts(self, m):
+        """Test bad ts."""
         m.return_value = MagicMock(
             status_code=200,
             json=lambda: {
@@ -6879,6 +7545,7 @@ class TestTrackEthMode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_exception(self, m):
+        """Test exception."""
         m.side_effect = RuntimeError("f")
         assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {
             "incoming": {},
@@ -6887,10 +7554,13 @@ class TestTrackEthMode:
 
 
 class TestTrackErc20Mode:
+    """TestTrackErc20Mode."""
+
     @patch(
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_non_200(self, m):
+        """Test non 200."""
         m.return_value = MagicMock(status_code=500)
         assert _mk()._track_erc20_transfers_mode("0xS", 1704067200) == {"outgoing": {}}
 
@@ -6898,6 +7568,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_empty(self, m):
+        """Test empty."""
         m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
         assert _mk()._track_erc20_transfers_mode("0xS", 1704067200) == {"outgoing": {}}
 
@@ -6905,6 +7576,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_usdc(self, m):
+        """Test usdc."""
         tx = {
             "timestamp": "2024-01-01T10:00:00Z",
             "from": {"hash": "0xsafe"},
@@ -6927,6 +7599,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_zero(self, m):
+        """Test zero."""
         tx = {
             "timestamp": "2024-01-01T10:00:00Z",
             "from": {"hash": "0xsafe"},
@@ -6946,6 +7619,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_bad_ts(self, m):
+        """Test bad ts."""
         tx = {
             "timestamp": "bad",
             "from": {"hash": "0xsafe"},
@@ -6965,6 +7639,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_future(self, m):
+        """Test future."""
         tx = {
             "timestamp": "2030-01-01T10:00:00Z",
             "from": {"hash": "0xsafe"},
@@ -6983,6 +7658,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_not_included(self, m):
+        """Test not included."""
         tx = {
             "timestamp": "2024-01-01T10:00:00Z",
             "from": {"hash": "0xsafe"},
@@ -7001,6 +7677,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_non_usdc(self, m):
+        """Test non usdc."""
         tx = {
             "timestamp": "2024-01-01T10:00:00Z",
             "from": {"hash": "0xsafe"},
@@ -7019,6 +7696,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_not_from_safe(self, m):
+        """Test not from safe."""
         tx = {
             "timestamp": "2024-01-01T10:00:00Z",
             "from": {"hash": "0xOther"},
@@ -7037,6 +7715,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_pagination(self, m):
+        """Test pagination."""
         tx = {
             "timestamp": "2024-01-01T10:00:00Z",
             "from": {"hash": "0xsafe"},
@@ -7048,6 +7727,7 @@ class TestTrackErc20Mode:
         c = [0]
 
         def mj():
+            """Mj."""
             c[0] += 1
             if c[0] == 1:
                 return {
@@ -7070,6 +7750,7 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_val_error(self, m):
+        """Test val error."""
         tx = {
             "timestamp": "2024-01-01T10:00:00Z",
             "from": {"hash": "0xsafe"},
@@ -7088,16 +7769,21 @@ class TestTrackErc20Mode:
         "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
     )
     def test_exception(self, m):
+        """Test exception."""
         m.side_effect = RuntimeError("f")
         assert _mk()._track_erc20_transfers_mode("0xS", 1704067200) == {"outgoing": {}}
 
 
 class TestVeloRewardsException:
+    """TestVeloRewardsException."""
+
     def test_exception(self):
+        """Test exception."""
         o = _mk()
         o.pools = {"velodrome": MagicMock()}
 
         def bad(*a, **kw):
+            """Bad."""
             yield
             raise RuntimeError("f")
 
@@ -7110,6 +7796,8 @@ class TestVeloRewardsException:
 
 
 class TestSmallBranchGaps2:
+    """TestSmallBranchGaps2."""
+
     def test_closed_positions(self):
         """Test _have_positions_changed when positions are closed."""
         o = _mk()
@@ -7127,6 +7815,7 @@ class TestSmallBranchGaps2:
         ci = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             ci[0] += 1
             yield
             if ci[0] == 1:
@@ -7152,6 +7841,7 @@ class TestSmallBranchGaps2:
         ci = [0]
 
         def fake_ci(*a, **kw):
+            """Fake ci."""
             ci[0] += 1
             yield
             if ci[0] == 1:
@@ -7343,6 +8033,7 @@ class TestOptimismSafeglobalBranches:
         ci = [0]
 
         def fr(*a, **kw):
+            """Fr."""
             ci[0] += 1
             yield
             if ci[0] == 1:
@@ -7458,6 +8149,7 @@ class TestOutgoingOptimismBranches:
         ci = [0]
 
         def fr(*a, **kw):
+            """Fr."""
             ci[0] += 1
             yield
             if ci[0] == 1:
@@ -7634,6 +8326,7 @@ class TestErc20OptimismBranches:
         ci = [0]
 
         def fr(*a, **kw):
+            """Fr."""
             ci[0] += 1
             yield
             if ci[0] == 1:
@@ -7649,6 +8342,7 @@ class TestReversionDateIso:
     """Test ISO timestamp format for reversion_date (line 4152)."""
 
     def test_iso_z_timestamp(self):
+        """Test iso z timestamp."""
         o = _mk()
         o.params.target_investment_chains = ["optimism"]
         o.params.safe_contract_addresses = {"optimism": "0xSafe"}
@@ -7882,6 +8576,7 @@ class TestCoverageGaps:
         written = {}
 
         def capture_write(data):
+            """Capture write."""
             written.update(data)
             yield
 
@@ -7910,6 +8605,7 @@ class TestCoverageGaps:
         call_count = {"n": 0}
 
         def cache_returns_on_second_call(*a, **kw):
+            """Cache returns on second call."""
             call_count["n"] += 1
             yield
             # First call (before API): no cache. Second call (fallback): has price.
@@ -7937,6 +8633,7 @@ class TestCoverageGaps:
         call_count = {"n": 0}
 
         def cache_returns_on_second_call(*a, **kw):
+            """Cache returns on second call."""
             call_count["n"] += 1
             yield
             if call_count["n"] >= 2:
@@ -8076,6 +8773,7 @@ class TestFetchAllTransfersDateMerge:
 
         # Token transfers succeed and add a new date
         def token_mode(*a, **kw):
+            """Token mode."""
             a[2]["2024-02-01"] = [{"x": 2}]  # all_transfers_by_date[date]
             yield
             return True
@@ -8093,6 +8791,7 @@ class TestFetchAllTransfersDateMerge:
 
         # _fetch_optimism_transfers_safeglobal adds a new date
         def sfg(*a, **kw):
+            """Sfg."""
             a[2]["2024-02-01"] = [{"y": 2}]  # all_transfers_by_date
             yield
 

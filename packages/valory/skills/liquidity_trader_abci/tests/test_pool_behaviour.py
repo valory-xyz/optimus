@@ -230,6 +230,7 @@ class TestPoolBehaviour:
         def fake_get_contract_api_response(
             *args: Any, **kwargs: Any
         ) -> Generator[Any, Any, Any]:
+            """Fake get contract api response."""
             yield
             return mock_response
 
@@ -262,6 +263,7 @@ class TestPoolBehaviour:
         def fake_get_contract_api_response(
             *args: Any, **kwargs: Any
         ) -> Generator[Any, Any, Any]:
+            """Fake get contract api response."""
             yield
             return mock_response
 
@@ -294,6 +296,7 @@ class TestPoolBehaviour:
         def fake_get_contract_api_response(
             *args: Any, **kwargs: Any
         ) -> Generator[Any, Any, Any]:
+            """Fake get contract api response."""
             yield
             return mock_response
 

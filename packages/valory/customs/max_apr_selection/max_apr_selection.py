@@ -355,7 +355,6 @@ def apply_risk_thresholds_and_select_optimal_strategy(
     else:
         # For new entries without current positions
         filtered_opportunities.sort(key=lambda x: x["apr_weighted_score"], reverse=True)
-        filtered_opportunities[0]["composite_score"]
 
         optimal_opportunities = [
             opp

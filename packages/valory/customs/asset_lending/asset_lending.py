@@ -21,21 +21,23 @@
 
 """Asset lending module."""
 
-import logging
-import threading
-import time
 import warnings
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-import pandas as pd
-import requests
-from aea.helpers.logging import setup_logger
-from pycoingecko import CoinGeckoAPI
-from web3 import Web3
-
+# Suppress numpy / pandas / web3 deprecation chatter at import time.
 warnings.filterwarnings("ignore")
+
+import logging  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+from datetime import datetime, timedelta  # noqa: E402
+from typing import Any, Dict, List, Optional, Tuple  # noqa: E402
+
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import requests  # noqa: E402
+from aea.helpers.logging import setup_logger  # noqa: E402
+from pycoingecko import CoinGeckoAPI  # noqa: E402
+from web3 import Web3  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -65,9 +67,9 @@ coingecko_name_to_id = {
 }
 
 # Thread-safe global caches with locks
-_coin_list_cache = None
-_aggregators_cache: Any = None
-_historical_data_cache = None
+_coin_list_cache: Optional[List[Dict[str, Any]]] = None
+_aggregators_cache: Optional[List[Dict[str, Any]]] = None
+_historical_data_cache: Optional[List[Dict[str, Any]]] = None
 _coin_list_lock = threading.Lock()
 _aggregators_lock = threading.Lock()
 _historical_data_lock = threading.Lock()

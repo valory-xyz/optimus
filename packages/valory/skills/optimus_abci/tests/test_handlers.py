@@ -1329,7 +1329,7 @@ class TestHttpHandlerMethods:
 
         mock_fn = MagicMock()
         ctx.shared_state = {GET_FUNDS_STATUS_METHOD_NAME: mock_fn}
-        handler.funds_status
+        _ = handler.funds_status  # noqa: F841 — property access triggers mock_fn
         mock_fn.assert_called_once()
 
     def test_read_kv(self) -> None:
@@ -1818,8 +1818,8 @@ class TestHttpHandlerMethods:
             ),
             patch("pathlib.Path.open", MagicMock()),
         ):
-            handler._get_eoa_account()
-        # Returns mock_account on success
+            result = handler._get_eoa_account()
+        assert result is mock_account
 
     def test_get_eoa_account_no_password_failure(self) -> None:
         """Test _get_eoa_account with no password and failed read."""

@@ -95,7 +95,7 @@ fingerprint:
   utils/tick_math.py: bafybeiehijphwni4zfu57rhhbgdyxn5evyokvvckiwzmldmrbzg3nd7cmy
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeifopkpon4brnvqno5b2hy2qpq4x4jgvhjr3l2vmggxcu7wdmfnrse
+- valory/mirror_db:0.1.0:bafybeibchw2crpnxmxl6puajge5gx6xcvkny3ls7apq7bbgbyauerlijom
 - valory/kv_store:0.1.0:bafybeiepbu6pjw4cduj7tvz6gin7z5yebnpnp2csu75ooi7cvt3erlvsaq
 - valory/x402:0.1.0:bafybeihtnlwawysnuvlrsflivrn76gacrcubo7feh656lwcz3leswiywum
 contracts:
@@ -106,7 +106,7 @@ contracts:
 - valory/erc20:0.1.0:bafybeihs6u6diy5iy5tnvgdgtgu4phb2niqze6kpmknmfvqio44zyozog4
 - valory/multisend:0.1.0:bafybeidwr3l2t564gle533l7elroxr77wvmqogdmwz4e6mmqxnbqsk37tm
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeiatcsejmq4j6mwcns7c2a7zdtkt2vrcqsh42eegwnyv7wtoih332m
-- valory/uniswap_v3_pool:0.1.0:bafybeias4hu5gtqpkpuxoolvjq4jmnin7eaowjdfc6vm3khlzipxatc6ei
+- valory/uniswap_v3_pool:0.1.0:bafybeigkrrovtkidix5x3dcoiypogvkwqm7pkok7bo324v3gtkl55wv4ra
 - valory/merkl_distributor:0.1.0:bafybeiczbzoliac32zx67spc34kv7ucjp5tmd5iqqu2sj2o4ed3wg4dcui
 - valory/staking_token:0.1.0:bafybeic6rlrsdgo5my3nxiy247njlsn2tupodhcehxqis6dpfyz325bdp4
 - valory/staking_activity_checker:0.1.0:bafybeideqqajn76jxdukqcyl4ear5mwjnc25zpko75u236afiimhm6imba

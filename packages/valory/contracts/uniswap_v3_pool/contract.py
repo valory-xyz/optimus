@@ -319,9 +319,6 @@ class UniswapV3PoolContract(Contract):
         """
 
         # Extract position details
-        position["token0"]
-        position["token1"]
-        position["fee"]
         tick_lower = position["tickLower"]
         tick_upper = position["tickUpper"]
         liquidity = position["liquidity"]

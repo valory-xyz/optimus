@@ -55,16 +55,15 @@ default-groups = "all"
 prerelease = "allow"
 
 [tool.tomte]
-# `customs/velodrome_pools_search` and `connections/mirror_db` carry the
-# bulk of the slim-canonical lint debt landed on `main` via the issue-280
-# resilience PRs (#284 / #285) — Google-style docstrings that darglint
-# rejects under sphinx style, commented-out code, late module-level
-# imports, etc. Excluded here so the migration can land alongside the
-# dep bumps; lint retrofit on those two paths is the same follow-up
-# tracked for the `liquidity_trader_abci` test suites.
+# `customs/velodrome_pools_search` carries the bulk of the slim-canonical
+# lint debt landed on `main` via the issue-280 P0–P4 resilience PR (#285)
+# — ~3000 lines of Google-style docstrings that darglint rejects under
+# sphinx style, plus late module-level imports. Excluded so the migration
+# can land alongside the dep bumps; type-hint / docstring retrofit on
+# this path is the same follow-up tracked for the liquidity_trader_abci
+# behaviours / pools / states.
 service_specific_packages_exclude = [
     "packages/valory/customs/velodrome_pools_search",
-    "packages/valory/connections/mirror_db",
 ]
 upstream_pins = [
     "valory-xyz/mech-interact@v0.30.0",
@@ -73,9 +72,8 @@ upstream_pins = [
     "valory-xyz/funds-manager@v3.0.0",
 ]
 gitleaks_extra_paths = [
-    ".*-ui-build/.*",
-    ".*-ui/assets/.*",
-    "packages/valory/skills/.*_abci/behaviours\\.py",
+    "packages/valory/skills/.*_abci/.*-ui-build/.*",
+    "packages/valory/skills/.*_abci/.*-ui/assets/.*",
 ]
 tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@v0.7.0"
 

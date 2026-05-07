@@ -26,7 +26,7 @@ import logging
 import re
 import ssl
 from functools import wraps
-from typing import Any, Dict, Optional, Union, cast
+from typing import Any, Callable, Dict, Optional, Union, cast
 
 import aiohttp
 import certifi
@@ -69,12 +69,19 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS)
 
 
-def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_factor=2):  # type: ignore
+def retry_with_exponential_backoff(  # type: ignore
+    max_retries: int = 5, initial_delay: float = 1, backoff_factor: float = 2
+) -> Callable[..., Any]:
     """Retry a function with exponential backoff on transient failures.
 
     Retries 408, 429, 5xx, and transient network errors (ClientConnectorError,
     ServerTimeoutError, asyncio.TimeoutError). All other exceptions propagate
     immediately.
+
+    :param max_retries: maximum retry attempts before giving up.
+    :param initial_delay: seconds to sleep before the first retry.
+    :param backoff_factor: multiplier applied to the delay on each subsequent retry.
+    :return: a decorator wrapping the target async function with retry logic.
     """
 
     def decorator(func):  # type: ignore
@@ -165,7 +172,7 @@ class GenericMirrorDBConnection(Connection):
         """
         super().__init__(*args, **kwargs)
         self.base_url = self.configuration.config.get("mirror_db_base_url")
-        # self.api_key: Optional[str] = None
+        # self.api_key: Optional[str] = None # noqa: E800
         self.session: Optional[aiohttp.ClientSession] = None
         self.dialogues = SrrDialogues(connection_id=PUBLIC_ID)
         self._response_envelopes: Optional[asyncio.Queue] = None
@@ -174,7 +181,7 @@ class GenericMirrorDBConnection(Connection):
 
         # Store all configuration in a single dictionary
         self._config = {
-            # "api_key": self.api_key,
+            # "api_key": self.api_key, # noqa: E800
             "base_url": self.base_url,
             # Add other default configs here
         }
@@ -452,7 +459,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.post(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"creating resource via {method_name}"
@@ -470,7 +477,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.get(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"reading resource via {method_name}"
@@ -490,7 +497,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.put(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"updating resource via {method_name}"
@@ -508,7 +515,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.delete(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"deleting resource via {method_name}"

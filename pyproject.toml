@@ -11,12 +11,12 @@ readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
     # OA / open-aea / plugins — pinned exactly (framework contract).
-    "open-autonomy[cli]==0.21.19",
-    "open-aea-test-autonomy==0.21.19",
-    "open-aea-helpers==0.21.19",
-    "open-aea==2.2.1",
-    "open-aea-ledger-ethereum==2.2.1",
-    "open-aea-ledger-cosmos==2.2.1",
+    "open-autonomy[cli]==0.21.20",
+    "open-aea-test-autonomy==0.21.20",
+    "open-aea-helpers==0.21.20",
+    "open-aea==2.2.3",
+    "open-aea-ledger-ethereum==2.2.3",
+    "open-aea-ledger-cosmos==2.2.3",
     # App-repo: all other deps exact-pinned per @DavidMinarsch's #436 rule
     # (no silent supply chain). The bounded ranges below have a strict upper
     # bound — they're declared as ranges by the third-party skill YAMLs synced
@@ -60,7 +60,7 @@ Repository = "https://github.com/valory-xyz/optimus"
 
 [dependency-groups]
 dev = [
-    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@v0.7.0",
 ]
 
 [tool.uv]
@@ -71,10 +71,10 @@ prerelease = "allow"
 # Third-party packages on disk are synced from open-autonomy + open-aea
 # (auto-prepended) plus mech-interact, genai, kv-store, funds-manager.
 upstream_pins = [
-    "valory-xyz/mech-interact@v0.28.0",
-    "valory-xyz/genai@v6.1.0",
-    "valory-xyz/kv-store@v0.4.0",
-    "valory-xyz/funds-manager@v2.3.0",
+    "valory-xyz/mech-interact@v0.30.0",
+    "valory-xyz/genai@v7.0.0",
+    "valory-xyz/kv-store@v0.5.0",
+    "valory-xyz/funds-manager@v3.0.0",
 ]
 # Vite UI bundle outputs (modius-ui-build/, optimus-ui-build/) trip
 # generic-api-key on every rebuild. Pattern matches both the current
@@ -85,7 +85,7 @@ gitleaks_extra_paths = [
     ".*-ui/assets/.*",
     "packages/valory/skills/.*_abci/behaviours\\.py",
 ]
-tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1"
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@v0.7.0"
 
 [tool.uv.build-backend]
 module-name = ["packages"]

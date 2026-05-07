@@ -10,19 +10,12 @@ requires-python = "<3.15,>=3.10"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    # OA / open-aea / plugins — pinned exactly (framework contract).
     "open-autonomy[cli]==0.21.20",
     "open-aea-test-autonomy==0.21.20",
     "open-aea-helpers==0.21.20",
     "open-aea==2.2.3",
     "open-aea-ledger-ethereum==2.2.3",
     "open-aea-ledger-cosmos==2.2.3",
-    # App-repo: all other deps exact-pinned per @DavidMinarsch's #436 rule
-    # (no silent supply chain). The bounded ranges below have a strict upper
-    # bound — they're declared as ranges by the third-party skill YAMLs synced
-    # into this repo, and `aea-helpers check-dependencies` requires the
-    # pyproject form to satisfy the YAML form (asn1crypto / jsonschema /
-    # protobuf). Each still has a hard upper cap on the major bump.
     "typing_extensions==4.15.0",
     "gql[requests]==3.5.0",
     "grpcio==1.78.0",
@@ -35,11 +28,6 @@ dependencies = [
     "hypothesis==6.21.6",
     "requests==2.32.5",
     "pycoingecko==3.2.0",
-    # numpy: range exception (not exact-pinned). Locking to a single numpy
-    # release breaks the Windows + Python 3.14 matrix because each py3.14
-    # micro-version on the GH runners drops MINGW-W64 ABI compat with older
-    # numpy wheels (access violation 0xC0000005 on import). Letting the
-    # resolver pick the latest numpy keeps the Windows wheel current.
     "numpy>=2.2.6,<3",
     "pandas==2.3.3",
     "peewee==3.17.5",
@@ -51,7 +39,6 @@ dependencies = [
     "pycryptodome==3.20.0",
     "certifi==2026.2.25",
     "hexbytes==1.3.1",
-    # pyinstaller is a build tool, kept at runtime for the agent_runner_bin spec.
     "pyinstaller==6.19.0",
 ]
 
@@ -68,18 +55,12 @@ default-groups = "all"
 prerelease = "allow"
 
 [tool.tomte]
-# Third-party packages on disk are synced from open-autonomy + open-aea
-# (auto-prepended) plus mech-interact, genai, kv-store, funds-manager.
 upstream_pins = [
     "valory-xyz/mech-interact@v0.30.0",
     "valory-xyz/genai@v7.0.0",
     "valory-xyz/kv-store@v0.5.0",
     "valory-xyz/funds-manager@v3.0.0",
 ]
-# Vite UI bundle outputs (modius-ui-build/, optimus-ui-build/) trip
-# generic-api-key on every rebuild. Pattern matches both the current
-# location (packages/valory/skills/optimus_abci/<name>-ui-build/) and
-# the historical top-level location.
 gitleaks_extra_paths = [
     ".*-ui-build/.*",
     ".*-ui/assets/.*",

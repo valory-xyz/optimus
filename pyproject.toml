@@ -55,15 +55,13 @@ default-groups = "all"
 prerelease = "allow"
 
 [tool.tomte]
-# `customs/velodrome_pools_search` carries the bulk of the slim-canonical
-# lint debt landed on `main` via the issue-280 P0–P4 resilience PR (#285)
-# — ~3000 lines of Google-style docstrings that darglint rejects under
-# sphinx style, plus late module-level imports. Excluded so the migration
-# can land alongside the dep bumps; type-hint / docstring retrofit on
-# this path is the same follow-up tracked for the liquidity_trader_abci
-# behaviours / pools / states.
 service_specific_packages_exclude = [
     "packages/valory/customs/velodrome_pools_search",
+    "packages/valory/customs/asset_lending",
+    "packages/valory/customs/balancer_pools_search",
+    "packages/valory/customs/uniswap_pools_search",
+    "packages/valory/customs/max_apr_selection",
+    "packages/valory/contracts/uniswap_v3_pool",
 ]
 upstream_pins = [
     "valory-xyz/mech-interact@v0.30.0",

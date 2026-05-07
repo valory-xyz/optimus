@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Velodrome Voter contract interface."""
 
 import logging
@@ -43,13 +42,7 @@ class VelodromeVoterContract(Contract):
         contract_address: str,
         pool_address: str,
     ) -> JSONLike:
-        """Get the gauge address for a given pool.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param pool_address: TODO
-        :return: TODO
-        """
+        """Get the gauge address for a given pool."""
         _logger.debug(f"Getting gauge for pool: {pool_address}")
 
         checksumed_pool = ledger_api.api.to_checksum_address(pool_address)
@@ -65,13 +58,7 @@ class VelodromeVoterContract(Contract):
         contract_address: str,
         gauge_address: str,
     ) -> JSONLike:
-        """Check if an address is a valid gauge.
-
-        :param contract_address: TODO
-        :param gauge_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Check if an address is a valid gauge."""
         _logger.debug(f"Validating gauge address: {gauge_address}")
 
         checksumed_gauge = ledger_api.api.to_checksum_address(gauge_address)
@@ -87,13 +74,7 @@ class VelodromeVoterContract(Contract):
         contract_address: str,
         gauge_address: str,
     ) -> JSONLike:
-        """Get the pool address for a given gauge.
-
-        :param contract_address: TODO
-        :param gauge_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the pool address for a given gauge."""
         _logger.debug(f"Getting pool for gauge: {gauge_address}")
 
         checksumed_gauge = ledger_api.api.to_checksum_address(gauge_address)
@@ -109,13 +90,7 @@ class VelodromeVoterContract(Contract):
         contract_address: str,
         gauge_address: str,
     ) -> JSONLike:
-        """Check if a gauge is alive (active).
-
-        :param contract_address: TODO
-        :param gauge_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Check if a gauge is alive (active)."""
         _logger.debug(f"Checking if gauge is alive: {gauge_address}")
 
         checksumed_gauge = ledger_api.api.to_checksum_address(gauge_address)
@@ -131,13 +106,7 @@ class VelodromeVoterContract(Contract):
         contract_address: str,
         gauge_address: str,
     ) -> JSONLike:
-        """Validate a gauge address by checking if it's a valid gauge and is alive.
-
-        :param contract_address: TODO
-        :param gauge_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Validate a gauge address by checking if it's a valid gauge and is alive."""
         _logger.debug(f"Validating gauge address: {gauge_address}")
 
         # Check if it's a valid gauge
@@ -167,12 +136,7 @@ class VelodromeVoterContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the total number of pools.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the total number of pools."""
         _logger.debug("Getting total number of pools")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)

@@ -17,8 +17,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
-
 """Balancer pools search module."""
 
 import logging
@@ -45,10 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 def _reset_x402_adapter(session: Any) -> None:
-    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse.
-
-    :param session: TODO
-    """
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
     if session is None:
         return
     for adapter in session.adapters.values():
@@ -109,15 +104,7 @@ def get_cached_price(
     ttl: int,
     prefix: str = "il_range",
 ) -> Optional[Any]:
-    """Get cached CoinGecko price data if it exists and is not expired.
-
-    :param cache: TODO
-    :param prefix: TODO
-    :param time_period: TODO
-    :param token_id: TODO
-    :param ttl: TODO
-    :return: TODO
-    """
+    """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
     entry = cache.get(cache_key)
     if entry is None:
@@ -136,14 +123,7 @@ def set_cached_price(
     cache: Dict[str, Any],
     prefix: str = "il_range",
 ) -> None:
-    """Cache CoinGecko price data with current timestamp.
-
-    :param cache: TODO
-    :param data: TODO
-    :param prefix: TODO
-    :param time_period: TODO
-    :param token_id: TODO
-    """
+    """Cache CoinGecko price data with current timestamp."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
     cache[cache_key] = {
         "data": data,
@@ -152,46 +132,28 @@ def set_cached_price(
 
 
 def get_errors() -> Any:
-    """Get thread-local error list.
-
-    :return: TODO
-    """
+    """Get thread-local error list."""
     if not hasattr(_thread_local, "errors"):
         _thread_local.errors = []
     return _thread_local.errors
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    """Check missing fields.
-
-    :param kwargs: TODO
-    :return: TODO
-    """
+    """Check missing fields."""
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
 def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
-    """Remove irrelevant fields.
-
-    :param kwargs: TODO
-    :param required_fields: TODO
-    :return: TODO
-    """
+    """Remove irrelevant fields."""
     return {key: value for key, value in kwargs.items() if key in required_fields}
 
 
 def run_query(
     query: Any, graphql_endpoint: Any, variables: Any = None
 ) -> Dict[str, Any]:
-    """Run query.
-
-    :param graphql_endpoint: TODO
-    :param query: TODO
-    :param variables: TODO
-    :return: TODO
-    """
+    """Run query."""
     logger.info(f"Executing GraphQL query to endpoint: {graphql_endpoint}")
     headers = {"Content-Type": "application/json"}
     payload = {"query": query, "variables": variables or {}}
@@ -220,11 +182,7 @@ def run_query(
 
 
 def get_total_apr(pool: Any) -> float:
-    """Get total apr.
-
-    :param pool: TODO
-    :return: TODO
-    """
+    """Get total apr."""
     apr_items = pool.get("dynamicData", {}).get("aprItems", [])
     return sum(
         item["apr"] for item in apr_items if item["type"] not in EXCLUDED_APR_TYPES
@@ -244,11 +202,6 @@ def standardize_metrics(
 
     Returns:
         List of pools with added standardized metrics and composite scores
-
-    :param apr_weight: TODO
-    :param pools: TODO
-    :param tvl_weight: TODO
-    :return: TODO
     """
     if not pools:
         return pools
@@ -319,14 +272,6 @@ def apply_composite_pre_filter(
 
     Returns:
         List of filtered and ranked pools
-
-    :param apr_weight: TODO
-    :param min_tvl_threshold: TODO
-    :param pools: TODO
-    :param top_n: TODO
-    :param tvl_weight: TODO
-    :param use_composite_filter: TODO
-    :return: TODO
     """
     if not pools or not use_composite_filter:
         return pools[:top_n] if pools else []
@@ -361,11 +306,7 @@ def apply_composite_pre_filter(
 
 @lru_cache(None)
 def create_web3_connection(chain_name: str) -> Any:
-    """Create web3 connection.
-
-    :param chain_name: TODO
-    :return: TODO
-    """
+    """Create web3 connection."""
     chain_url = CHAIN_URLS.get(chain_name)
     if not chain_url:
         return None
@@ -380,12 +321,7 @@ def create_web3_connection(chain_name: str) -> Any:
 
 @lru_cache(None)
 def fetch_token_name_from_contract(chain_name: Any, token_address: Any) -> Any:
-    """Fetch token name from contract.
-
-    :param chain_name: TODO
-    :param token_address: TODO
-    :return: TODO
-    """
+    """Fetch token name from contract."""
     ERC20_ABI = [
         {
             "constant": True,
@@ -412,12 +348,7 @@ def fetch_token_name_from_contract(chain_name: Any, token_address: Any) -> Any:
 def get_balancer_pools(
     chains: Any, graphql_endpoint: Any
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-    """Get balancer pools.
-
-    :param chains: TODO
-    :param graphql_endpoint: TODO
-    :return: TODO
-    """
+    """Get balancer pools."""
     logger.info(f"Fetching Balancer pools for chains: {chains}")
     chain_list_str = ", ".join(chain.upper() for chain in chains)
     graphql_query = f"""
@@ -453,14 +384,7 @@ def get_balancer_pools(
 def get_filtered_pools_for_balancer(
     pools: Any, current_positions: Any, whitelisted_assets: Any, **kwargs: Any
 ) -> Any:
-    """Get filtered pools for balancer.
-
-    :param **kwargs: TODO
-    :param current_positions: TODO
-    :param pools: TODO
-    :param whitelisted_assets: TODO
-    :return: TODO
-    """
+    """Get filtered pools for balancer."""
     # Extract composite filtering parameters
     top_n = kwargs.get("top_n", 10)
     apr_weight = kwargs.get("apr_weight", 0.7)
@@ -513,13 +437,7 @@ def get_filtered_pools_for_balancer(
 def get_coin_id_from_symbol(
     coin_id_mapping: Any, symbol: Any, chain_name: Any
 ) -> Optional[str]:
-    """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name.
-
-    :param chain_name: TODO
-    :param coin_id_mapping: TODO
-    :param symbol: TODO
-    :return: TODO
-    """
+    """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
     # Check if coin_list is valid
     symbol = symbol.lower()
     if symbol in coin_id_mapping.get(chain_name, {}):
@@ -541,11 +459,6 @@ def calculate_il_impact_multi(
 
     Returns:
         float: Impermanent loss impact
-
-    :param final_prices: TODO
-    :param initial_prices: TODO
-    :param weights: TODO
-    :return: TODO
     """
     if not initial_prices or not final_prices:
         return 0
@@ -590,17 +503,7 @@ def calculate_il_risk_score_multi(
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
 ) -> Optional[float]:
-    """Calculate IL risk score for multiple tokens.
-
-    :param coingecko_api_key: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param time_period: TODO
-    :param token_ids: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Calculate IL risk score for multiple tokens."""
     if price_cache is None:
         price_cache = {}
     to_timestamp = int(datetime.now().timestamp())
@@ -694,11 +597,7 @@ def calculate_il_risk_score_multi(
 
 
 def create_graphql_client(api_url: Any = "https://api-v3.balancer.fi") -> Client:
-    """Create graphql client.
-
-    :param api_url: TODO
-    :return: TODO
-    """
+    """Create graphql client."""
     transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
     return Client(transport=transport, fetch_schema_from_transport=False)
 
@@ -706,13 +605,7 @@ def create_graphql_client(api_url: Any = "https://api-v3.balancer.fi") -> Client
 def create_pool_snapshots_query(
     pool_id: str, chain: str, range: str = "NINETY_DAYS"
 ) -> gql:
-    """Create pool snapshots query.
-
-    :param chain: TODO
-    :param pool_id: TODO
-    :param range: TODO
-    :return: TODO
-    """
+    """Create pool snapshots query."""
     return gql(f"""
     query GetLiquidityMetrics {{
       poolGetSnapshots(
@@ -734,14 +627,7 @@ def analyze_pool_liquidity(
     client: Optional[Client] = None,
     price_impact: float = 0.01,
 ) -> Any:
-    """Analyze pool liquidity.
-
-    :param chain: TODO
-    :param client: TODO
-    :param pool_id: TODO
-    :param price_impact: TODO
-    :return: TODO
-    """
+    """Analyze pool liquidity."""
     try:
         metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
         if metrics is None:
@@ -759,14 +645,7 @@ def fetch_liquidity_metrics(
     client: Optional[Client] = None,
     price_impact: float = 0.01,
 ) -> Optional[Dict[str, Any]]:
-    """Fetch liquidity metrics.
-
-    :param chain: TODO
-    :param client: TODO
-    :param pool_id: TODO
-    :param price_impact: TODO
-    :return: TODO
-    """
+    """Fetch liquidity metrics."""
     logger.info(
         f"Fetching enhanced liquidity metrics for pool {pool_id} on chain {chain}"
     )
@@ -903,13 +782,7 @@ def fetch_liquidity_metrics(
 def get_balancer_pool_sharpe_ratio(
     pool_id: Any, chain: Any, timerange: Any = "ONE_YEAR"
 ) -> Any:
-    """Get balancer pool sharpe ratio.
-
-    :param chain: TODO
-    :param pool_id: TODO
-    :param timerange: TODO
-    :return: TODO
-    """
+    """Get balancer pool sharpe ratio."""
     logger.info(
         f"Calculating Sharpe ratio for pool {pool_id} on chain {chain} with timerange {timerange}"
     )
@@ -1057,11 +930,7 @@ def get_balancer_pool_sharpe_ratio(
 
 
 def get_underlying_token_symbol(symbol: str) -> str:
-    """Map wrapped/synthetic tokens to their underlying asset symbols.
-
-    :param symbol: TODO
-    :return: TODO
-    """
+    """Map wrapped/synthetic tokens to their underlying asset symbols."""
     symbol = symbol.lower()
 
     # Mapping of synthetic/wrapped tokens to their underlying assets
@@ -1084,11 +953,7 @@ def get_underlying_token_symbol(symbol: str) -> str:
 
 
 def normalize_token_symbol(symbol: str) -> str:
-    """Normalize token symbols for better matching.
-
-    :param symbol: TODO
-    :return: TODO
-    """
+    """Normalize token symbols for better matching."""
     # Remove common prefixes/suffixes
     prefixes = ["cs", "wa", "w", "a", "c", "v", "x"]
     for prefix in prefixes:
@@ -1103,14 +968,7 @@ def get_pool_token_prices(
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
 ) -> Optional[Dict[str, float]]:
-    """Enhanced token price fetching with support for synthetic tokens.
-
-    :param coingecko_api_key: TODO
-    :param token_symbols: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Enhanced token price fetching with support for synthetic tokens."""
     prices = {}
 
     try:
@@ -1224,10 +1082,6 @@ def get_token_investments_multi(
     Returns:
         List[float]: List of token amounts to invest. Returns empty list if investment
                      is not possible.
-
-    :param diff_investment: TODO
-    :param token_prices: TODO
-    :return: TODO
     """
     # Validate inputs
     if diff_investment <= 0:
@@ -1290,10 +1144,7 @@ def calculate_single_pool_investment(apr: float, tvl: float) -> float:
 
     Returns:
         float: Calculated investment amount, capped at $1000
-
-    :param apr: TODO
-    :param tvl: TODO
-    :return: TODO
+    # noqa: DAR101,DAR201
     """
     MIN_APR_THRESHOLD = 0.02  # 2% minimum APR
     MAX_TVL_ALLOCATION = 0.20  # 20% maximum TVL allocation
@@ -1329,12 +1180,6 @@ def calculate_differential_investment(
 
     Returns:
         float: Calculated investment amount, capped at $1000
-
-    :param apr_base: TODO
-    :param apr_current: TODO
-    :param is_single_pool: TODO
-    :param tvl: TODO
-    :return: TODO
     """
     # Handle invalid inputs
     if tvl <= 0:
@@ -1383,9 +1228,6 @@ def filter_valid_investment_pools(
 
     Returns:
         List[Dict[str, Any]]: Filtered list of pools
-
-    :param formatted_pools: TODO
-    :return: TODO
     """
     valid_pools = []
 
@@ -1413,14 +1255,7 @@ def format_pool_data(
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Enhanced pool data formatter with improved investment calculations for multi-token pools.
-
-    :param coingecko_api_key: TODO
-    :param pools: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Enhanced pool data formatter with improved investment calculations for multi-token pools."""
     # Initialize CoinGecko API
     cg = (
         CoinGeckoAPI(api_key=coingecko_api_key)
@@ -1533,21 +1368,7 @@ def get_opportunities_for_balancer(
     price_cache_ttl: int = 1800,
     **kwargs: Any,
 ) -> Any:
-    """Get and format pool opportunities with investment calculations.
-
-    :param **kwargs: TODO
-    :param chains: TODO
-    :param coin_id_mapping: TODO
-    :param coingecko_api_key: TODO
-    :param current_positions: TODO
-    :param graphql_endpoint: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param whitelisted_assets: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Get and format pool opportunities with investment calculations."""
     logger.info(f"Starting opportunity search for chains: {chains}")
     logger.info(f"Current positions to exclude: {len(current_positions)}")
 
@@ -1637,18 +1458,7 @@ def calculate_metrics(
     price_cache_ttl: int = 1800,
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
-    """Calculate metrics.
-
-    :param **kwargs: TODO
-    :param coin_id_mapping: TODO
-    :param coingecko_api_key: TODO
-    :param position: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Calculate metrics."""
     # Dynamic handling of tokens
     token_ids = []
     token_count = position.get("token_count", 0)
@@ -1703,11 +1513,7 @@ def calculate_metrics(
 
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:
-    """Check if the provided CoinGecko API key is a pro key.
-
-    :param coingecko_api_key: TODO
-    :return: TODO
-    """
+    """Check if the provided CoinGecko API key is a pro key."""
     # Try using the key as a pro API key
     cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
     try:
@@ -1723,12 +1529,7 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
 
 
 def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str, List[str]]]:
-    """Run.
-
-    :param **kwargs: TODO
-    :param *_args: TODO
-    :return: TODO
-    """
+    """Run."""
     logger.info("Starting Balancer pools search execution")
     logger.info(f"Input parameters: {list(kwargs.keys())}")
 

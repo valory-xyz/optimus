@@ -17,8 +17,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
-
 """Max apr selection module."""
 
 import math
@@ -45,11 +43,7 @@ logs = []
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    """Check for missing fields and return them, if any.
-
-    :param kwargs: TODO
-    :return: TODO
-    """
+    """Check for missing fields and return them, if any."""
     missing = []
     for field in REQUIRED_FIELDS:
         if kwargs.get(field, None) is None:
@@ -58,21 +52,12 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 
 
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove the irrelevant fields from the given kwargs.
-
-    :param kwargs: TODO
-    :return: TODO
-    """
+    """Remove the irrelevant fields from the given kwargs."""
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
 
 def calculate_composite_score(pool: Any, max_values: Any) -> Any:
-    """Calculate the composite score for a given pool.
-
-    :param max_values: TODO
-    :param pool: TODO
-    :return: TODO
-    """
+    """Calculate the composite score for a given pool."""
     sharpe_ratio = pool.get("sharpe_ratio", math.nan)
     depth_score = pool.get("depth_score", math.nan)
     il_risk_score = pool.get("il_risk_score", math.nan)
@@ -113,11 +98,7 @@ def calculate_composite_score(pool: Any, max_values: Any) -> Any:
 
 
 def get_max_values(pools: Any) -> Any:
-    """Get maximum values for normalization.
-
-    :param pools: TODO
-    :return: TODO
-    """
+    """Get maximum values for normalization."""
     # For IL risk score, we need the maximum absolute value (highest risk)
     # since IL risk scores are negative, and more negative = higher risk
     il_risk_scores = [pool.get("il_risk_score", 0) for pool in pools]
@@ -131,11 +112,7 @@ def get_max_values(pools: Any) -> Any:
 
 
 def il_risk_descriptor(il_score: Any) -> Any:
-    """Map the IL risk score to a qualitative descriptor.
-
-    :param il_score: TODO
-    :return: TODO
-    """
+    """Map the IL risk score to a qualitative descriptor."""
     # Handle None values
     if il_score is None:
         return "Unknown"
@@ -162,9 +139,7 @@ def calculate_relative_percentages(percentages: Any) -> Any:
 
     Returns:
         list of float: A list of relative percentages.
-
-    :param percentages: TODO
-    :return: TODO
+    # noqa: DAR101,DAR201
     """
     total_percentage = sum(percentages)
     dynamic_percentages = []
@@ -188,15 +163,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
     improvement_threshold: Any = 0.1,
     max_pools: Any = 1,
 ) -> Any:
-    """Apply risk thresholds and select the optimal strategy based on combined metrics.
-
-    :param composite_score_threshold: TODO
-    :param current_positions: TODO
-    :param improvement_threshold: TODO
-    :param max_pools: TODO
-    :param trading_opportunities: TODO
-    :return: TODO
-    """
+    """Apply risk thresholds and select the optimal strategy based on combined metrics."""
     reasoning = []
     base_description = (
         "The agent evaluates opportunities based on risk-adjusted returns, market liquidity, "
@@ -416,12 +383,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
 
 def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str]]:
-    """Run the strategy.
-
-    :param **kwargs: TODO
-    :param *_args: TODO
-    :return: TODO
-    """
+    """Run the strategy."""
     missing = check_missing_fields(kwargs)
     if len(missing) > 0:
         return {"error": f"Required kwargs {missing} were not provided."}

@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """Tests for velodrome_pools_search custom component."""
 
 import time
@@ -205,8 +204,6 @@ class TestGetWeb3Connection:
     @patch("packages.valory.customs.velodrome_pools_search.velodrome_pools_search.Web3")
     def test_creates_connection(self, mock_web3: MagicMock) -> None:
         """Test creating a web3 connection.
-
-        :param mock_web3: TODO
         """
         mock_instance = MagicMock()
         mock_web3.return_value = mock_instance
@@ -244,8 +241,6 @@ class TestFetchTokenNameFromContract:
     )
     def test_no_web3(self, mock_conn: MagicMock) -> None:
         """Test returns None when web3 connection is falsy.
-
-        :param mock_conn: TODO
         """
         mock_conn.return_value = None
         vel_mod.fetch_token_name_from_contract.cache_clear()
@@ -273,8 +268,6 @@ class TestFetchTokenNameFromContract:
     )
     def test_contract_exception(self, mock_conn: MagicMock) -> None:
         """Test returns None on contract call exception.
-
-        :param mock_conn: TODO
         """
         mock_web3 = MagicMock()
         mock_contract = MagicMock()
@@ -326,8 +319,6 @@ class TestIsProApiKey:
     )
     def test_pro(self, mock_cg: MagicMock) -> None:
         """Test pro key returns True.
-
-        :param mock_cg: TODO
         """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {"prices": []}
@@ -339,8 +330,6 @@ class TestIsProApiKey:
     )
     def test_not_pro(self, mock_cg: MagicMock) -> None:
         """Test non-pro key returns False.
-
-        :param mock_cg: TODO
         """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
@@ -352,8 +341,6 @@ class TestIsProApiKey:
     )
     def test_empty_response(self, mock_cg: MagicMock) -> None:
         """Test empty response returns False.
-
-        :param mock_cg: TODO
         """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {}
@@ -433,10 +420,6 @@ class TestCalculateVelodromeIlRiskScoreMulti:
         self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
     ) -> None:
         """Test with pro API key.
-
-        :param mock_cg: TODO
-        :param mock_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_pro.return_value = True
         inst = MagicMock()
@@ -456,9 +439,6 @@ class TestCalculateVelodromeIlRiskScoreMulti:
     )
     def test_with_x402(self, mock_cg: MagicMock, mock_sleep: MagicMock) -> None:
         """Test with x402 session.
-
-        :param mock_cg: TODO
-        :param mock_sleep: TODO
         """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = [
@@ -484,9 +464,6 @@ class TestCalculateVelodromeIlRiskScoreMulti:
     )
     def test_api_exception(self, mock_cg: MagicMock, mock_sleep: MagicMock) -> None:
         """Test API exception.
-
-        :param mock_cg: TODO
-        :param mock_sleep: TODO
         """
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
@@ -560,8 +537,6 @@ class TestGetEpochsByAddress:
     )
     def test_not_connected(self, mock_conn: MagicMock) -> None:
         """Test when web3 is not connected.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = False
@@ -612,8 +587,6 @@ class TestGetEpochsByAddress:
     )
     def test_attribute_error(self, mock_conn: MagicMock) -> None:
         """Test AttributeError when function not found.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -632,8 +605,6 @@ class TestGetEpochsByAddress:
     )
     def test_execution_reverted(self, mock_conn: MagicMock) -> None:
         """Test execution reverted error.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -652,8 +623,6 @@ class TestGetEpochsByAddress:
     )
     def test_abi_not_found_error(self, mock_conn: MagicMock) -> None:
         """Test ABI not found error.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -717,8 +686,6 @@ class TestGetVelodromePoolSharpeRatio:
     )
     def test_zero_std(self, mock_epochs: MagicMock) -> None:
         """Test with zero standard deviation (constant returns).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (1700000000 + i * 604800, 100000, 5000) for i in range(10)
@@ -731,8 +698,6 @@ class TestGetVelodromePoolSharpeRatio:
     )
     def test_nan_in_returns(self, mock_epochs: MagicMock) -> None:
         """Test with NaN values in returns.
-
-        :param mock_epochs: TODO
         """
         epochs = [
             (1700000000 + i * 604800, 0 if i == 2 else 100000 + i * 1000, 5000)
@@ -756,8 +721,6 @@ class TestGetVelodromePoolSharpeRatio:
     )
     def test_no_common_indices(self, mock_epochs: MagicMock) -> None:
         """Test the no-common-indices branch.
-
-        :param mock_epochs: TODO
         """
         # This is hard to trigger naturally since timestamps always match.
         # The no-common-indices path uses price_rets as fallback.
@@ -798,8 +761,6 @@ class TestAnalyzeVelodromePoolLiquidity:
     )
     def test_zero_tvl(self, mock_epochs: MagicMock) -> None:
         """Test with zero TVL.
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (1700000000, 0, 0),
@@ -812,8 +773,6 @@ class TestAnalyzeVelodromePoolLiquidity:
     )
     def test_small_price_impact(self, mock_epochs: MagicMock) -> None:
         """Test with very small price impact.
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [(1700000000, 100000, 5000)]
         depth, max_pos = analyze_velodrome_pool_liquidity(
@@ -839,8 +798,6 @@ class TestGetVelodromePools:
     )
     def test_supported_chain(self, mock_sugar: MagicMock) -> None:
         """Test with supported chain ID.
-
-        :param mock_sugar: TODO
         """
         mock_sugar.return_value = [{"id": "pool1"}]
         result = get_velodrome_pools(OPTIMISM_CHAIN_ID)
@@ -867,8 +824,6 @@ class TestGetVelodromePoolsViaSugar:
     )
     def test_not_connected(self, mock_conn: MagicMock) -> None:
         """Test when web3 is not connected.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = False
@@ -1007,8 +962,6 @@ class TestCalculatePositionDetailsForVelodrome:
     )
     def test_cl_pool_with_tick_bands(self, mock_ticks: MagicMock) -> None:
         """Test CL pool with tick bands.
-
-        :param mock_ticks: TODO
         """
         mock_ticks.return_value = [
             {"tick_lower": -100, "tick_upper": 100},
@@ -1034,8 +987,6 @@ class TestCalculatePositionDetailsForVelodrome:
     )
     def test_cl_pool_no_tick_bands(self, mock_ticks: MagicMock) -> None:
         """Test CL pool when tick_bands returns None.
-
-        :param mock_ticks: TODO
         """
         mock_ticks.return_value = None
         pool_data = {
@@ -1059,8 +1010,6 @@ class TestCalculatePositionDetailsForVelodrome:
     )
     def test_cl_pool_zero_effective_width(self, mock_ticks: MagicMock) -> None:
         """Test CL pool with zero effective width.
-
-        :param mock_ticks: TODO
         """
         mock_ticks.return_value = [
             {"tick_lower": 0, "tick_upper": 0},
@@ -1085,8 +1034,6 @@ class TestCalculatePositionDetailsForVelodrome:
     )
     def test_cl_pool_exception(self, mock_ticks: MagicMock) -> None:
         """Test CL pool with exception in tick calculation.
-
-        :param mock_ticks: TODO
         """
         mock_ticks.side_effect = Exception("tick fail")
         pool_data = {
@@ -1239,11 +1186,6 @@ class TestGetFilteredPoolsForVelodrome:
 
     def _make_pool(self, pool_id: Any = "0xpool", chain: Any = "optimism") -> Any:
         """Create a test pool.
-
-        :param pool_id: TODO
-        :return: TODO
-
-        :param chain: TODO
         """
         return {
             "id": pool_id,
@@ -1452,8 +1394,6 @@ class TestGetOpportunitiesForVelodrome:
     )
     def test_pool_error(self, mock_pools: MagicMock) -> None:
         """Test pool fetch error.
-
-        :param mock_pools: TODO
         """
         mock_pools.return_value = {"error": "fail"}
         result = get_opportunities_for_velodrome([], "key")
@@ -1469,9 +1409,6 @@ class TestGetOpportunitiesForVelodrome:
         self, mock_pools: MagicMock, mock_filter: MagicMock
     ) -> None:
         """Test when no pools pass filtering.
-
-        :param mock_filter: TODO
-        :param mock_pools: TODO
         """
         mock_pools.return_value = [{"id": "p1"}]
         mock_filter.return_value = []
@@ -1498,11 +1435,6 @@ class TestGetOpportunitiesForVelodrome:
         mock_format: MagicMock,
     ) -> None:
         """Test when no pools remain after formatting.
-
-        :param mock_composite: TODO
-        :param mock_filter: TODO
-        :param mock_format: TODO
-        :param mock_pools: TODO
         """
         mock_pools.return_value = [{"id": "p1"}]
         mock_filter.return_value = [{"id": "p1"}]
@@ -1524,10 +1456,6 @@ class TestGetOpportunitiesForVelodrome:
         self, mock_pools: MagicMock, mock_filter: MagicMock, mock_composite: MagicMock
     ) -> None:
         """Test when composite filter returns empty.
-
-        :param mock_composite: TODO
-        :param mock_filter: TODO
-        :param mock_pools: TODO
         """
         mock_pools.return_value = [{"id": "p1"}]
         mock_filter.return_value = [{"id": "p1"}]
@@ -1603,9 +1531,6 @@ class TestCalculateMetrics:
         self, mock_sharpe: MagicMock, mock_liq: MagicMock
     ) -> None:
         """Test with insufficient valid token IDs.
-
-        :param mock_liq: TODO
-        :param mock_sharpe: TODO
         """
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
@@ -1648,8 +1573,6 @@ class TestRun:
     )
     def test_get_metrics_success(self, mock_calc: MagicMock) -> None:
         """Test get_metrics mode.
-
-        :param mock_calc: TODO
         """
         mock_calc.return_value = {"il_risk_score": -0.05}
         result = run(
@@ -1668,8 +1591,6 @@ class TestRun:
     )
     def test_get_metrics_none(self, mock_calc: MagicMock) -> None:
         """Test get_metrics returning None.
-
-        :param mock_calc: TODO
         """
         mock_calc.return_value = None
         result = run(
@@ -1720,8 +1641,6 @@ class TestRun:
     )
     def test_rpc_not_connected(self, mock_conn: MagicMock) -> None:
         """Test when RPC is not connected.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = False
@@ -1742,9 +1661,6 @@ class TestRun:
     )
     def test_successful_search(self, mock_conn: MagicMock, mock_opp: MagicMock) -> None:
         """Test successful opportunity search.
-
-        :param mock_conn: TODO
-        :param mock_opp: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -1767,9 +1683,6 @@ class TestRun:
     )
     def test_search_error(self, mock_conn: MagicMock, mock_opp: MagicMock) -> None:
         """Test search returning error.
-
-        :param mock_conn: TODO
-        :param mock_opp: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -1791,9 +1704,6 @@ class TestRun:
     )
     def test_search_empty(self, mock_conn: MagicMock, mock_opp: MagicMock) -> None:
         """Test search returning empty.
-
-        :param mock_conn: TODO
-        :param mock_opp: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -1829,9 +1739,6 @@ class TestRun:
         self, mock_conn: MagicMock, mock_opp: MagicMock
     ) -> None:
         """Test run with an unsupported chain name that does not map to any chain_id.
-
-        :param mock_conn: TODO
-        :param mock_opp: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -1854,9 +1761,6 @@ class TestRun:
         self, mock_conn: MagicMock, mock_opp: MagicMock
     ) -> None:
         """Test run with a chain whose ID is not in SUGAR_CONTRACT_ADDRESSES.
-
-        :param mock_conn: TODO
-        :param mock_opp: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -1880,8 +1784,6 @@ class TestRun:
     )
     def test_chain_rpc_not_connected(self, mock_conn: MagicMock) -> None:
         """Test run with RPC connection failure for a valid chain.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = False
@@ -1899,8 +1801,6 @@ class TestRun:
     )
     def test_get_metrics_mode(self, mock_calc: MagicMock) -> None:
         """Test run in get_metrics mode with valid position.
-
-        :param mock_calc: TODO
         """
         mock_calc.return_value = {"il_risk_score": 0.5, "sharpe_ratio": 1.0}
         result = run(
@@ -1919,8 +1819,6 @@ class TestRun:
     )
     def test_get_metrics_mode_returns_none(self, mock_calc: MagicMock) -> None:
         """Test run in get_metrics mode when calculate_metrics returns None.
-
-        :param mock_calc: TODO
         """
         mock_calc.return_value = None
         result = run(
@@ -1975,8 +1873,6 @@ class TestGetTickSpacingVelodrome:
     )
     def test_not_connected(self, mock_conn: MagicMock) -> None:
         """Test when web3 is not connected.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = False
@@ -1989,8 +1885,6 @@ class TestGetTickSpacingVelodrome:
     )
     def test_tick_spacing_zero(self, mock_conn: MagicMock) -> None:
         """Test when tick spacing returns 0 (falsy).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -2041,8 +1935,6 @@ class TestGetPoolTokens:
     )
     def test_not_connected(self, mock_conn: MagicMock) -> None:
         """Test when web3 is not connected.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = False
@@ -2055,8 +1947,6 @@ class TestGetPoolTokens:
     )
     def test_empty_token0(self, mock_conn: MagicMock) -> None:
         """Test when token0 is empty/falsy.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -2109,8 +1999,6 @@ class TestGetCurrentPoolPrice:
     )
     def test_not_connected(self, mock_conn: MagicMock) -> None:
         """Test when web3 is not connected.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = False
@@ -2123,8 +2011,6 @@ class TestGetCurrentPoolPrice:
     )
     def test_slot0_none(self, mock_conn: MagicMock) -> None:
         """Test when slot0 returns None.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -2140,8 +2026,6 @@ class TestGetCurrentPoolPrice:
     )
     def test_sqrt_price_zero(self, mock_conn: MagicMock) -> None:
         """Test when sqrt_price_x96 is zero.
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -2170,8 +2054,6 @@ class TestGetCoinIdFromAddress:
     )
     def test_stablecoin_mapping(self, mock_sleep: MagicMock) -> None:
         """Test stablecoin mapping lookup.
-
-        :param mock_sleep: TODO
         """
         result = get_coin_id_from_address(
             "optimism",
@@ -2185,8 +2067,6 @@ class TestGetCoinIdFromAddress:
     )
     def test_stablecoin_mapping_none_value(self, mock_sleep: MagicMock) -> None:
         """Test stablecoin mapping that maps to None.
-
-        :param mock_sleep: TODO
         """
         result = get_coin_id_from_address(
             "optimism",
@@ -2205,9 +2085,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test x402 session API call success.
-
-        :param mock_cg_class: TODO
-        :param mock_sleep: TODO
         """
         mock_session = MagicMock()
         mock_response = MagicMock()
@@ -2233,9 +2110,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test that x402 session GET request passes timeout=30.
-
-        :param mock_cg_class: TODO
-        :param mock_sleep: TODO
         """
         mock_session = MagicMock()
         mock_response = MagicMock()
@@ -2262,9 +2136,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test x402 session API call failure (non-200).
-
-        :param mock_cg_class: TODO
-        :param mock_sleep: TODO
         """
         mock_session = MagicMock()
         mock_response = MagicMock()
@@ -2289,9 +2160,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test x402 session API call exception.
-
-        :param mock_cg_class: TODO
-        :param mock_sleep: TODO
         """
         mock_session = MagicMock()
         mock_session.get.side_effect = Exception("x402 error")
@@ -2327,10 +2195,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API with pro key.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = True
         mock_cg = MagicMock()
@@ -2358,10 +2222,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API with demo key.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
@@ -2386,10 +2246,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API returning None response.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
@@ -2413,10 +2269,6 @@ class TestGetCoinIdFromAddress:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API exception.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
@@ -2443,9 +2295,6 @@ class TestGetHistoricalMarketData:
         self, mock_sleep: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test successful x402 market data retrieval.
-
-        :param mock_cg_class: TODO
-        :param mock_sleep: TODO
         """
         mock_session = MagicMock()
         mock_cg = MagicMock()
@@ -2474,9 +2323,6 @@ class TestGetHistoricalMarketData:
         self, mock_sleep: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test x402 with empty response.
-
-        :param mock_cg_class: TODO
-        :param mock_sleep: TODO
         """
         mock_session = MagicMock()
         mock_cg = MagicMock()
@@ -2500,9 +2346,6 @@ class TestGetHistoricalMarketData:
         self, mock_sleep: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test x402 exception.
-
-        :param mock_cg_class: TODO
-        :param mock_sleep: TODO
         """
         mock_session = MagicMock()
         mock_cg = MagicMock()
@@ -2537,10 +2380,6 @@ class TestGetHistoricalMarketData:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API with pro key success.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = True
         mock_cg = MagicMock()
@@ -2568,10 +2407,6 @@ class TestGetHistoricalMarketData:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API with demo key success.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
@@ -2596,10 +2431,6 @@ class TestGetHistoricalMarketData:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API with empty response.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
@@ -2623,10 +2454,6 @@ class TestGetHistoricalMarketData:
         self, mock_sleep: MagicMock, mock_is_pro: MagicMock, mock_cg_class: MagicMock
     ) -> None:
         """Test regular API exception.
-
-        :param mock_cg_class: TODO
-        :param mock_is_pro: TODO
-        :param mock_sleep: TODO
         """
         mock_is_pro.return_value = False
         mock_cg = MagicMock()
@@ -2682,8 +2509,6 @@ class TestGetPoolTokenHistory:
     )
     def test_missing_coin_id(self, mock_coin_id: MagicMock) -> None:
         """Test when coin ID cannot be resolved.
-
-        :param mock_coin_id: TODO
         """
         mock_coin_id.side_effect = [None, "weth"]
         result = get_pool_token_history(
@@ -2701,9 +2526,6 @@ class TestGetPoolTokenHistory:
         self, mock_coin_id: MagicMock, mock_market_data: MagicMock
     ) -> None:
         """Test when market data is not available.
-
-        :param mock_coin_id: TODO
-        :param mock_market_data: TODO
         """
         mock_coin_id.side_effect = ["usd-coin", "weth"]
         mock_market_data.side_effect = [None, {"prices": [1.0]}]
@@ -2722,9 +2544,6 @@ class TestGetPoolTokenHistory:
         self, mock_coin_id: MagicMock, mock_market_data: MagicMock
     ) -> None:
         """Test when prices are empty.
-
-        :param mock_coin_id: TODO
-        :param mock_market_data: TODO
         """
         mock_coin_id.side_effect = ["usd-coin", "weth"]
         mock_market_data.side_effect = [
@@ -2746,9 +2565,6 @@ class TestGetPoolTokenHistory:
         self, mock_coin_id: MagicMock, mock_market_data: MagicMock
     ) -> None:
         """Test ratio calculation when token0 price is 0 (skipped).
-
-        :param mock_coin_id: TODO
-        :param mock_market_data: TODO
         """
         mock_coin_id.side_effect = ["usd-coin", "weth"]
         mock_market_data.side_effect = [
@@ -2767,8 +2583,6 @@ class TestGetPoolTokenHistory:
     )
     def test_exception_handling(self, mock_coin_id: MagicMock) -> None:
         """Test exception handling.
-
-        :param mock_coin_id: TODO
         """
         mock_coin_id.side_effect = Exception("lookup failed")
         result = get_pool_token_history(
@@ -2786,9 +2600,6 @@ class TestGetPoolTokenHistory:
         self, mock_coin_id: MagicMock, mock_market_data: MagicMock
     ) -> None:
         """Test when price arrays have different lengths.
-
-        :param mock_coin_id: TODO
-        :param mock_market_data: TODO
         """
         mock_coin_id.side_effect = ["usd-coin", "weth"]
         mock_market_data.side_effect = [
@@ -2830,12 +2641,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_optimize: MagicMock,
     ) -> None:
         """Test successful calculation for stable pool.
-
-        :param mock_history: TODO
-        :param mock_optimize: TODO
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 1
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -2876,8 +2681,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
     )
     def test_no_tick_spacing(self, mock_tick_spacing: MagicMock) -> None:
         """Test when tick spacing cannot be retrieved.
-
-        :param mock_tick_spacing: TODO
         """
         mock_tick_spacing.return_value = None
         result = calculate_tick_lower_and_upper_velodrome("optimism", "0xpool", True)
@@ -2893,9 +2696,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         self, mock_tick_spacing: MagicMock, mock_tokens: MagicMock
     ) -> None:
         """Test when pool tokens cannot be retrieved.
-
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = None
@@ -2918,10 +2718,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_price: MagicMock,
     ) -> None:
         """Test when current price cannot be retrieved.
-
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -2949,11 +2745,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_history: MagicMock,
     ) -> None:
         """Test when pool token history cannot be retrieved.
-
-        :param mock_history: TODO
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -2982,11 +2773,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_history: MagicMock,
     ) -> None:
         """Test when ratio_prices is empty.
-
-        :param mock_history: TODO
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -3015,11 +2801,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_history: MagicMock,
     ) -> None:
         """Test when get_pool_token_history raises exception.
-
-        :param mock_history: TODO
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -3052,12 +2833,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_optimize: MagicMock,
     ) -> None:
         """Test when optimize_stablecoin_bands returns empty result.
-
-        :param mock_history: TODO
-        :param mock_optimize: TODO
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -3092,12 +2867,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_optimize: MagicMock,
     ) -> None:
         """Test that equal tick_lower and tick_upper are adjusted by tick_spacing.
-
-        :param mock_history: TODO
-        :param mock_optimize: TODO
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 10
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -3141,12 +2910,6 @@ class TestCalculateTickLowerAndUpperVelodrome:
         mock_optimize: MagicMock,
     ) -> None:
         """Test calculation for non-stable pool (no min_width_pct override).
-
-        :param mock_history: TODO
-        :param mock_optimize: TODO
-        :param mock_price: TODO
-        :param mock_tick_spacing: TODO
-        :param mock_tokens: TODO
         """
         mock_tick_spacing.return_value = 60
         mock_tokens.return_value = ("0xtoken0", "0xtoken1")
@@ -3173,13 +2936,6 @@ class TestFormatVelodromePoolData:
         tvl: Any = "1000",
     ) -> Any:
         """Helper to create a pool dict for testing.
-
-        :param pool_id: TODO
-        :return: TODO
-
-        :param sugar_type: TODO
-        :param token_count: TODO
-        :param tvl: TODO
         """
         return {
             "id": pool_id,
@@ -3200,8 +2956,6 @@ class TestFormatVelodromePoolData:
     )
     def test_basic_format(self, mock_pos_details: MagicMock) -> None:
         """Test basic pool formatting without API key.
-
-        :param mock_pos_details: TODO
         """
         mock_pos_details.return_value = {"apr": 10.0}
         pool = self._make_pool()
@@ -3218,8 +2972,6 @@ class TestFormatVelodromePoolData:
     )
     def test_skip_less_than_two_tokens(self, mock_pos_details: MagicMock) -> None:
         """Test that pools with less than 2 tokens are skipped.
-
-        :param mock_pos_details: TODO
         """
         pool = self._make_pool(token_count=1)
         result = format_velodrome_pool_data([pool], OPTIMISM_CHAIN_ID)
@@ -3232,8 +2984,6 @@ class TestFormatVelodromePoolData:
         self, mock_pos_details: MagicMock
     ) -> None:
         """Test that pool is skipped when calculate_position_details returns None.
-
-        :param mock_pos_details: TODO
         """
         mock_pos_details.return_value = None
         pool = self._make_pool()
@@ -3275,12 +3025,6 @@ class TestFormatVelodromePoolData:
         mock_il: MagicMock,
     ) -> None:
         """Test formatting with API key, full metrics calculation.
-
-        :param mock_coin_id: TODO
-        :param mock_depth: TODO
-        :param mock_il: TODO
-        :param mock_pos_details: TODO
-        :param mock_sharpe: TODO
         """
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.side_effect = ["token0-id", "token1-id"]
@@ -3315,10 +3059,6 @@ class TestFormatVelodromePoolData:
         mock_sharpe: MagicMock,
     ) -> None:
         """Test Sharpe ratio exception sets None.
-
-        :param mock_coin_id: TODO
-        :param mock_pos_details: TODO
-        :param mock_sharpe: TODO
         """
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.return_value = "token-id"
@@ -3349,11 +3089,6 @@ class TestFormatVelodromePoolData:
         mock_depth: MagicMock,
     ) -> None:
         """Test depth score exception sets None.
-
-        :param mock_coin_id: TODO
-        :param mock_depth: TODO
-        :param mock_pos_details: TODO
-        :param mock_sharpe: TODO
         """
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.return_value = "token-id"
@@ -3389,12 +3124,6 @@ class TestFormatVelodromePoolData:
         mock_il: MagicMock,
     ) -> None:
         """Test IL risk score exception sets None.
-
-        :param mock_coin_id: TODO
-        :param mock_depth: TODO
-        :param mock_il: TODO
-        :param mock_pos_details: TODO
-        :param mock_sharpe: TODO
         """
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.side_effect = ["tid0", "tid1"]
@@ -3427,11 +3156,6 @@ class TestFormatVelodromePoolData:
         mock_depth: MagicMock,
     ) -> None:
         """Test when not enough valid token IDs for IL risk score.
-
-        :param mock_coin_id: TODO
-        :param mock_depth: TODO
-        :param mock_pos_details: TODO
-        :param mock_sharpe: TODO
         """
         mock_pos_details.return_value = {"apr": 10.0}
         mock_coin_id.side_effect = [None, None]  # No valid token IDs
@@ -3448,8 +3172,6 @@ class TestFormatVelodromePoolData:
     )
     def test_two_token_pool(self, mock_pos_details: MagicMock) -> None:
         """Test pool with two tokens in inputTokens (minimum after filtering).
-
-        :param mock_pos_details: TODO
         """
         mock_pos_details.return_value = {}
         pool = self._make_pool(token_count=2)
@@ -3467,8 +3189,6 @@ class TestSharpeRatioBranches:
     )
     def test_exception_combining_returns(self, mock_epochs: MagicMock) -> Any:
         """Test exception branch when combining price and fee returns (lines 815-817).
-
-        :param mock_epochs: TODO
         """
         # Need to create epochs data that triggers the exception in combining returns
         mock_epochs.return_value = [
@@ -3507,8 +3227,6 @@ class TestSharpeRatioBranches:
     )
     def test_nan_inf_values_in_returns(self, mock_epochs: MagicMock) -> None:
         """Test NaN and Inf values handling in returns (lines 832-843).
-
-        :param mock_epochs: TODO
         """
         # Create data that produces NaN/Inf returns
         mock_epochs.return_value = [
@@ -3527,8 +3245,6 @@ class TestSharpeRatioBranches:
     )
     def test_zero_std_returns(self, mock_epochs: MagicMock) -> None:
         """Test zero standard deviation returns (lines 857-859).
-
-        :param mock_epochs: TODO
         """
         # All identical values -> zero std
         mock_epochs.return_value = [
@@ -3542,8 +3258,6 @@ class TestSharpeRatioBranches:
     )
     def test_nan_mean_returns(self, mock_epochs: MagicMock) -> None:
         """Test NaN mean returns (lines 861-863).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (1000, 100.0, 50.0, 10.0, 5.0, []),
@@ -3558,8 +3272,6 @@ class TestSharpeRatioBranches:
     )
     def test_inner_sharpe_calculation_exception(self, mock_epochs: MagicMock) -> None:
         """Test inner exception in Sharpe ratio calculation (lines 880-882).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (1000, 100.0, 50.0, 10.0, 5.0, []),
@@ -3581,8 +3293,6 @@ class TestSharpeRatioBranches:
     )
     def test_nan_sharpe_ratio_result(self, mock_epochs: MagicMock) -> None:
         """Test NaN result from sharpe ratio calculation (lines 877-879).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (1000, 100.0, 50.0, 10.0, 5.0, []),
@@ -3608,8 +3318,6 @@ class TestSharpeRatioBranches:
     )
     def test_unknown_chain_name_loop_exhaust(self, mock_epochs: MagicMock) -> None:
         """Test chain name loop exhausts without finding match (lines 776->784, 777->776).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (i, float(100 + i * 10), float(50 + i * 5), 0, 0, []) for i in range(10)
@@ -3627,8 +3335,6 @@ class TestGetEpochsByAddressBranches:
     )
     def test_missing_rewards_sugar_or_rpc(self, mock_conn: MagicMock) -> None:
         """Test when RewardsSugar address or RPC URL is missing (lines 664-665).
-
-        :param mock_conn: TODO
         """
         # Use a chain that doesn't have rewards sugar configured
         result = get_epochs_by_address("0xpool", "UNKNOWNCHAIN", limit=10)
@@ -3639,8 +3345,6 @@ class TestGetEpochsByAddressBranches:
     )
     def test_attribute_error_on_function(self, mock_conn: MagicMock) -> None:
         """Test AttributeError when epochsByAddress function not found (lines 695-696).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -3821,11 +3525,6 @@ class TestGetOpportunitiesForVelodromeBranches:
         mock_format: MagicMock,
     ) -> None:
         """Test top_n=0 skips composite pre-filter (line 2880->2896).
-
-        :param mock_composite: TODO
-        :param mock_filter: TODO
-        :param mock_format: TODO
-        :param mock_pools: TODO
         """
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1", "token_count": 2}]
@@ -3861,11 +3560,6 @@ class TestGetOpportunitiesForVelodromeBranches:
         mock_format: MagicMock,
     ) -> None:
         """Test when composite filter returns empty (line 2890-2892).
-
-        :param mock_composite: TODO
-        :param mock_filter: TODO
-        :param mock_format: TODO
-        :param mock_pools: TODO
         """
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1"}]
@@ -3900,11 +3594,6 @@ class TestGetOpportunitiesForVelodromeBranches:
         mock_format: MagicMock,
     ) -> None:
         """Test when format_velodrome_pool_data returns empty (line 2907-2909).
-
-        :param mock_composite: TODO
-        :param mock_filter: TODO
-        :param mock_format: TODO
-        :param mock_pools: TODO
         """
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1"}]
@@ -3929,8 +3618,6 @@ class TestGetVelodromePoolsViaSugarBranches:
     )
     def test_default_rpc_url(self, mock_conn: MagicMock) -> None:
         """Test default RPC URL is used when none provided (line 1016).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -3948,8 +3635,6 @@ class TestGetVelodromePoolsViaSugarBranches:
     )
     def test_empty_raw_pools_break(self, mock_conn: MagicMock) -> None:
         """Test break when raw_pools is empty (line 1047).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -3968,8 +3653,6 @@ class TestGetVelodromePoolsViaSugarBranches:
     )
     def test_pool_types_and_ticks(self, mock_conn: MagicMock) -> Any:
         """Test pool type/tick combinations (lines 1088-1093).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -3984,13 +3667,6 @@ class TestGetVelodromePoolsViaSugarBranches:
             16=fee,17=bribe,18=factory,19=emissions,20=em_token,21=em_cap,
             22=pool_fee,23=unstaked_fee,24=t0_fees,25=t1_fees,26=locked,
             27=emerging,28=created_at,29=nfpm,30=alm,31=root
-
-            :param lp_addr: TODO
-            :param pool_type: TODO
-            :param tick: TODO
-            :param token0: TODO
-            :param token1: TODO
-            :return: TODO
             """
             return (
                 lp_addr,
@@ -4057,8 +3733,6 @@ class TestGetVelodromePoolsViaSugarBranches:
     )
     def test_batch_exception(self, mock_conn: MagicMock) -> None:
         """Test exception during batch fetch (lines 1104-1107).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -4079,8 +3753,6 @@ class TestGetVelodromePoolsViaSugarBranches:
     )
     def test_skip_none_pool(self, mock_conn: MagicMock) -> None:
         """Test skipping None pool in the second loop (line 1114).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -4234,8 +3906,6 @@ class TestSharpeRatioNaNInfBranches:
     )
     def test_inf_values_in_returns_data(self, mock_epochs: MagicMock) -> None:
         """Test Inf values in returns data triggers cleanup (lines 832-843).
-
-        :param mock_epochs: TODO
         """
         # Create epochs where one has zero liquidity, causing Inf in pct_change
         mock_epochs.return_value = [
@@ -4253,8 +3923,6 @@ class TestSharpeRatioNaNInfBranches:
     )
     def test_nan_mean_return(self, mock_epochs: MagicMock) -> Any:
         """Test NaN mean return triggers return 0 (lines 862-863).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (i, float(100 + i * 10), float(50 + i * 5), 0, 0, []) for i in range(10)
@@ -4279,8 +3947,6 @@ class TestSharpeRatioNaNInfBranches:
     )
     def test_nan_sharpe_result_via_patch(self, mock_epochs: MagicMock) -> Any:
         """Test NaN sharpe result returns 0 (lines 877-879).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (i, float(100 + i * 10), float(50 + i * 5), 0, 0, []) for i in range(10)
@@ -4329,8 +3995,6 @@ class TestSharpeRatioNaNInfBranches:
     )
     def test_inner_calculation_exception(self, mock_epochs: MagicMock) -> Any:
         """Test inner exception in sharpe calculation (lines 880-882).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (i, float(100 + i * 10), float(50 + i * 5), 0, 0, []) for i in range(10)
@@ -4355,8 +4019,6 @@ class TestSharpeRatioNaNInfBranches:
     )
     def test_inf_causes_cleanup_to_one_point(self, mock_epochs: MagicMock) -> None:
         """Test returns when Inf values leave <=1 data point after cleanup.
-
-        :param mock_epochs: TODO
         """
         # Three epochs where the middle one has zero liquidity, producing
         # NaN/Inf values during pct_change that get cleaned up to a single
@@ -4386,8 +4048,6 @@ class TestSharpeRatioNaNInfBranches:
     )
     def test_cleanup_leaves_one_datapoint(self, mock_epochs: MagicMock) -> Any:
         """Force cleanup path to leave <=1 data points via patching (lines 841-843).
-
-        :param mock_epochs: TODO
         """
         mock_epochs.return_value = [
             (i, float(100 + i), float(50 + i), 0, 0, []) for i in range(5)
@@ -4452,9 +4112,6 @@ class TestCalculateTickLowerVelodromeTokenErrors:
         self, mock_tick: MagicMock, mock_tokens: MagicMock
     ) -> None:
         """Test TypeError when unpacking None from get_pool_tokens.
-
-        :param mock_tick: TODO
-        :param mock_tokens: TODO
         """
         mock_tick.return_value = 60
         mock_tokens.return_value = None
@@ -4475,9 +4132,6 @@ class TestCalculateTickLowerVelodromeTokenErrors:
         self, mock_tick: MagicMock, mock_tokens: MagicMock
     ) -> None:
         """Test when token0 is empty (falsy) triggering lines 2275-2276.
-
-        :param mock_tick: TODO
-        :param mock_tokens: TODO
         """
         mock_tick.return_value = 60
         mock_tokens.return_value = ("", "0xtoken1")  # token0 is falsy
@@ -4495,8 +4149,6 @@ class TestGetVelodromePoolsViaSugarMoreBranches:
     )
     def test_multiple_batches_and_offset_increment(self, mock_conn: MagicMock) -> Any:
         """Test multiple batches triggering offset increment (line 1104).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -4554,8 +4206,6 @@ class TestGetVelodromePoolsViaSugarMoreBranches:
     )
     def test_none_pool_in_all_pools_skipped(self, mock_conn: MagicMock) -> None:
         """Test that None entries in all_pools are skipped (line 1114).
-
-        :param mock_conn: TODO
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -4807,10 +4457,6 @@ class TestGetOpportunitiesTopPoolsEmpty:
         self, mock_pools: MagicMock, mock_filter: MagicMock, mock_format: MagicMock
     ) -> None:
         """Test top_pools empty when top_n <= 0 and formatted_pools is empty after format.
-
-        :param mock_filter: TODO
-        :param mock_format: TODO
-        :param mock_pools: TODO
         """
         mock_pools.return_value = [{"id": "pool1"}]
         mock_filter.return_value = [{"id": "pool1"}]
@@ -4867,8 +4513,6 @@ class TestOperatorPrecedenceBug:
         self, mock_pos_details: MagicMock
     ) -> None:
         """Test that coingecko_api_key alone with <2 tokens skips metrics.
-
-        :param mock_pos_details: TODO
         """
         mock_pos_details.return_value = {"apr": 10.0}
         pool = {

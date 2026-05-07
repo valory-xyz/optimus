@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains a wrapper for Balancer Queries contract interface."""
 
 from typing import List
@@ -49,20 +48,7 @@ class BalancerQueriesContract(Contract):
         minimum_bpt: int,
         from_internal_balance: bool,
     ) -> JSONLike:
-        """Query join operation to get expected BPT output - view function, no gas cost.
-
-        :param assets: TODO
-        :param contract_address: TODO
-        :param from_internal_balance: TODO
-        :param join_kind: TODO
-        :param ledger_api: TODO
-        :param max_amounts_in: TODO
-        :param minimum_bpt: TODO
-        :param pool_id: TODO
-        :param recipient: TODO
-        :param sender: TODO
-        :return: TODO
-        """
+        """Query join operation to get expected BPT output - view function, no gas cost."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
 
         encoded_user_data = encode(
@@ -100,20 +86,7 @@ class BalancerQueriesContract(Contract):
         bpt_amount_in: int,
         to_internal_balance: bool,
     ) -> JSONLike:
-        """Query exit operation to get expected token amounts - view function, no gas cost.
-
-        :param assets: TODO
-        :param bpt_amount_in: TODO
-        :param contract_address: TODO
-        :param exit_kind: TODO
-        :param ledger_api: TODO
-        :param min_amounts_out: TODO
-        :param pool_id: TODO
-        :param recipient: TODO
-        :param sender: TODO
-        :param to_internal_balance: TODO
-        :return: TODO
-        """
+        """Query exit operation to get expected token amounts - view function, no gas cost."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
 
         encoded_user_data = encode(["uint256", "uint256"], [exit_kind, bpt_amount_in])

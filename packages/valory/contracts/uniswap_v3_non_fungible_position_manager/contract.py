@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for UniswapV3 Pool contract interface."""
 
 from aea.common import JSONLike
@@ -49,23 +48,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         recipient: str,
         deadline: int,
     ) -> JSONLike:
-        """Prepare mint position transaction
-
-        :param amount0_desired: TODO
-        :param amount0_min: TODO
-        :param amount1_desired: TODO
-        :param amount1_min: TODO
-        :param contract_address: TODO
-        :param deadline: TODO
-        :param fee: TODO
-        :param ledger_api: TODO
-        :param recipient: TODO
-        :param tick_lower: TODO
-        :param tick_upper: TODO
-        :param token0: TODO
-        :param token1: TODO
-        :return: TODO
-        """
+        """Prepare mint position transaction"""
         mint_params = (
             token0,
             token1,
@@ -96,17 +79,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         amount1_min: int,
         deadline: int,
     ) -> JSONLike:
-        """Prepare decrease liquidity transaction
-
-        :param amount0_min: TODO
-        :param amount1_min: TODO
-        :param contract_address: TODO
-        :param deadline: TODO
-        :param ledger_api: TODO
-        :param liquidity: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Prepare decrease liquidity transaction"""
         decrease_liquidity_params = (
             token_id,
             liquidity,
@@ -129,13 +102,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Prepare burn position transaction
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Prepare burn position transaction"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_hash = contract_instance.encode_abi("burn", args=(token_id,))
         return dict(tx_hash=bytes.fromhex(tx_hash[2:]))
@@ -150,16 +117,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         amount0_max: int,
         amount1_max: int,
     ) -> JSONLike:
-        """Prepare collect transaction
-
-        :param amount0_max: TODO
-        :param amount1_max: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param recipient: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Prepare collect transaction"""
         collect_params = (token_id, recipient, amount0_max, amount1_max)
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
@@ -173,12 +131,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the pool tokens
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the pool tokens"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
@@ -191,13 +144,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_address: str,
         owner: str,
     ) -> JSONLike:
-        """Get the number of NFT positions owned by an address
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Get the number of NFT positions owned by an address"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
         return dict(balance=balance)
@@ -209,13 +156,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Get the owner of a specific NFT position
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Get the owner of a specific NFT position"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         owner = contract_instance.functions.ownerOf(token_id).call()
         return dict(owner=owner)
@@ -227,13 +168,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Get the position info
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Get the position info"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         position = contract_instance.functions.positions(token_id).call()
         if not position:

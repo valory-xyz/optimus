@@ -17,8 +17,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
-
 """Uniswap pools search module."""
 
 import logging
@@ -44,10 +42,7 @@ _logger = setup_logger(__name__)
 
 
 def _reset_x402_adapter(session: Any) -> None:
-    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse.
-
-    :param session: TODO
-    """
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
     if session is None:
         return
     for adapter in session.adapters.values():
@@ -96,15 +91,7 @@ def get_cached_price(
     ttl: int,
     prefix: str = "il_range",
 ) -> Optional[Any]:
-    """Get cached CoinGecko price data if it exists and is not expired.
-
-    :param cache: TODO
-    :param prefix: TODO
-    :param time_period: TODO
-    :param token_id: TODO
-    :param ttl: TODO
-    :return: TODO
-    """
+    """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
     entry = cache.get(cache_key)
     if entry is None:
@@ -123,14 +110,7 @@ def set_cached_price(
     cache: Dict[str, Any],
     prefix: str = "il_range",
 ) -> None:
-    """Cache CoinGecko price data with current timestamp.
-
-    :param cache: TODO
-    :param data: TODO
-    :param prefix: TODO
-    :param time_period: TODO
-    :param token_id: TODO
-    """
+    """Cache CoinGecko price data with current timestamp."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
     cache[cache_key] = {
         "data": data,
@@ -139,21 +119,14 @@ def set_cached_price(
 
 
 def get_errors() -> Any:
-    """Get thread-local error list.
-
-    :return: TODO
-    """
+    """Get thread-local error list."""
     if not hasattr(_thread_local, "errors"):
         _thread_local.errors = []
     return _thread_local.errors
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    """Check missing fields.
-
-    :param kwargs: TODO
-    :return: TODO
-    """
+    """Check missing fields."""
     missing = [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
     if missing:
         logger.warning(f"Missing required fields: {missing}")
@@ -163,25 +136,14 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
-    """Remove irrelevant fields.
-
-    :param kwargs: TODO
-    :param required_fields: TODO
-    :return: TODO
-    """
+    """Remove irrelevant fields."""
     return {key: value for key, value in kwargs.items() if key in required_fields}
 
 
 def get_coin_id_from_symbol(
     coin_id_mapping: Any, symbol: Any, chain_name: Any
 ) -> Optional[str]:
-    """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name.
-
-    :param chain_name: TODO
-    :param coin_id_mapping: TODO
-    :param symbol: TODO
-    :return: TODO
-    """
+    """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
     # Check if coin_list is valid
     symbol = symbol.lower()
     if symbol in coin_id_mapping.get(chain_name, {}):
@@ -193,13 +155,7 @@ def get_coin_id_from_symbol(
 def run_query(
     query: Any, graphql_endpoint: Any, variables: Any = None
 ) -> Dict[str, Any]:
-    """Run query.
-
-    :param graphql_endpoint: TODO
-    :param query: TODO
-    :param variables: TODO
-    :return: TODO
-    """
+    """Run query."""
     logger.info(f"Running GraphQL query to endpoint: {graphql_endpoint}")
     headers = {"Content-Type": "application/json"}
     payload = {"query": query, "variables": variables or {}}
@@ -228,13 +184,7 @@ def run_query(
 
 
 def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
-    """Calculate APR: (Daily Volume / TVL) × Fee Rate × 365 × 100
-
-    :param daily_volume: TODO
-    :param fee_rate: TODO
-    :param tvl: TODO
-    :return: TODO
-    """
+    """Calculate APR: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
     return (
         0
         if tvl == 0
@@ -255,11 +205,6 @@ def standardize_metrics(
 
     Returns:
         List of pools with added standardized metrics and composite scores
-
-    :param apr_weight: TODO
-    :param pools: TODO
-    :param tvl_weight: TODO
-    :return: TODO
     """
     if not pools:
         return pools
@@ -330,14 +275,6 @@ def apply_composite_pre_filter(
 
     Returns:
         List of filtered and ranked pools
-
-    :param apr_weight: TODO
-    :param min_tvl_threshold: TODO
-    :param pools: TODO
-    :param top_n: TODO
-    :param tvl_weight: TODO
-    :param use_composite_filter: TODO
-    :return: TODO
     """
     if not pools or not use_composite_filter:
         return pools[:top_n] if pools else []
@@ -373,14 +310,7 @@ def apply_composite_pre_filter(
 def get_filtered_pools_for_uniswap(
     pools: Any, current_positions: Any, whitelisted_assets: Any, **kwargs: Any
 ) -> List[Dict[str, Any]]:
-    """Get filtered pools for uniswap.
-
-    :param **kwargs: TODO
-    :param current_positions: TODO
-    :param pools: TODO
-    :param whitelisted_assets: TODO
-    :return: TODO
-    """
+    """Get filtered pools for uniswap."""
     logger.info(f"Filtering Uniswap pools - Total pools: {len(pools)}")
     logger.info(f"Current positions to exclude: {current_positions}")
 
@@ -453,12 +383,7 @@ def get_filtered_pools_for_uniswap(
 def fetch_graphql_data(
     chains: Any, graphql_endpoints: Any
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-    """Fetch graphql data.
-
-    :param chains: TODO
-    :param graphql_endpoints: TODO
-    :return: TODO
-    """
+    """Fetch graphql data."""
     logger.info(f"Fetching GraphQL data for chains: {chains}")
     graphql_query = """
     {
@@ -516,13 +441,7 @@ def fetch_graphql_data(
 def get_uniswap_pool_sharpe_ratio(
     pool_address: Any, graphql_endpoint: Any, days_back: Any = 365
 ) -> float:
-    """Get uniswap pool sharpe ratio.
-
-    :param days_back: TODO
-    :param graphql_endpoint: TODO
-    :param pool_address: TODO
-    :return: TODO
-    """
+    """Get uniswap pool sharpe ratio."""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days_back)
     start_timestamp = int(start_date.timestamp())
@@ -569,22 +488,13 @@ def get_uniswap_pool_sharpe_ratio(
 
 
 def calculate_il_impact(P0: Any, P1: Any) -> Any:
-    """Calculate il impact.
-
-    :param P0: TODO
-    :param P1: TODO
-    :return: TODO
-    """
+    """Calculate il impact."""
     # Impermanent Loss impact calculation
     return 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
 
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:
-    """Check if the provided CoinGecko API key is a pro key.
-
-    :param coingecko_api_key: TODO
-    :return: TODO
-    """
+    """Check if the provided CoinGecko API key is a pro key."""
     # Try using the key as a pro API key
     cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
     try:
@@ -609,18 +519,7 @@ def calculate_il_risk_score(
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
 ) -> Optional[float]:
-    """Calculate il risk score.
-
-    :param coingecko_api_key: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param time_period: TODO
-    :param token_0: TODO
-    :param token_1: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Calculate il risk score."""
     if price_cache is None:
         price_cache = {}
     to_timestamp = int(datetime.now().timestamp())
@@ -700,12 +599,7 @@ def calculate_il_risk_score(
 
 
 def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]:
-    """Fetch pool data.
-
-    :param SUBGRAPH_URL: TODO
-    :param pool_id: TODO
-    :return: TODO
-    """
+    """Fetch pool data."""
     query = {"query": f"""
         {{
           pool(id: "{pool_id.lower()}") {{
@@ -743,11 +637,7 @@ def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]
 
 
 def calculate_metrics_liquidity_risk(pool_data: Dict[str, Any]) -> Tuple[float, float]:
-    """Calculate metrics liquidity risk.
-
-    :param pool_data: TODO
-    :return: TODO
-    """
+    """Calculate metrics liquidity risk."""
     try:
         tvl = float(pool_data.get("totalValueLockedUSD", 0))
         tvl_token0 = float(pool_data.get("totalValueLockedToken0", 0))
@@ -769,12 +659,7 @@ def calculate_metrics_liquidity_risk(pool_data: Dict[str, Any]) -> Tuple[float, 
 
 
 def assess_pool_liquidity(pool_id: str, SUBGRAPH_URL: str) -> Tuple[float, float]:
-    """Assess pool liquidity.
-
-    :param SUBGRAPH_URL: TODO
-    :param pool_id: TODO
-    :return: TODO
-    """
+    """Assess pool liquidity."""
     pool_data = fetch_pool_data(pool_id, SUBGRAPH_URL)
     if pool_data is None:
         return float("nan"), float("nan")
@@ -782,11 +667,7 @@ def assess_pool_liquidity(pool_id: str, SUBGRAPH_URL: str) -> Tuple[float, float
 
 
 def format_pool_data(pool: Any) -> Dict[str, Any]:
-    """Format pool data.
-
-    :param pool: TODO
-    :return: TODO
-    """
+    """Format pool data."""
     return {
         "dex_type": UNISWAP,
         "chain": pool["chain"].lower(),
@@ -817,21 +698,7 @@ def get_opportunities_for_uniswap(
     price_cache_ttl: int = 1800,
     **kwargs: Any,
 ) -> List[Dict[str, Any]]:
-    """Get opportunities for uniswap.
-
-    :param **kwargs: TODO
-    :param chains: TODO
-    :param coin_id_mapping: TODO
-    :param coingecko_api_key: TODO
-    :param current_positions: TODO
-    :param graphql_endpoints: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param whitelisted_assets: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Get opportunities for uniswap."""
     logger.info(f"Getting Uniswap opportunities for chains: {chains}")
     logger.info(f"Current positions to exclude: {current_positions}")
 
@@ -932,19 +799,7 @@ def calculate_metrics(
     price_cache_ttl: int = 1800,
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
-    """Calculate metrics.
-
-    :param **kwargs: TODO
-    :param coin_id_mapping: TODO
-    :param coingecko_api_key: TODO
-    :param graphql_endpoints: TODO
-    :param position: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Calculate metrics."""
     token_0_id = get_coin_id_from_symbol(
         coin_id_mapping, position["token0_symbol"], position["chain"]
     )
@@ -981,12 +836,7 @@ def calculate_metrics(
 
 
 def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str, List[str]]]:
-    """Run.
-
-    :param **kwargs: TODO
-    :param *_args: TODO
-    :return: TODO
-    """
+    """Run."""
     logger.info("Starting Uniswap pools search strategy execution")
     logger.info(f"Received kwargs: {list(kwargs.keys())}")
 

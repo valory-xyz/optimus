@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Velodrome Pool contract interface."""
 
 from aea.common import JSONLike
@@ -39,13 +38,7 @@ class VelodromePoolContract(Contract):
         contract_address: str,
         account: str,
     ) -> JSONLike:
-        """Get the balance of the given account.
-
-        :param account: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.balanceOf(account).call()
         return dict(balance=data)
@@ -58,14 +51,7 @@ class VelodromePoolContract(Contract):
         spender: str,
         amount: int,
     ) -> JSONLike:
-        """Build an ERC20 approval.
-
-        :param amount: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param spender: TODO
-        :return: TODO
-        """
+        """Build an ERC20 approval."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         checksumed_spender = ledger_api.api.to_checksum_address(spender)
         data = contract_instance.encode_abi(
@@ -79,12 +65,7 @@ class VelodromePoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the current reserves of token0 and token1.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the current reserves of token0 and token1."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         reserve0 = contract_instance.functions.reserve0().call()
         reserve1 = contract_instance.functions.reserve1().call()

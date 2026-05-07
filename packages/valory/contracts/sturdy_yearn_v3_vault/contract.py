@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Sturdy's YearnV3Vault contract interface."""
 
 import logging
@@ -45,14 +44,7 @@ class YearnV3VaultContract(Contract):
         assets: int,
         receiver: str,
     ) -> JSONLike:
-        """Prepare a deposit transaction.
-
-        :param assets: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param receiver: TODO
-        :return: TODO
-        """
+        """Prepare a deposit transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi("deposit", args=(assets, receiver))
         return {"tx_hash": bytes.fromhex(data[2:])}
@@ -66,15 +58,7 @@ class YearnV3VaultContract(Contract):
         receiver: str,
         owner: str,
     ) -> JSONLike:
-        """Prepare a withdraw transaction.
-
-        :param assets: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :param receiver: TODO
-        :return: TODO
-        """
+        """Prepare a withdraw transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi("withdraw", args=(assets, receiver, owner))
         return {"tx_hash": bytes.fromhex(data[2:])}
@@ -88,15 +72,7 @@ class YearnV3VaultContract(Contract):
         receiver: str,
         owner: str,
     ) -> JSONLike:
-        """Prepare a redeem transaction.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :param receiver: TODO
-        :param shares: TODO
-        :return: TODO
-        """
+        """Prepare a redeem transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi("redeem", args=(shares, receiver, owner))
         return {"tx_hash": bytes.fromhex(data[2:])}
@@ -108,13 +84,7 @@ class YearnV3VaultContract(Contract):
         contract_address: str,
         owner: str,
     ) -> JSONLike:
-        """Get the maximum amount of shares that can be redeemed by the owner.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Get the maximum amount of shares that can be redeemed by the owner."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         max_redeem_amount = contract_instance.functions.maxRedeem(owner).call()
         return {"amount": max_redeem_amount}
@@ -126,13 +96,7 @@ class YearnV3VaultContract(Contract):
         contract_address: str,
         owner: str,
     ) -> JSONLike:
-        """Get the maximum amount that can be withdrawn by the owner.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Get the maximum amount that can be withdrawn by the owner."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         max_withdraw_amount = contract_instance.functions.maxWithdraw(owner).call()
         return {"amount": max_withdraw_amount}
@@ -144,13 +108,7 @@ class YearnV3VaultContract(Contract):
         contract_address: str,
         owner: str,
     ) -> JSONLike:
-        """Get the balance of a user in the vault.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Get the balance of a user in the vault."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
         return {"amount": balance}
@@ -161,12 +119,7 @@ class YearnV3VaultContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the name of the aggregator
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the name of the aggregator"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         name = contract_instance.functions.name().call()
         return {"name": name}
@@ -177,12 +130,7 @@ class YearnV3VaultContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the total supply of the vault.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the total supply of the vault."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         total_supply = contract_instance.functions.totalSupply().call()
         return {"total_supply": total_supply}
@@ -193,12 +141,7 @@ class YearnV3VaultContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the total assets of the vault.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the total assets of the vault."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         total_assets = contract_instance.functions.totalAssets().call()
         return {"total_assets": total_assets}
@@ -209,12 +152,7 @@ class YearnV3VaultContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the number of decimals used by the vault.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the number of decimals used by the vault."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         decimals = contract_instance.functions.decimals().call()
         return {"decimals": decimals}

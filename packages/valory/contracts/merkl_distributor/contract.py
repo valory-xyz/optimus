@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for distributor contract interface."""
 
 from aea.common import JSONLike
@@ -42,16 +41,7 @@ class DistributorContract(Contract):
         amounts: list,
         proofs: list[list[str]],
     ) -> JSONLike:
-        """Prepare a claim rewards transaction.
-
-        :param amounts: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param proofs: TODO
-        :param tokens: TODO
-        :param users: TODO
-        :return: TODO
-        """
+        """Prepare a claim rewards transaction."""
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
         # Convert proofs from hex strings to bytes32

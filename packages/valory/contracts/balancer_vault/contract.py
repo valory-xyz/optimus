@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for vault contract interface."""
 
 import logging
@@ -45,13 +44,7 @@ class VaultContract(Contract):
         contract_address: str,
         pool_id: str,
     ) -> JSONLike:
-        """Get the pool tokens for poolId.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param pool_id: TODO
-        :return: TODO
-        """
+        """Get the pool tokens for poolId."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         pool_id_bytes = bytes.fromhex(pool_id[2:])
         data = contract_instance.functions.getPoolTokens(pool_id_bytes).call()
@@ -71,20 +64,7 @@ class VaultContract(Contract):
         minimum_bpt: int,
         from_internal_balance: bool = False,
     ) -> JSONLike:
-        """Prepare a join pool transaction.
-
-        :param assets: TODO
-        :param contract_address: TODO
-        :param from_internal_balance: TODO
-        :param join_kind: TODO
-        :param ledger_api: TODO
-        :param max_amounts_in: TODO
-        :param minimum_bpt: TODO
-        :param pool_id: TODO
-        :param recipient: TODO
-        :param sender: TODO
-        :return: TODO
-        """
+        """Prepare a join pool transaction."""
 
         encoded_user_data = encode(
             ["uint256", "uint256[]", "uint256"],
@@ -119,20 +99,7 @@ class VaultContract(Contract):
         bpt_amount_in: int,
         to_internal_balance: bool = False,
     ) -> JSONLike:
-        """Prepare a exit pool transaction.
-
-        :param assets: TODO
-        :param bpt_amount_in: TODO
-        :param contract_address: TODO
-        :param exit_kind: TODO
-        :param ledger_api: TODO
-        :param min_amounts_out: TODO
-        :param pool_id: TODO
-        :param recipient: TODO
-        :param sender: TODO
-        :param to_internal_balance: TODO
-        :return: TODO
-        """
+        """Prepare a exit pool transaction."""
 
         encoded_user_data = encode(["uint256", "uint256"], [exit_kind, bpt_amount_in])
 
@@ -159,15 +126,7 @@ class VaultContract(Contract):
         data: str,
         gas_limit: int,
     ) -> JSONLike:
-        """Simulate the transaction.
-
-        :param contract_address: TODO
-        :param data: TODO
-        :param gas_limit: TODO
-        :param ledger_api: TODO
-        :param sender_address: TODO
-        :return: TODO
-        """
+        """Simulate the transaction."""
         try:
             ledger_api.api.eth.call(
                 {

@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Velodrome Gauge contract interface."""
 
 import logging
@@ -44,14 +43,7 @@ class VelodromeGaugeContract(Contract):
         method_name: str,
         args: tuple,
     ) -> JSONLike:
-        """Helper to build transaction bytes.
-
-        :param args: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param method_name: TODO
-        :return: TODO
-        """
+        """Helper to build transaction bytes."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(method_name, args=args)
         _logger.debug(f"Encoded {method_name} call with args: {args}")
@@ -64,13 +56,7 @@ class VelodromeGaugeContract(Contract):
         contract_address: str,
         amount: int,
     ) -> JSONLike:
-        """Prepare encoded tx for depositing LP tokens to gauge.
-
-        :param amount: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for depositing LP tokens to gauge."""
         _logger.debug(f"Preparing deposit transaction for amount: {amount}")
 
         if amount <= 0:
@@ -92,13 +78,7 @@ class VelodromeGaugeContract(Contract):
         contract_address: str,
         amount: int,
     ) -> JSONLike:
-        """Prepare encoded tx for withdrawing LP tokens from gauge.
-
-        :param amount: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for withdrawing LP tokens from gauge."""
         _logger.debug(f"Preparing withdraw transaction for amount: {amount}")
 
         if amount <= 0:
@@ -120,13 +100,7 @@ class VelodromeGaugeContract(Contract):
         contract_address: str,
         account: str,
     ) -> JSONLike:
-        """Prepare encoded tx for claiming rewards.
-
-        :param account: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for claiming rewards."""
         _logger.debug(f"Preparing getReward transaction for account: {account}")
 
         checksumed_account = ledger_api.api.to_checksum_address(account)
@@ -145,13 +119,7 @@ class VelodromeGaugeContract(Contract):
         contract_address: str,
         account: str,
     ) -> JSONLike:
-        """Get the amount of rewards earned by an account.
-
-        :param account: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the amount of rewards earned by an account."""
         _logger.debug(f"Getting earned rewards for account: {account}")
 
         checksumed_account = ledger_api.api.to_checksum_address(account)
@@ -167,13 +135,7 @@ class VelodromeGaugeContract(Contract):
         contract_address: str,
         account: str,
     ) -> JSONLike:
-        """Get the staked balance of an account in the gauge.
-
-        :param account: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the staked balance of an account in the gauge."""
         _logger.debug(f"Getting staked balance for account: {account}")
 
         checksumed_account = ledger_api.api.to_checksum_address(account)
@@ -188,12 +150,7 @@ class VelodromeGaugeContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the total supply of staked tokens in the gauge.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the total supply of staked tokens in the gauge."""
         _logger.debug("Getting total supply of staked tokens")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)

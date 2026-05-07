@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Weighted Pool contract interface."""
 
 from aea.common import JSONLike
@@ -39,13 +38,7 @@ class WeightedPoolContract(Contract):
         contract_address: str,
         account: str,
     ) -> JSONLike:
-        """Get the balance of the given account.
-
-        :param account: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.balanceOf(account).call()
         return dict(balance=data)
@@ -56,12 +49,7 @@ class WeightedPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the name of the pool.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the name of the pool."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         name = contract_instance.functions.name().call()
         return dict(name=name)
@@ -72,12 +60,7 @@ class WeightedPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get pool id
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get pool id"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.getPoolId().call()
         return dict(pool_id="0x" + data.hex())
@@ -88,12 +71,7 @@ class WeightedPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get vault address
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get vault address"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.getVault().call()
         return dict(vault=data)
@@ -104,12 +82,7 @@ class WeightedPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the total supply of BPT tokens.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the total supply of BPT tokens."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         total_supply = contract_instance.functions.totalSupply().call()
         return dict(data=total_supply)

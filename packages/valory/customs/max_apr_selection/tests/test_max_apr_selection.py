@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """Tests for max_apr_selection custom component."""
 
 import math
@@ -265,16 +264,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         dex_type: Any = "UniswapV3",
         pool_address: Any = "0xpool",
     ) -> Any:
-        """Create a test opportunity.
-
-        :param apr: TODO
-        :param depth: TODO
-        :param dex_type: TODO
-        :param il_risk: TODO
-        :param pool_address: TODO
-        :param sharpe: TODO
-        :return: TODO
-        """
+        """Create a test opportunity."""
         return {
             "sharpe_ratio": sharpe,
             "depth_score": depth,
@@ -501,10 +491,7 @@ class TestRun:
         "packages.valory.customs.max_apr_selection.max_apr_selection.apply_risk_thresholds_and_select_optimal_strategy"
     )
     def test_run_delegates_correctly(self, mock_fn: MagicMock) -> None:
-        """Test that run delegates to apply_risk_thresholds_and_select_optimal_strategy.
-
-        :param mock_fn: TODO
-        """
+        """Test that run delegates to apply_risk_thresholds_and_select_optimal_strategy."""
         mock_fn.return_value = {
             "optimal_strategies": [],
             "position_to_exit": {},
@@ -524,10 +511,7 @@ class TestRun:
         "packages.valory.customs.max_apr_selection.max_apr_selection.apply_risk_thresholds_and_select_optimal_strategy"
     )
     def test_run_strips_irrelevant_kwargs(self, mock_fn: MagicMock) -> None:
-        """Test that run strips extra kwargs.
-
-        :param mock_fn: TODO
-        """
+        """Test that run strips extra kwargs."""
         mock_fn.return_value = {
             "optimal_strategies": [],
             "position_to_exit": {},
@@ -568,16 +552,7 @@ class TestBranchCoverage:
         dex_type: Any = "UniswapV3",
         pool_address: Any = "0xpool",
     ) -> Any:
-        """Create a test opportunity.
-
-        :param apr: TODO
-        :param depth: TODO
-        :param dex_type: TODO
-        :param il_risk: TODO
-        :param pool_address: TODO
-        :param sharpe: TODO
-        :return: TODO
-        """
+        """Create a test opportunity."""
         return {
             "sharpe_ratio": sharpe,
             "depth_score": depth,

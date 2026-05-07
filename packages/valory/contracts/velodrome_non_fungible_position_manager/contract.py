@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """Wrapper for Velodrome CL Pool Manager contract interface."""
 
 from aea.common import JSONLike
@@ -64,24 +63,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         deadline: int,
         sqrt_price_x96: int,
     ) -> JSONLike:
-        """Prepare encoded tx for mint.
-
-        :param amount0_desired: TODO
-        :param amount0_min: TODO
-        :param amount1_desired: TODO
-        :param amount1_min: TODO
-        :param contract_address: TODO
-        :param deadline: TODO
-        :param ledger_api: TODO
-        :param recipient: TODO
-        :param sqrt_price_x96: TODO
-        :param tick_lower: TODO
-        :param tick_spacing: TODO
-        :param tick_upper: TODO
-        :param token0: TODO
-        :param token1: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for mint."""
         params = (
             token0,
             token1,
@@ -114,17 +96,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         amount1_min: int,
         deadline: int,
     ) -> JSONLike:
-        """Prepare encoded tx for decreaseLiquidity.
-
-        :param amount0_min: TODO
-        :param amount1_min: TODO
-        :param contract_address: TODO
-        :param deadline: TODO
-        :param ledger_api: TODO
-        :param liquidity: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for decreaseLiquidity."""
         params = (
             token_id,
             liquidity,
@@ -146,13 +118,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Prepare encoded tx for burn.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for burn."""
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -170,16 +136,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         amount0_max: int,
         amount1_max: int,
     ) -> JSONLike:
-        """Prepare encoded tx for collect.
-
-        :param amount0_max: TODO
-        :param amount1_max: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param recipient: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for collect."""
         params = (
             token_id,
             recipient,
@@ -200,13 +157,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Get tokens information from a position.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Get tokens information from a position."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.positions(token_id).call()
         return dict(
@@ -225,13 +176,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         owner: str,
     ) -> JSONLike:
-        """Get the number of NFT positions owned by an address
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Get the number of NFT positions owned by an address"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
         return dict(balance=balance)
@@ -243,13 +188,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Get the owner of a specific NFT position
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Get the owner of a specific NFT position"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         owner = contract_instance.functions.ownerOf(token_id).call()
         return dict(owner=owner)
@@ -261,13 +200,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Get the position info
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Get the position info"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         position = contract_instance.functions.positions(token_id).call()
         if not position:
@@ -297,14 +230,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         to: str,
         token_id: int,
     ) -> JSONLike:
-        """Prepare encoded tx for approving a specific NFT token.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param to: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for approving a specific NFT token."""
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -320,14 +246,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         operator: str,
         approved: bool,
     ) -> JSONLike:
-        """Prepare encoded tx for setting approval for all NFTs.
-
-        :param approved: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param operator: TODO
-        :return: TODO
-        """
+        """Prepare encoded tx for setting approval for all NFTs."""
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -343,14 +262,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         owner: str,
         operator: str,
     ) -> JSONLike:
-        """Check if operator is approved for all NFTs of owner.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param operator: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Check if operator is approved for all NFTs of owner."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         is_approved = contract_instance.functions.isApprovedForAll(
             owner, operator
@@ -364,13 +276,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Get the approved address for a specific NFT token.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param token_id: TODO
-        :return: TODO
-        """
+        """Get the approved address for a specific NFT token."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         approved = contract_instance.functions.getApproved(token_id).call()
         return dict(approved=approved)
@@ -383,14 +289,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         owner: str,
         index: int,
     ) -> JSONLike:
-        """Get token ID owned by owner at a given index.
-
-        :param contract_address: TODO
-        :param index: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Get token ID owned by owner at a given index."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token_id = contract_instance.functions.tokenOfOwnerByIndex(owner, index).call()
         return dict(token_id=token_id)
@@ -402,13 +301,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         owner: str,
     ) -> JSONLike:
-        """Get all token IDs owned by an address.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param owner: TODO
-        :return: TODO
-        """
+        """Get all token IDs owned by an address."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
 

@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains a wrapper for Velodrome Router contract interface."""
 
 from aea.common import JSONLike
@@ -41,14 +40,7 @@ class VelodromeRouterContract(Contract):
         method_name: str,
         args: tuple,
     ) -> JSONLike:
-        """Return the ABI encoded tx bytes for a contract method call.
-
-        :param args: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param method_name: TODO
-        :return: TODO
-        """
+        """Return the ABI encoded tx bytes for a contract method call."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(method_name, args=args)
         return dict(tx_hash=bytes.fromhex(data[2:]))
@@ -69,21 +61,7 @@ class VelodromeRouterContract(Contract):
         to: str,
         deadline: int,
     ) -> JSONLike:
-        """Prepare encoded data for addLiquidity.
-
-        :param amount_a_desired: TODO
-        :param amount_a_min: TODO
-        :param amount_b_desired: TODO
-        :param amount_b_min: TODO
-        :param contract_address: TODO
-        :param deadline: TODO
-        :param ledger_api: TODO
-        :param stable: TODO
-        :param to: TODO
-        :param token_a: TODO
-        :param token_b: TODO
-        :return: TODO
-        """
+        """Prepare encoded data for addLiquidity."""
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -115,20 +93,7 @@ class VelodromeRouterContract(Contract):
         to: str,
         deadline: int,
     ) -> JSONLike:
-        """Prepare encoded data for removeLiquidity.
-
-        :param amount_a_min: TODO
-        :param amount_b_min: TODO
-        :param contract_address: TODO
-        :param deadline: TODO
-        :param ledger_api: TODO
-        :param liquidity: TODO
-        :param stable: TODO
-        :param to: TODO
-        :param token_a: TODO
-        :param token_b: TODO
-        :return: TODO
-        """
+        """Prepare encoded data for removeLiquidity."""
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -157,18 +122,7 @@ class VelodromeRouterContract(Contract):
         amount_a_desired: int,
         amount_b_desired: int,
     ) -> JSONLike:
-        """Quote expected amounts for addLiquidity operation.
-
-        :param amount_a_desired: TODO
-        :param amount_b_desired: TODO
-        :param contract_address: TODO
-        :param factory: TODO
-        :param ledger_api: TODO
-        :param stable: TODO
-        :param token_a: TODO
-        :param token_b: TODO
-        :return: TODO
-        """
+        """Quote expected amounts for addLiquidity operation."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.quoteAddLiquidity(
             token_a,
@@ -197,17 +151,7 @@ class VelodromeRouterContract(Contract):
         factory: str,
         liquidity: int,
     ) -> JSONLike:
-        """Quote expected amounts for removeLiquidity operation.
-
-        :param contract_address: TODO
-        :param factory: TODO
-        :param ledger_api: TODO
-        :param liquidity: TODO
-        :param stable: TODO
-        :param token_a: TODO
-        :param token_b: TODO
-        :return: TODO
-        """
+        """Quote expected amounts for removeLiquidity operation."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.quoteRemoveLiquidity(
             token_a,
@@ -229,17 +173,7 @@ class VelodromeRouterContract(Contract):
         amount_a_desired: int,
         amount_b_desired: int,
     ) -> JSONLike:
-        """Quote expected amounts for addLiquidity operation (Mode - no factory param).
-
-        :param amount_a_desired: TODO
-        :param amount_b_desired: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param stable: TODO
-        :param token_a: TODO
-        :param token_b: TODO
-        :return: TODO
-        """
+        """Quote expected amounts for addLiquidity operation (Mode - no factory param)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.quoteAddLiquidity(
             token_a,
@@ -266,16 +200,7 @@ class VelodromeRouterContract(Contract):
         stable: bool,
         liquidity: int,
     ) -> JSONLike:
-        """Quote expected amounts for removeLiquidity operation (Mode - no factory param).
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param liquidity: TODO
-        :param stable: TODO
-        :param token_a: TODO
-        :param token_b: TODO
-        :return: TODO
-        """
+        """Quote expected amounts for removeLiquidity operation (Mode - no factory param)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.quoteRemoveLiquidity(
             token_a,
@@ -291,12 +216,7 @@ class VelodromeRouterContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Read the factory address (Mode-style routers use a `factory` method).
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Read the factory address (Mode-style routers use a `factory` method)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.factory().call()
         return {"factory": result}
@@ -307,12 +227,7 @@ class VelodromeRouterContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Read the factory address (Optimism-style routers use `defaultFactory`).
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Read the factory address (Optimism-style routers use `defaultFactory`)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.defaultFactory().call()
         return {"factory": result}

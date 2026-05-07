@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains the class to interact with the Velodrome Sugar contract."""
 
 from aea.common import JSONLike
@@ -39,15 +38,7 @@ class VelodromeSugarContract(Contract):
         offset: int,
         account: str,
     ) -> JSONLike:
-        """Get user positions and rewards data using Velodrome Sugar contract.
-
-        :param account: TODO
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param limit: TODO
-        :param offset: TODO
-        :return: TODO
-        """
+        """Get user positions and rewards data using Velodrome Sugar contract."""
         checksumed_account = ledger_api.api.to_checksum_address(account)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.positions(

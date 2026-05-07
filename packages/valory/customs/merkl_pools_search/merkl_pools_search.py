@@ -17,8 +17,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
-
 """Merkl pools search module."""
 
 import json
@@ -49,11 +47,7 @@ class DexTypes(Enum):
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    """Check for missing fields and return them, if any.
-
-    :param kwargs: TODO
-    :return: TODO
-    """
+    """Check for missing fields and return them, if any."""
     missing = []
     for field in REQUIRED_FIELDS:
         if kwargs.get(field, None) is None:
@@ -62,11 +56,7 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 
 
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove the irrelevant fields from the given kwargs.
-
-    :param kwargs: TODO
-    :return: TODO
-    """
+    """Remove the irrelevant fields from the given kwargs."""
     filtered_kwargs = {
         key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS
     }
@@ -82,23 +72,10 @@ def highest_apr_opportunity(
     apr_threshold: float,
     current_pool: Optional[str],
 ) -> Dict[str, Any]:
-    """Get the highest APR yielding opportunity over given protocols using Merkl API.
-
-    :param apr_threshold: TODO
-    :param balancer_graphql_endpoints: TODO
-    :param chain_to_chain_id_mapping: TODO
-    :param chains: TODO
-    :param current_pool: TODO
-    :param merkl_fetch_campaign_args: TODO
-    :param protocols: TODO
-    :return: TODO
-    """
+    """Get the highest APR yielding opportunity over given protocols using Merkl API."""
 
     def fetch_all_pools() -> Dict[str, Any]:
-        """Fetch all pools based on allowed chains.
-
-        :return: TODO
-        """
+        """Fetch all pools based on allowed chains."""
         if not chains:
             return {"error": "No chain selected for investment!"}
 
@@ -138,11 +115,7 @@ def highest_apr_opportunity(
     def filter_eligible_pools(
         all_pools: Dict[str, Any],
     ) -> Union[List[Dict[str, Any]], Dict[str, str]]:
-        """Filter pools based on allowed assets and LP pools and sort by APR.
-
-        :param all_pools: TODO
-        :return: TODO
-        """
+        """Filter pools based on allowed assets and LP pools and sort by APR."""
         eligible_pools = []
         allowed_dex_types = [DexTypes[protocol.upper()].value for protocol in protocols]
         for chain_id, campaigns in all_pools.items():
@@ -194,11 +167,7 @@ def highest_apr_opportunity(
     def determine_highest_apr_pool(
         eligible_pools: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """Determine the pool with the highest APR from the eligible pools.
-
-        :param eligible_pools: TODO
-        :return: TODO
-        """
+        """Determine the pool with the highest APR from the eligible pools."""
         for pool_info in eligible_pools:
             dex_type = pool_info["dex_type"]
             chain = pool_info["chain"]
@@ -225,14 +194,7 @@ def highest_apr_opportunity(
     def extract_pool_info(
         dex_type: Any, chain: Any, apr: Any, campaign: Any
     ) -> Dict[str, Any]:
-        """Extract pool info from campaign data.
-
-        :param apr: TODO
-        :param campaign: TODO
-        :param chain: TODO
-        :param dex_type: TODO
-        :return: TODO
-        """
+        """Extract pool info from campaign data."""
         pool_address = campaign.get("mainParameter")
         pool_token_dict = {}
         pool_id = None
@@ -288,13 +250,7 @@ def highest_apr_opportunity(
     def fetch_balancer_pool_info(
         pool_id: str, chain: str, detail: str
     ) -> Dict[str, Any]:
-        """Fetch the pool type for a Balancer pool using a GraphQL query.
-
-        :param chain: TODO
-        :param detail: TODO
-        :param pool_id: TODO
-        :return: TODO
-        """
+        """Fetch the pool type for a Balancer pool using a GraphQL query."""
         query = f"""
                     query {{
                     pools(where: {{ id: "{pool_id}" }}) {{
@@ -347,12 +303,7 @@ def highest_apr_opportunity(
 
 
 def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str]]:
-    """Run the strategy.
-
-    :param **kwargs: TODO
-    :param *_args: TODO
-    :return: TODO
-    """
+    """Run the strategy."""
     missing = check_missing_fields(kwargs)
     if len(missing) > 0:
         return {"error": f"Required kwargs {missing} were not provided."}

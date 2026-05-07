@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Pool contract interface."""
 
 from typing import Any
@@ -47,9 +46,6 @@ class TickMath:
 
         Returns:
             The sqrt ratio as a Q64.96 value
-
-        :param tick: TODO
-        :return: TODO
         """
         # Validate tick range
         if tick < TickMath.MIN_TICK or tick > TickMath.MAX_TICK:
@@ -132,12 +128,6 @@ class LiquidityAmounts:
 
         Returns:
             A tuple of (amount0, amount1) representing the token amounts
-
-        :param liquidity: TODO
-        :param sqrtRatioAX96: TODO
-        :param sqrtRatioBX96: TODO
-        :param sqrtRatioX96: TODO
-        :return: TODO
         """
         if sqrtRatioAX96 > sqrtRatioBX96:
             sqrtRatioAX96, sqrtRatioBX96 = sqrtRatioBX96, sqrtRatioAX96
@@ -179,11 +169,6 @@ class LiquidityAmounts:
 
         Formula: amount0 = liquidity * (sqrtRatioBX96 - sqrtRatioAX96)
         / (sqrtRatioAX96 * sqrtRatioBX96)
-
-        :param liquidity: TODO
-        :param sqrtRatioAX96: TODO
-        :param sqrtRatioBX96: TODO
-        :return: TODO
         """
         # Multiply by 2^96 first to maintain precision
         numerator = liquidity * (sqrtRatioBX96 - sqrtRatioAX96) * (2**96)
@@ -198,11 +183,6 @@ class LiquidityAmounts:
         """Calculate amount1 from liquidity and sqrt-price bounds.
 
         Formula: amount1 = liquidity * (sqrtRatioBX96 - sqrtRatioAX96)
-
-        :param liquidity: TODO
-        :param sqrtRatioAX96: TODO
-        :param sqrtRatioBX96: TODO
-        :return: TODO
         """
         return liquidity * (sqrtRatioBX96 - sqrtRatioAX96) // (2**96)
 
@@ -221,12 +201,7 @@ class UniswapV3PoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the pool tokens.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the pool tokens."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
@@ -238,12 +213,7 @@ class UniswapV3PoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the fee.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the fee."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         fee = contract_instance.functions.fee().call()
         return dict(data=fee)
@@ -254,12 +224,7 @@ class UniswapV3PoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the tick spacing.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the tick spacing."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tick_spacing = contract_instance.functions.tickSpacing().call()
         return dict(data=tick_spacing)
@@ -270,12 +235,7 @@ class UniswapV3PoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the current state of the pool from slot0.
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :return: TODO
-        """
+        """Get the current state of the pool from slot0."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.slot0().call()
         return dict(
@@ -311,11 +271,6 @@ class UniswapV3PoolContract(Contract):
 
         Returns:
             A dictionary containing the calculated token amounts and position details
-
-        :param contract_address: TODO
-        :param ledger_api: TODO
-        :param position: TODO
-        :return: TODO
         """
 
         # Extract position details

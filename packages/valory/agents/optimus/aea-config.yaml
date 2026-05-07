@@ -23,20 +23,20 @@ contracts:
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeicutxdhfofyqt3l2y4udiqgfh22n3sn6fl2i5r7txd2kctvuig4e4
 - valory/multisend:0.1.0:bafybeidwr3l2t564gle533l7elroxr77wvmqogdmwz4e6mmqxnbqsk37tm
 - valory/service_registry:0.1.0:bafybeid7bou6qn43oeldbbs2vuytrozpu3pegrtnr4kf6zbw3cpd2sxhjq
-- valory/balancer_weighted_pool:0.1.0:bafybeiesa2ejvvr4nh2j2e32jvxljvhjergytpbde4z3hy2jelggopzuru
-- valory/balancer_vault:0.1.0:bafybeie7vvumcisxvwciqf7k57fwz5dhtsxshfqme7qd2jtmfkaf7ium7a
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeigw2kebowsfyzo7vq4aomugcfdu7zguqxle5dtibiyhbqgnne72v4
-- valory/uniswap_v3_pool:0.1.0:bafybeibsjz3flziazdilu4kleevblbx5svob3quzlnadayl7zg5ximqphi
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeicycos2paaynly3w5baa6pr36qn4ox4zgmvieput7lsodcisghvge
-- valory/velodrome_router:0.1.0:bafybeidhrlz6ppoemeshdxtsbxqwbvbkv7v3wvxafx5k5fbkx4t7ydsixe
-- valory/velodrome_cl_pool:0.1.0:bafybeidzbbgbpqkiyjf4cgrv62ezbwlxlreob7ljcfzj5zpe7qmnwwvk4a
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeifjwudoct2xumtrmdc42gjnvewwftpfr6p35pybv3bzhavpg7s2ze
-- valory/velodrome_pool:0.1.0:bafybeibcixet56oovaszkbctpr52feiiiidxzbth2376sx7cel7jec463q
-- valory/velodrome_sugar:0.1.0:bafybeiebw67rqazddmfvpmohdmno5a65atvay6hjho2oathwnjtsdsivry
-- valory/velodrome_gauge:0.1.0:bafybeie4zq6kdmsg33mxejgntabees6hqy22t3nq3ox6kvv6zihlhxvsgq
-- valory/velodrome_voter:0.1.0:bafybeihsv67riftfxbe4g4vjqswsewq4nseibln4ffypwwnv43mxds6aiy
-- valory/velodrome_cl_gauge:0.1.0:bafybeihnhspzzgi3jrdrgl75zw2rearisone2lia6rrn5pvuscwikcqke4
-- valory/balancer_queries:0.1.0:bafybeibmidze64hg2kgikzdn6gtgooxy6bmlopoazlpalgmzrxsxisfwmy
+- valory/balancer_weighted_pool:0.1.0:bafybeieqzno67yf4nqa2qnykovdtnxbswqo7pdafftmex5rv7xxpnykwky
+- valory/balancer_vault:0.1.0:bafybeidbl6zkl7nskr5nawgsnbjkyye7mtd4q5his5twjfnqcfzbjfha4y
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeicxrnjyov6pa354hvmj4nx5div362d7pg5hmlmppoi62akspqcbzu
+- valory/uniswap_v3_pool:0.1.0:bafybeihq5rdo6lmwf5hdqw5bvpyn4xf2ihe2uax3t6sty73zgxorxj7isu
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeigqs56jromubrdvfgz2kutpd4qqahjjtd7jzt26zfiao2fd5ctlj4
+- valory/velodrome_router:0.1.0:bafybeiaktgtwyuvzbyixcefmfxfx4k5nzuc72er4o7ipbrlbwsrihcvupi
+- valory/velodrome_cl_pool:0.1.0:bafybeicfpfcbhq24s2hsqr33nd7lwaf5xqei75jlmvqfd5tcguoquidx5u
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeie5vkp3nnbow3ltsd67e3fj7mru6yua3yfyl3wmy4myhvk5zvnuay
+- valory/velodrome_pool:0.1.0:bafybeid7c7kwryexjaswzxqsvkecys5h4un2nrvdfbunhu2v6y3t22wnci
+- valory/velodrome_sugar:0.1.0:bafybeiblsacb4yit7gpgewwoifrw4uem2lcbsjlzufnhtv4wup7df4r3vu
+- valory/velodrome_gauge:0.1.0:bafybeibsbi4lpg42esbkbqe4zozgxvuzblzr7pqzmypqetcexcjqjiqe44
+- valory/velodrome_voter:0.1.0:bafybeihovts5kasxvqmlpqdbnvydczp7ztw2lgz72effiungpsg24qqz7a
+- valory/velodrome_cl_gauge:0.1.0:bafybeidmgeliuzkzru7vijsiohv74kajl62rz6unhhmvrtfd3rbmehpl7i
+- valory/balancer_queries:0.1.0:bafybeifikh3czxp46byinhh44zsovqgnsbevshbizqiqvkvul2o2bsocbi
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
 - valory/abci:0.1.0:bafybeiak4pwac3pwjtd7weskxdhkrcopckr32vtazfbuteu6yqjkwarpte
@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeib5qjkpfsxjcur4asube6kctmy2xsrg2hzcele2tmvsstula4lt54
 - valory/abstract_round_abci:0.1.0:bafybeidpod4inivvvgzenx46whshq4mzmxgwsxinv6ibdvyemkstam2yz4
 - valory/funds_manager:0.1.0:bafybeihuwnkgrhqixl4zj55fz2awptmpmdnmub2uzkgbx7rve7bnhkkl5i
-- valory/liquidity_trader_abci:0.1.0:bafybeie4lr6dpqss33nvemjvdik6ep4h4fnc3fexy7ucymsfoiin4s2m7i
-- valory/optimus_abci:0.1.0:bafybeibs5hebibsdyiorqv34y7gw5t3brguvnvqtqudcdoyjtwuv66nvfa
+- valory/liquidity_trader_abci:0.1.0:bafybeicgmxymrwdsraesy2y6a4gdvh6uasscngzv2iouudeqqvhqlnkp6y
+- valory/optimus_abci:0.1.0:bafybeihnat4t3pltv4dhxqajiu656ih6fzzn7fi6kcvxjlqgwt2ck2ud6e
 - valory/registration_abci:0.1.0:bafybeietlh4pq5wjsb6srpsqehcq3gwsod5c6gs4jdiwpzkgrwyxhbbbvq
 - valory/reset_pause_abci:0.1.0:bafybeifdzwzz5byan3ytsi46n4n2svtqme6475hk5z77sopymyzqszcpoa
 - valory/termination_abci:0.1.0:bafybeiadbtzcvzkwbrosshlsubilj7mwzdqfni6dr75wsd3vawhslpwqeu
@@ -98,7 +98,7 @@ logging_config:
 skill_exception_policy: stop_and_exit
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.2.1
+    version: ==2.2.3
 default_connection: null
 ---
 public_id: valory/kv_store:0.1.0

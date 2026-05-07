@@ -21,7 +21,9 @@
 
 import json
 import os
+import threading
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from time import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -49,6 +51,103 @@ from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderA
 HTTP_OK = [200, 201]
 MINUTE_UNIX = 60
 
+# Defaults for the per-endpoint circuit breaker. Tuned to skip a known-bad
+# external endpoint for a recovery window instead of replaying the full
+# retry sequence every FSM round.
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
+CIRCUIT_BREAKER_RECOVERY_SECONDS = 60.0
+
+
+class CircuitBreakerState(Enum):
+    """Circuit breaker lifecycle states."""
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreakerOpenError(Exception):
+    """Raised when an endpoint's breaker is open and the call is short-circuited."""
+
+
+class EndpointCircuitBreaker:
+    """Per-endpoint circuit breaker.
+
+    Starts CLOSED. After ``failure_threshold`` consecutive failures it opens
+    and rejects calls for ``recovery_timeout_seconds``. Then it transitions
+    to HALF_OPEN, allowing a single probe through. The probe's outcome
+    decides whether to close (success) or re-open (failure).
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+        recovery_timeout_seconds: float = CIRCUIT_BREAKER_RECOVERY_SECONDS,
+    ) -> None:
+        """Initialize a CLOSED breaker."""
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout_seconds
+        self._consecutive_failures = 0
+        self._opened_at: Optional[float] = None
+        self._half_open_at: Optional[float] = None
+        self._state = CircuitBreakerState.CLOSED
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> CircuitBreakerState:
+        """Return the current breaker state."""
+        return self._state
+
+    def allow(self) -> bool:
+        """Return True if a call is permitted."""
+        with self._lock:
+            now = time()
+            if self._state == CircuitBreakerState.CLOSED:
+                return True
+            if self._state == CircuitBreakerState.OPEN:
+                if (
+                    self._opened_at is not None
+                    and (now - self._opened_at) >= self._recovery_timeout
+                ):
+                    self._state = CircuitBreakerState.HALF_OPEN
+                    self._half_open_at = now
+                    return True
+                return False
+            if (
+                self._half_open_at is not None
+                and (now - self._half_open_at) >= self._recovery_timeout
+            ):
+                self._state = CircuitBreakerState.OPEN
+                self._opened_at = now
+                self._half_open_at = None
+            return False
+
+    def on_success(self) -> None:
+        """Record a successful call and close the breaker."""
+        with self._lock:
+            if self._state == CircuitBreakerState.OPEN:
+                return
+            if self._state == CircuitBreakerState.HALF_OPEN:
+                self._state = CircuitBreakerState.CLOSED
+                self._opened_at = None
+                self._half_open_at = None
+            self._consecutive_failures = 0
+
+    def on_failure(self) -> None:
+        """Record a failed call. Opens the breaker once the threshold is hit."""
+        with self._lock:
+            if self._state == CircuitBreakerState.OPEN:
+                return
+            if self._state == CircuitBreakerState.HALF_OPEN:
+                self._state = CircuitBreakerState.OPEN
+                self._opened_at = time()
+                self._half_open_at = None
+                return
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._failure_threshold:
+                self._state = CircuitBreakerState.OPEN
+                self._opened_at = time()
+
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
@@ -74,6 +173,18 @@ class SharedState(BaseSharedState):
         self.last_strategy_evaluation_time: float = 0.0
         # Shared price cache passed to strategies via kwargs
         self.strategy_coingecko_price_cache: Dict[str, Any] = {}
+        # Per-endpoint circuit breakers for external dependencies.
+        self._endpoint_breakers: Dict[str, EndpointCircuitBreaker] = {}
+        self._endpoint_breakers_lock = threading.Lock()
+
+    def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
+        """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""
+        with self._endpoint_breakers_lock:
+            breaker = self._endpoint_breakers.get(endpoint)
+            if breaker is None:
+                breaker = EndpointCircuitBreaker()
+                self._endpoint_breakers[endpoint] = breaker
+            return breaker
 
     def setup(self) -> None:
         """Set up the model."""
@@ -450,6 +561,14 @@ class Params(BaseParams):
         self.optimism_ledger_rpc = self._ensure("optimism_ledger_rpc", kwargs, str)
         self.lifi_quote_to_amount_url = self._ensure(
             "lifi_quote_to_amount_url", kwargs, str
+        )
+        self.tls_verify: bool = self._ensure("tls_verify", kwargs, bool)
+        self.mode_conduit_explorer_url: str = self._ensure(
+            "mode_conduit_explorer_url", kwargs, str
+        )
+        self.safe_api_v1_url: str = self._ensure("safe_api_v1_url", kwargs, str)
+        self.mode_native_explorer_url: str = self._ensure(
+            "mode_native_explorer_url", kwargs, str
         )
         self.stoploss_threshold_multiplier = kwargs.get(
             "stoploss_threshold_multiplier", 0.43

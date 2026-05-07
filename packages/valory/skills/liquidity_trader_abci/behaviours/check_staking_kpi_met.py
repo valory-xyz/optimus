@@ -38,6 +38,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
 )
 from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import (
     CheckStakingKPIMetRound,
+    Event,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -53,6 +54,25 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:  # type: ignore[override]
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
+                payload = CheckStakingKPIMetPayload(
+                    sender=self.context.agent_address,
+                    tx_submitter=self.matching_round.auto_round_id(),
+                    tx_hash=None,
+                    safe_contract_address=None,
+                    chain_id=None,
+                    is_staking_kpi_met=None,
+                    event=Event.WITHDRAWAL_INITIATED.value,
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             vanity_tx_hex = None
             is_staking_kpi_met = yield from self._is_staking_kpi_met()
             if is_staking_kpi_met is None:

@@ -37,7 +37,7 @@ class TestEncodeCall:
         """Test that _encode_call returns a dict with the tx_hash key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        encoded_data = b"0xabcdef"
+        encoded_data = "0xabcdef"
         mock_contract_instance.encode_abi.return_value = encoded_data
 
         with patch.object(
@@ -49,13 +49,13 @@ class TestEncodeCall:
                 mock_ledger_api, MOCK_ADDRESS, "deposit", (100,)
             )
 
-        assert result == {"tx_hash": encoded_data}
+        assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_encode_call_calls_encode_abi_with_correct_args(self) -> None:
         """Test that _encode_call calls encode_abi with the correct method name and args."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
+        mock_contract_instance.encode_abi.return_value = "0x00"
 
         with patch.object(
             VelodromeGaugeContract,
@@ -78,7 +78,7 @@ class TestDeposit:
         """Test that deposit returns a dict with tx_hash for a valid positive amount."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        encoded_data = b"0xdeposit_data"
+        encoded_data = "0xde90517da70a"
         mock_contract_instance.encode_abi.return_value = encoded_data
 
         with patch.object(
@@ -88,13 +88,13 @@ class TestDeposit:
         ):
             result = VelodromeGaugeContract.deposit(mock_ledger_api, MOCK_ADDRESS, 1000)
 
-        assert result == {"tx_hash": encoded_data}
+        assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_deposit_calls_encode_abi_with_correct_args(self) -> None:
         """Test that deposit calls encode_abi with 'deposit' method name and amount tuple."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
+        mock_contract_instance.encode_abi.return_value = "0x00"
 
         with patch.object(
             VelodromeGaugeContract,
@@ -123,7 +123,7 @@ class TestWithdraw:
         """Test that withdraw returns a dict with tx_hash for a valid positive amount."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        encoded_data = b"0xwithdraw_data"
+        encoded_data = "0xa17fd7a7"
         mock_contract_instance.encode_abi.return_value = encoded_data
 
         with patch.object(
@@ -135,13 +135,13 @@ class TestWithdraw:
                 mock_ledger_api, MOCK_ADDRESS, 1000
             )
 
-        assert result == {"tx_hash": encoded_data}
+        assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_withdraw_calls_encode_abi_with_correct_args(self) -> None:
         """Test that withdraw calls encode_abi with 'withdraw' method name and amount tuple."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
+        mock_contract_instance.encode_abi.return_value = "0x00"
 
         with patch.object(
             VelodromeGaugeContract,
@@ -171,7 +171,7 @@ class TestGetReward:
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
-        encoded_data = b"0xreward_data"
+        encoded_data = "0x7e7a7da7"
         mock_contract_instance.encode_abi.return_value = encoded_data
 
         with patch.object(
@@ -183,14 +183,14 @@ class TestGetReward:
                 mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
             )
 
-        assert result == {"tx_hash": encoded_data}
+        assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_get_reward_checksums_account(self) -> None:
         """Test that get_reward checksums the account address before encoding."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
+        mock_contract_instance.encode_abi.return_value = "0x00"
 
         with patch.object(
             VelodromeGaugeContract,

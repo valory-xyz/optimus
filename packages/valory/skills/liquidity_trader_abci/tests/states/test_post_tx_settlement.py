@@ -123,3 +123,7 @@ class TestPostTxSettlementRound:
         type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         result = round_obj.end_block()
         assert result is None
+
+    def test_no_withdrawal_initiated_class_attribute(self) -> None:
+        """PostTxSettlement does not expose a withdrawal_initiated transition anchor."""
+        assert "withdrawal_initiated" not in vars(PostTxSettlementRound)

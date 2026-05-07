@@ -1612,6 +1612,32 @@ class LiquidityTraderBaseBehaviour(
 
         return data
 
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read the investing_paused flag from the KV store."""
+        result = yield from self._read_kv(("investing_paused",))
+        if result is None:
+            self.context.logger.error(
+                "KV store unreachable while reading investing_paused"
+            )
+            return False
+
+        raw = result.get("investing_paused")
+        if raw is None:
+            self.context.logger.debug(
+                "investing_paused key absent in KV store; treating as not paused"
+            )
+            return False
+
+        if not isinstance(raw, str):
+            self.context.logger.error(
+                "investing_paused has unexpected type %s: %r",
+                type(raw).__name__,
+                raw,
+            )
+            return False
+
+        return raw.lower() == "true"
+
     def _write_kv(
         self,
         data: Dict[str, str],
@@ -2684,6 +2710,164 @@ class LiquidityTraderBaseBehaviour(
                 f"Error building unstake LP tokens action: {str(e)}"
             )
             return None
+
+    MAX_VERIFY_RETRIES = 2
+
+    def _verify_cl_token_staked_with_retry(
+        self,
+        pool: Any,
+        safe_address: str,
+        token_id: int,
+        chain: str,
+        gauge_address: str,
+    ) -> Generator[None, None, Optional[bool]]:
+        """Verify on-chain stake state with up to ``MAX_VERIFY_RETRIES`` attempts."""
+        for _ in range(self.MAX_VERIFY_RETRIES):
+            is_staked = yield from pool.is_cl_token_staked(
+                self,
+                safe_address,
+                token_id,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            if is_staked is not None:
+                return is_staked
+        return None
+
+    def _filter_staked_token_ids(
+        self,
+        pool: Any,
+        safe_address: str,
+        token_ids: List[int],
+        chain: str,
+        gauge_address: str,
+    ) -> Generator[None, None, Tuple[List[int], bool]]:
+        """Return ``(staked_ids, verification_failed)`` for a list of CL token IDs."""
+        staked_ids: List[int] = []
+        for token_id in token_ids:
+            is_staked = yield from self._verify_cl_token_staked_with_retry(
+                pool, safe_address, token_id, chain, gauge_address
+            )
+            if is_staked is None:
+                return [], True
+            if is_staked:
+                staked_ids.append(token_id)
+        return staked_ids, False
+
+    def _log_verification_fallback(
+        self,
+        action: str,
+        reason: str,
+        pool_address: Optional[str],
+        chain: Optional[str],
+        gauge_address: Optional[str] = None,
+        token_ids: Optional[List[int]] = None,
+    ) -> None:
+        """Emit a structured ``<action>_verification_fallback`` warning."""
+        self.context.logger.warning(
+            f"{action}_verification_fallback "
+            f"reason={reason} chain={chain} pool={pool_address} "
+            f"gauge={gauge_address} token_ids={token_ids}"
+        )
+
+    def _build_unstake_lp_tokens_action_verified(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Build an UnstakeLpTokens action with best-effort on-chain stake verification."""
+        # Best-effort: on RPC failure, missing config, or any path that
+        # prevents an authoritative on-chain check, falls back to
+        # _build_unstake_lp_tokens_action (the unverified path). Every
+        # fallback emits a structured ``unstake_verification_fallback``
+        # warning so the failure mode is alertable from logs.
+        is_cl_pool = position.get("is_cl_pool", False)
+        dex_type = position.get("dex_type")
+        pool_address = position.get("pool_address")
+        chain = position.get("chain")
+
+        if dex_type != "velodrome" or not is_cl_pool:
+            return self._build_unstake_lp_tokens_action(position)
+
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        if not all([chain, pool_address, safe_address]):
+            self._log_verification_fallback(
+                "unstake", "missing_required_fields", pool_address, chain
+            )
+            return self._build_unstake_lp_tokens_action(position)
+
+        positions_data = position.get("positions", [])
+        token_ids = [p["token_id"] for p in positions_data if "token_id" in p]
+        if not token_ids:
+            token_id = position.get("token_id")
+            if token_id is not None:
+                token_ids = [token_id]
+        if not token_ids:
+            self._log_verification_fallback(
+                "unstake", "no_token_ids", pool_address, chain
+            )
+            return self._build_unstake_lp_tokens_action(position)
+
+        pool = self.pools.get("velodrome")
+        if not pool:
+            self._log_verification_fallback(
+                "unstake",
+                "no_velodrome_pool_registry",
+                pool_address,
+                chain,
+                token_ids=token_ids,
+            )
+            return self._build_unstake_lp_tokens_action(position)
+
+        gauge_address = position.get("gauge_address")
+        if not gauge_address:
+            gauge_address = yield from pool.get_gauge_address(
+                self, pool_address, chain=chain
+            )
+        if not gauge_address:
+            self._log_verification_fallback(
+                "unstake",
+                "gauge_address_unresolvable",
+                pool_address,
+                chain,
+                token_ids=token_ids,
+            )
+            return self._build_unstake_lp_tokens_action(position)
+
+        staked_token_ids, verification_failed = (
+            yield from self._filter_staked_token_ids(
+                pool, safe_address, token_ids, chain, gauge_address
+            )
+        )
+
+        if verification_failed:
+            self._log_verification_fallback(
+                "unstake",
+                "verification_rpc_failed",
+                pool_address,
+                chain,
+                gauge_address=gauge_address,
+                token_ids=token_ids,
+            )
+            return self._build_unstake_lp_tokens_action(position)
+
+        if not staked_token_ids:
+            self.context.logger.info(
+                f"Skipping unstake for pool {pool_address}: none of "
+                f"{token_ids} are staked in gauge {gauge_address}"
+            )
+            return None
+
+        filtered_position = dict(position)
+        filtered_position["positions"] = [
+            p for p in positions_data if p.get("token_id") in staked_token_ids
+        ]
+        top_level_token_id = position.get("token_id")
+        if (
+            top_level_token_id is not None
+            and top_level_token_id not in staked_token_ids
+        ):
+            filtered_position.pop("token_id", None)
+        filtered_position["gauge_address"] = gauge_address
+        return self._build_unstake_lp_tokens_action(filtered_position)
 
     def get_agent_type_by_name(
         self, type_name: Any

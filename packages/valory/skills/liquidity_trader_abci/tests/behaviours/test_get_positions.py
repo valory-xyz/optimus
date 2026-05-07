@@ -22,8 +22,10 @@
 # pylint: skip-file
 
 import json
-from typing import Any, Generator
-from unittest.mock import MagicMock
+from contextlib import contextmanager
+from unittest.mock import MagicMock, PropertyMock, patch
+
+import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.get_positions import (
     GetPositionsBehaviour,
@@ -33,15 +35,22 @@ from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
 )
 
 
-def _make_behaviour() -> Any:
+def _gen_return_false(*args, **kwargs):
+    """Generator function that yields once and returns False."""
+    yield
+    return False
+
+
+def _make_behaviour():
     """Create a GetPositionsBehaviour without __init__."""
     obj = object.__new__(GetPositionsBehaviour)
     ctx = MagicMock()
     obj.__dict__["_context"] = ctx
+    obj._read_investing_paused = _gen_return_false
     return obj
 
 
-def _drive(gen: Any, sends: Any = None) -> Any:
+def _drive(gen, sends=None):
     """Drive a generator to completion, sending values from *sends*."""
     sends = sends or []
     idx = 0
@@ -71,18 +80,18 @@ class TestGetPositionsBehaviour:
         positions_data = [{"pool": "0x123", "value": 100}]
 
         # Stub generator methods
-        def fake_get_positions() -> Generator[Any, Any, Any]:
+        def fake_get_positions():
             yield
             return positions_data
 
-        def fake_adjust(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_adjust(*args, **kwargs):
             yield
             return None
 
-        def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_send(*args, **kwargs):
             yield
 
-        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_wait(*args, **kwargs):
             yield
 
         obj.get_positions = fake_get_positions
@@ -105,21 +114,21 @@ class TestGetPositionsBehaviour:
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
-        def fake_get_positions() -> Generator[Any, Any, Any]:
+        def fake_get_positions():
             yield
             return None
 
-        def fake_adjust(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_adjust(*args, **kwargs):
             yield
             return None
 
         captured_payloads = []
 
-        def fake_send(payload: Any) -> Generator[Any, Any, Any]:
+        def fake_send(payload):
             captured_payloads.append(payload)
             yield
 
-        def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_wait(*args, **kwargs):
             yield
 
         obj.get_positions = fake_get_positions
@@ -138,4 +147,85 @@ class TestGetPositionsBehaviour:
             GetPositionsRound.ERROR_PAYLOAD, sort_keys=True, ensure_ascii=True
         )
         assert payload.positions == expected
+        obj.set_done.assert_called_once()
+
+
+class TestGetPositionsWithdrawalGate:
+    """Verify the gate at the top of async_act emits a withdrawal payload."""
+
+    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
+        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return True
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj.get_positions = MagicMock(
+            side_effect=AssertionError(
+                "get_positions must not run when investing is paused"
+            )
+        )
+        obj._read_investing_paused = fake_read_investing_paused
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event == "withdrawal_initiated"
+        assert captured["payload"].positions is None
+        obj.set_done.assert_called_once()
+
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal positions path emit a non-withdrawal payload."""
+        obj = _make_behaviour()
+        obj.current_positions = []
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return False
+
+        def fake_get_positions():
+            yield
+            return None
+
+        def fake_adjust(*args, **kwargs):
+            yield
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._read_investing_paused = fake_read_investing_paused
+        obj.get_positions = fake_get_positions
+        obj._adjust_current_positions_for_backward_compatibility = fake_adjust
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event is None
+        assert captured["payload"].positions == json.dumps(
+            GetPositionsRound.ERROR_PAYLOAD, sort_keys=True, ensure_ascii=True
+        )
         obj.set_done.assert_called_once()

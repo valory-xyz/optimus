@@ -19,34 +19,29 @@
 # ------------------------------------------------------------------------------
 
 
-"""Velodrome pools search module."""
+import warnings
+
+warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import logging
 import threading
 import time
-import warnings
 from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
 
-warnings.filterwarnings("ignore")  # Suppress all warnings
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def _reset_x402_adapter(session: Any) -> None:
-    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse.
-
-    :param session: TODO
-    """
+def _reset_x402_adapter(session):
+    """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
     if session is None:
         return
     for adapter in session.adapters.values():
@@ -284,15 +279,7 @@ def get_cached_price(
     ttl: int,
     prefix: str = "il_range",
 ) -> Optional[Any]:
-    """Get cached CoinGecko price data if it exists and is not expired.
-
-    :param cache: TODO
-    :param prefix: TODO
-    :param time_period: TODO
-    :param token_id: TODO
-    :param ttl: TODO
-    :return: TODO
-    """
+    """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
     entry = cache.get(cache_key)
     if entry is None:
@@ -311,14 +298,7 @@ def set_cached_price(
     cache: Dict[str, Any],
     prefix: str = "il_range",
 ) -> None:
-    """Cache CoinGecko price data with current timestamp.
-
-    :param cache: TODO
-    :param data: TODO
-    :param prefix: TODO
-    :param time_period: TODO
-    :param token_id: TODO
-    """
+    """Cache CoinGecko price data with current timestamp."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
     cache[cache_key] = {
         "data": data,
@@ -335,24 +315,18 @@ CACHE_METRICS = {
 # Thread-local storage for errors
 _thread_local = threading.local()
 
+WEB3_HTTP_TIMEOUT_SECONDS = 30
 
-def get_errors() -> Any:
-    """Get thread-local error list.
 
-    :return: TODO
-    """
+def get_errors():
+    """Get thread-local error list."""
     if not hasattr(_thread_local, "errors"):
         _thread_local.errors = []
     return _thread_local.errors
 
 
-def get_cached_data(cache_type: Any, key: Any = None) -> Any:
-    """Get data from cache if it exists and is not expired.
-
-    :param cache_type: TODO
-    :param key: TODO
-    :return: TODO
-    """
+def get_cached_data(cache_type, key=None):
+    """Get data from cache if it exists and is not expired."""
     if cache_type not in CACHE:
         CACHE_METRICS["misses"][cache_type] = (
             CACHE_METRICS["misses"].get(cache_type, 0) + 1
@@ -363,14 +337,14 @@ def get_cached_data(cache_type: Any, key: Any = None) -> Any:
     current_time = time.time()
 
     # Check if cache is expired
-    if current_time - cache_entry["timestamp"] > cache_entry["ttl"]:  # type: ignore[operator]
+    if current_time - cache_entry["timestamp"] > cache_entry["ttl"]:
         CACHE_METRICS["misses"][cache_type] = (
             CACHE_METRICS["misses"].get(cache_type, 0) + 1
         )
         return None
 
     if key is not None:
-        result = cache_entry["data"].get(key)  # type: ignore[attr-defined]
+        result = cache_entry["data"].get(key)
     else:
         result = cache_entry["data"]
 
@@ -384,30 +358,21 @@ def get_cached_data(cache_type: Any, key: Any = None) -> Any:
     return result
 
 
-def set_cached_data(cache_type: Any, data: Any, key: Any = None) -> None:
-    """Set data in cache with current timestamp.
-
-    :param cache_type: TODO
-    :param data: TODO
-    :param key: TODO
-    """
+def set_cached_data(cache_type, data, key=None):
+    """Set data in cache with current timestamp."""
     if cache_type not in CACHE:
         CACHE[cache_type] = {"data": {}, "timestamp": 0, "ttl": 600}
 
     if key is not None:
-        CACHE[cache_type]["data"][key] = data  # type: ignore[index]
+        CACHE[cache_type]["data"][key] = data
     else:
         CACHE[cache_type]["data"] = data
 
     CACHE[cache_type]["timestamp"] = time.time()
 
 
-def invalidate_cache(cache_type: Any = None, key: Any = None) -> None:
-    """Invalidate specific cache or all caches.
-
-    :param cache_type: TODO
-    :param key: TODO
-    """
+def invalidate_cache(cache_type=None, key=None):
+    """Invalidate specific cache or all caches."""
     if cache_type is None:
         # Invalidate all caches
         for cache in CACHE:
@@ -420,46 +385,38 @@ def invalidate_cache(cache_type: Any = None, key: Any = None) -> None:
             CACHE[cache_type]["timestamp"] = 0
     else:
         # Invalidate specific key in cache type
-        if cache_type in CACHE and key in CACHE[cache_type]["data"]:  # type: ignore[operator]
-            del CACHE[cache_type]["data"][key]  # type: ignore[attr-defined]
+        if cache_type in CACHE and key in CACHE[cache_type]["data"]:
+            del CACHE[cache_type]["data"][key]
 
 
-def log_cache_metrics() -> None:
+def log_cache_metrics():
     """Log cache hit/miss metrics."""
     for cache_type in CACHE_METRICS["hits"]:
         hits = CACHE_METRICS["hits"].get(cache_type, 0)
         misses = CACHE_METRICS["misses"].get(cache_type, 0)
         total = hits + misses
-        (hits / total * 100) if total > 0 else 0
+        hit_rate = (hits / total * 100) if total > 0 else 0
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    """Check if any required fields are missing from kwargs.
-
-    :param kwargs: TODO
-    :return: TODO
-    """
+    """Check if any required fields are missing from kwargs."""
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
 @lru_cache(maxsize=8)
-def get_web3_connection(rpc_url: Any) -> Any:
-    """Get or create a Web3 connection with caching.
-
-    :param rpc_url: TODO
-    :return: TODO
-    """
-    return Web3(Web3.HTTPProvider(rpc_url))
+def get_web3_connection(rpc_url):
+    """Get or create a Web3 connection with caching."""
+    return Web3(
+        Web3.HTTPProvider(
+            rpc_url,
+            request_kwargs={"timeout": WEB3_HTTP_TIMEOUT_SECONDS},
+        )
+    )
 
 
 @lru_cache(None)
-def fetch_token_name_from_contract(chain_name: Any, token_address: Any) -> Any:
-    """Fetch token name from the token contract.
-
-    :param chain_name: TODO
-    :param token_address: TODO
-    :return: TODO
-    """
+def fetch_token_name_from_contract(chain_name, token_address):
+    """Fetch token name from the token contract."""
     ERC20_ABI = [
         {
             "constant": True,
@@ -500,16 +457,8 @@ def fetch_token_name_from_contract(chain_name: Any, token_address: Any) -> Any:
         return None
 
 
-def get_coin_id_from_symbol(
-    coin_id_mapping: Any, symbol: Any, chain_name: Any
-) -> Optional[str]:
-    """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name.
-
-    :param chain_name: TODO
-    :param coin_id_mapping: TODO
-    :param symbol: TODO
-    :return: TODO
-    """
+def get_coin_id_from_symbol(coin_id_mapping, symbol, chain_name) -> Optional[str]:
+    """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
     # Check if coin_list is valid
     symbol = symbol.lower()
     if symbol in coin_id_mapping.get(chain_name, {}):
@@ -519,11 +468,7 @@ def get_coin_id_from_symbol(
 
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:
-    """Check if the provided CoinGecko API key is a pro key.
-
-    :param coingecko_api_key: TODO
-    :return: TODO
-    """
+    """Check if the provided CoinGecko API key is a pro key."""
     # Try using the key as a pro API key
     cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
     try:
@@ -538,9 +483,7 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
     return False
 
 
-def calculate_il_impact_multi(
-    initial_prices: Any, final_prices: Any, weights: Any = None
-) -> Any:
+def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     """
     Calculate impermanent loss impact for multiple tokens.
 
@@ -551,11 +494,6 @@ def calculate_il_impact_multi(
 
     Returns:
         float: Impermanent loss impact
-
-    :param final_prices: TODO
-    :param initial_prices: TODO
-    :param weights: TODO
-    :return: TODO
     """
     if not initial_prices or not final_prices:
         return 0
@@ -592,29 +530,17 @@ def calculate_il_impact_multi(
 
 
 def calculate_velodrome_il_risk_score_multi(
-    token_ids: Any,
+    token_ids,
     coingecko_api_key: str,
     time_period: int = 90,
-    pool_id: Any = None,
-    chain: Any = None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    pool_id=None,
+    chain=None,
+    x402_session=None,
+    x402_proxy=None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-) -> Optional[float]:
-    """Calculate IL risk score for multiple tokens.
-
-    :param chain: TODO
-    :param coingecko_api_key: TODO
-    :param pool_id: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param time_period: TODO
-    :param token_ids: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+) -> float:
+    """Calculate IL risk score for multiple tokens."""
     if price_cache is None:
         price_cache = {}
 
@@ -712,7 +638,7 @@ def calculate_velodrome_il_risk_score_multi(
                 avg_correlation += abs(correlation_matrix[i, j])
                 count += 1
 
-        avg_correlation = avg_correlation / count if count > 0 else 0  # type: ignore[assignment]
+        avg_correlation = avg_correlation / count if count > 0 else 0
 
         # Calculate volatility for each token
         volatilities = [np.std(prices) for prices in aligned_prices]
@@ -771,9 +697,7 @@ def calculate_velodrome_il_risk_score_multi(
         return None
 
 
-def get_epochs_by_address(
-    pool_id: Any, chain: Any, limit: Any = 30, offset: Any = 0
-) -> Any:
+def get_epochs_by_address(pool_id, chain, limit=30, offset=0):
     """
     Get historical epochs for a pool using RewardsSugar contract.
 
@@ -785,12 +709,6 @@ def get_epochs_by_address(
 
     Returns:
         List of epoch data or None if fetching fails
-
-    :param chain: TODO
-    :param limit: TODO
-    :param offset: TODO
-    :param pool_id: TODO
-    :return: TODO
     """
     try:
         # Map chain name to chain ID
@@ -833,7 +751,7 @@ def get_epochs_by_address(
             # Try to get the function directly to check if it exists
             try:
                 # Check if the function exists
-                contract_instance.functions.epochsByAddress
+                fn = contract_instance.functions.epochsByAddress
 
                 # Call epochsByAddress function with proper types
                 epochs_data = contract_instance.functions.epochsByAddress(
@@ -891,13 +809,8 @@ def get_epochs_by_address(
 
 
 def get_velodrome_pool_sharpe_ratio(
-    pool_id: Any,
-    chain: Any,
-    pool_fee: Any,
-    timerange: Any = "NINETY_DAYS",
-    days: Any = 365,
-    risk_free_rate: Any = 0.03,
-) -> Any:
+    pool_id, chain, pool_fee, timerange="NINETY_DAYS", days=365, risk_free_rate=0.03
+):
     """
     Calculate Sharpe ratio for a Velodrome pool using historical epoch data from RewardsSugar.
 
@@ -909,14 +822,6 @@ def get_velodrome_pool_sharpe_ratio(
 
     Returns:
         float: Sharpe ratio or None if calculation fails
-
-    :param chain: TODO
-    :param days: TODO
-    :param pool_fee: TODO
-    :param pool_id: TODO
-    :param risk_free_rate: TODO
-    :param timerange: TODO
-    :return: TODO
     """
     try:
         # Get epochs data from RewardsSugar
@@ -946,8 +851,10 @@ def get_velodrome_pool_sharpe_ratio(
             total_supplies.append(float(epoch[1]))
 
         # Get pool fee rate from Sugar contract
-        for _cid, cname in CHAIN_NAMES.items():
+        chain_id = None
+        for cid, cname in CHAIN_NAMES.items():
             if cname.upper() == chain.upper():
+                chain_id = cid
                 break
 
         # Use actual liquidity values as a proxy for share price
@@ -979,7 +886,7 @@ def get_velodrome_pool_sharpe_ratio(
 
             # Use only common indices
             if common_indices:
-                common_indices = sorted(list(common_indices))  # type: ignore[assignment]
+                common_indices = sorted(list(common_indices))
                 price_rets_filtered = price_rets.loc[common_indices]
                 fee_returns_filtered = fee_returns_series.loc[common_indices]
                 total_rets = (price_rets_filtered + fee_returns_filtered).dropna()
@@ -1097,7 +1004,7 @@ def analyze_velodrome_pool_liquidity(
     chain: str,
     price_impact: float = 0.01,
     max_allocation_percentage: float = DEFAULT_MAX_ALLOCATION_PERCENTAGE,
-) -> Any:
+):
     """
     Analyze pool liquidity and calculate depth score using historical epoch data from RewardsSugar.
 
@@ -1109,12 +1016,6 @@ def analyze_velodrome_pool_liquidity(
 
     Returns:
         Tuple of (depth_score, max_position_size)
-
-    :param chain: TODO
-    :param max_allocation_percentage: TODO
-    :param pool_id: TODO
-    :param price_impact: TODO
-    :return: TODO
     """
     try:
         # Get epochs data from RewardsSugar
@@ -1157,11 +1058,16 @@ def analyze_velodrome_pool_liquidity(
         # Cap depth score at reasonable values
         depth_score = min(depth_score, 1e6)
 
+        # Calculate liquidity risk multiplier
+        liquidity_risk_multiplier = (
+            max(0, 1 - (1 / max(1, depth_score))) if depth_score > 0 else 0
+        )
+
         # Apply hard allocation cap based on max_allocation_percentage
         hard_max_allocation = avg_tvl * max_allocation_percentage
         max_position_size = hard_max_allocation
         logger.info(
-            f"Pool {pool_id}: Applied {max_allocation_percentage * 100}% allocation cap: {hard_max_allocation:.2f}"
+            f"Pool {pool_id}: Applied {max_allocation_percentage*100}% allocation cap: {hard_max_allocation:.2f}"
         )
 
         # Cap max position size to reasonable values
@@ -1175,7 +1081,7 @@ def analyze_velodrome_pool_liquidity(
 
 
 def get_velodrome_pools(
-    chain_id: Any = OPTIMISM_CHAIN_ID, lp_sugar_address: Any = None, ledger_api: MagicMock = None  # type: ignore[assignment]
+    chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Get pools from Velodrome.
@@ -1187,11 +1093,6 @@ def get_velodrome_pools(
 
     Returns:
         List of pools or error dictionary
-
-    :param chain_id: TODO
-    :param ledger_api: TODO
-    :param lp_sugar_address: TODO
-    :return: TODO
     """
     # Use Sugar contract for all chains
     if chain_id in SUGAR_CONTRACT_ADDRESSES:
@@ -1210,7 +1111,7 @@ def get_velodrome_pools(
 
 
 def get_velodrome_pools_via_sugar(
-    lp_sugar_address: Any, rpc_url: Any = None, chain_id: Any = MODE_CHAIN_ID
+    lp_sugar_address, rpc_url=None, chain_id=MODE_CHAIN_ID
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Get pools from Velodrome via Sugar contract (Mode).
@@ -1221,11 +1122,6 @@ def get_velodrome_pools_via_sugar(
 
     Returns:
         List of pools or error dictionary
-
-    :param chain_id: TODO
-    :param lp_sugar_address: TODO
-    :param rpc_url: TODO
-    :return: TODO
     """
     # Check cache first
     cache_key = f"{chain_id}:{lp_sugar_address}"
@@ -1238,7 +1134,7 @@ def get_velodrome_pools_via_sugar(
     if rpc_url is None:
         rpc_url = RPC_ENDPOINTS[MODE_CHAIN_ID]
 
-    CHAIN_NAMES.get(chain_id, "unknown")
+    chain_name = CHAIN_NAMES.get(chain_id, "unknown")
 
     try:
         # Initialize Web3 with the correct provider using cached connection
@@ -1309,7 +1205,7 @@ def get_velodrome_pools_via_sugar(
                     }
                     # Only log if type is not 0 or -1 and tick is not 0
                     if pool["type"] not in [0, -1] and pool["tick"] != 0:
-                        CHAIN_NAMES.get(chain_id, "unknown").capitalize()
+                        chain_name = CHAIN_NAMES.get(chain_id, "unknown").capitalize()
                     if pool["tick"] == 0 and pool["type"] in [0, -1]:
                         pool["is_stable"] = True if pool["type"] == 0 else False
                     else:
@@ -1334,8 +1230,8 @@ def get_velodrome_pools_via_sugar(
         for pool in all_pools:
             # Skip pools with missing or zero-address tokens
             ZERO_ADDR = "0x0000000000000000000000000000000000000000"
-            str(pool.get("token0", ZERO_ADDR)).lower()
-            str(pool.get("token1", ZERO_ADDR)).lower()
+            token0 = str(pool.get("token0", ZERO_ADDR)).lower()
+            token1 = str(pool.get("token1", ZERO_ADDR)).lower()
             # Format the pool to match subgraph format
             formatted_pool = {
                 "id": pool["id"],
@@ -1382,12 +1278,8 @@ def get_velodrome_pools_via_sugar(
 
 
 def calculate_tvl_from_reserves(
-    reserve0: Any,
-    reserve1: Any,
-    token0_address: Any,
-    token1_address: Any,
-    token_prices: Any = None,
-) -> Any:
+    reserve0, reserve1, token0_address, token1_address, token_prices=None
+):
     """
     Calculate TVL from token reserves and prices.
 
@@ -1400,13 +1292,6 @@ def calculate_tvl_from_reserves(
 
     Returns:
         String representation of the TVL in USD
-
-    :param reserve0: TODO
-    :param reserve1: TODO
-    :param token0_address: TODO
-    :param token1_address: TODO
-    :param token_prices: TODO
-    :return: TODO
     """
     # Check cache first
     cache_key = f"{token0_address}:{token1_address}:{reserve0}:{reserve1}"
@@ -1459,23 +1344,14 @@ def calculate_tvl_from_reserves(
 
 
 def calculate_position_details_for_velodrome(
-    pool_data: Any,
+    pool_data,
     coingecko_api_key: None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    x402_session=None,
+    x402_proxy=None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-) -> Any:
-    """Calculate APR and other position data for a pool based on the official Velodrome formula
-
-    :param coingecko_api_key: TODO
-    :param pool_data: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+):
+    """Calculate APR and other position data for a pool based on the official Velodrome formula"""
     # Extract necessary values from pool data
     day_seconds = 24 * 60 * 60  # Seconds in a day
 
@@ -1590,12 +1466,7 @@ def calculate_position_details_for_velodrome(
 
 
 def calculate_ema(prices: List[float], period: int) -> np.ndarray:
-    """Calculate Exponential Moving Average (EMA) from a list of price data points.
-
-    :param period: TODO
-    :param prices: TODO
-    :return: TODO
-    """
+    """Calculate Exponential Moving Average (EMA) from a list of price data points."""
     prices_array = np.array(prices)
     ema = np.zeros_like(prices_array)
 
@@ -1610,13 +1481,7 @@ def calculate_ema(prices: List[float], period: int) -> np.ndarray:
 
 
 def calculate_std_dev(prices: List[float], ema: np.ndarray, window: int) -> np.ndarray:
-    """Calculate rolling standard deviation of price deviations from EMA over a window.
-
-    :param ema: TODO
-    :param prices: TODO
-    :param window: TODO
-    :return: TODO
-    """
+    """Calculate rolling standard deviation of price deviations from EMA over a window."""
     prices_array = np.array(prices)
     length = len(prices_array)
     std_dev = np.zeros(length)
@@ -1650,23 +1515,13 @@ def evaluate_band_configuration(
     band_allocations: List[float],
     min_width_pct: float,
 ) -> Dict[str, float]:
-    """Evaluate and simulate performance of a specific liquidity band configuration.
-
-    :param band_allocations: TODO
-    :param band_multipliers: TODO
-    :param ema: TODO
-    :param min_width_pct: TODO
-    :param prices: TODO
-    :param std_dev: TODO
-    :param z_scores: TODO
-    :return: TODO
-    """
+    """Evaluate and simulate performance of a specific liquidity band configuration."""
     # Calculate band regions using Z-scores
     # Note: R uses 1-indexed arrays, but Python uses 0-indexed arrays
     # So band_multipliers[0] in Python corresponds to band_multipliers[1] in R
-    band1_mask = z_scores <= band_multipliers[0]  # type: ignore[operator]
-    band2_mask = (z_scores > band_multipliers[0]) & (z_scores <= band_multipliers[1])  # type: ignore[operator]
-    band3_mask = (z_scores > band_multipliers[1]) & (z_scores <= band_multipliers[2])  # type: ignore[operator]
+    band1_mask = z_scores <= band_multipliers[0]
+    band2_mask = (z_scores > band_multipliers[0]) & (z_scores <= band_multipliers[1])
+    band3_mask = (z_scores > band_multipliers[1]) & (z_scores <= band_multipliers[2])
 
     # Calculate price coverage by band
     band1_count = np.sum(band1_mask)
@@ -1738,19 +1593,7 @@ def run_monte_carlo_level(
     min_width_pct: float,
     verbose: bool = False,
 ) -> Dict[str, Any]:
-    """Run Monte Carlo simulations to optimize a single liquidity band level.
-
-    :param ema: TODO
-    :param max_multiplier: TODO
-    :param min_multiplier: TODO
-    :param min_width_pct: TODO
-    :param num_simulations: TODO
-    :param prices: TODO
-    :param std_dev: TODO
-    :param verbose: TODO
-    :param z_scores: TODO
-    :return: TODO
-    """
+    """Run Monte Carlo simulations to optimize a single liquidity band level."""
     # Prepare arrays to hold simulation results
     sim_nums = np.arange(num_simulations)
     m1_values = np.zeros(num_simulations)
@@ -1768,7 +1611,7 @@ def run_monte_carlo_level(
         if verbose and sim_num % 20 == 0:
             logger.info(
                 f"Level {min_multiplier:.4f}-{max_multiplier:.4f}: "
-                f"Simulation {sim_num + 1}/{num_simulations}"
+                f"Simulation {sim_num+1}/{num_simulations}"
             )
 
         # Generate random inner band multiplier within range
@@ -1857,15 +1700,15 @@ def run_monte_carlo_level(
         )
         logger.info(
             f"  Inner Band: {top_config['band_multipliers'][0]:.4f}σ "
-            f"({top_config['band_allocations'][0] * 100:.1f}% allocation)"
+            f"({top_config['band_allocations'][0]*100:.1f}% allocation)"
         )
         logger.info(
             f"  Middle Band: {top_config['band_multipliers'][1]:.4f}σ "
-            f"({top_config['band_allocations'][1] * 100:.1f}% allocation)"
+            f"({top_config['band_allocations'][1]*100:.1f}% allocation)"
         )
         logger.info(
             f"  Outer Band: {top_config['band_multipliers'][2]:.4f}σ "
-            f"({top_config['band_allocations'][2] * 100:.1f}% allocation)"
+            f"({top_config['band_allocations'][2]*100:.1f}% allocation)"
         )
         logger.info(
             f"  Performance: {top_config['percent_in_bounds']:.2f}% in bounds, "
@@ -1900,15 +1743,7 @@ def optimize_stablecoin_bands(
     std_dev_window: int = 14,
     verbose: bool = False,
 ) -> Dict[str, Any]:
-    """Optimize liquidity band allocation for stablecoin pools based on historical price data.
-
-    :param ema_period: TODO
-    :param min_width_pct: TODO
-    :param prices: TODO
-    :param std_dev_window: TODO
-    :param verbose: TODO
-    :return: TODO
-    """
+    """Optimize liquidity band allocation for stablecoin pools based on historical price data."""
     # Calculate EMA and standard deviation
     prices_array = np.array(prices)
     ema = calculate_ema(prices_array, ema_period)
@@ -1966,9 +1801,9 @@ def optimize_stablecoin_bands(
             ema,
             std_dev,
             z_scores,
-            level_config["min_multiplier"],  # type: ignore[arg-type]
-            level_config["max_multiplier"],  # type: ignore[arg-type]
-            level_config["num_simulations"],  # type: ignore[arg-type]
+            level_config["min_multiplier"],
+            level_config["max_multiplier"],
+            level_config["num_simulations"],
             min_width_pct,
             verbose,
         )
@@ -2004,8 +1839,8 @@ def optimize_stablecoin_bands(
                 if verbose:
                     logger.info(">> Triggering next recursion level <<")
                     logger.info(
-                        f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "  # type: ignore[operator]
-                        f"(threshold: {level_config['trigger_threshold'] * 100:.1f}%)"  # type: ignore[operator]
+                        f"Inner band allocation: {best_config['band_allocations'][0]*100:.1f}% "
+                        f"(threshold: {level_config['trigger_threshold']*100:.1f}%)"
                     )
                     logger.info(
                         f"Inner band multiplier: {best_config['band_multipliers'][0]:.4f}σ "
@@ -2025,30 +1860,30 @@ def optimize_stablecoin_bands(
     # After all recursion levels, return the best overall result
     if verbose:
         logger.info("BEST OVERALL CONFIGURATION:")
-        logger.info(f"From {best_overall['level_name']}")  # type: ignore[index]
+        logger.info(f"From {best_overall['level_name']}")
         logger.info(
-            f"Band Multipliers: {best_overall['best_config']['band_multipliers'][0]:.4f}, "  # type: ignore[index]
-            f"{best_overall['best_config']['band_multipliers'][1]:.4f}, "  # type: ignore[index]
-            f"{best_overall['best_config']['band_multipliers'][2]:.4f}"  # type: ignore[index]
+            f"Band Multipliers: {best_overall['best_config']['band_multipliers'][0]:.4f}, "
+            f"{best_overall['best_config']['band_multipliers'][1]:.4f}, "
+            f"{best_overall['best_config']['band_multipliers'][2]:.4f}"
         )
         logger.info(
-            f"Band Allocations: {best_overall['best_config']['band_allocations'][0] * 100:.1f}%, "  # type: ignore[index]
-            f"{best_overall['best_config']['band_allocations'][1] * 100:.1f}%, "  # type: ignore[index]
-            f"{best_overall['best_config']['band_allocations'][2] * 100:.1f}%"  # type: ignore[index]
+            f"Band Allocations: {best_overall['best_config']['band_allocations'][0]*100:.1f}%, "
+            f"{best_overall['best_config']['band_allocations'][1]*100:.1f}%, "
+            f"{best_overall['best_config']['band_allocations'][2]*100:.1f}%"
         )
         logger.info(
-            f"Z-Score Economic Score: {best_overall['best_config']['zscore_economic_score']:.4f}"  # type: ignore[index]
+            f"Z-Score Economic Score: {best_overall['best_config']['zscore_economic_score']:.4f}"
         )
 
     # Return the best configuration
     return {
-        "band_multipliers": best_overall["best_config"]["band_multipliers"],  # type: ignore[index]
-        "band_allocations": best_overall["best_config"]["band_allocations"],  # type: ignore[index]
-        "zscore_economic_score": best_overall["best_config"]["zscore_economic_score"],  # type: ignore[index]
-        "percent_in_bounds": best_overall["best_config"]["percent_in_bounds"],  # type: ignore[index]
-        "avg_weighted_width": best_overall["best_config"]["avg_weighted_width"],  # type: ignore[index]
-        "from_level": best_overall["level"],  # type: ignore[index]
-        "from_level_name": best_overall["level_name"],  # type: ignore[index]
+        "band_multipliers": best_overall["best_config"]["band_multipliers"],
+        "band_allocations": best_overall["best_config"]["band_allocations"],
+        "zscore_economic_score": best_overall["best_config"]["zscore_economic_score"],
+        "percent_in_bounds": best_overall["best_config"]["percent_in_bounds"],
+        "avg_weighted_width": best_overall["best_config"]["avg_weighted_width"],
+        "from_level": best_overall["level"],
+        "from_level_name": best_overall["level_name"],
     }
 
 
@@ -2061,17 +1896,7 @@ def calculate_tick_range_from_bands_wrapper(
     min_tick: int = MIN_TICK,
     max_tick: int = MAX_TICK,
 ) -> Dict[str, Any]:
-    """Convert band multipliers to tick ranges for Velodrome liquidity provision.
-
-    :param band_multipliers: TODO
-    :param ema: TODO
-    :param max_tick: TODO
-    :param min_tick: TODO
-    :param price_to_tick_function: TODO
-    :param standard_deviation: TODO
-    :param tick_spacing: TODO
-    :return: TODO
-    """
+    """Convert band multipliers to tick ranges for Velodrome liquidity provision."""
     # Convert band multipliers to price ranges using the formula:
     # Upper bound = EMA + (sigma*multiplier)
     # Lower bound = EMA - (sigma*multiplier)
@@ -2090,7 +1915,7 @@ def calculate_tick_range_from_bands_wrapper(
     logger.info(f"Band 3 price range: lower={band3_lower}, upper={band3_upper}")
 
     # Convert to ticks and round to tick spacing
-    def round_to_spacing(tick: Any) -> Any:
+    def round_to_spacing(tick):
         return int(tick // tick_spacing) * tick_spacing
 
     # Convert prices to ticks
@@ -2146,12 +1971,7 @@ def calculate_tick_range_from_bands_wrapper(
 
 
 def get_tick_spacing_velodrome(pool_address: str, chain_id: int) -> Optional[int]:
-    """Get velodrome pool tick spacing using VelodromeCLPoolContract
-
-    :param chain_id: TODO
-    :param pool_address: TODO
-    :return: TODO
-    """
+    """Get velodrome pool tick spacing using VelodromeCLPoolContract"""
     try:
         rpc_url = RPC_ENDPOINTS.get(chain_id)
         if not rpc_url:
@@ -2186,14 +2006,9 @@ def get_tick_spacing_velodrome(pool_address: str, chain_id: int) -> Optional[int
 
 
 def get_pool_tokens(pool_address: str, chain_id: int) -> Optional[Tuple[str, str]]:
-    """Get the token addresses from a Velodrome pool using VelodromeCLPoolContract.
-
-    STEP 2 in the position-opening flow; mirrors the implementation from
-    velodrome.py adapted for standalone use.
-
-    :param chain_id: TODO
-    :param pool_address: TODO
-    :return: TODO
+    """
+    STEP 2: Get the token addresses from a Velodrome pool using VelodromeCLPoolContract
+    Exact implementation from velodrome.py adapted for standalone use
     """
     try:
         rpc_url = RPC_ENDPOINTS.get(chain_id)
@@ -2228,12 +2043,7 @@ def get_pool_tokens(pool_address: str, chain_id: int) -> Optional[Tuple[str, str
 
 
 def get_current_pool_price(pool_address: str, chain_id: int) -> Optional[float]:
-    """Get the current price from a Velodrome concentrated liquidity pool
-
-    :param chain_id: TODO
-    :param pool_address: TODO
-    :return: TODO
-    """
+    """Get the current price from a Velodrome concentrated liquidity pool"""
     try:
         rpc_url = RPC_ENDPOINTS.get(chain_id)
         if not rpc_url:
@@ -2280,19 +2090,10 @@ def get_coin_id_from_address(
     address: str,
     platform: str,
     coingecko_api_key: Optional[str] = None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    x402_session=None,
+    x402_proxy=None,
 ) -> Optional[str]:
-    """Retrieve CoinGecko coin ID
-
-    :param address: TODO
-    :param chain: TODO
-    :param coingecko_api_key: TODO
-    :param platform: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Retrieve CoinGecko coin ID"""
     try:
         # Check stablecoin mappings first
         stablecoin_mappings = {
@@ -2315,6 +2116,7 @@ def get_coin_id_from_address(
             "0xd988097fb8612cc24eec14542bc03424c656005f": "mode-bridged-usdc-mode",
             "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": None,
             "0xf0f161fda2712db8b566946122a5af183995e2ed": "mode-bridged-usdt-mode",
+            "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
         }
 
         if address.lower() in stablecoin_mappings:
@@ -2384,22 +2186,12 @@ def get_historical_market_data(
     coin_id: str,
     days: int,
     coingecko_api_key: Optional[str] = None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    x402_session=None,
+    x402_proxy=None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
 ) -> Optional[Dict[str, Any]]:
-    """Get historical market data using x402 requests when available
-
-    :param coin_id: TODO
-    :param coingecko_api_key: TODO
-    :param days: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Get historical market data using x402 requests when available"""
     if price_cache is None:
         price_cache = {}
     try:
@@ -2509,24 +2301,12 @@ def get_pool_token_history(
     token1_address: str,
     days: int = 30,
     coingecko_api_key: Optional[str] = None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    x402_session=None,
+    x402_proxy=None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
 ) -> Optional[Dict[str, Any]]:
-    """Fetch historical price data for a token pair
-
-    :param chain: TODO
-    :param coingecko_api_key: TODO
-    :param days: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param token0_address: TODO
-    :param token1_address: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Fetch historical price data for a token pair"""
     logger.info(
         f"Fetching historical price data for tokens: {token0_address} and {token1_address}"
     )
@@ -2624,24 +2404,13 @@ def calculate_tick_lower_and_upper_velodrome(
     chain: str,
     pool_address: str,
     is_stable: bool,
-    coingecko_api_key: Any = None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    coingecko_api_key=None,
+    x402_session=None,
+    x402_proxy=None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
 ) -> Optional[List[Dict[str, Any]]]:
-    """Calculate optimal tick ranges for a Velodrome Concentrated position based on pool features.
-
-    :param chain: TODO
-    :param coingecko_api_key: TODO
-    :param is_stable: TODO
-    :param pool_address: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Calculate optimal tick ranges for a Velodrome Concentrated position based on pool features."""
     logger.info(
         f"Calculating tick ranges using stablecoin model for pool {pool_address}"
     )
@@ -2665,7 +2434,7 @@ def calculate_tick_lower_and_upper_velodrome(
             return None
 
         # 2. Get the token addresses from the pool
-        token0, token1 = get_pool_tokens(pool_address, chain_id)  # type: ignore[misc]
+        token0, token1 = get_pool_tokens(pool_address, chain_id)
         if not token0 or not token1:
             logger.error(f"Failed to get tokens for pool {pool_address}")
             return None
@@ -2720,10 +2489,10 @@ def calculate_tick_lower_and_upper_velodrome(
 
         # For stablecoin pools, we can use more aggressive settings
         if is_stable:
-            model_params["min_width_pct"] = 0.0001  # type: ignore[assignment]  # Updated from 0.00001 to 0.0001
+            model_params["min_width_pct"] = 0.0001  # Updated from 0.00001 to 0.0001
 
         # Run the optimization
-        result = optimize_stablecoin_bands(prices=ratio_prices, **model_params)  # type: ignore[arg-type]
+        result = optimize_stablecoin_bands(prices=ratio_prices, **model_params)
         logger.info(f"Result from models: {result}")
 
         if not result:
@@ -2770,7 +2539,7 @@ def calculate_tick_lower_and_upper_velodrome(
         positions = []
         band_allocations = result["band_allocations"]
         for i, _band_name in enumerate(["inner", "middle", "outer"]):
-            band_data = tick_range_results[f"band{i + 1}"]
+            band_data = tick_range_results[f"band{i+1}"]
             tick_lower = band_data["tick_lower"]
             tick_upper = band_data["tick_upper"]
             positions.append(
@@ -2792,7 +2561,7 @@ def calculate_tick_lower_and_upper_velodrome(
                     f"Adjusted position: tick_lower={p['tick_lower']}, tick_upper={p['tick_upper']}."
                 )
 
-        tick_to_band: Dict[Any, Any] = defaultdict(
+        tick_to_band = defaultdict(
             lambda: {"tick_lower": None, "tick_upper": None, "allocation": 0.0}
         )
 
@@ -2865,16 +2634,8 @@ def calculate_tick_lower_and_upper_velodrome(
         return None
 
 
-def get_filtered_pools_for_velodrome(
-    pools: Any, current_positions: Any, whitelisted_assets: Any
-) -> Any:
-    """Filter pools based on criteria and exclude current positions.
-
-    :param current_positions: TODO
-    :param pools: TODO
-    :param whitelisted_assets: TODO
-    :return: TODO
-    """
+def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_assets):
+    """Filter pools based on criteria and exclude current positions."""
     qualifying_pools = []
 
     logger.info(f"Starting pool filtering with {len(pools)} total pools")
@@ -2943,28 +2704,16 @@ def get_filtered_pools_for_velodrome(
 
 def format_velodrome_pool_data(
     pools: List[Dict[str, Any]],
-    chain_id: Any = OPTIMISM_CHAIN_ID,
-    coingecko_api_key: Any = None,
-    coin_id_mapping: Any = None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    chain_id=OPTIMISM_CHAIN_ID,
+    coingecko_api_key=None,
+    coin_id_mapping=None,
+    x402_session=None,
+    x402_proxy=None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-    **kwargs: Any,
+    **kwargs,
 ) -> List[Dict[str, Any]]:
-    """Format pool data for output according to required schema.
-
-    :param **kwargs: TODO
-    :param chain_id: TODO
-    :param coin_id_mapping: TODO
-    :param coingecko_api_key: TODO
-    :param pools: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
-    """
+    """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
 
@@ -3062,8 +2811,10 @@ def format_velodrome_pool_data(
                 # Get token IDs for CoinGecko API
                 token_ids = []
 
-                for token in tokens:
+                for i, token in enumerate(tokens):
                     token_symbol = token["symbol"] or ""
+                    token_address = token["id"]
+
                     token_id = get_coin_id_from_symbol(
                         coin_id_mapping, token_symbol, chain_name
                     )
@@ -3105,9 +2856,7 @@ def format_velodrome_pool_data(
     return formatted_pools
 
 
-def standardize_metrics(
-    pools: Any, apr_weight: Any = 0.7, tvl_weight: Any = 0.3
-) -> Any:
+def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
     """
     Standardize APR and TVL using Z-score normalization and calculate composite scores.
 
@@ -3118,11 +2867,6 @@ def standardize_metrics(
 
     Returns:
         List of pools with added standardized metrics and composite scores
-
-    :param apr_weight: TODO
-    :param pools: TODO
-    :param tvl_weight: TODO
-    :return: TODO
     """
     if not pools:
         return pools
@@ -3173,14 +2917,14 @@ def standardize_metrics(
 
 
 def apply_composite_pre_filter(
-    pools: Any,
-    top_n: Any = 10,
-    apr_weight: Any = 0.7,
-    tvl_weight: Any = 0.3,
-    min_tvl_threshold: Any = 1000,
-    min_volume_threshold: Any = DEFAULT_MIN_VOLUME_THRESHOLD,
-    cl_filter: Any = None,
-) -> Any:
+    pools,
+    top_n=10,
+    apr_weight=0.7,
+    tvl_weight=0.3,
+    min_tvl_threshold=1000,
+    min_volume_threshold=DEFAULT_MIN_VOLUME_THRESHOLD,
+    cl_filter=None,
+):
     """
     Apply composite scoring pre-filter based on standardized APR and TVL.
 
@@ -3198,15 +2942,6 @@ def apply_composite_pre_filter(
 
     Returns:
         List of top N pools sorted by composite score in descending order
-
-    :param apr_weight: TODO
-    :param cl_filter: TODO
-    :param min_tvl_threshold: TODO
-    :param min_volume_threshold: TODO
-    :param pools: TODO
-    :param top_n: TODO
-    :param tvl_weight: TODO
-    :return: TODO
     """
     if not pools:
         return pools
@@ -3288,7 +3023,7 @@ def apply_composite_pre_filter(
     # Log top pools for debugging
     for i, pool in enumerate(result_pools[:5]):  # Log top 5
         logger.info(
-            f"Pool #{i + 1}: {pool.get('pool_address', 'N/A')} - "
+            f"Pool #{i+1}: {pool.get('pool_address', 'N/A')} - "
             f"APR: {pool.get('apr', 0):.2f}%, "
             f"TVL: ${pool.get('tvl', 0):,.0f}, "
             f"Composite Score: {pool.get('composite_score', 0):.3f}"
@@ -3297,7 +3032,7 @@ def apply_composite_pre_filter(
     return result_pools
 
 
-def get_top_n_pools_by_apr(pools: Any, n: Any = 10, cl_filter: Any = None) -> Any:
+def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     """
     Filter pools by CL status and return the top N pools by APR.
 
@@ -3311,11 +3046,6 @@ def get_top_n_pools_by_apr(pools: Any, n: Any = 10, cl_filter: Any = None) -> An
 
     Returns:
         List of the top N pools sorted by APR in descending order
-
-    :param cl_filter: TODO
-    :param n: TODO
-    :param pools: TODO
-    :return: TODO
     """
     # First filter by CL status if specified
     if cl_filter is not None:
@@ -3333,20 +3063,20 @@ def get_top_n_pools_by_apr(pools: Any, n: Any = 10, cl_filter: Any = None) -> An
 
 
 def get_opportunities_for_velodrome(
-    current_positions: Any,
-    coingecko_api_key: Any,
-    chain_id: Any = OPTIMISM_CHAIN_ID,
-    lp_sugar_address: Any = None,
-    ledger_api: MagicMock = None,  # type: ignore[assignment]
-    top_n: Any = 10,
-    whitelisted_assets: Any = None,
-    coin_id_mapping: Any = None,
-    x402_session: Any = None,
-    x402_proxy: Any = None,
+    current_positions,
+    coingecko_api_key,
+    chain_id=OPTIMISM_CHAIN_ID,
+    lp_sugar_address=None,
+    ledger_api=None,
+    top_n=10,
+    whitelisted_assets=None,
+    coin_id_mapping=None,
+    x402_session=None,
+    x402_proxy=None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-    **kwargs: Any,
-) -> Any:
+    **kwargs,
+):
     """
     Get and format pool opportunities with optimized caching and performance.
 
@@ -3365,21 +3095,6 @@ def get_opportunities_for_velodrome(
 
     Returns:
         List of formatted pool opportunities
-
-    :param **kwargs: TODO
-    :param chain_id: TODO
-    :param coin_id_mapping: TODO
-    :param coingecko_api_key: TODO
-    :param current_positions: TODO
-    :param ledger_api: TODO
-    :param lp_sugar_address: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param top_n: TODO
-    :param whitelisted_assets: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
     """
     start_time = time.time()
 
@@ -3471,7 +3186,7 @@ def calculate_metrics(
     x402_proxy: Optional[Any] = None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-    **kwargs: Any,
+    **kwargs,
 ) -> Optional[Dict[str, Any]]:
     """
     Calculate risk metrics for a specific Velodrome pool position.
@@ -3483,16 +3198,6 @@ def calculate_metrics(
 
     Returns:
         Dictionary containing calculated metrics or None if calculation fails
-
-    :param **kwargs: TODO
-    :param coin_id_mapping: TODO
-    :param coingecko_api_key: TODO
-    :param position: TODO
-    :param price_cache: TODO
-    :param price_cache_ttl: TODO
-    :param x402_proxy: TODO
-    :param x402_session: TODO
-    :return: TODO
     """
     try:
         # Extract position details
@@ -3566,7 +3271,7 @@ def calculate_metrics(
 
 
 def run(
-    force_refresh: Any = False, **kwargs: Any
+    force_refresh=False, **kwargs
 ) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
     """Main function to run the Velodrome pool analysis.
 
@@ -3584,10 +3289,6 @@ def run(
 
     Returns:
         Dict containing either error messages or result data
-
-    :param **kwargs: TODO
-    :param force_refresh: TODO
-    :return: TODO
     """
     # Clear previous errors
     get_errors().clear()

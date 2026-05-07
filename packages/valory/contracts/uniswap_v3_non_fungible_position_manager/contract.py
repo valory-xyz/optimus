@@ -83,7 +83,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_hash = contract_instance.encode_abi("mint", args=(mint_params,))
 
-        return dict(tx_hash=tx_hash)
+        return dict(tx_hash=bytes.fromhex(tx_hash[2:]))
 
     @classmethod
     def decrease_liquidity(
@@ -120,7 +120,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
             "decreaseLiquidity", args=(decrease_liquidity_params,)
         )
 
-        return dict(tx_hash=tx_hash)
+        return dict(tx_hash=bytes.fromhex(tx_hash[2:]))
 
     @classmethod
     def burn_token(
@@ -138,7 +138,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_hash = contract_instance.encode_abi("burn", args=(token_id,))
-        return dict(tx_hash=tx_hash)
+        return dict(tx_hash=bytes.fromhex(tx_hash[2:]))
 
     @classmethod
     def collect_tokens(
@@ -165,7 +165,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_hash = contract_instance.encode_abi("collect", args=(collect_params,))
 
-        return dict(tx_hash=tx_hash)
+        return dict(tx_hash=bytes.fromhex(tx_hash[2:]))
 
     @classmethod
     def get_pool_tokens(

@@ -38,10 +38,10 @@ class TestMint:
     """Tests for mint."""
 
     def test_mint_returns_tx_hash(self) -> None:
-        """Test that mint encodes a mint call and returns dict(tx_hash=tx_hash) as raw string."""
+        """Test that mint encodes a mint call and returns dict(tx_hash=...) as bytes."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xm1ntdata"
+        mock_instance.encode_abi.return_value = "0xa1f7da7a"
 
         with patch.object(
             UniswapV3NonfungiblePositionManagerContract,
@@ -64,7 +64,7 @@ class TestMint:
                 deadline=9999999,
             )
 
-        assert result == {"tx_hash": "0xm1ntdata"}
+        assert result == {"tx_hash": bytes.fromhex("a1f7da7a")}
         mock_instance.encode_abi.assert_called_once_with(
             "mint",
             args=(
@@ -92,7 +92,7 @@ class TestDecreaseLiquidity:
         """Test that decrease_liquidity encodes a decreaseLiquidity call and returns tx_hash."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xdecr"
+        mock_instance.encode_abi.return_value = "0xdecfdecf"
 
         with patch.object(
             UniswapV3NonfungiblePositionManagerContract,
@@ -109,7 +109,7 @@ class TestDecreaseLiquidity:
                 deadline=8888888,
             )
 
-        assert result == {"tx_hash": "0xdecr"}
+        assert result == {"tx_hash": bytes.fromhex("decfdecf")}
         mock_instance.encode_abi.assert_called_once_with(
             "decreaseLiquidity",
             args=((42, 5000, 100, 200, 8888888),),
@@ -123,7 +123,7 @@ class TestBurnToken:
         """Test that burn_token encodes a burn call and returns tx_hash."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xburnt0ken"
+        mock_instance.encode_abi.return_value = "0xb12347ef"
 
         with patch.object(
             UniswapV3NonfungiblePositionManagerContract,
@@ -136,7 +136,7 @@ class TestBurnToken:
                 token_id=99,
             )
 
-        assert result == {"tx_hash": "0xburnt0ken"}
+        assert result == {"tx_hash": bytes.fromhex("b12347ef")}
         mock_instance.encode_abi.assert_called_once_with("burn", args=(99,))
 
 
@@ -147,7 +147,7 @@ class TestCollectTokens:
         """Test that collect_tokens encodes a collect call and returns tx_hash."""
         mock_ledger_api = MagicMock()
         mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xc011ect"
+        mock_instance.encode_abi.return_value = "0xc011ec70"
 
         with patch.object(
             UniswapV3NonfungiblePositionManagerContract,
@@ -163,7 +163,7 @@ class TestCollectTokens:
                 amount1_max=20000,
             )
 
-        assert result == {"tx_hash": "0xc011ect"}
+        assert result == {"tx_hash": bytes.fromhex("c011ec70")}
         mock_instance.encode_abi.assert_called_once_with(
             "collect",
             args=((7, MOCK_RECIPIENT, 10000, 20000),),

@@ -22,6 +22,8 @@
 
 import asyncio
 import json
+import logging
+import re
 import ssl
 from functools import wraps
 from typing import Any, Dict, Optional, Union, cast
@@ -41,27 +43,63 @@ from packages.valory.protocols.srr.message import SrrMessage
 
 PUBLIC_ID = PublicId.from_str("valory/mirror_db:0.1.0")
 
+_MODULE_LOGGER = logging.getLogger(__name__)
+
+
+class MirrorDBHTTPError(Exception):
+    """HTTP error raised by mirror_db with the response status code attached."""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        """Initialize with a status code and message."""
+        super().__init__(message)
+        self.status_code = status_code
+
+
+_RETRYABLE_NETWORK_EXCEPTIONS: tuple = (
+    aiohttp.ClientConnectorError,
+    aiohttp.ServerTimeoutError,
+    asyncio.TimeoutError,
+)
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Return True if the exception is a transient failure worth retrying."""
+    if isinstance(exc, MirrorDBHTTPError):
+        return exc.status_code in (408, 429) or 500 <= exc.status_code < 600
+    return isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS)
+
 
 def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_factor=2):  # type: ignore
-    """Retry a function with exponential backoff."""
+    """Retry a function with exponential backoff on transient failures.
+
+    Retries 408, 429, 5xx, and transient network errors (ClientConnectorError,
+    ServerTimeoutError, asyncio.TimeoutError). All other exceptions propagate
+    immediately.
+    """
 
     def decorator(func):  # type: ignore
         @wraps(func)
         async def wrapper(*args, **kwargs):  # type: ignore
             delay = initial_delay
             last_exception: Optional[Exception] = None
+            logger = getattr(args[0], "logger", None) if args else None
+            if logger is None:
+                logger = _MODULE_LOGGER
             for attempt in range(max_retries):
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
-                    if "rate limit exceeded" not in str(e).lower():
+                    if not _is_retryable(e):
                         raise
                     if attempt < max_retries - 1:
-                        print(f"Retrying in {delay} seconds due to rate limit...")
+                        logger.warning(
+                            f"Retrying mirror_db request in {delay}s "
+                            f"(attempt {attempt + 1}/{max_retries}): {e}"
+                        )
                         await asyncio.sleep(delay)
                         delay *= backoff_factor
-            print("Max retries reached. Could not complete the request.")
+            logger.error(f"Max retries ({max_retries}) reached for mirror_db request")
             raise last_exception  # type: ignore
 
         return wrapper
@@ -72,7 +110,7 @@ def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_facto
 class SrrDialogues(BaseSrrDialogues):
     """A class to keep track of SRR dialogues."""
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, **kwargs: Any) -> None:
         """
         Initialize dialogues.
 
@@ -127,6 +165,7 @@ class GenericMirrorDBConnection(Connection):
         """
         super().__init__(*args, **kwargs)
         self.base_url = self.configuration.config.get("mirror_db_base_url")
+        # self.api_key: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.dialogues = SrrDialogues(connection_id=PUBLIC_ID)
         self._response_envelopes: Optional[asyncio.Queue] = None
@@ -135,7 +174,9 @@ class GenericMirrorDBConnection(Connection):
 
         # Store all configuration in a single dictionary
         self._config = {
+            # "api_key": self.api_key,
             "base_url": self.base_url,
+            # Add other default configs here
         }
 
     @property
@@ -221,6 +262,13 @@ class GenericMirrorDBConnection(Connection):
         task = self.loop.create_task(self._get_response(message, dialogue))
         return task
 
+    @classmethod
+    def _is_valid_endpoint(cls, endpoint: str) -> bool:
+        """Return True if the endpoint matches one of the allowed patterns."""
+        return any(
+            re.match(pattern, endpoint) is not None for pattern in cls._VALID_ENDPOINTS
+        )
+
     def prepare_error_message(
         self, srr_message: SrrMessage, dialogue: Optional[BaseDialogue], error: str
     ) -> SrrMessage:
@@ -249,19 +297,48 @@ class GenericMirrorDBConnection(Connection):
 
         :param task: The completed task
         """
-        request = self.task_to_request.pop(task)
-        response_message: Optional[Message] = task.result()
+        request = None
+        try:
+            request = self.task_to_request.pop(task)
+            try:
+                response_message: Optional[Message] = task.result()
+            except Exception as e:  # pylint: disable=broad-except
+                self.logger.exception(
+                    "Unhandled exception in mirror_db task "
+                    f"(to={request.to}, sender={request.sender}): {e}"
+                )
+                response_message = self._build_typed_error_message(request, e)
 
-        response_envelope = None
-        if response_message is not None:
-            response_envelope = Envelope(
-                to=request.sender,
-                sender=request.to,
-                message=response_message,
-                context=request.context,
+            envelope: Optional[Envelope] = None
+            if response_message is not None:
+                envelope = Envelope(
+                    to=request.sender,
+                    sender=request.to,
+                    message=response_message,
+                    context=request.context,
+                )
+            self.response_envelopes.put_nowait(envelope)
+        except Exception as outer_exc:  # pylint: disable=broad-except
+            self.logger.exception(
+                f"Unrecoverable failure in _handle_done_task: {outer_exc}"
             )
+            self.response_envelopes.put_nowait(None)
 
-        self.response_envelopes.put_nowait(response_envelope)
+    def _build_typed_error_message(
+        self, request: Envelope, exc: Exception
+    ) -> Optional[Message]:
+        """Build an SRR error reply for a failed task."""
+        try:
+            srr_message = cast(SrrMessage, request.message)
+            dialogue = self.dialogues.update(srr_message)
+            return self.prepare_error_message(
+                srr_message,
+                dialogue,
+                f"Backend task failed: {exc}",
+            )
+        except Exception as build_exc:  # pylint: disable=broad-except
+            self.logger.exception(f"Failed to build typed error message: {build_exc}")
+            return None
 
     async def _get_response(
         self, srr_message: SrrMessage, dialogue: Optional[BaseDialogue]
@@ -280,7 +357,15 @@ class GenericMirrorDBConnection(Connection):
                 f"Performative `{srr_message.performative.value}` is not supported.",
             )
 
-        payload = json.loads(srr_message.payload)
+        try:
+            payload = json.loads(srr_message.payload)
+        except (json.JSONDecodeError, TypeError) as e:
+            self.logger.error(f"Failed to parse mirror_db request payload: {e}")
+            return self.prepare_error_message(
+                srr_message,
+                dialogue,
+                f"Failed to parse request payload: {e}",
+            )
         method_name = payload.get("method")
 
         if method_name not in self._ALLOWED_METHODS:
@@ -299,13 +384,20 @@ class GenericMirrorDBConnection(Connection):
                 f"Method {method_name} is not available.",
             )
 
-        # Log endpoint and payload (safe print that handles Unicode characters)
+        # Log endpoint and payload (safe log that handles Unicode characters)
         endpoint = payload.get("kwargs", {}).get("endpoint")
         try:
-            print(f"endpoint,payload : {endpoint}, {payload}")
+            self.logger.info(f"endpoint,payload : {endpoint,payload}")
         except UnicodeEncodeError:
             safe_payload = str(payload).encode("ascii", "replace").decode("ascii")
-            print(f"endpoint,payload : {endpoint}, {safe_payload}")
+            self.logger.info(f"endpoint,payload : {endpoint},{safe_payload}")
+
+        if endpoint is not None and not self._is_valid_endpoint(endpoint):
+            return self.prepare_error_message(
+                srr_message,
+                dialogue,
+                f"Endpoint {endpoint!r} does not match any allowed pattern.",
+            )
 
         try:
             response = await method(**payload.get("kwargs", {}))
@@ -333,13 +425,19 @@ class GenericMirrorDBConnection(Connection):
 
         :param response: The HTTP response
         :param action: The action being performed (for error messages)
-        :raises Exception: If the response status is not 200
+        :raises MirrorDBHTTPError: If the response status is not 200
         """
         if response.status == 200:
             return
-        error_content = await response.json()
-        detail = error_content.get("detail", error_content)
-        raise Exception(f"Error {action}: {detail} (HTTP {response.status})")
+        try:
+            error_content = await response.json()
+            detail = error_content.get("detail", error_content)
+        except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError):
+            detail = await response.text()
+        raise MirrorDBHTTPError(
+            response.status,
+            f"Error {action}: {detail} (HTTP {response.status})",
+        )
 
     @retry_with_exponential_backoff()
     async def create_(self, method_name: str, endpoint: str, data: Dict) -> Dict:
@@ -354,6 +452,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.post(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"creating resource via {method_name}"
@@ -371,6 +470,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.get(  # type: ignore
             f"{self.base_url}/{endpoint}",
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"reading resource via {method_name}"
@@ -390,6 +490,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.put(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"updating resource via {method_name}"
@@ -407,6 +508,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.delete(  # type: ignore
             f"{self.base_url}/{endpoint}",
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(
                 response, f"deleting resource via {method_name}"

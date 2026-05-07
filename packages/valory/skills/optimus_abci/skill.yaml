@@ -10,9 +10,9 @@ fingerprint:
   behaviours.py: bafybeib3kst4zp2btwplfwps3rptdknh7zjx2dndjcejzov4ldqmwcnzxu
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
-  fsm_specification.yaml: bafybeiclrv7v4i2dvig7uea3fjxqfwwfqp3vsnumy5647dulgfhha6mlea
-  handlers.py: bafybeiaxmtrrfbeuc3grmfzjato3zetsfxfqwsdkacgli5shfnktwbbkpe
-  models.py: bafybeidcnavvsrajvqlshmos3js5jiebaggmcov5nc5n3o5gswfp3mbkay
+  fsm_specification.yaml: bafybeig2kmu6pwiabradi3h62di4aap5zjamdh4e4gryh2kw7342twzv7e
+  handlers.py: bafybeickycbhvcp6rsoi4tpaz5so4so7mntlngyuyuo2shi7ru4zsen7mu
+  models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
   modius-ui-build/assets/index-DPlzseC6.js: bafybeihn3b6hvbogyassji7f22tao4hqrvypoan2xqv5dlbbkolq6icphy
@@ -108,7 +108,7 @@ fingerprint:
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
-  tests/test_handlers.py: bafybeibzsflhigceujudhchehidgitrayuajjg6uyhb6rp6gwvfu6ga4di
+  tests/test_handlers.py: bafybeicqjczpicumsjf7s2453lwgwiy4d5obday7j62plaw5alx6vsv3ki
   tests/test_models.py: bafybeigtkzz7qofobw4f2krnhqscpapspub3qnbwwpv7j4dzxtcjorle4u
   tests/test_prompts.py: bafybeibpbnuqhgntud3jiw4fjq77tffdcjoczg4mwu2qryka7vt7g5rl7i
 fingerprint_ignore_patterns: []
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeietlh4pq5wjsb6srpsqehcq3gwsod5c6gs4jdiwpzkgrwyxhbbbvq
 - valory/reset_pause_abci:0.1.0:bafybeifdzwzz5byan3ytsi46n4n2svtqme6475hk5z77sopymyzqszcpoa
 - valory/termination_abci:0.1.0:bafybeiadbtzcvzkwbrosshlsubilj7mwzdqfni6dr75wsd3vawhslpwqeu
-- valory/liquidity_trader_abci:0.1.0:bafybeihcbocx6klkphgudbkxwfvgrlmd7pyvmfj3d656c7gx32c5mcvmty
+- valory/liquidity_trader_abci:0.1.0:bafybeiekjrbdrmkvejvsgqlrpwufb4kvjlj5b2nk5bm764qstmrq5ypnpq
 - valory/transaction_settlement_abci:0.1.0:bafybeigiojqgbi54jhree3sqrzaudbmjxb7y2ete74bbliryi3t7ztwi5q
 - valory/funds_manager:0.1.0:bafybeihuwnkgrhqixl4zj55fz2awptmpmdnmub2uzkgbx7rve7bnhkkl5i
 behaviours:
@@ -298,7 +298,7 @@ models:
       - optimism
       - mode
       staking_chain: optimism
-      file_hash_to_strategies: '{"bafybeihagqopwmh3ywqulv7xk3slbhdysulep3e5yhz54cbugjst5f3aai":"merkl_pools_search","bafybeiaa5tgx4a26375jv3wa4eirj43dvycz3xdxdyqtbt4ft3cag6nv24":"max_apr_selection"}'
+      file_hash_to_strategies: '{"bafybeid7vmeeh6eeagyoa3nysq5oijyabous2eaw3gnm6yt5pnloimvbza":"merkl_pools_search","bafybeie4sceuc3z52jqtnsn5knnsjeogu6gsnetvp325ao2tf4vv3dqcee":"max_apr_selection"}'
       strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
       available_protocols:
       - balancer
@@ -333,6 +333,10 @@ models:
       x402_payment_requirements: '{"threshold":0.2,"top_up":0.25}'
       optimism_ledger_rpc: https://mainnet.optimism.io
       lifi_quote_to_amount_url: https://li.quest/v1/quote/toAmount
+      tls_verify: true
+      mode_conduit_explorer_url: https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2
+      safe_api_v1_url: https://safe-transaction-optimism.safe.global/api/v1
+      mode_native_explorer_url: https://explorer.mode.network/api
     class_name: Params
   coingecko:
     args:

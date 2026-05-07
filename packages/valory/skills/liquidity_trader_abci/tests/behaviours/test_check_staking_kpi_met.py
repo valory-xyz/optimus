@@ -21,23 +21,31 @@
 
 # pylint: skip-file
 
-from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
+
+import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
 
 
-def _make_behaviour() -> Any:
+def _gen_return_false(*args, **kwargs):
+    """Generator function that yields once and returns False."""
+    yield
+    return False
+
+
+def _make_behaviour():
     """Create a CheckStakingKPIMetBehaviour without __init__."""
     obj = object.__new__(CheckStakingKPIMetBehaviour)
     ctx = MagicMock()
     obj.__dict__["_context"] = ctx
+    obj._read_investing_paused = _gen_return_false
     return obj
 
 
-def _drive(gen: Any) -> Any:
+def _drive(gen):
     """Drive a generator to completion."""
     val = None
     while True:
@@ -50,9 +58,7 @@ def _drive(gen: Any) -> Any:
 class TestCheckStakingKPIMetBehaviour:
     """Tests for CheckStakingKPIMetBehaviour."""
 
-    def _run_async_act(
-        self, obj: Any, params_mock: MagicMock, synced_mock: MagicMock
-    ) -> None:
+    def _run_async_act(self, obj, params_mock, synced_mock):
         with (
             patch.object(
                 type(obj), "params", new_callable=PropertyMock, return_value=params_mock
@@ -68,10 +74,10 @@ class TestCheckStakingKPIMetBehaviour:
             obj.context.benchmark_tool.measure.return_value = benchmark_mock
             obj.context.agent_address = "0xagent"
 
-            def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            def fake_send(*args, **kwargs):
                 yield
 
-            def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            def fake_wait(*args, **kwargs):
                 yield
 
             obj.send_a2a_transaction = fake_send
@@ -89,7 +95,7 @@ class TestCheckStakingKPIMetBehaviour:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         synced_mock = MagicMock()
 
-        def fake_is_kpi_met() -> Generator[Any, Any, Any]:
+        def fake_is_kpi_met():
             yield
             return None
 
@@ -106,7 +112,7 @@ class TestCheckStakingKPIMetBehaviour:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         synced_mock = MagicMock()
 
-        def fake_is_kpi_met() -> Generator[Any, Any, Any]:
+        def fake_is_kpi_met():
             yield
             return True
 
@@ -126,7 +132,7 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.period_count = 5
         synced_mock.period_number_at_last_cp = 0
 
-        def fake_is_kpi_met() -> Generator[Any, Any, Any]:
+        def fake_is_kpi_met():
             yield
             return False
 
@@ -147,15 +153,15 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.period_number_at_last_cp = 0
         synced_mock.min_num_of_safe_tx_required = 5
 
-        def fake_is_kpi_met() -> Generator[Any, Any, Any]:
+        def fake_is_kpi_met():
             yield
             return False
 
-        def fake_get_nonces(chain: Any, multisig: Any) -> Generator[Any, Any, Any]:
+        def fake_get_nonces(chain, multisig):
             yield
             return 2
 
-        def fake_prepare_vanity_tx(chain: Any) -> Generator[Any, Any, Any]:
+        def fake_prepare_vanity_tx(chain):
             yield
             return "0xvanity_hash"
 
@@ -178,11 +184,11 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.period_number_at_last_cp = 0
         synced_mock.min_num_of_safe_tx_required = None
 
-        def fake_is_kpi_met() -> Generator[Any, Any, Any]:
+        def fake_is_kpi_met():
             yield
             return False
 
-        def fake_get_nonces(chain: Any, multisig: Any) -> Generator[Any, Any, Any]:
+        def fake_get_nonces(chain, multisig):
             yield
             return None
 
@@ -204,17 +210,97 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.period_number_at_last_cp = 0
         synced_mock.min_num_of_safe_tx_required = 5
 
-        def fake_is_kpi_met() -> Generator[Any, Any, Any]:
+        def fake_is_kpi_met():
             yield
             return False
 
-        def fake_get_nonces(chain: Any, multisig: Any) -> Generator[Any, Any, Any]:
+        def fake_get_nonces(chain, multisig):
             yield
             return 10  # 5 - 10 = -5
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
         self._run_async_act(obj, params_mock, synced_mock)
+        obj.set_done.assert_called_once()
+
+
+class TestCheckStakingKPIMetWithdrawalGate:
+    """Verify the gate at the top of async_act emits a withdrawal payload."""
+
+    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
+        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return True
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._is_staking_kpi_met = MagicMock(
+            side_effect=AssertionError(
+                "KPI lookup must not run when investing is paused"
+            )
+        )
+        obj._read_investing_paused = fake_read_investing_paused
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        _drive(obj.async_act())
+
+        assert captured["payload"].event == "withdrawal_initiated"
+        assert captured["payload"].tx_hash is None
+        obj.set_done.assert_called_once()
+
+    def test_gate_falls_through_when_not_paused(self) -> None:
+        """investing_paused=False lets the normal KPI path emit a non-withdrawal payload."""
+        obj = _make_behaviour()
+        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.agent_address = "0xagent"
+
+        captured = {}
+
+        def fake_read_investing_paused():
+            yield
+            return False
+
+        def fake_is_kpi_met():
+            yield
+            return True
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        obj._read_investing_paused = fake_read_investing_paused
+        obj._is_staking_kpi_met = fake_is_kpi_met
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            _drive(obj.async_act())
+
+        assert captured["payload"].event is None
+        assert captured["payload"].tx_hash is None
         obj.set_done.assert_called_once()
 
 
@@ -227,7 +313,7 @@ class TestPrepareVanityTx:
         params_mock = MagicMock()
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_contract_interact(**kwargs):
             yield
             return "0x" + "ab" * 32
 
@@ -246,7 +332,7 @@ class TestPrepareVanityTx:
         params_mock = MagicMock()
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_contract_interact(**kwargs):
             yield
             return None
 
@@ -265,7 +351,7 @@ class TestPrepareVanityTx:
         params_mock = MagicMock()
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_contract_interact(**kwargs):
             raise ValueError("boom")
             yield  # noqa: unreachable
 
@@ -284,7 +370,7 @@ class TestPrepareVanityTx:
         params_mock = MagicMock()
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
-        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
+        def fake_contract_interact(**kwargs):
             yield
             return "0x" + "ab" * 32
 
@@ -294,10 +380,10 @@ class TestPrepareVanityTx:
 
         original_hash = mod.hash_payload_to_hex
 
-        def bad_hash(**kwargs: Any) -> None:
+        def bad_hash(**kwargs):
             raise ValueError("bad hash")
 
-        mod.hash_payload_to_hex = bad_hash  # type: ignore[assignment]
+        mod.hash_payload_to_hex = bad_hash
         try:
             with patch.object(
                 type(obj), "params", new_callable=PropertyMock, return_value=params_mock

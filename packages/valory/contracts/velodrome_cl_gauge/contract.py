@@ -55,7 +55,7 @@ class VelodromeCLGaugeContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(method_name, args=args)
         _logger.debug(f"Encoded {method_name} call with args: {args}")
-        return dict(tx_hash=data)
+        return dict(tx_hash=bytes.fromhex(data[2:]))
 
     @classmethod
     def deposit(
@@ -193,6 +193,22 @@ class VelodromeCLGaugeContract(Contract):
         balance = contract_instance.functions.balanceOf(checksumed_account).call()
         _logger.debug(f"CL staked balance for {account}: {balance}")
         return dict(balance=balance)
+
+    @classmethod
+    def staked_contains(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Check whether ``token_id`` is currently staked by ``account`` in the CL gauge."""
+        checksumed_account = ledger_api.api.to_checksum_address(account)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        is_staked = contract_instance.functions.stakedContains(
+            checksumed_account, token_id
+        ).call()
+        return dict(is_staked=bool(is_staked))
 
     @classmethod
     def total_supply(

@@ -81,6 +81,11 @@ class AllocationStatus(Enum):
     FAILED = "failed"
 
 
+# Mirrors LiquidityTraderBaseBehaviour.MAX_VERIFY_RETRIES so the stake-side
+# pre-filter retries on RPC failures the same way the unstake/claim helpers do.
+MAX_STAKE_VERIFY_RETRIES = 2
+
+
 class VelodromePoolBehaviour(PoolBehaviour, ABC):
     """Velodrome Pool Behaviour that handles both Stable/Volatile and Concentrated Liquidity pools"""
 
@@ -268,7 +273,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error calculating slippage protection: {str(e)}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
     def enter(
         self, **kwargs: Any
@@ -303,7 +308,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Missing required parameters for entering CL pool. Here are the kwargs: {kwargs}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
         else:
             # For stable/volatile pools, tick_ranges and tick_spacing are not required
             if not all(
@@ -318,20 +323,20 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Missing required parameters for entering stable/volatile pool. Here are the kwargs: {kwargs}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
         # Determine the pool type and call the appropriate method
         if is_cl_pool:
             return (
                 yield from self._enter_cl_pool(
-                    pool_address=pool_address,  # type: ignore[arg-type]
-                    safe_address=safe_address,  # type: ignore[arg-type]
-                    assets=assets,  # type: ignore[arg-type]
-                    chain=chain,  # type: ignore[arg-type]
-                    max_amounts_in=max_amounts_in,  # type: ignore[arg-type]
-                    is_stable=is_stable,  # type: ignore[arg-type]
+                    pool_address=pool_address,
+                    safe_address=safe_address,
+                    assets=assets,
+                    chain=chain,
+                    max_amounts_in=max_amounts_in,
+                    is_stable=is_stable,
                     pool_fee=kwargs.get("pool_fee"),
-                    tick_ranges=tick_ranges,  # type: ignore[arg-type]
+                    tick_ranges=tick_ranges,
                     tick_spacing=tick_spacing,
                 )
             )
@@ -339,12 +344,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Handle Stable or Volatile pools
             return (
                 yield from self._enter_stable_volatile_pool(
-                    pool_address=pool_address,  # type: ignore[arg-type]
-                    safe_address=safe_address,  # type: ignore[arg-type]
-                    assets=assets,  # type: ignore[arg-type]
-                    chain=chain,  # type: ignore[arg-type]
-                    max_amounts_in=max_amounts_in,  # type: ignore[arg-type]
-                    is_stable=is_stable,  # type: ignore[arg-type]
+                    pool_address=pool_address,
+                    safe_address=safe_address,
+                    assets=assets,
+                    chain=chain,
+                    max_amounts_in=max_amounts_in,
+                    is_stable=is_stable,
                 )
             )
 
@@ -361,7 +366,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
             )
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         # Determine the pool type and call the appropriate method
         if is_cl_pool:
@@ -374,15 +379,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     "Missing token_ids or liquidities for exiting CL pool"
                 )
-                return None, None, None  # type: ignore[return-value]
+                return None, None, None
 
             return (
-                yield from self._exit_cl_pool(  # type: ignore[return-value]
-                    chain=chain,  # type: ignore[arg-type]
-                    safe_address=safe_address,  # type: ignore[arg-type]
+                yield from self._exit_cl_pool(
+                    chain=chain,
+                    safe_address=safe_address,
                     token_ids=token_ids,
                     liquidities=liquidities,
-                    pool_address=pool_address,  # type: ignore[arg-type]
+                    pool_address=pool_address,
                 )
             )
         else:
@@ -391,16 +396,16 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     "Missing assets for exiting stable/volatile pool"
                 )
-                return None, None, None  # type: ignore[return-value]
+                return None, None, None
 
             return (
                 yield from self._exit_stable_volatile_pool(
-                    pool_address=pool_address,  # type: ignore[arg-type]
-                    safe_address=safe_address,  # type: ignore[arg-type]
-                    assets=kwargs.get("assets"),  # type: ignore[arg-type]
-                    chain=chain,  # type: ignore[arg-type]
-                    liquidity=kwargs.get("liquidity"),  # type: ignore[arg-type]
-                    is_stable=is_stable,  # type: ignore[arg-type]
+                    pool_address=pool_address,
+                    safe_address=safe_address,
+                    assets=kwargs.get("assets"),
+                    chain=chain,
+                    liquidity=kwargs.get("liquidity"),
+                    is_stable=is_stable,
                 )
             )
 
@@ -420,7 +425,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No router contract address found for chain {chain}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         adjusted_amounts = max_amounts_in
 
@@ -445,7 +450,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.warning(
                 "Unable to quote add liquidity amounts, using zero minimums"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -455,7 +460,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Call addLiquidity on the router contract
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=router_address,
             contract_public_id=VelodromeRouterContract.contract_id,
             contract_callable="add_liquidity",
@@ -490,11 +495,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No router contract address found for chain {chain}"
             )
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         if not liquidity:
             liquidity = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=VelodromePoolContract.contract_id,
                 contract_callable="get_balance",
@@ -507,7 +512,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No liquidity found for account ({safe_address}) in pool ({pool_address})"
             )
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         # Query expected amounts and apply slippage protection
         expected_amounts = yield from self._query_remove_liquidity_velodrome(
@@ -527,7 +532,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.warning(
                 "Unable to quote remove liquidity amounts, using zero minimums"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None, None
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -540,7 +545,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # First, approve the liquidity tokens to the router
         approve_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=VelodromePoolContract.contract_id,
             contract_callable="build_approval_tx",
@@ -552,7 +557,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         if not approve_tx_hash:
             self.context.logger.error("failed to approve liquidity tokens to router")
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         multi_send_txs.append(
             {
@@ -565,7 +570,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Then, call removeLiquidity on the router contract
         remove_liquidity_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=router_address,
             contract_public_id=VelodromeRouterContract.contract_id,
             contract_callable="remove_liquidity",
@@ -583,7 +588,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         if not remove_liquidity_tx_hash:
             self.context.logger.error("Failed to create remove_liquidity transaction")
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         multi_send_txs.append(
             {
@@ -600,10 +605,10 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Could not find multisend address for chain {chain}"
             )
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=multisend_address,
             contract_public_id=MultiSendContract.contract_id,
             contract_callable="get_tx_data",
@@ -613,10 +618,10 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         if not multisend_tx_hash:
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
-        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True  # type: ignore[return-value]
+        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
     def _get_cached_price_at_selection(
         self, chain: str
@@ -637,16 +642,16 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                         return current_price
                     else:
                         self.context.logger.warning("Cache was invalidated")
-                        return None  # type: ignore[return-value]
+                        return None
                 except (json.JSONDecodeError, TypeError) as e:
                     self.context.logger.error(f"Error parsing cached data: {e}")
-                    return None  # type: ignore[return-value]
+                    return None
             else:
                 self.context.logger.warning("No cached data found")
-                return None  # type: ignore[return-value]
+                return None
         except Exception as e:
             self.context.logger.error(f"Error reading cached current price: {e}")
-            return None  # type: ignore[return-value]
+            return None
 
     def _enter_cl_pool(
         self,
@@ -671,21 +676,21 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No NonFungiblePositionManager contract address found for chain {chain}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         # Calculate tick ranges if not provided
         if not tick_ranges:
             self.context.logger.info(
                 "No tick ranges provided, calculating from pool data"
             )
-            tick_ranges = yield from self._calculate_tick_lower_and_upper_velodrome(  # type: ignore[assignment]
+            tick_ranges = yield from self._calculate_tick_lower_and_upper_velodrome(
                 chain=chain, pool_address=pool_address, is_stable=is_stable
             )
             if not tick_ranges:
                 self.context.logger.error(
                     f"Failed to calculate tick ranges for pool {pool_address}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
         # Get tick spacing if not provided
         if not tick_spacing:
@@ -697,7 +702,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Could not get tick spacing for pool {pool_address}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
         price_at_selection = yield from self._get_cached_price_at_selection(chain)
         if price_at_selection is None:
@@ -714,7 +719,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 "Price movement check failed. Aborting CL pool entry."
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         if price_moved:
             slippage_tolerance_pct = self.params.slippage_tolerance * 100
@@ -731,12 +736,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     "Price monitoring failed. Aborting CL pool entry."
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
             elif allocation_status == AllocationStatus.TIMEOUT:
                 self.context.logger.warning(
                     f"Price monitoring timed out after {MAX_WAIT_TIME} seconds. "
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
             elif allocation_status == AllocationStatus.READY:
                 self.context.logger.info(
                     "Price conditions are favorable. Proceeding with allocation."
@@ -793,7 +798,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 max_amounts_in, allocation, sqrt_price_x96, token_decimals
             )
             if total_band_investment is None:
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             # Apply individual band ratios using pool price
             amount0_desired, amount1_desired = self._calculate_individual_token_amounts(
@@ -868,7 +873,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             # Call mint on the CLPoolManager contract
             mint_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=position_manager_address,
                 contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
                 contract_callable="mint",
@@ -899,7 +904,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # If no transactions were created, return error
         if not tx_hashes:
             self.context.logger.error("No valid mint transactions created")
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         self.context.logger.info(
             f"tx_hashes, position_manager_address :{tx_hashes, position_manager_address}"
@@ -917,7 +922,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         slot0_data = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=VelodromeCLPoolContract.contract_id,
             contract_callable="slot0",
@@ -944,7 +949,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         token_ids: List[int],
         liquidities: List[int],
         pool_address: str,
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    ) -> Generator[None, None, Tuple[Optional[bytes], Optional[str], Optional[bool]]]:
         """Exit positions from a Velodrome concentrated liquidity pool."""
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
@@ -955,7 +960,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No CLPoolManager contract address found for chain {chain}"
             )
-            return None
+            return None, None, None
 
         multi_send_txs = []
 
@@ -970,17 +975,42 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Process each position
         for index, position_token_id in enumerate(token_ids):
-            # Get liquidity for this position from the corresponding index
-            position_liquidity = liquidities[index]
-            if not position_liquidity:
-                position_liquidity = yield from self.get_liquidity_for_token_velodrome(  # type: ignore[assignment]
-                    position_token_id, chain
+            owner = yield from self.get_cl_position_owner(position_token_id, chain)
+            if owner is not None and owner.lower() != safe_address.lower():
+                self.context.logger.warning(
+                    f"Skipping exit for token {position_token_id}: owner "
+                    f"{owner} is not the Safe {safe_address}"
                 )
-                if not position_liquidity:
+                continue
+
+            cached_liquidity = liquidities[index] if index < len(liquidities) else None
+            fresh_liquidity = yield from self.get_liquidity_for_token_velodrome(
+                position_token_id, chain
+            )
+            if fresh_liquidity is None:
+                if not cached_liquidity:
                     self.context.logger.warning(
                         f"Could not get liquidity for token ID {position_token_id}, skipping"
                     )
                     continue
+                self.context.logger.warning(
+                    f"On-chain liquidity read failed for token {position_token_id}; "
+                    f"falling back to cached value {cached_liquidity}"
+                )
+                position_liquidity = cached_liquidity
+            else:
+                position_liquidity = fresh_liquidity
+                if cached_liquidity and cached_liquidity != fresh_liquidity:
+                    self.context.logger.info(
+                        f"Cached liquidity for token {position_token_id} "
+                        f"({cached_liquidity}) diverged from on-chain "
+                        f"({position_liquidity}); using on-chain value"
+                    )
+            if not position_liquidity:
+                self.context.logger.warning(
+                    f"Could not get liquidity for token ID {position_token_id}, skipping"
+                )
+                continue
 
             # Calculate slippage protection for this specific position
             (
@@ -994,7 +1024,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to calculate slippage protection for position {position_token_id}"
                 )
-                return None, None
+                return None, None, None
 
             # Decrease liquidity for this position
             decrease_liquidity_tx_hash = yield from self.decrease_liquidity_velodrome(
@@ -1043,16 +1073,22 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
+        if not multi_send_txs:
+            self.context.logger.warning(
+                "No exit transactions queued for any token; skipping multisend"
+            )
+            return None, None, None
+
         # prepare multisend
         multisend_address = self.params.multisend_contract_addresses.get(chain, "")
         if not multisend_address:
             self.context.logger.error(
                 f"Could not find multisend address for chain {chain}"
             )
-            return None
+            return None, None, None
 
         multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=multisend_address,
             contract_public_id=MultiSendContract.contract_id,
             contract_callable="get_tx_data",
@@ -1061,10 +1097,41 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
         if not multisend_tx_hash:
-            return None
+            return None, None, None
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
-        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True  # type: ignore[return-value]
+        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
+
+    def get_cl_position_owner(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Return the on-chain owner of a Velodrome CL position NFT, or None on failure."""
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain, ""
+            )
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return None
+
+        owner = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+            contract_callable="ownerOf",
+            data_key="owner",
+            token_id=token_id,
+            chain_id=chain,
+        )
+        if not owner:
+            self.context.logger.warning(
+                f"Could not read owner of velodrome CL position {token_id}"
+            )
+            return None
+        return owner
 
     def get_liquidity_for_token_velodrome(
         self, token_id: int, chain: str
@@ -1082,7 +1149,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         position = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="get_position",
@@ -1094,12 +1161,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # liquidity is returned from positions mapping at the appropriate index
-        # Typically liquidity is at a specific index in the struct
-        liquidity = position[
-            2
-        ]  # This should match the index where liquidity is stored in the positions struct
-        return liquidity
+        return position.get("liquidity")
 
     def decrease_liquidity_velodrome(
         self,
@@ -1123,7 +1185,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="decrease_liquidity",
@@ -1159,7 +1221,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="collect",
@@ -1178,7 +1240,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[int]]:
         """Get velodrome pool tick spacing"""
         tick_spacing = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=VelodromeCLPoolContract.contract_id,
             contract_callable="get_tick_spacing",
@@ -1277,10 +1339,10 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             # For stablecoin pools, we can use more aggressive settings
             if is_stable:
-                model_params["min_width_pct"] = 0.0001  # type: ignore[assignment]  # Updated from 0.00001 to 0.0001
+                model_params["min_width_pct"] = 0.0001  # Updated from 0.00001 to 0.0001
 
             # Run the optimization
-            result = self.optimize_stablecoin_bands(prices=ratio_prices, **model_params)  # type: ignore[arg-type]
+            result = self.optimize_stablecoin_bands(prices=ratio_prices, **model_params)
             self.context.logger.info(f"Result from models: {result}")
 
             if not result:
@@ -1351,7 +1413,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                         f"Adjusted position: tick_lower={p['tick_lower']}, tick_upper={p['tick_upper']}."
                     )
 
-            tick_to_band: Dict[Any, Any] = defaultdict(
+            tick_to_band = defaultdict(
                 lambda: {"tick_lower": None, "tick_upper": None, "allocation": 0.0}
             )
 
@@ -1424,7 +1486,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     else list(band_multipliers)
                 )
 
-            return positions  # type: ignore[return-value]
+            return positions
 
         except Exception as e:
             self.context.logger.error(
@@ -1439,7 +1501,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         try:
             # Call the token0 and token1 functions on the pool contract
             tokens = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=VelodromeCLPoolContract.contract_id,
                 contract_callable="get_pool_tokens",
@@ -1567,9 +1629,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 ema,
                 std_dev,
                 z_scores,
-                level_config["min_multiplier"],  # type: ignore[arg-type]
-                level_config["max_multiplier"],  # type: ignore[arg-type]
-                level_config["num_simulations"],  # type: ignore[arg-type]
+                level_config["min_multiplier"],
+                level_config["max_multiplier"],
+                level_config["num_simulations"],
                 min_width_pct,
                 verbose,
             )
@@ -1608,8 +1670,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                             ">> Triggering next recursion level <<"
                         )
                         self.context.logger.info(
-                            f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "  # type: ignore[operator]
-                            f"(threshold: {level_config['trigger_threshold'] * 100:.1f}%)"  # type: ignore[operator]
+                            f"Inner band allocation: {best_config['band_allocations'][0] * 100:.1f}% "
+                            f"(threshold: {level_config['trigger_threshold'] * 100:.1f}%)"
                         )
                         self.context.logger.info(
                             f"Inner band multiplier: {best_config['band_multipliers'][0]:.4f}σ "
@@ -1629,32 +1691,32 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # After all recursion levels, return the best overall result
         if verbose:
             self.context.logger.info("BEST OVERALL CONFIGURATION:")
-            self.context.logger.info(f"From {best_overall['level_name']}")  # type: ignore[index]
+            self.context.logger.info(f"From {best_overall['level_name']}")
             self.context.logger.info(
-                f"Band Multipliers: {best_overall['best_config']['band_multipliers'][0]:.4f}, "  # type: ignore[index]
-                f"{best_overall['best_config']['band_multipliers'][1]:.4f}, "  # type: ignore[index]
-                f"{best_overall['best_config']['band_multipliers'][2]:.4f}"  # type: ignore[index]
+                f"Band Multipliers: {best_overall['best_config']['band_multipliers'][0]:.4f}, "
+                f"{best_overall['best_config']['band_multipliers'][1]:.4f}, "
+                f"{best_overall['best_config']['band_multipliers'][2]:.4f}"
             )
             self.context.logger.info(
-                f"Band Allocations: {best_overall['best_config']['band_allocations'][0] * 100:.1f}%, "  # type: ignore[index]
-                f"{best_overall['best_config']['band_allocations'][1] * 100:.1f}%, "  # type: ignore[index]
-                f"{best_overall['best_config']['band_allocations'][2] * 100:.1f}%"  # type: ignore[index]
+                f"Band Allocations: {best_overall['best_config']['band_allocations'][0] * 100:.1f}%, "
+                f"{best_overall['best_config']['band_allocations'][1] * 100:.1f}%, "
+                f"{best_overall['best_config']['band_allocations'][2] * 100:.1f}%"
             )
             self.context.logger.info(
-                f"Z-Score Economic Score: {best_overall['best_config']['zscore_economic_score']:.4f}"  # type: ignore[index]
+                f"Z-Score Economic Score: {best_overall['best_config']['zscore_economic_score']:.4f}"
             )
 
         # Return the best configuration
         return {
-            "band_multipliers": best_overall["best_config"]["band_multipliers"],  # type: ignore[index]
-            "band_allocations": best_overall["best_config"]["band_allocations"],  # type: ignore[index]
-            "zscore_economic_score": best_overall["best_config"][  # type: ignore[index]
+            "band_multipliers": best_overall["best_config"]["band_multipliers"],
+            "band_allocations": best_overall["best_config"]["band_allocations"],
+            "zscore_economic_score": best_overall["best_config"][
                 "zscore_economic_score"
             ],
-            "percent_in_bounds": best_overall["best_config"]["percent_in_bounds"],  # type: ignore[index]
-            "avg_weighted_width": best_overall["best_config"]["avg_weighted_width"],  # type: ignore[index]
-            "from_level": best_overall["level"],  # type: ignore[index]
-            "from_level_name": best_overall["level_name"],  # type: ignore[index]
+            "percent_in_bounds": best_overall["best_config"]["percent_in_bounds"],
+            "avg_weighted_width": best_overall["best_config"]["avg_weighted_width"],
+            "from_level": best_overall["level"],
+            "from_level_name": best_overall["level_name"],
         }
 
     def _run_monte_carlo_level(
@@ -1818,12 +1880,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # Calculate band regions using Z-scores
         # Note: R uses 1-indexed arrays, but Python uses 0-indexed arrays
         # So band_multipliers[0] in Python corresponds to band_multipliers[1] in R
-        band1_mask = z_scores <= band_multipliers[0]  # type: ignore[operator]
-        band2_mask = (z_scores > band_multipliers[0]) & (  # type: ignore[operator]
-            z_scores <= band_multipliers[1]  # type: ignore[operator]
+        band1_mask = z_scores <= band_multipliers[0]
+        band2_mask = (z_scores > band_multipliers[0]) & (
+            z_scores <= band_multipliers[1]
         )
-        band3_mask = (z_scores > band_multipliers[1]) & (  # type: ignore[operator]
-            z_scores <= band_multipliers[2]  # type: ignore[operator]
+        band3_mask = (z_scores > band_multipliers[1]) & (
+            z_scores <= band_multipliers[2]
         )
 
         # Calculate price coverage by band
@@ -1923,7 +1985,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             platform = platform_map.get(chain.lower())
             if not platform:
                 self.context.logger.warning(f"Unsupported chain: {chain}")
-                return None  # type: ignore[return-value]
+                return None
 
             # Get coin IDs for both tokens
             token0_id = yield from self._get_coin_id_from_address(
@@ -1937,7 +1999,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.warning(
                     f"Could not find coin IDs for tokens: {token0_address}, {token1_address}"
                 )
-                return None  # type: ignore[return-value]
+                return None
 
             # Get price history for both tokens
             token0_data = yield from self._get_historical_market_data(
@@ -1955,7 +2017,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 or not token1_data.get("prices")
             ):
                 self.context.logger.warning("Missing price data for one or both tokens")
-                return None  # type: ignore[return-value]
+                return None
 
             # Combine data and calculate price ratios
             token0_prices = token0_data.get("prices", [])
@@ -1987,7 +2049,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             }
         except Exception as e:
             self.context.logger.error(f"Error getting pool token history: {str(e)}")
-            return None  # type: ignore[return-value]
+            return None
 
     def _get_coin_id_from_address(
         self, chain: str, address: str, platform: str, headers: Dict[str, str]
@@ -2192,7 +2254,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         # Convert to ticks and round to tick spacing
-        def round_to_spacing(tick: Any) -> Any:
+        def round_to_spacing(tick):
             return int(tick // tick_spacing) * tick_spacing
 
         # Convert prices to ticks
@@ -2300,7 +2362,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         """Get pool reserves for stable pool calculations."""
         try:
             reserves_data = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=VelodromePoolContract.contract_id,
                 contract_callable="get_reserves",
@@ -2328,7 +2390,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             decimals = []
             for asset in assets:
                 token_decimals = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                     contract_address=asset,
                     contract_public_id=ERC20.contract_id,
                     contract_callable="get_token_decimals",
@@ -2356,7 +2418,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         allocation: float,
         sqrt_price_x96: int,
         token_decimals: List[int],
-    ) -> Optional[int]:
+    ) -> int:
         """Calculate band investment using pool's native price"""
         try:
             if sqrt_price_x96 is None or sqrt_price_x96 == 0:
@@ -2405,7 +2467,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.warning(
                     "Pool price unavailable for individual token calculation"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             token0_decimals, token1_decimals = token_decimals
 
@@ -2441,7 +2503,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error in individual token calculation: {str(e)}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
     def _calculate_stable_pool_amounts(
         self,
@@ -2616,7 +2678,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Query the voter contract for the gauge address
         gauge_address = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=voter_address,
             contract_public_id=VelodromeVoterContract.contract_id,
             contract_callable="gauges",
@@ -2668,7 +2730,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # First, approve LP tokens to gauge
         approve_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=lp_token,
             contract_public_id=ERC20.contract_id,
             contract_callable="build_approval_tx",
@@ -2694,7 +2756,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Then, stake LP tokens in gauge
         stake_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,
             contract_public_id=VelodromeGaugeContract.contract_id,
             contract_callable="deposit",
@@ -2725,7 +2787,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return {"error": error_msg}
 
         multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=multisend_address,
             contract_public_id=MultiSendContract.contract_id,
             contract_callable="get_tx_data",
@@ -2782,7 +2844,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Check staked balance
         staked_balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,
             contract_public_id=VelodromeGaugeContract.contract_id,
             contract_callable="balance_of",
@@ -2798,7 +2860,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Create withdraw transaction
         withdraw_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,
             contract_public_id=VelodromeGaugeContract.contract_id,
             contract_callable="withdraw",
@@ -2849,7 +2911,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Check pending rewards before claiming
         pending_rewards = yield from self.get_pending_rewards(
-            lp_token, safe_address, chain=chain  # type: ignore[arg-type]
+            lp_token, safe_address, chain=chain
         )
         if pending_rewards == 0:
             self.context.logger.info("No pending rewards to claim")
@@ -2861,7 +2923,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Create claim rewards transaction
         claim_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,
             contract_public_id=VelodromeGaugeContract.contract_id,
             contract_callable="get_reward",
@@ -2909,7 +2971,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Get earned rewards
         earned_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,
             contract_public_id=VelodromeGaugeContract.contract_id,
             contract_callable="earned",
@@ -2951,7 +3013,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Get staked balance
         balance_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,
             contract_public_id=VelodromeGaugeContract.contract_id,
             contract_callable="balance_of",
@@ -2993,7 +3055,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Get total supply
         total_supply_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,
             contract_public_id=VelodromeGaugeContract.contract_id,
             contract_callable="total_supply",
@@ -3050,9 +3112,45 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return {"error": f"No position manager address found for chain {chain}"}
 
-        # Check if we need to approve the gauge for all NFTs
+        # First pass: filter out tokens already in the gauge's stake set so we
+        # can decide whether the approval and deposit txs are even needed.
+        # Uses the same retry policy as the unstake/claim verification helpers
+        # so a transient RPC failure on a single check does not push the token
+        # straight into the "try anyway" branch on the first attempt.
+        tokens_to_stake = []
+        for token_id in token_ids:
+            is_staked = yield from self._is_cl_token_staked_with_retry(
+                safe_address,
+                token_id,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            if is_staked is True:
+                self.context.logger.info(
+                    f"Token {token_id} is already staked in gauge "
+                    f"{gauge_address}; skipping deposit"
+                )
+                continue
+            if is_staked is None:
+                self.context.logger.warning(
+                    f"Could not verify on-chain staked state for token "
+                    f"{token_id} on gauge {gauge_address} after retry; "
+                    f"queuing deposit anyway"
+                )
+            tokens_to_stake.append(token_id)
+
+        if not tokens_to_stake:
+            self.context.logger.info(
+                f"All {len(token_ids)} tokens already staked in gauge "
+                f"{gauge_address}; nothing to do"
+            )
+            return None
+
+        # Check if we need to approve the gauge for all NFTs. We only build
+        # this tx now that we know at least one deposit will follow it,
+        # otherwise we would submit an orphan approval-only multisend.
         is_approved = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="is_approved_for_all",
@@ -3064,13 +3162,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # Add approval transaction if needed
         if not is_approved:
             self.context.logger.info(
                 f"Setting approval for all NFTs to gauge {gauge_address}"
             )
             approve_all_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=position_manager_address,
                 contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
                 contract_callable="set_approval_for_all",
@@ -3094,12 +3191,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
-        # Stake each NFT position
+        # Stake each NFT position that wasn't filtered out above.
         staked_positions = []
-        for token_id in token_ids:
-            # Create stake transaction for this NFT
+        for token_id in tokens_to_stake:
             stake_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=gauge_address,
                 contract_public_id=VelodromeCLGaugeContract.contract_id,
                 contract_callable="deposit",
@@ -3125,7 +3221,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             staked_positions.append({"token_id": token_id})
 
-        if not multi_send_txs:
+        if not staked_positions:
             error_msg = "No valid stake transactions created"
             self.context.logger.error(error_msg)
             return {"error": error_msg}
@@ -3138,7 +3234,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return {"error": error_msg}
 
         multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=multisend_address,
             contract_public_id=MultiSendContract.contract_id,
             contract_callable="get_tx_data",
@@ -3192,7 +3288,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         for token_id in token_ids:
             # Create withdraw transaction using token ID
             withdraw_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=gauge_address,
                 contract_public_id=VelodromeCLGaugeContract.contract_id,
                 contract_callable="withdraw",
@@ -3231,7 +3327,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return {"error": error_msg}
 
         multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=multisend_address,
             contract_public_id=MultiSendContract.contract_id,
             contract_callable="get_tx_data",
@@ -3285,7 +3381,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         for token_id in token_ids:
             # Check pending rewards for this token ID
             earned_result = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=gauge_address,
                 contract_public_id=VelodromeCLGaugeContract.contract_id,
                 contract_callable="earned",
@@ -3310,7 +3406,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
                 # Create claim rewards transaction for this token ID
                 claim_tx_hash = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                     contract_address=gauge_address,
                     contract_public_id=VelodromeCLGaugeContract.contract_id,
                     contract_callable="get_reward_for_token_id",
@@ -3358,7 +3454,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return {"error": error_msg}
 
         multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=multisend_address,
             contract_public_id=MultiSendContract.contract_id,
             contract_callable="get_tx_data",
@@ -3404,8 +3500,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Get earned rewards from CL gauge
         earned_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
-            contract_address=gauge_address,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
             contract_public_id=VelodromeCLGaugeContract.contract_id,
             contract_callable="earned",
             data_key="earned",
@@ -3443,8 +3539,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Get staked balance from CL gauge
         balance_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
-            contract_address=gauge_address,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
             contract_public_id=VelodromeCLGaugeContract.contract_id,
             contract_callable="balance_of",
             data_key="balance",
@@ -3461,6 +3557,58 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         staked_amount = balance_result if isinstance(balance_result, int) else 0
         self.context.logger.info(f"CL staked balance for {account}: {staked_amount}")
         return staked_amount
+
+    # Mirrors LiquidityTraderBaseBehaviour._verify_cl_token_staked_with_retry
+    # for the stake-side pre-filter so a one-shot RPC blip does not flip a
+    # token into the "try anyway" branch on the first call.
+    def _is_cl_token_staked_with_retry(
+        self,
+        account: str,
+        token_id: int,
+        chain: str,
+        gauge_address: str,
+    ) -> Generator[None, None, Optional[bool]]:
+        """Verify on-chain stake state with up to ``MAX_STAKE_VERIFY_RETRIES`` attempts."""
+        for _ in range(MAX_STAKE_VERIFY_RETRIES):
+            is_staked = yield from self.is_cl_token_staked(
+                account, token_id, chain=chain, gauge_address=gauge_address
+            )
+            if is_staked is not None:
+                return is_staked
+        return None
+
+    def is_cl_token_staked(
+        self, account: str, token_id: int, **kwargs: Any
+    ) -> Generator[None, None, Optional[bool]]:
+        """Return True/False if the gauge's stake set can be read, else None."""
+        chain = kwargs.get("chain")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not chain or not gauge_address or token_id is None:
+            self.context.logger.error(
+                "Chain, gauge_address and token_id are required for is_cl_token_staked"
+            )
+            return None
+
+        result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="staked_contains",
+            data_key="is_staked",
+            account=account,
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if result is None:
+            self.context.logger.warning(
+                f"Could not verify on-chain staked state for token {token_id} "
+                f"on gauge {gauge_address}"
+            )
+            return None
+
+        return bool(result)
 
     def get_cl_gauge_total_supply(self, **kwargs: Any) -> Generator[None, None, int]:
         """Get the total supply of staked tokens in CL gauge."""
@@ -3479,8 +3627,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Get total supply from CL gauge
         total_supply_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
-            contract_address=gauge_address,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
             contract_public_id=VelodromeCLGaugeContract.contract_id,
             contract_callable="total_supply",
             data_key="total_supply",
@@ -3516,7 +3664,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         factory = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=router_address,
             contract_public_id=VelodromeRouterContract.contract_id,
             contract_callable=factory_method,
@@ -3549,7 +3697,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Mode chain uses different quote function without factory parameter
             if chain.lower() == "mode":
                 result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                     contract_address=router_address,
                     contract_public_id=VelodromeRouterContract.contract_id,
                     contract_callable="quote_add_liquidity_mode",
@@ -3574,7 +3722,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     return None
 
                 result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                     contract_address=router_address,
                     contract_public_id=VelodromeRouterContract.contract_id,
                     contract_callable="quote_add_liquidity",
@@ -3618,7 +3766,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Mode chain uses different quote function without factory parameter
             if chain.lower() == "mode":
                 result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                     contract_address=router_address,
                     contract_public_id=VelodromeRouterContract.contract_id,
                     contract_callable="quote_remove_liquidity_mode",
@@ -3642,7 +3790,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     return None
 
                 result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                     contract_address=router_address,
                     contract_public_id=VelodromeRouterContract.contract_id,
                     contract_callable="quote_remove_liquidity",
@@ -3691,10 +3839,10 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"No position_manager contract address found for chain {chain}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             position = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=position_manager_address,
                 contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
                 contract_callable="get_position",
@@ -3707,7 +3855,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get position data for token {token_id}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             # For withdrawal flows, disable slippage protection entirely
             if is_withdrawal:
@@ -3721,7 +3869,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             # Get current tick and sqrt price
             slot0_data = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=VelodromeCLPoolContract.contract_id,
                 contract_callable="slot0",
@@ -3733,7 +3881,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get slot0 data for pool {pool_address}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             current_tick = slot0_data.get("tick", 0)
             current_sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
@@ -3764,7 +3912,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error calculating Velodrome slippage protection when decreasing liquidity: {str(e)}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
     def _calculate_velodrome_decrease_amounts(
         self,
@@ -3786,7 +3934,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get sqrt_ratio for tick_lower {tick_lower}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
                 chain, tick_upper
@@ -3795,7 +3943,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get sqrt_ratio for tick_upper {tick_upper}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             # Use get_amounts_for_liquidity to calculate the amounts
             amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
@@ -3818,7 +3966,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error in Velodrome decrease amounts calculation: {str(e)}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
     def get_velodrome_amounts_for_liquidity(
         self,
@@ -3840,7 +3988,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Use Velodrome's official getAmountsForLiquidity function
         amounts = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=sugar_address,
             contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
             contract_callable="get_amounts_for_liquidity",

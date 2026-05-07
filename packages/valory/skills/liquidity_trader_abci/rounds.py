@@ -135,7 +135,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - done: 6.
             - none: 6.
             - no majority: 6.
-            - withdrawal initiated: 8.
         7. FetchStrategiesRound
             - done: 1.
             - wait: 7.
@@ -238,7 +237,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONE: PostTxSettlementRound,
             Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
-            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         FetchStrategiesRound: {
             Event.DONE: CallCheckpointRound,

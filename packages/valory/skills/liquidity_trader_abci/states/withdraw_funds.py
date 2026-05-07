@@ -43,7 +43,8 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
     none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_withdraw_funds)
-    selection_key = (get_name(SynchronizedData.actions),)  # Use standard actions field
+    # Required by extended_requirements; end_block overrides super() so this is unused.
+    selection_key = (get_name(SynchronizedData.actions),)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""

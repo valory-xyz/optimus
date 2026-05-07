@@ -53,18 +53,18 @@ class MintParams:
 
     def __init__(
         self,
-        token0: Any,
-        token1: Any,
-        fee: Any,
-        tickLower: Any,
-        tickUpper: Any,
-        amount0Desired: Any,
-        amount1Desired: Any,
-        amount0Min: Any,
-        amount1Min: Any,
-        recipient: Any,
-        deadline: Any,
-    ) -> None:
+        token0,
+        token1,
+        fee,
+        tickLower,
+        tickUpper,
+        amount0Desired,
+        amount1Desired,
+        amount0Min,
+        amount1Min,
+        recipient,
+        deadline,
+    ):
         """Initialize mint parameters"""
         self.token0 = token0
         self.token1 = token1
@@ -99,7 +99,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
@@ -108,27 +108,27 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No position_manager contract address found for chain {chain}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         # Fetch fee from uniswap v3 pool if pool fee is not provided
         if not pool_fee:
-            pool_fee = yield from self._get_pool_fee(pool_address, chain)  # type: ignore[arg-type]
+            pool_fee = yield from self._get_pool_fee(pool_address, chain)
             if not pool_fee:
-                return None, None  # type: ignore[return-value]
+                return None, None
 
         # TO-DO: specify a more concentrated position
-        tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(  # type: ignore[misc]
-            pool_address, chain  # type: ignore[arg-type]
+        tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(
+            pool_address, chain
         )
         if tick_lower is None or tick_upper is None:
-            return None, None  # type: ignore[return-value]
+            return None, None
 
         # Calculate slippage protection using TickMath utilities
         (
             amount0_min,
             amount1_min,
         ) = yield from self._calculate_slippage_protection_for_mint(
-            pool_address, tick_lower, tick_upper, max_amounts_in, chain  # type: ignore[arg-type]
+            pool_address, tick_lower, tick_upper, max_amounts_in, chain
         )
 
         if amount0_min is None or amount1_min is None:
@@ -141,18 +141,18 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         deadline = int(last_update_time) + (20 * 60)
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
             contract_callable="mint",
             data_key="tx_hash",
-            token0=assets[0],  # type: ignore[index]
-            token1=assets[1],  # type: ignore[index]
+            token0=assets[0],
+            token1=assets[1],
             fee=pool_fee,
             tick_lower=tick_lower,
             tick_upper=tick_upper,
-            amount0_desired=max_amounts_in[0],  # type: ignore[index]
-            amount1_desired=max_amounts_in[1],  # type: ignore[index]
+            amount0_desired=max_amounts_in[0],
+            amount1_desired=max_amounts_in[1],
             amount0_min=amount0_min,
             amount1_min=amount1_min,
             recipient=safe_address,
@@ -175,7 +175,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
             )
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
@@ -184,22 +184,44 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"No position_manager contract address found for chain {chain}"
             )
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         multi_send_txs = []
 
-        # fetch liquidity from contract
+        owner = yield from self.get_uniswap_position_owner(token_id, chain)
+        if owner is not None and owner.lower() != safe_address.lower():
+            self.context.logger.warning(
+                f"Skipping exit for uniswap token {token_id}: owner {owner} "
+                f"is not the Safe {safe_address}"
+            )
+            return None, None, None
+
+        cached_liquidity = liquidity
+        fresh_liquidity = yield from self.get_liquidity_for_token(token_id, chain)
+        if fresh_liquidity is None:
+            if not cached_liquidity:
+                return None, None, None
+            self.context.logger.warning(
+                f"On-chain liquidity read failed for token {token_id}; "
+                f"falling back to cached value {cached_liquidity}"
+            )
+            liquidity = cached_liquidity
+        else:
+            liquidity = fresh_liquidity
+            if cached_liquidity and cached_liquidity != fresh_liquidity:
+                self.context.logger.info(
+                    f"Cached liquidity for token {token_id} ({cached_liquidity}) "
+                    f"diverged from on-chain ({liquidity}); using on-chain value"
+                )
         if not liquidity:
-            liquidity = yield from self.get_liquidity_for_token(token_id, chain)  # type: ignore[arg-type]
-            if not liquidity:
-                return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         # Calculate slippage protection for decrease liquidity
         (
             amount0_min,
             amount1_min,
         ) = yield from self._calculate_slippage_protection_for_decrease(
-            token_id, liquidity, chain, pool_address  # type: ignore[arg-type]
+            token_id, liquidity, chain, pool_address
         )
 
         if amount0_min is None or amount1_min is None:
@@ -212,10 +234,10 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         deadline = int(last_update_time) + (20 * 60)
 
         decrease_liquidity_tx_hash = yield from self.decrease_liquidity(
-            token_id, liquidity, amount0_min, amount1_min, deadline, chain  # type: ignore[arg-type]
+            token_id, liquidity, amount0_min, amount1_min, deadline, chain
         )
         if not decrease_liquidity_tx_hash:
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
         multi_send_txs.append(
             {
                 "operation": MultiSendOperation.CALL,
@@ -230,14 +252,14 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         # However, that value was too large, so we adjusted it to 2**100 - 1 wei.
         amount_max = Web3.to_wei(2**100 - 1, "wei")
         collect_tokens_tx_hash = yield from self.collect_tokens(
-            token_id=token_id,  # type: ignore[arg-type]
-            recipient=safe_address,  # type: ignore[arg-type]
+            token_id=token_id,
+            recipient=safe_address,
             amount0_max=amount_max,
             amount1_max=amount_max,
-            chain=chain,  # type: ignore[arg-type]
+            chain=chain,
         )
         if not collect_tokens_tx_hash:
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
         multi_send_txs.append(
             {
                 "operation": MultiSendOperation.CALL,
@@ -253,7 +275,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Could not find multisend address for chain {chain}"
             )
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -265,10 +287,10 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
         if not multisend_tx_hash:
-            return None, None, None  # type: ignore[return-value]
+            return None, None, None
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
-        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True  # type: ignore[return-value]
+        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
     def burn_token(
         self, token_id: int, chain: str
@@ -284,7 +306,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             return None
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
             contract_callable="burn_token",
@@ -314,7 +336,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             return None
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
             contract_callable="collect_tokens",
@@ -348,7 +370,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             return None
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
             contract_callable="decrease_liquidity",
@@ -362,6 +384,35 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
 
         return tx_hash
+
+    def get_uniswap_position_owner(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Return the on-chain owner of a Uniswap V3 position NFT, or None on failure."""
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None
+
+        owner = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="ownerOf",
+            data_key="owner",
+            token_id=token_id,
+            chain_id=chain,
+        )
+        if not owner:
+            self.context.logger.warning(
+                f"Could not read owner of uniswap V3 position {token_id}"
+            )
+            return None
+        return owner
 
     def get_liquidity_for_token(
         self, token_id: int, chain: str
@@ -377,7 +428,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             return None
 
         position = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
             contract_callable="get_position",
@@ -389,9 +440,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         if not position:
             return None
 
-        # liquidity is returned at the 7th index from contract
-        liquidity = position[7]
-        return liquidity
+        return position.get("liquidity")
 
     def _get_tokens(
         self, pool_address: str, chain: str
@@ -400,7 +449,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         """Return a dict of tokens {"token0": 0x00, "token1": 0x00}"""
 
         pool_tokens = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=UniswapV3PoolContract.contract_id,
             contract_callable="get_pool_tokens",
@@ -423,7 +472,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[int]]:
         """Get uniswap pool fee"""
         pool_fee = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=UniswapV3PoolContract.contract_id,
             contract_callable="get_pool_fee",
@@ -445,7 +494,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[int]]:
         """Get uniswap pool fee"""
         tick_spacing = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=UniswapV3PoolContract.contract_id,
             contract_callable="get_tick_spacing",
@@ -471,7 +520,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         # Fetch tick spacing from uniswap v3 pool
         tick_spacing = yield from self._get_tick_spacing(pool_address, chain)
         if not tick_spacing:
-            return None, None  # type: ignore[return-value]
+            return None, None
         # Adjust MIN_TICK to the nearest higher multiple of tick_spacing
         adjusted_tick_lower = -(abs(MIN_TICK) // tick_spacing * tick_spacing)
 
@@ -494,7 +543,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         """Calculate slippage protection for mint operations using TickMath utilities."""
         try:
             slot0_data = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=UniswapV3PoolContract.contract_id,
                 contract_callable="slot0",
@@ -506,7 +555,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get slot0 data for pool {pool_address}"
                 )
-                return None, None  # type: ignore[return-value]
+                return None, None
 
             sqrt_price_x96 = slot0_data["sqrt_price_x96"]
 
@@ -553,7 +602,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error calculating slippage protection when minting: {str(e)}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None
 
     def _calculate_slippage_protection_for_decrease(
         self, token_id: int, liquidity: int, chain: str, pool_address: str
@@ -570,7 +619,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 return 0, 0
 
             position = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=position_manager_address,
                 contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
                 contract_callable="get_position",
@@ -589,7 +638,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             tick_upper = position.get("tickUpper")
 
             slot0_data = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=UniswapV3PoolContract.contract_id,
                 contract_callable="slot0",
@@ -630,4 +679,4 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error calculating slippage protection when decreasing liquidity: {str(e)}"
             )
-            return None, None  # type: ignore[return-value]
+            return None, None

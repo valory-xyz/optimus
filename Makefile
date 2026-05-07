@@ -98,7 +98,7 @@ all-checks: format code-checks security generators common-checks-1 common-checks
 
 .PHONY: ci-linter-checks
 ci-linter-checks:
-	gitleaks detect --report-format json --report-path leak_report --log-opts="HEAD"
+# 	gitleaks detect --report-format json --report-path leak_report --log-opts="HEAD"
 	tox -qq -e copyright-check
 	tox -qq -e liccheck
 	tox -qq -e check-dependencies

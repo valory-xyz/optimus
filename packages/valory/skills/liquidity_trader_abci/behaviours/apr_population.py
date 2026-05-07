@@ -34,6 +34,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 from packages.valory.skills.liquidity_trader_abci.payloads import APRPopulationPayload
 from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
     APRPopulationRound,
+    Event,
 )
 
 
@@ -47,6 +48,21 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:  # type: ignore[override]
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
+                payload = APRPopulationPayload(
+                    sender=self.context.agent_address,
+                    context="APR Population (withdrawal initiated)",
+                    event=Event.WITHDRAWAL_INITIATED.value,
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             sender = self.context.agent_address
             payload_context = "APR Population"
 
@@ -488,25 +504,3 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(
                     "Could not convert price data to Decimal, skipping adjustment"
                 )
-
-    def _read_investing_paused(self) -> Generator[None, None, bool]:
-        """Read investing_paused flag from KV store."""
-        try:
-            result = yield from self._read_kv(("investing_paused",))
-            if result is None:
-                self.context.logger.warning(
-                    "No response from KV store for investing_paused flag"
-                )
-                return False
-
-            investing_paused_value = result.get("investing_paused")
-            if investing_paused_value is None:
-                self.context.logger.warning(
-                    "investing_paused value is None in KV store"
-                )
-                return False
-
-            return investing_paused_value.lower() == "true"
-        except Exception as e:
-            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
-            return False

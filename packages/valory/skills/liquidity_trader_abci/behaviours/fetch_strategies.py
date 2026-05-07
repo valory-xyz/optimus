@@ -68,6 +68,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
+    Event,
     FetchStrategiesPayload,
     FetchStrategiesRound,
 )
@@ -90,6 +91,10 @@ TRANSFER_EVENT_SIGNATURE = (
 ZERO_ADDRESS_PADDED = (
     "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
+# Hard cap on pagination loops against external APIs. The round timeout is
+# the primary protection; this is a backstop against an API that returns a
+# non-empty next-page cursor indefinitely.
+MAX_PAGINATION_PAGES = 100
 
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
@@ -98,9 +103,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     matching_round: Type[AbstractRound] = FetchStrategiesRound
     strategies = None
 
-    def async_act(self) -> Generator:  # type: ignore[override]
+    def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
+                payload = FetchStrategiesPayload(
+                    sender=self.context.agent_address,
+                    content=json.dumps(
+                        {
+                            "event": Event.WITHDRAWAL_INITIATED.value,
+                            "updates": {},
+                        },
+                        sort_keys=True,
+                        ensure_ascii=True,
+                    ),
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             # Normal fetch strategies logic
             sender = self.context.agent_address
 
@@ -146,13 +172,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 keys=("selected_protocols", "trading_type")
             )
 
-            selected_protocols = db_data.get("selected_protocols", None)  # type: ignore[union-attr]
+            selected_protocols = db_data.get("selected_protocols", None)
             if selected_protocols is None:
                 serialized_protocols = []
             else:
                 serialized_protocols = json.loads(selected_protocols)
 
-            trading_type = db_data.get("trading_type", None)  # type: ignore[union-attr]
+            trading_type = db_data.get("trading_type", None)
 
             if not serialized_protocols:
                 serialized_protocols = []
@@ -182,7 +208,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Reading values from kv store... Selected protocols: {serialized_protocols}, Trading type: {trading_type}"
             )
             self.shared_state.trading_type = trading_type
-            self.shared_state.selected_protocols = selected_protocols  # type: ignore[assignment]
+            self.shared_state.selected_protocols = selected_protocols
 
             # Initialize assets from initial_assets if empty
             if not self.assets:  # pragma: no branch
@@ -197,7 +223,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if one day has passed since last whitelist update
             db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
-            last_updated = db_data.get("last_whitelisted_updated", "0")  # type: ignore[union-attr]
+            last_updated = db_data.get("last_whitelisted_updated", "0")
             if not last_updated:  # pragma: no cover
                 last_updated = 0
 
@@ -222,7 +248,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._track_whitelisted_assets()
                 # Store current timestamp as last updated
                 self.context.logger.info("Updating last whitelist update timestamp")
-                yield from self._write_kv({"last_whitelisted_updated": current_time})  # type: ignore[dict-item]
+                yield from self._write_kv({"last_whitelisted_updated": current_time})
 
             # Check if we need to recalculate the portfolio
             self.context.logger.info("Recalculating user share values")
@@ -266,7 +292,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         yesterday_str = yesterday.strftime("%d-%m-%Y")
 
         # Track assets to remove
-        assets_to_remove: Dict[Any, Any] = {}
+        assets_to_remove = {}
 
         for chain, assets in WHITELISTED_ASSETS.items():
             if chain not in self.params.target_investment_chains:
@@ -339,7 +365,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
     def _check_and_create_eth_revert_transactions(
-        self, chain: Any, safe_address: Any, sender: Any
+        self, chain, safe_address, sender
     ) -> Generator[None, None, None]:
         """Check if there are any ETH revert transactions and create them if there are."""
 
@@ -565,7 +591,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Check for any differences
         new_positions = current_position_set - last_position_set
-        closed_positions = last_position_set - current_position_set  # type: ignore[operator]
+        closed_positions = last_position_set - current_position_set
 
         if new_positions:
             self.context.logger.info(
@@ -584,9 +610,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def calculate_user_share_values(self) -> Generator[None, None, None]:
         """Calculate the value of shares for the user based on open pools."""
         total_user_share_value_usd = Decimal(0)
-        allocations: List[Any] = []
-        individual_shares: List[Any] = []
-        portfolio_breakdown: List[Any] = []
+        allocations = []
+        individual_shares = []
+        portfolio_breakdown = []
 
         # Map DEX types to their handler functions
         dex_handlers = {
@@ -616,7 +642,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 # Get position details and balances using the appropriate handler
-                result = yield from handler(position, chain)  # type: ignore[func-returns-value,misc]
+                result = yield from handler(position, chain)
                 if not result:
                     continue
 
@@ -653,7 +679,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
         # Calculate safe balances value
-        total_safe_value_usd = yield from self._calculate_safe_balances_value(  # type: ignore[func-returns-value,misc]
+        total_safe_value_usd = yield from self._calculate_safe_balances_value(
             portfolio_breakdown
         )
         staking_rewards_value = yield from self.calculate_stakig_rewards_value()
@@ -695,12 +721,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         portfolio_data = self._create_portfolio_data(
             total_user_share_value_usd,
-            total_safe_value_usd,  # type: ignore[arg-type]
+            total_safe_value_usd,
             staking_rewards_value,
             airdrop_rewards_value,
             withdrawals_value,
-            initial_investment,  # type: ignore[arg-type]
-            volume,  # type: ignore[arg-type]
+            initial_investment,
+            volume,
             allocations,
             portfolio_breakdown,
         )
@@ -771,6 +797,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:  # pragma: no cover
             self.context.logger.error(f"Error filtering portfolio breakdown: {e}")
             # Keep original list in case of error
+            pass
 
         for entry in portfolio_breakdown:
             if total_value > 0 and total_ratio > 0:
@@ -793,17 +820,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             DexType.UNISWAP_V3.value,
             DexType.VELODROME.value,
         ]:
-            return []  # type: ignore[return-value]
+            return []
 
         # For Velodrome positions, we only get tick ranges if it's a CL pool
         if position.get("dex_type") == DexType.VELODROME.value and not position.get(
             "is_cl_pool"
         ):
-            return []  # type: ignore[return-value]
+            return []
 
         pool_address = position.get("pool_address")
         if not pool_address:
-            return []  # type: ignore[return-value]
+            return []
 
         # Get current tick from pool
         contract_id = (
@@ -812,7 +839,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else UniswapV3PoolContract.contract_id
         )
 
-        slot0_data = yield from self.contract_interact(  # type: ignore[misc]
+        slot0_data = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=contract_id,
@@ -825,7 +852,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Failed to get current tick for pool {pool_address}"
             )
-            return []  # type: ignore[return-value]
+            return []
 
         current_tick = slot0_data["tick"]
 
@@ -842,7 +869,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"No position manager address found for chain {chain}"
             )
-            return []  # type: ignore[return-value]
+            return []
 
         # Get contract ID for position manager
         contract_id = (
@@ -863,7 +890,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if not token_id:
                 continue
 
-            position_data = yield from self.contract_interact(  # type: ignore[misc]
+            position_data = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=position_manager_address,
                 contract_public_id=contract_id,
@@ -890,7 +917,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     }
                 )
 
-        return tick_ranges  # type: ignore[return-value]
+        return tick_ranges
 
     def _update_allocation_ratios(
         self,
@@ -936,9 +963,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 None,
             )
 
-            tick_ranges: List[Any] = []
+            tick_ranges = []
             if position:  # pragma: no branch
-                tick_ranges = yield from self._get_tick_ranges(position, chain)  # type: ignore[assignment,func-returns-value,misc]
+                tick_ranges = yield from self._get_tick_ranges(position, chain)
 
             # UI supports only camel case names, but our strategies have different name for dex
             dex_type_mapping = {
@@ -1128,16 +1155,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = position.get("pool_address")
         pool_id = position.get("pool_id")
 
-        user_balances = yield from self.get_user_share_value_balancer(  # type: ignore[misc]
-            user_address, pool_id, pool_address, chain  # type: ignore[arg-type]
+        user_balances = yield from self.get_user_share_value_balancer(
+            user_address, pool_id, pool_address, chain
         )
-        details = yield from self._get_balancer_pool_name(pool_address, chain)  # type: ignore[arg-type,misc]
+        details = yield from self._get_balancer_pool_name(pool_address, chain)
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
             position.get("token1"): position.get("token1_symbol"),
         }
 
-        return user_balances, details, token_info  # type: ignore[return-value]
+        return user_balances, details, token_info
 
     def _handle_uniswap_position(
         self, position: Dict, chain: str
@@ -1149,8 +1176,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             f"Calculating Uniswap V3 position for pool {pool_address} with token ID {token_id}"
         )
 
-        user_balances = yield from self.get_user_share_value_uniswap(  # type: ignore[misc]
-            pool_address, token_id, chain, position  # type: ignore[arg-type]
+        user_balances = yield from self.get_user_share_value_uniswap(
+            pool_address, token_id, chain, position
         )
         details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
         token_info = {
@@ -1158,7 +1185,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             position.get("token1"): position.get("token1_symbol"),
         }
 
-        return user_balances, details, token_info  # type: ignore[return-value]
+        return user_balances, details, token_info
 
     def _handle_sturdy_position(
         self, position: Dict, chain: str
@@ -1171,13 +1198,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         aggregator_address = position.get("pool_address")
         asset_address = position.get("token0")
 
-        user_balances = yield from self.get_user_share_value_sturdy(  # type: ignore[misc]
-            user_address, aggregator_address, asset_address, chain  # type: ignore[arg-type]
+        user_balances = yield from self.get_user_share_value_sturdy(
+            user_address, aggregator_address, asset_address, chain
         )
-        details = yield from self._get_aggregator_name(aggregator_address, chain)  # type: ignore[arg-type,misc]
+        details = yield from self._get_aggregator_name(aggregator_address, chain)
         token_info = {position.get("token0"): position.get("token0_symbol")}
 
-        return user_balances, details, token_info  # type: ignore[return-value]
+        return user_balances, details, token_info
 
     def _handle_velodrome_position(
         self, position: Dict, chain: str
@@ -1190,13 +1217,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
 
-        user_balances = yield from self.get_user_share_value_velodrome(  # type: ignore[misc]
-            user_address, pool_address, token_id, chain, position  # type: ignore[arg-type]
+        user_balances = yield from self.get_user_share_value_velodrome(
+            user_address, pool_address, token_id, chain, position
         )
 
         # Add VELO rewards to user balances if position is staked
         if position.get("staked", False):
-            velo_rewards = yield from self._get_velodrome_pending_rewards(  # type: ignore[misc]
+            velo_rewards = yield from self._get_velodrome_pending_rewards(
                 position, chain, user_address
             )
             if velo_rewards > 0:
@@ -1204,7 +1231,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
                     # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
-                    user_balances[velo_token_address] = velo_rewards  # type: ignore[index]
+                    user_balances[velo_token_address] = velo_rewards
                     self.context.logger.info(
                         f"Added VELO rewards to position: {velo_rewards}"
                     )
@@ -1217,10 +1244,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Add VELO to token_info if rewards exist
         velo_token_address = self._get_velo_token_address(chain)
-        if velo_token_address and velo_token_address in user_balances:  # type: ignore[operator]
+        if velo_token_address and velo_token_address in user_balances:
             token_info[velo_token_address] = "VELO"
 
-        return user_balances, details, token_info  # type: ignore[return-value]
+        return user_balances, details, token_info
 
     def _calculate_position_value(
         self,
@@ -1240,12 +1267,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error(f"Could not find balance for {token_symbol}")
                 continue
 
-            asset_price = yield from self._fetch_token_price(token_address, chain)  # type: ignore[misc]
+            asset_price = yield from self._fetch_token_price(token_address, chain)
             if asset_price is None:
                 self.context.logger.error(f"Could not fetch price for {token_symbol}")
                 continue
 
-            asset_price = Decimal(str(asset_price))  # type: ignore[assignment]
+            asset_price = Decimal(str(asset_price))
             asset_value_usd = asset_balance * asset_price
             user_share += asset_value_usd
 
@@ -1281,20 +1308,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
         # Update position with current value and corrected yield calculation
-        yield from self._update_position_with_current_value(  # type: ignore[misc]
+        yield from self._update_position_with_current_value(
             position, user_share, chain, user_balances, token_info, token_prices
         )
 
-        return user_share  # type: ignore[return-value]
+        return user_share
 
     def _update_position_with_current_value(
         self,
         position: Dict,
         current_value_usd: Decimal,
         chain: str,
-        user_balances: Dict = None,  # type: ignore[assignment]
-        token_info: Dict = None,  # type: ignore[assignment]
-        token_prices: Dict = None,  # type: ignore[assignment]
+        user_balances: Dict = None,
+        token_info: Dict = None,
+        token_prices: Dict = None,
     ) -> Generator[None, None, None]:
         """Update position with current value and corrected yield calculation"""
         try:
@@ -1328,7 +1355,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 and initial_amount1 is not None
             ):
                 # Calculate yield as token quantity increases priced at current prices
-                yield_usd = yield from self._calculate_corrected_yield(  # type: ignore[func-returns-value,misc]
+                yield_usd = yield from self._calculate_corrected_yield(
                     position,
                     initial_amount0,
                     initial_amount1,
@@ -1341,14 +1368,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 entry_cost = position.get("entry_cost", 0)
                 if yield_usd >= entry_cost:
                     position["cost_recovered"] = True
-                    position["yield_usd"] = float(yield_usd)  # type: ignore[arg-type]
+                    position["yield_usd"] = float(yield_usd)
                     self.context.logger.info(
                         f"Position {position.get('pool_address')} has recovered costs: "
                         f"yield=${yield_usd:.2f} >= entry_cost=${entry_cost:.2f}"
                     )
                 else:
                     position["cost_recovered"] = False
-                    position["yield_usd"] = float(yield_usd)  # type: ignore[arg-type]
+                    position["yield_usd"] = float(yield_usd)
                     recovery_percentage = (
                         (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
                     )
@@ -1377,7 +1404,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         initial_amount1: int,
         current_balances: Dict,
         chain: str,
-        token_prices: Dict = None,  # type: ignore[assignment]
+        token_prices: Dict = None,
     ) -> Generator[Decimal, None, None]:
         """Calculate yield as token quantity increases priced at current prices"""
 
@@ -1385,14 +1412,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address = position.get("token1")
 
         # Get token decimals
-        token0_decimals = yield from self._get_token_decimals(chain, token0_address)  # type: ignore[arg-type,misc]
-        token1_decimals = yield from self._get_token_decimals(chain, token1_address)  # type: ignore[arg-type,misc]
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
 
         if token0_decimals is None or token1_decimals is None:
             self.context.logger.error(
                 "Could not get token decimals for yield calculation"
             )
-            return Decimal(0)  # type: ignore[return-value]
+            return Decimal(0)
 
         # Convert initial amounts to decimal-adjusted values
         initial_token0_decimal = Decimal(initial_amount0) / Decimal(10**token0_decimals)
@@ -1420,14 +1447,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             token1_price = token_prices[token1_address]
         else:
             # Price the increases at current prices
-            token0_price = yield from self._fetch_token_price(token0_address, chain)  # type: ignore[arg-type,misc]
-            token1_price = yield from self._fetch_token_price(token1_address, chain)  # type: ignore[arg-type,misc]
+            token0_price = yield from self._fetch_token_price(token0_address, chain)
+            token1_price = yield from self._fetch_token_price(token1_address, chain)
 
             if token0_price is None or token1_price is None:
                 self.context.logger.error(
                     "Could not fetch current token prices for yield calculation"
                 )
-                return Decimal(0)  # type: ignore[return-value]
+                return Decimal(0)
 
             token0_price = Decimal(str(token0_price))
             token1_price = Decimal(str(token1_price))
@@ -1450,7 +1477,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         velo_price = token_prices[velo_token_address]
                     else:
                         velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
-                        velo_price = yield from self._fetch_coin_price(velo_coin_id)  # type: ignore[arg-type,misc]
+                        velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
                             self.context.logger.warning(
                                 "Could not fetch VELO price for yield calculation"
@@ -1496,47 +1523,42 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[Any, Any, Dict[str, Decimal]]:
         """Get current token balances for a position (reuse existing calculation logic)"""
         dex_type = position.get("dex_type")
-        current_user_shares: Dict[Any, Any] = {}
+        current_user_shares = {}
         if dex_type == DexType.BALANCER.value:
             user_address = self.params.safe_contract_addresses.get(chain)
             pool_id = position.get("pool_id")
             pool_address = position.get("pool_address")
-            current_user_shares = yield from self.get_user_share_value_balancer(  # type: ignore[assignment]
-                user_address, pool_id, pool_address, chain  # type: ignore[arg-type]
+            current_user_shares = yield from self.get_user_share_value_balancer(
+                user_address, pool_id, pool_address, chain
             )
 
         elif dex_type == DexType.UNISWAP_V3.value:
             pool_address = position.get("pool_address")
             token_id = position.get("token_id")
-            current_user_shares = yield from self.get_user_share_value_uniswap(  # type: ignore[assignment]
-                pool_address, token_id, chain, position  # type: ignore[arg-type]
+            current_user_shares = yield from self.get_user_share_value_uniswap(
+                pool_address, token_id, chain, position
             )
 
         elif dex_type == DexType.VELODROME.value:
             user_address = self.params.safe_contract_addresses.get(chain)
             pool_address = position.get("pool_address")
             token_id = position.get("token_id")
-            current_user_shares = yield from self.get_user_share_value_velodrome(  # type: ignore[assignment]
-                user_address, pool_address, token_id, chain, position  # type: ignore[arg-type]
+            current_user_shares = yield from self.get_user_share_value_velodrome(
+                user_address, pool_address, token_id, chain, position
             )
 
         elif dex_type == DexType.STURDY.value:
             user_address = self.params.safe_contract_addresses.get(chain)
             aggregator_address = position.get("pool_address")
             asset_address = position.get("token0")
-            current_user_shares = yield from self.get_user_share_value_sturdy(  # type: ignore[assignment]
-                user_address, aggregator_address, asset_address, chain  # type: ignore[arg-type]
+            current_user_shares = yield from self.get_user_share_value_sturdy(
+                user_address, aggregator_address, asset_address, chain
             )
 
         return current_user_shares
 
     def get_user_share_value_velodrome(
-        self,
-        user_address: str,
-        pool_address: str,
-        token_id: int,
-        chain: str,
-        position: Any,
+        self, user_address: str, pool_address: str, token_id: int, chain: str, position
     ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
         """Calculate the user's share value and token balances in a Velodrome pool."""
         token0_address = position.get("token0")
@@ -1566,9 +1588,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
         return result
 
-    def _get_token_decimals_pair(
-        self, chain: Any, token0_address: Any, token1_address: Any
-    ) -> Generator[Any, Any, Any]:
+    def _get_token_decimals_pair(self, chain, token0_address, token1_address):
         token0_decimals = yield from self._get_token_decimals(chain, token0_address)
         token1_decimals = yield from self._get_token_decimals(chain, token1_address)
         if token0_decimals is None or token1_decimals is None:
@@ -1576,7 +1596,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return None, None
         return token0_decimals, token1_decimals
 
-    def _adjust_for_decimals(self, amount: Any, decimals: Any) -> Any:
+    def _adjust_for_decimals(self, amount, decimals):
         return Decimal(str(amount)) / Decimal(10**decimals)
 
     def _calculate_cl_position_value(
@@ -1672,7 +1692,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             # Calculate amounts for this position
-            amount0, amount1 = yield from self._calculate_position_amounts(  # type: ignore[misc]
+            amount0, amount1 = yield from self._calculate_position_amounts(
                 position_details, current_tick, sqrt_price_x96, pos, dex_type, chain
             )
 
@@ -1789,12 +1809,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _get_user_share_value_velodrome_cl(
         self,
-        pool_address: Any,
-        chain: Any,
-        position: Any,
-        token0_address: Any,
-        token1_address: Any,
-    ) -> Generator[Any, Any, Any]:
+        pool_address,
+        chain,
+        position,
+        token0_address,
+        token1_address,
+    ):
         """Calculate the user's share value and token balances in a Velodrome CL pool."""
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
@@ -1825,13 +1845,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _get_user_share_value_velodrome_non_cl(
         self,
-        user_address: Any,
-        pool_address: Any,
-        chain: Any,
-        position: Any,
-        token0_address: Any,
-        token1_address: Any,
-    ) -> Generator[Any, Any, Any]:
+        user_address,
+        pool_address,
+        chain,
+        position,
+        token0_address,
+        token1_address,
+    ):
         """Calculate the user's share value and token balances in a Velodrome non-CL pool."""
         user_balance = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1901,7 +1921,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def get_user_share_value_uniswap(
-        self, pool_address: str, token_id: int, chain: str, position: Any
+        self, pool_address: str, token_id: int, chain: str, position
     ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
         """Calculate the user's share value and token balances in a Uniswap V3 position."""
         token0_address = position.get("token0")
@@ -2133,10 +2153,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Get current balances dynamically instead of using static assets
             if chain == Chain.OPTIMISM.value:
-                balances = yield from self._get_optimism_balances_from_safe_api()  # type: ignore[misc]
+                balances = yield from self._get_optimism_balances_from_safe_api()
 
             if chain == Chain.MODE.value:
-                balances = yield from self._get_mode_balances_from_explorer_api()  # type: ignore[misc]
+                balances = yield from self._get_mode_balances_from_explorer_api()
 
             if not balances:
                 self.context.logger.warning(f"No balances found for chain {chain}")
@@ -2168,7 +2188,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     adjusted_balance = Decimal(str(token_balance)) / Decimal(10**18)
                 else:
                     # Get token decimals for ERC20 tokens
-                    token_decimals = yield from self._get_token_decimals(  # type: ignore[misc]
+                    token_decimals = yield from self._get_token_decimals(
                         chain, token_address
                     )
                     if token_decimals is None:
@@ -2183,12 +2203,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 velo_token_address = self._get_velo_token_address(chain)
                 # Get token price
                 if token_address == ZERO_ADDRESS:
-                    token_price = yield from self._fetch_zero_address_price()  # type: ignore[misc]
+                    token_price = yield from self._fetch_zero_address_price()
                 elif token_address.lower() == velo_token_address:
                     velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
-                    token_price = yield from self._fetch_coin_price(velo_coin_id)  # type: ignore[arg-type,misc]
+                    token_price = yield from self._fetch_coin_price(velo_coin_id)
                 else:
-                    token_price = yield from self._fetch_token_price(  # type: ignore[misc]
+                    token_price = yield from self._fetch_token_price(
                         token_address, chain
                     )
 
@@ -2198,8 +2218,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     continue
 
-                token_price = Decimal(str(token_price))  # type: ignore[assignment]
-                token_value_usd = adjusted_balance * token_price  # type: ignore[operator]
+                token_price = Decimal(str(token_price))
+                token_value_usd = adjusted_balance * token_price
                 total_safe_value += token_value_usd
 
                 self.context.logger.info(
@@ -2212,12 +2232,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     token_address,
                     token_symbol,
                     adjusted_balance,
-                    token_price,  # type: ignore[arg-type]
+                    token_price,
                     token_value_usd,
                 )
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
-        return total_safe_value  # type: ignore[return-value]
+        return total_safe_value
 
     def calculate_airdrop_rewards_value(self) -> Generator[None, None, Decimal]:
         """Calculate airdrop rewards equivalent in USD (MODE chain only)"""
@@ -2232,7 +2252,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Fetch actual USDC price
             usdc_address = self._get_usdc_address(chain)
-            usdc_price = yield from self._fetch_token_price(usdc_address, chain)  # type: ignore[arg-type]
+            usdc_price = yield from self._fetch_token_price(usdc_address, chain)
 
             if usdc_price is not None:
                 usdc_price_decimal = Decimal(str(usdc_price))
@@ -2269,8 +2289,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Get OLAS price
                 olas_price = yield from self._fetch_token_price(olas_address, chain)
                 if olas_price is not None:
-                    olas_price = Decimal(str(olas_price))  # type: ignore[assignment]
-                    olas_value_usd = olas_balance * olas_price  # type: ignore[operator]
+                    olas_price = Decimal(str(olas_price))
+                    olas_value_usd = olas_balance * olas_price
 
                     self.context.logger.info(
                         f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
@@ -2292,7 +2312,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if chain == "mode":
             all_erc20_transfers_mode = self._track_erc20_transfers_mode(
                 self.params.safe_contract_addresses.get(chain),
-                datetime.now().timestamp(),  # type: ignore[arg-type]
+                datetime.now().timestamp(),
             )
             if all_erc20_transfers_mode is None:
                 self.context.logger.warning(
@@ -2504,7 +2524,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         cached_values = yield from self._read_kv(keys=("initial_investment_values",))
         if cached_values and cached_values.get("initial_investment_values"):
             try:
-                raw_cache = json.loads(cached_values.get("initial_investment_values"))  # type: ignore[arg-type]
+                raw_cache = json.loads(cached_values.get("initial_investment_values"))
                 # Ensure all values are floats (not strings)
                 self.initial_investment_values_per_pool = {
                     k: float(v) for k, v in raw_cache.items()
@@ -2548,7 +2568,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             # Get token decimals
-            token0_decimals = yield from self._get_token_decimals(chain, token0)  # type: ignore[arg-type]
+            token0_decimals = yield from self._get_token_decimals(chain, token0)
             if not token0_decimals:
                 continue
 
@@ -2558,19 +2578,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Calculate adjusted amount for token1 if it exists
             initial_amount1 = None
             if token1 is not None and amount1 is not None:
-                token1_decimals = yield from self._get_token_decimals(chain, token1)  # type: ignore[arg-type]
+                token1_decimals = yield from self._get_token_decimals(chain, token1)
                 if not token1_decimals:  # pragma: no cover
                     continue
                 initial_amount1 = Decimal(str(amount1)) / Decimal(10**token1_decimals)
 
-            date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")  # type: ignore[arg-type]
+            date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
             tokens = [[position.get("token0_symbol"), token0]]
             if token1 is not None:
                 tokens.append([position.get("token1_symbol"), token1])
 
             historical_prices = yield from self._fetch_historical_token_prices(
-                tokens, date_str, chain  # type: ignore[arg-type]
+                tokens, date_str, chain
             )
 
             if not historical_prices:
@@ -2578,7 +2598,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             # Calculate value for token0
-            initial_price0 = historical_prices.get(token0)  # type: ignore[arg-type]
+            initial_price0 = historical_prices.get(token0)
             if initial_price0 is None:  # pragma: no cover
                 self.context.logger.error("Historical price not found for token0.")
                 continue
@@ -2731,7 +2751,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get the current balance of LP tokens
         balance = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,  # type: ignore[arg-type]
+            contract_address=pool_address,
             contract_public_id=WeightedPoolContract.contract_id,
             contract_callable="get_balance",
             data_key="balance",
@@ -2781,9 +2801,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
 
-        if position_data and position_data.get("liquidity"):
-            # Update the position with the current liquidity
-            position["current_liquidity"] = position_data.get("liquidity")
+        liquidity = position_data.get("liquidity") if position_data else None
+        if liquidity is not None:
+            position["current_liquidity"] = liquidity
             self.context.logger.info(
                 f"Updated Uniswap position liquidity: {position['current_liquidity']}"
             )
@@ -2807,7 +2827,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         if is_cl_pool:
             # Handle Velodrome concentrated liquidity pool
-            for pos in position.get("positions"):  # type: ignore[union-attr]
+            for pos in position.get("positions"):
                 token_id = pos.get("token_id")
                 if not token_id:
                     self.context.logger.warning(
@@ -2835,15 +2855,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     chain_id=chain,
                 )
 
-                if position_data and position_data.get("liquidity"):
-                    # Update the position with the current liquidity
-                    pos["current_liquidity"] = position_data.get("liquidity")
+                liquidity = position_data.get("liquidity") if position_data else None
+                if liquidity is not None:
+                    pos["current_liquidity"] = liquidity
                     self.context.logger.info(
-                        f"Updated Uniswap position liquidity: {pos['current_liquidity']}"
+                        f"Updated Velodrome CL position liquidity: {pos['current_liquidity']}"
                     )
                 else:
                     self.context.logger.warning(
-                        f"Failed to get liquidity for Uniswap position: {pos}"
+                        f"Failed to get liquidity for Velodrome CL position: {pos}"
                     )
         else:
             # Handle Velodrome stable/volatile pool
@@ -2861,7 +2881,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Get the current balance of LP tokens
             balance = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=pool_address,  # type: ignore[arg-type]
+                contract_address=pool_address,
                 contract_public_id=VelodromePoolContract.contract_id,
                 contract_callable="get_balance",
                 data_key="balance",
@@ -2898,7 +2918,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get the current balance
         balance = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,  # type: ignore[arg-type]
+            contract_address=pool_address,
             contract_public_id=YearnV3VaultContract.contract_id,
             contract_callable="balance_of",
             data_key="amount",
@@ -3213,7 +3233,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict]:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
-        self.funding_events = self.read_funding_events()  # type: ignore[func-returns-value]
+        self.funding_events = self.read_funding_events()
         if self.funding_events:
             existing_mode_data = self.funding_events.get("mode", {})
         else:
@@ -3245,7 +3265,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "Cleared funding_events for backward compatibility refetch"
             )
 
-        all_transfers_by_date: Dict[Any, List[Any]] = defaultdict(list)
+        all_transfers_by_date = defaultdict(list)
         end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
         end_datetime = end_datetime.replace(tzinfo=timezone.utc)
 
@@ -3256,7 +3276,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Fetching Mode token transfers...")
 
             success = yield from self._fetch_token_transfers_mode(
-                address, end_datetime, all_transfers_by_date, fetch_till_date  # type: ignore[arg-type]
+                address, end_datetime, all_transfers_by_date, fetch_till_date
             )
             if not success:
                 self.context.logger.info("No token transfers found for Mode")
@@ -3265,7 +3285,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Fetch ETH transfers
             self.context.logger.info("Fetching Mode ETH transfers...")
             self._fetch_eth_transfers_mode(
-                address, end_datetime, all_transfers_by_date, fetch_till_date  # type: ignore[arg-type]
+                address, end_datetime, all_transfers_by_date, fetch_till_date
             )
             if not success:
                 self.context.logger.info("No ETH transfers found for Mode")
@@ -3305,13 +3325,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict]:
         """Fetch all Optimism transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
-        self.funding_events = self.read_funding_events()  # type: ignore[func-returns-value]
+        self.funding_events = self.read_funding_events()
         if self.funding_events:
             existing_optimism_data = self.funding_events.get("optimism", {})
         else:
             existing_optimism_data = {}
 
-        all_transfers_by_date: Dict[Any, List[Any]] = defaultdict(list)
+        all_transfers_by_date = defaultdict(list)
 
         try:
             self.context.logger.info(
@@ -3360,7 +3380,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         existing_data: dict,
     ) -> Generator[None, None, None]:
         """Fetch token transfers from Mode blockchain explorer."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        base_url = self.params.mode_conduit_explorer_url
         processed_count = 0
 
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
@@ -3430,7 +3450,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         return name == "GnosisSafeProxy"
 
     def _should_include_transfer(
-        self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False  # type: ignore[assignment]
+        self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False
     ) -> bool:
         """Determine if a transfer should be included based on filtering criteria."""
         if not from_address:
@@ -3479,11 +3499,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         fetch_all_till_date: bool = False,
     ) -> Generator[None, None, bool]:
         """Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        base_url = self.params.mode_conduit_explorer_url
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
 
         has_more_pages = True
+        pages_processed = 0
         params = {"filter": "to"}  # Only fetch incoming transfers
 
         # Check if we have existing mode events and get latest date
@@ -3499,13 +3520,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
+            if pages_processed >= MAX_PAGINATION_PAGES:
+                self.context.logger.warning(
+                    f"Mode token transfers pagination hit cap of "
+                    f"{MAX_PAGINATION_PAGES} pages; stopping early"
+                )
+                break
+            pages_processed += 1
             try:
                 response = requests.get(
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
             except (requests.RequestException, ValueError, TypeError) as e:
                 self.context.logger.error(
@@ -3627,11 +3655,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         fetch_till_date: bool,
     ) -> bool:
         """Fetch ETH balance history from Mode blockchain explorer."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        base_url = self.params.mode_conduit_explorer_url
         endpoint = f"{base_url}/addresses/{address}/coin-balance-history"
 
         has_more_pages = True
-        params: Dict[Any, Any] = {}
+        pages_processed = 0
+        params = {}
         processed_count = 0
 
         # Check if we have existing mode events and get latest date
@@ -3647,13 +3676,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
+            if pages_processed >= MAX_PAGINATION_PAGES:
+                self.context.logger.warning(
+                    f"Mode coin balance history pagination hit cap of "
+                    f"{MAX_PAGINATION_PAGES} pages; stopping early"
+                )
+                break
+            pages_processed += 1
             try:
                 response = requests.get(
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
             except (requests.RequestException, ValueError, TypeError) as e:
                 self.context.logger.error(
@@ -3758,7 +3794,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         return True
 
     def _should_include_transfer_mode(
-        self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False  # type: ignore[assignment]
+        self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False
     ) -> bool:
         """Determine if a Mode transfer should be included based on filtering criteria."""
         if not from_address:
@@ -3791,7 +3827,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         existing_data: dict,
     ) -> Generator[None, None, None]:
         """Fetch Optimism transfers using SafeGlobal API."""
-        base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+        base_url = self.params.safe_api_v1_url
 
         try:
             self.context.logger.info(
@@ -3892,11 +3928,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             symbol = token_info.get("symbol", "Unknown")
                             decimals = int(token_info.get("decimals", 18) or 18)
 
-                        if symbol.lower() != "usdc":  # type: ignore[union-attr]
+                        if symbol.lower() != "usdc":
                             continue
 
                         value_raw = int(transfer.get("value", "0") or "0")
-                        amount = value_raw / (10**decimals)  # type: ignore[operator]
+                        amount = value_raw / (10**decimals)
 
                         transfer_data = {
                             "from_address": from_address,
@@ -4006,7 +4042,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint="https://mainnet.optimism.io",
+                endpoint=self.params.optimism_ledger_rpc,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4026,7 +4062,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 is_eoa = True
             else:
                 # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
+                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{from_address}/"
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4087,7 +4123,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint="https://mainnet.optimism.io",
+                endpoint=self.params.optimism_ledger_rpc,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4107,7 +4143,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 is_eoa = True
             else:
                 # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{to_address}/"
+                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{to_address}/"
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4142,7 +4178,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         cached_data = yield from self._read_kv(keys=(key,))
         if cached_data and cached_data.get(key):
             try:
-                return float(cached_data.get(key))  # type: ignore[arg-type]
+                return float(cached_data.get(key))
             except (ValueError, TypeError):
                 self.context.logger.warning(
                     f"Failed to parse cached {chain} total investment"
@@ -4162,7 +4198,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         cached_data = yield from self._read_kv(keys=("funding_events",))
         if cached_data and cached_data.get("funding_events"):
             try:
-                return json.loads(cached_data.get("funding_events"))  # type: ignore[arg-type]
+                return json.loads(cached_data.get("funding_events"))
             except json.JSONDecodeError:
                 self.context.logger.warning(
                     "Failed to parse cached unified transfer data"
@@ -4243,8 +4279,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             reversion_date = None
 
             # Sort transfers by timestamp
-            sorted_incoming_transfers: List[Any] = []
-            for _, transfers in all_incoming_transfers.items():  # type: ignore[assignment]
+            sorted_incoming_transfers = []
+            for _, transfers in all_incoming_transfers.items():
                 for transfer in transfers:
                     if (
                         isinstance(transfer, dict) and "timestamp" in transfer
@@ -4253,8 +4289,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             sorted_incoming_transfers.sort(key=lambda x: x["timestamp"])
 
-            sorted_outgoing_transfers: List[Any] = []
-            for _, transfers in all_outgoing_transfers.items():  # type: ignore[assignment]
+            sorted_outgoing_transfers = []
+            for _, transfers in all_outgoing_transfers.items():
                 for transfer in transfers:
                     if (
                         isinstance(transfer, dict) and "timestamp" in transfer
@@ -4305,7 +4341,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if len(reversion_transfers) == 0:
                     # No reversion has happened yet, revert the last transfer amount
                     last_transfer = eth_transfers[-1]
-                    reversion_amount = float(last_transfer.get("amount", 0))  # type: ignore[assignment]
+                    reversion_amount = float(last_transfer.get("amount", 0))
 
                     # Get the date of the last transfer that needs reversion
                     try:
@@ -4327,8 +4363,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         # Use current date as fallback
                         reversion_date = current_date
 
-                    if current_eth_balance < reversion_amount:  # type: ignore[operator]
-                        reversion_amount = current_eth_balance  # type: ignore[assignment]
+                    if current_eth_balance < reversion_amount:
+                        reversion_amount = current_eth_balance
                         self.context.logger.info(
                             f"Current ETH balance is {current_eth_balance} which is less than the reversion amount {reversion_amount} indicating that some ETH has already been used"
                         )
@@ -4344,8 +4380,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
 
             if len(reversion_transfers) > 0:
-                historical_reversion_value = yield from self._calculate_total_reversion_value(  # type: ignore[assignment]
-                    eth_transfers, reversion_transfers
+                historical_reversion_value = (
+                    yield from self._calculate_total_reversion_value(
+                        eth_transfers, reversion_transfers
+                    )
                 )
 
             result = {
@@ -4422,10 +4460,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch outgoing ETH transfers from the safe address on Optimism, with persistence."""
         # Load persisted outgoing data
         if not self.funding_events:
-            self.funding_events = self.read_funding_events() or {}  # type: ignore[func-returns-value]
+            self.funding_events = self.read_funding_events() or {}
         existing_outgoing = self.funding_events.get("optimism_outgoing", {})
 
-        all_transfers: Dict[Any, Any] = {}
+        all_transfers = {}
 
         if not address:
             self.context.logger.warning(
@@ -4435,7 +4473,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         try:
             # Use SafeGlobal API for Optimism transfers
-            base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+            base_url = self.params.safe_api_v1_url
             transfers_url = f"{base_url}/safes/{address}/transfers/"
 
             processed_count = 0
@@ -4570,7 +4608,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict[str, Dict[str, List[Dict]]]]:
         """Fetch and organize ERC20 token transfers for Optimism chain using Safe API."""
         try:
-            all_transfers: Any = {"outgoing": {}}
+            all_transfers = {"outgoing": {}}
 
             if not safe_address:
                 self.context.logger.warning(
@@ -4579,7 +4617,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 return all_transfers
 
             # Use SafeGlobal API for Optimism transfers
-            base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+            base_url = self.params.safe_api_v1_url
             transfers_url = f"{base_url}/safes/{safe_address}/transfers/"
 
             processed_count = 0
@@ -4660,11 +4698,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         decimals = int(token_info.get("decimals", 18) or 18)
 
                     # Only process USDC transfers
-                    if symbol.upper() != "USDC":  # type: ignore[union-attr]
+                    if symbol.upper() != "USDC":
                         continue
 
                     value_raw = int(transfer.get("value", "0") or "0")
-                    amount = value_raw / (10**decimals)  # type: ignore[operator]
+                    amount = value_raw / (10**decimals)
 
                     if amount <= 0:
                         continue
@@ -4708,10 +4746,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Dict[str, Dict[str, List[Dict]]]:
         """Fetch and organize ETH transfers for Mode chain using the Mode explorer API."""
         try:
-            all_transfers: Any = {"incoming": {}, "outgoing": {}}
+            all_transfers = {"incoming": {}, "outgoing": {}}
 
             # Use Mode internal transactions API
-            base_url = "https://explorer.mode.network/api"
+            base_url = self.params.mode_native_explorer_url
             params = {
                 "module": "account",
                 "action": "txlistinternal",
@@ -4726,7 +4764,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 params=params,
                 headers={"Accept": "application/json"},
                 timeout=self.params.request_timeout,
-                verify=False,  # nosec B501
+                verify=self.params.tls_verify,
             )
 
             if response.status_code != 200:
@@ -4823,23 +4861,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Dict[str, Dict[str, List[Dict]]]:
         """Fetch and organize ERC20 token transfers for Mode chain using the Mode explorer API with pagination."""
         try:
-            all_transfers: Any = {"outgoing": {}}
+            all_transfers = {"outgoing": {}}
 
             # Use Mode Explorer API (same as _fetch_token_transfers_mode)
-            base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+            base_url = self.params.mode_conduit_explorer_url
             endpoint = f"{base_url}/addresses/{safe_address}/token-transfers"
             params = {"filter": "from"}  # Only fetch outgoing transfers
 
             has_more_pages = True
+            pages_processed = 0
             processed_count = 0
 
             while has_more_pages:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Mode ERC20 transfers pagination hit cap of "
+                        f"{MAX_PAGINATION_PAGES} pages; stopping early"
+                    )
+                    break
+                pages_processed += 1
                 response = requests.get(
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=self.params.request_timeout,
-                    verify=False,  # nosec B501
+                    verify=self.params.tls_verify,
                 )
 
                 if response.status_code != 200:
@@ -5035,28 +5081,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def _read_investing_paused(self) -> Generator[None, None, bool]:
-        """Read investing_paused flag from KV store."""
-        try:
-            result = yield from self._read_kv(("investing_paused",))
-            if result is None:
-                self.context.logger.warning(
-                    "No response from KV store for investing_paused flag"
-                )
-                return False
-
-            investing_paused_value = result.get("investing_paused")
-            if investing_paused_value is None:
-                self.context.logger.warning(
-                    "investing_paused value is None in KV store"
-                )
-                return False
-
-            return investing_paused_value.lower() == "true"
-        except Exception as e:
-            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
-            return False
-
     def check_is_valid_safe_address(
         self, safe_address: str, operating_chain: str
     ) -> Generator[None, None, bool]:
@@ -5195,7 +5219,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Use existing get_transaction_receipt function
             response = yield from self.get_transaction_receipt(
-                tx_digest=tx_hash,  # type: ignore[arg-type]
+                tx_digest=tx_hash,
                 chain_id=chain,
             )
 
@@ -5230,7 +5254,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Normalize addresses for comparison
             actual_pool_address = actual_pool_address.lower()
-            stored_pool_address = stored_pool_address.lower()  # type: ignore[union-attr]
+            stored_pool_address = stored_pool_address.lower()
 
             if actual_pool_address != stored_pool_address:
                 self.context.logger.info(
@@ -5256,7 +5280,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return False
 
-    def _is_airdrop_transfer(self, tx: Dict) -> bool:  # type: ignore[override]
+    def _is_airdrop_transfer(self, tx: Dict) -> bool:
         """Check if a transfer is an airdrop transfer."""
         if not self.params.airdrop_started or not self.params.airdrop_contract_address:
             return False
@@ -5269,12 +5293,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         usdc_address = self._get_usdc_address("mode")
         return (
             symbol.upper() == "USDC"
-            and token.get("address", "").lower() == usdc_address.lower()  # type: ignore[union-attr]
+            and token.get("address", "").lower() == usdc_address.lower()
             and from_address.get("hash", "").lower()
             == self.params.airdrop_contract_address.lower()
         )
 
-    def _update_agent_performance_metrics(self) -> None:
+    def _update_agent_performance_metrics(self):
         """Update agent performance metrics with portfolio balance and ROI."""
         try:
             # Read existing agent performance data or initialize

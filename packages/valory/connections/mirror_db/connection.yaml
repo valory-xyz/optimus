@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigbsl2ifkuqbe75ibww3eva4uiygc2mi3kvyqt5gltzzyf2mmgjly
-  connection.py: bafybeibzjpei5ssawxbpdly54iznly2lx6hn6l2shgjmdjatkldme4alzm
+  connection.py: bafybeihueccx2dbhrol7qhczcywirxn7c7ytzv4b6ol47khvt6kqx5grfq
   readme.md: bafybeib453wcfkqkvybozrgmll4bqo7tvntfmcbl4tb76a7vo445njlgxe
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
-  tests/test_connection.py: bafybeif2tdhs6slmgsmbrht234th6peqnov3urrkhfqdbbvregfi57o7ma
+  tests/test_connection.py: bafybeihn6ypbzdfh6rmbhztto56yrp3tpcgw5c3rx36bub5oxkwhwgq5m4
 fingerprint_ignore_patterns: []
 connections: []
 protocols:

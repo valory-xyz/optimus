@@ -21,7 +21,7 @@
 
 # pylint: skip-file
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import PropertyMock
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.liquidity_trader_abci.states.base import (
@@ -61,8 +61,8 @@ class TestPostTxSettlementRound:
         round_obj = object.__new__(PostTxSettlementRound)
         db = AbciAppDB(setup_data={"tx_submitter": [submitter]})
         synced = SynchronizedData(db=db)
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).synchronized_data = PropertyMock(return_value=synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=synced)  # type: ignore[method-assign]
         return round_obj
 
     def test_end_block_checkpoint_executed(self) -> None:
@@ -120,10 +120,10 @@ class TestPostTxSettlementRound:
     def test_end_block_not_threshold_reached(self) -> None:
         """Test end_block returns None when threshold not reached."""
         round_obj = object.__new__(PostTxSettlementRound)
-        type(round_obj).threshold_reached = PropertyMock(return_value=False)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         result = round_obj.end_block()
         assert result is None
 
     def test_no_withdrawal_initiated_class_attribute(self) -> None:
-        """PostTxSettlement does not expose a withdrawal_initiated transition anchor."""
+        """PostTxSettlement does not expose a withdrawal_initiated transition anchor."""  # noqa: D403
         assert "withdrawal_initiated" not in vars(PostTxSettlementRound)

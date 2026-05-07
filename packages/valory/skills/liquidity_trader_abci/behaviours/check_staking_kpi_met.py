@@ -51,7 +51,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     # pylint-disable too-many-ancestors
     matching_round: Type[AbstractRound] = CheckStakingKPIMetRound
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             investing_paused = yield from self._read_investing_paused()
@@ -81,7 +81,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info("KPI already met for the day!")
             else:
                 is_period_threshold_exceeded = (
-                    self.synchronized_data.period_count
+                    self.synchronized_data.period_count  # type: ignore[operator]
                     - self.synchronized_data.period_number_at_last_cp
                     >= self.params.staking_threshold_period
                 )
@@ -92,7 +92,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     multisig_nonces_since_last_cp = (
                         yield from self._get_multisig_nonces_since_last_cp(
-                            chain=self.params.staking_chain,
+                            chain=self.params.staking_chain,  # type: ignore[arg-type]
                             multisig=self.params.safe_contract_addresses.get(
                                 self.params.staking_chain
                             ),
@@ -111,7 +111,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             )
                             self.context.logger.info("Preparing vanity tx..")
                             vanity_tx_hex = yield from self._prepare_vanity_tx(
-                                chain=self.params.staking_chain
+                                chain=self.params.staking_chain  # type: ignore[arg-type]
                             )
                             self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
@@ -137,7 +137,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.debug(f"Safe address for chain {chain}: {safe_address}")
 
         tx_data = b"0x"
-        self.context.logger.debug(f"Transaction data: {tx_data}")
+        self.context.logger.debug(f"Transaction data: {tx_data}")  # type: ignore[str-bytes-safe]
 
         try:
             safe_tx_hash = yield from self.contract_interact(

@@ -16,8 +16,8 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for vault contract interface."""
+
 import logging
 
 from aea.common import JSONLike
@@ -25,7 +25,6 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
 from eth_abi import encode
-
 
 PUBLIC_ID = PublicId.from_str("valory/balancer_vault:0.1.0")
 _logger = logging.getLogger(
@@ -45,7 +44,7 @@ class VaultContract(Contract):
         contract_address: str,
         pool_id: str,
     ) -> JSONLike:
-        """get the pool tokens for poolId."""
+        """Get the pool tokens for poolId."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         pool_id_bytes = bytes.fromhex(pool_id[2:])
         data = contract_instance.functions.getPoolTokens(pool_id_bytes).call()

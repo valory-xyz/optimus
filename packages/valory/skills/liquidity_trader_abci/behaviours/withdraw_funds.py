@@ -42,7 +42,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round = WithdrawFundsRound
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             self.context.logger.info("=== WithdrawFundsBehaviour started ===")

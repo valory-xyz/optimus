@@ -130,8 +130,8 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return None, None
         try:
             pool_info = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=vault_address,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+                contract_address=vault_address,  # type: ignore[arg-type]
                 contract_public_id=VaultContract.contract_id,
                 contract_callable="get_pool_tokens",
                 pool_id=pool_id,
@@ -146,7 +146,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             # Safely extract and flatten token addresses
             tokens_nested = pool_info[0]
             new_max_amounts_in = self.adjust_amounts(
-                assets, tokens_nested, max_amounts_in
+                assets, tokens_nested, max_amounts_in  # type: ignore[arg-type]
             )
 
             return tokens_nested, new_max_amounts_in
@@ -202,31 +202,31 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
             )
-            return None, None
+            return None, None  # type: ignore[return-value]
 
         self.context.logger.info("enter into the pool")
 
-        join_kind = self._determine_join_kind(pool_type)
+        join_kind = self._determine_join_kind(pool_type)  # type: ignore[arg-type]
         self.context.logger.info(f"Determined join kind: {join_kind}")
 
         if not join_kind:
             self.context.logger.error(
                 f"Could not determine join kind for pool type {pool_type}"
             )
-            return None, None
+            return None, None  # type: ignore[return-value]
         # Get vault contract address from balancer weighted pool contract
         vault_address = self.params.balancer_vault_contract_addresses.get(chain)
         self.context.logger.info(f"Vault address retrieved: {vault_address}")
 
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
-            return None, None
+            return None, None  # type: ignore[return-value]
 
         # Fetch the pool id
-        pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
+        pool_id = yield from self._get_pool_id(pool_address, chain)  # type: ignore[arg-type]  # getPoolId()
         self.context.logger.info(f"Pool ID retrieved: {pool_id}")
         if not pool_id:
-            return None, None
+            return None, None  # type: ignore[return-value]
 
         self.context.logger.info(f"assets, max_amounts_in:{assets, max_amounts_in}")
 
@@ -238,7 +238,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             chain=chain,
         )
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
-        from_internal_balance = ZERO_ADDRESS in assets
+        from_internal_balance = ZERO_ADDRESS in assets  # type: ignore[operator]
         self.context.logger.info(
             f"new_assets, new_max_amounts_in:{new_assets, new_max_amounts_in}"
         )
@@ -246,10 +246,10 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         # Query expected BPT output and apply slippage protection
         expected_bpt_out = yield from self.query_proportional_join(
             pool_id=pool_id,
-            pool_address=pool_address,
+            pool_address=pool_address,  # type: ignore[arg-type]
             vault_address=vault_address,
-            chain=chain,
-            amounts_in=max_amounts_in,
+            chain=chain,  # type: ignore[arg-type]
+            amounts_in=max_amounts_in,  # type: ignore[arg-type]
         )
         if expected_bpt_out:
             slippage_tolerance = self.params.slippage_tolerance
@@ -261,12 +261,12 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.warning(
                 "Unable to estimate minimum BPT, discarding transaction"
             )
-            return None, None
+            return None, None  # type: ignore[return-value]
 
         self.context.logger.info("Preparing transaction for pool join.")
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
             contract_address=vault_address,
             contract_public_id=VaultContract.contract_id,
             contract_callable="join_pool",
@@ -297,30 +297,30 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
             )
-            return None, None, None
+            return None, None, None  # type: ignore[return-value]
 
-        exit_kind = self._determine_exit_kind(pool_type)
+        exit_kind = self._determine_exit_kind(pool_type)  # type: ignore[arg-type]
         if not exit_kind:
             self.context.logger.error(
                 f"Could not determine exit kind for pool type {pool_type}"
             )
-            return None, None, None
+            return None, None, None  # type: ignore[return-value]
 
         # Get vault contract address from balancer weighted pool contract
         vault_address = self.params.balancer_vault_contract_addresses.get(chain)
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
-            return None, None, None
+            return None, None, None  # type: ignore[return-value]
 
         # Fetch the pool id
-        pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
+        pool_id = yield from self._get_pool_id(pool_address, chain)  # type: ignore[arg-type]  # getPoolId()
         if not pool_id:
-            return None, None, None
+            return None, None, None  # type: ignore[return-value]
 
         # fetch the amount of LP tokens
         bpt_amount_in = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
+            contract_address=pool_address,  # type: ignore[arg-type]
             contract_public_id=str(WeightedPoolContract.contract_id),
             contract_callable="get_balance",
             data_key="balance",
@@ -331,17 +331,17 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error fetching BPT Amount for safe {safe_address} for pool {pool_address}"
             )
-            return None, None, None
+            return None, None, None  # type: ignore[return-value]
 
         # toInternalBalance - True if receiving internal token balances. False if receiving ERC20.
-        to_internal_balance = ZERO_ADDRESS in assets
+        to_internal_balance = ZERO_ADDRESS in assets  # type: ignore[operator]
 
         # Query expected amounts out and apply slippage protection
         expected_amounts = yield from self.query_proportional_exit(
             pool_id=pool_id,
-            pool_address=pool_address,
+            pool_address=pool_address,  # type: ignore[arg-type]
             vault_address=vault_address,
-            chain=chain,
+            chain=chain,  # type: ignore[arg-type]
             bpt_amount_in=bpt_amount_in,
         )
 
@@ -357,10 +357,10 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.warning(
                 "Unable to estimate minimum amounts out, discarding transaction"
             )
-            return None, None, None
+            return None, None, None  # type: ignore[return-value]
 
         tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
             contract_address=vault_address,
             contract_public_id=VaultContract.contract_id,
             contract_callable="exit_pool",
@@ -396,7 +396,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return None
 
         pool_tokens = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
             contract_address=vault_address,
             contract_public_id=VaultContract.contract_id,
             contract_callable="get_pool_tokens",
@@ -423,7 +423,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         """Get pool id"""
 
         pool_id = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
             contract_address=pool_address,
             contract_public_id=WeightedPoolContract.contract_id,
             contract_callable="get_pool_id",
@@ -479,7 +479,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             checksummed_assets = [to_checksum_address(asset) for asset in assets]
 
             result = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address=queries_address,
                 contract_public_id=BalancerQueriesContract.contract_id,
                 contract_callable="query_join",
@@ -524,7 +524,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             checksummed_assets = [to_checksum_address(asset) for asset in assets]
 
             result = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address=queries_address,
                 contract_public_id=BalancerQueriesContract.contract_id,
                 contract_callable="query_exit",
@@ -578,7 +578,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         try:
             # Fetch pool token information
             pool_tokens_info = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address=vault_address,
                 contract_public_id=VaultContract.contract_id,
                 contract_callable="get_pool_tokens",
@@ -595,7 +595,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
             # Fetch total BPT supply
             total_bpt_supply = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address=pool_address,
                 contract_public_id=WeightedPoolContract.contract_id,
                 contract_callable="get_total_supply",
@@ -639,7 +639,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         try:
             # Fetch pool token information
             pool_tokens_info = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address=vault_address,
                 contract_public_id=VaultContract.contract_id,
                 contract_callable="get_pool_tokens",
@@ -656,7 +656,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
             # Fetch total BPT supply
             total_bpt_supply = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address=pool_address,
                 contract_public_id=WeightedPoolContract.contract_id,
                 contract_callable="get_total_supply",
@@ -672,7 +672,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             bpt_out = BalancerProportionalMath.query_proportional_join(
                 token_balances=token_balances,
                 total_bpt_supply=total_bpt_supply,
-                amounts_in=amounts_in,
+                amounts_in=amounts_in,  # type: ignore[arg-type]
             )
 
             self.context.logger.info(

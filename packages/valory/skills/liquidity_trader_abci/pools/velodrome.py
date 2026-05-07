@@ -1370,6 +1370,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             # Define a converter that maps a human price to a tick relative to tick_current
             def price_to_tick(price: float) -> int:
+                """Price to tick."""
                 ratio = price / current_ema if current_ema > 0 else 1.0
                 delta = np.log(ratio) / np.log(1.0001)
                 return int(np.rint(delta) + tick_current)
@@ -2255,6 +2256,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Convert to ticks and round to tick spacing
         def round_to_spacing(tick):
+            """Round to spacing."""
             return int(tick // tick_spacing) * tick_spacing
 
         # Convert prices to ticks

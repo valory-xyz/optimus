@@ -16,14 +16,12 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for UniswapV3 Pool contract interface."""
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
-
 
 PUBLIC_ID = PublicId.from_str("valory/uniswap_v3_non_fungible_position_manager:0.1.0")
 
@@ -133,12 +131,12 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the pool tokens"""
+        """Get the pool tokens"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
         return dict(tokens=[token0, token1])
-    
+
     @classmethod
     def balanceOf(
         cls,
@@ -150,7 +148,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
         return dict(balance=balance)
-    
+
     @classmethod
     def ownerOf(
         cls,
@@ -162,7 +160,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         owner = contract_instance.functions.ownerOf(token_id).call()
         return dict(owner=owner)
-    
+
     @classmethod
     def get_position(
         cls,
@@ -170,22 +168,24 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """get the position info"""
+        """Get the position info"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         position = contract_instance.functions.positions(token_id).call()
         if not position:
             return dict(data={})
-        return dict(data={
-            "nonce": position[0],
-            "operator": position[1],
-            "token0": position[2],
-            "token1": position[3],
-            "fee": position[4],
-            "tickLower": position[5],
-            "tickUpper": position[6],
-            "liquidity": position[7],
-            "feeGrowthInside0LastX128": position[8],
-            "feeGrowthInside1LastX128": position[9],
-            "tokensOwed0": position[10],
-            "tokensOwed1": position[11],
-        })
+        return dict(
+            data={
+                "nonce": position[0],
+                "operator": position[1],
+                "token0": position[2],
+                "token1": position[3],
+                "fee": position[4],
+                "tickLower": position[5],
+                "tickUpper": position[6],
+                "liquidity": position[7],
+                "feeGrowthInside0LastX128": position[8],
+                "feeGrowthInside1LastX128": position[9],
+                "tokensOwed0": position[10],
+                "tokensOwed1": position[11],
+            }
+        )

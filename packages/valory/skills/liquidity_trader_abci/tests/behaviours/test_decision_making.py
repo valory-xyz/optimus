@@ -22,8 +22,7 @@
 # pylint: skip-file
 
 import json
-import time
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, List
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -33,12 +32,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Decision,
     DexType,
     MAX_RETRIES_FOR_ROUTES,
-    MAX_RETRIES_FOR_STATUS_CHECK,
     MAX_SWAP_CONFIRMATION_RETRIES,
     MIN_TIME_IN_POSITION,
     PositionStatus,
-    SwapStatus,
-    WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.decision_making import (
@@ -136,6 +132,7 @@ def _make_gen_method(return_value):
     """Create a generator method mock that yields nothing and returns return_value."""
 
     def method(*args, **kwargs):
+        """Method."""
         yield  # one yield to make it a generator
         return return_value
 
@@ -146,6 +143,7 @@ def _make_gen_none():
     """Generator that returns None."""
 
     def method(*args, **kwargs):
+        """Method."""
         if False:
             yield
         return None
@@ -157,6 +155,7 @@ def _make_gen_method_by_token(token_map):
     """Build a fake is_cl_token_staked that returns token_map[token_id]."""
 
     def method(behaviour, account, token_id, **kwargs):
+        """Method."""
         yield
         return token_map.get(token_id)
 
@@ -167,18 +166,21 @@ class TestReadInvestingPaused:
     """Tests for _read_investing_paused."""
 
     def test_returns_true(self):
+        """Test returns true."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method({"investing_paused": "true"})
         result = _exhaust(b._read_investing_paused())
         assert result is True
 
     def test_returns_false_for_false_value(self):
+        """Test returns false for false value."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method({"investing_paused": "false"})
         result = _exhaust(b._read_investing_paused())
         assert result is False
 
     def test_returns_false_when_kv_returns_none(self):
+        """Test returns false when kv returns none."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method(None)
         result = _exhaust(b._read_investing_paused())
@@ -186,6 +188,7 @@ class TestReadInvestingPaused:
         b.context.logger.error.assert_called_once()
 
     def test_returns_false_when_value_is_none(self):
+        """Test returns false when value is none."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method({"investing_paused": None})
         result = _exhaust(b._read_investing_paused())
@@ -196,6 +199,7 @@ class TestReadInvestingPaused:
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("boom")
             yield  # noqa
 
@@ -208,18 +212,21 @@ class TestReadWithdrawalStatus:
     """Tests for _read_withdrawal_status."""
 
     def test_returns_status(self):
+        """Test returns status."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method({"withdrawal_status": "INITIATED"})
         result = _exhaust(b._read_withdrawal_status())
         assert result == "INITIATED"
 
     def test_returns_unknown_when_missing(self):
+        """Test returns unknown when missing."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method({})
         result = _exhaust(b._read_withdrawal_status())
         assert result == "unknown"
 
     def test_returns_unknown_when_kv_unreachable(self):
+        """Test returns unknown when kv unreachable."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method(None)
         result = _exhaust(b._read_withdrawal_status())
@@ -227,6 +234,7 @@ class TestReadWithdrawalStatus:
         b.context.logger.error.assert_called_once()
 
     def test_returns_unknown_when_value_non_string(self):
+        """Test returns unknown when value non string."""
         b = _make_behaviour()
         b._read_kv = _make_gen_method({"withdrawal_status": 42})
         result = _exhaust(b._read_withdrawal_status())
@@ -238,6 +246,7 @@ class TestReadWithdrawalStatus:
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -250,6 +259,7 @@ class TestGetNextEvent:
     """Tests for get_next_event."""
 
     def test_no_actions(self):
+        """Test no actions."""
         b = _make_behaviour()
         b.synchronized_data.actions = []
         b._read_investing_paused = _make_gen_method(False)
@@ -322,6 +332,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_last_action_exit_pool(self):
+        """Test last action exit pool."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "ExitPool"}]
         b.synchronized_data.last_executed_action_index = 0
@@ -341,6 +352,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_last_action_deposit(self):
+        """Test last action deposit."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "deposit"}]
         b.synchronized_data.last_executed_action_index = 0
@@ -360,6 +372,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_last_action_withdraw(self):
+        """Test last action withdraw."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "withdraw"}]
         b.synchronized_data.last_executed_action_index = 0
@@ -380,6 +393,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_last_action_bridge_swap_executed(self):
+        """Test last action bridge swap executed."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "BridgeAndSwap"}]
         b.synchronized_data.last_executed_action_index = 0
@@ -399,6 +413,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_last_action_claim_rewards(self):
+        """Test last action claim rewards."""
         b = _make_behaviour()
         b.synchronized_data.actions = [
             {"action": "ClaimRewards"},
@@ -427,6 +442,7 @@ class TestGetNextEvent:
         assert result is None
 
     def test_last_action_stake_lp_tokens(self):
+        """Test last action stake lp tokens."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "StakeLpTokens"}]
         b.synchronized_data.last_executed_action_index = 0
@@ -448,6 +464,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_last_action_unstake_lp_tokens(self):
+        """Test last action unstake lp tokens."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "UnstakeLpTokens"}]
         b.synchronized_data.last_executed_action_index = 0
@@ -469,6 +486,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_last_action_claim_staking_rewards(self):
+        """Test last action claim staking rewards."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "ClaimStakingRewards"}]
         b.synchronized_data.last_executed_action_index = 0
@@ -490,6 +508,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_routes_fetched_last_action(self):
+        """Test routes fetched last action."""
         b = _make_behaviour()
         b.synchronized_data.actions = [
             {"action": "FindBridgeRoute"},
@@ -512,6 +531,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_step_executed_last_action(self):
+        """Test step executed last action."""
         b = _make_behaviour()
         b.synchronized_data.actions = [
             {"action": "FindBridgeRoute"},
@@ -534,6 +554,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_switch_route_last_action(self):
+        """Test switch route last action."""
         b = _make_behaviour()
         b.synchronized_data.actions = [
             {"action": "FindBridgeRoute"},
@@ -556,6 +577,7 @@ class TestGetNextEvent:
         assert result == (Event.DONE.value, {})
 
     def test_prepare_next_action_called(self):
+        """Test prepare next action called."""
         b = _make_behaviour()
         b.synchronized_data.actions = [{"action": "EnterPool"}]
         b.synchronized_data.last_executed_action_index = None
@@ -619,13 +641,17 @@ class TestGetNextEvent:
 
 
 class TestGetPortfolioData:
+    """TestGetPortfolioData."""
+
     def test_empty_portfolio(self):
+        """Test empty portfolio."""
         b = _make_behaviour()
         b.portfolio_data = {}
         result = _exhaust(b._get_portfolio_data())
         assert result is None
 
     def test_non_empty_portfolio(self):
+        """Test non empty portfolio."""
         b = _make_behaviour()
         b.portfolio_data = {"key": "value"}
         result = _exhaust(b._get_portfolio_data())
@@ -633,7 +659,10 @@ class TestGetPortfolioData:
 
 
 class TestUpdateWithdrawalCompletion:
+    """TestUpdateWithdrawalCompletion."""
+
     def test_without_final_tx_hash(self):
+        """Test without final tx hash."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = None
         type(b.synchronized_data).final_tx_hash = PropertyMock(
@@ -643,15 +672,18 @@ class TestUpdateWithdrawalCompletion:
         _exhaust(b._update_withdrawal_completion())
 
     def test_with_final_tx_hash(self):
+        """Test with final tx hash."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xabc"
         b._write_kv = _make_gen_method(True)
         _exhaust(b._update_withdrawal_completion())
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("boom")
             yield  # noqa
 
@@ -661,20 +693,26 @@ class TestUpdateWithdrawalCompletion:
 
 
 class TestUpdateWithdrawalStatus:
+    """TestUpdateWithdrawalStatus."""
+
     def test_non_completed(self):
+        """Test non completed."""
         b = _make_behaviour()
         b._write_kv = _make_gen_method(True)
         _exhaust(b._update_withdrawal_status("WITHDRAWING", "msg"))
 
     def test_completed(self):
+        """Test completed."""
         b = _make_behaviour()
         b._write_kv = _make_gen_method(True)
         _exhaust(b._update_withdrawal_status("COMPLETED", "done"))
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -683,7 +721,10 @@ class TestUpdateWithdrawalStatus:
 
 
 class TestPostExecuteStep:
+    """TestPostExecuteStep."""
+
     def test_decision_exit(self):
+        """Test decision exit."""
         b = _make_behaviour()
         b.sleep = _make_gen_method(None)
         b.get_decision_on_swap = _make_gen_method(Decision.EXIT)
@@ -691,6 +732,7 @@ class TestPostExecuteStep:
         assert result == (Event.DONE.value, {})
 
     def test_decision_continue(self):
+        """Test decision continue."""
         b = _make_behaviour()
         b.sleep = _make_gen_method(None)
         b.get_decision_on_swap = _make_gen_method(Decision.CONTINUE)
@@ -706,6 +748,7 @@ class TestPostExecuteStep:
         assert result[0] == Event.UPDATE.value
 
     def test_decision_wait_then_continue(self):
+        """Test decision wait then continue."""
         b = _make_behaviour()
         b.sleep = _make_gen_method(None)
         # First call returns WAIT, _wait_for_swap_confirmation will loop
@@ -716,6 +759,7 @@ class TestPostExecuteStep:
         call_count = [0]
 
         def swap_gen(*a, **kw):
+            """Swap gen."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -731,11 +775,13 @@ class TestPostExecuteStep:
         assert result[0] == Event.UPDATE.value
 
     def test_decision_wait_then_exit(self):
+        """Test decision wait then exit."""
         b = _make_behaviour()
         b.sleep = _make_gen_method(None)
         call_count = [0]
 
         def swap_gen(*a, **kw):
+            """Swap gen."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -750,7 +796,10 @@ class TestPostExecuteStep:
 
 
 class TestWaitForSwapConfirmation:
+    """TestWaitForSwapConfirmation."""
+
     def test_immediate_continue(self):
+        """Test immediate continue."""
         b = _make_behaviour()
         b.sleep = _make_gen_method(None)
         b.get_decision_on_swap = _make_gen_method(Decision.CONTINUE)
@@ -758,6 +807,7 @@ class TestWaitForSwapConfirmation:
         assert result == Decision.CONTINUE
 
     def test_immediate_exit(self):
+        """Test immediate exit."""
         b = _make_behaviour()
         b.sleep = _make_gen_method(None)
         b.get_decision_on_swap = _make_gen_method(Decision.EXIT)
@@ -766,7 +816,10 @@ class TestWaitForSwapConfirmation:
 
 
 class TestUpdateAssetsAfterSwap:
+    """TestUpdateAssetsAfterSwap."""
+
     def test_normal_swap(self):
+        """Test normal swap."""
         b = _make_behaviour()
         b.synchronized_data.last_executed_step_index = None
         action = {"remaining_fee_allowance": 1.0, "remaining_gas_allowance": 2.0}
@@ -776,6 +829,7 @@ class TestUpdateAssetsAfterSwap:
         assert result[1]["last_action"] == Action.STEP_EXECUTED.value
 
     def test_with_existing_step_index(self):
+        """Test with existing step index."""
         b = _make_behaviour()
         b.synchronized_data.last_executed_step_index = 2
         action = {"remaining_fee_allowance": 1.0, "remaining_gas_allowance": 2.0}
@@ -783,6 +837,7 @@ class TestUpdateAssetsAfterSwap:
         assert result[1]["last_executed_step_index"] == 3
 
     def test_withdrawal_swap(self):
+        """Test withdrawal swap."""
         b = _make_behaviour()
         b.synchronized_data.last_executed_step_index = 0
         action = {
@@ -795,7 +850,10 @@ class TestUpdateAssetsAfterSwap:
 
 
 class TestPostExecuteExitPool:
+    """TestPostExecuteExitPool."""
+
     def test_updates_position_status(self):
+        """Test updates position status."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xexit"
         b.current_positions = [
@@ -815,6 +873,7 @@ class TestPostExecuteExitPool:
         assert b.current_positions[0]["status"] == PositionStatus.CLOSED.value
 
     def test_velodrome_cl_pool(self):
+        """Test velodrome cl pool."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xexit"
         b.current_positions = [
@@ -839,6 +898,7 @@ class TestPostExecuteExitPool:
         assert b.current_positions[0]["status"] == PositionStatus.CLOSED.value
 
     def test_withdrawal_exit(self):
+        """Test withdrawal exit."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xexit"
         b.current_positions = []
@@ -849,6 +909,7 @@ class TestPostExecuteExitPool:
         _exhaust(b._post_execute_exit_pool([action], 0))
 
     def test_non_matching_pool(self):
+        """Test non matching pool."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xexit"
         b.current_positions = [
@@ -863,7 +924,10 @@ class TestPostExecuteExitPool:
 
 
 class TestPostExecuteTransfer:
+    """TestPostExecuteTransfer."""
+
     def test_logs_transfer(self):
+        """Test logs transfer."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xtx"
         action = {
@@ -877,7 +941,10 @@ class TestPostExecuteTransfer:
 
 
 class TestPostExecuteWithdraw:
+    """TestPostExecuteWithdraw."""
+
     def test_marks_complete(self):
+        """Test marks complete."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(True)
         b._read_withdrawal_status = _make_gen_method("WITHDRAWING")
@@ -885,12 +952,14 @@ class TestPostExecuteWithdraw:
         _exhaust(b._post_execute_withdraw([], 0))
 
     def test_not_paused(self):
+        """Test not paused."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._read_withdrawal_status = _make_gen_method("unknown")
         _exhaust(b._post_execute_withdraw([], 0))
 
     def test_paused_not_withdrawing(self):
+        """Test paused not withdrawing."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(True)
         b._read_withdrawal_status = _make_gen_method("INITIATED")
@@ -898,7 +967,10 @@ class TestPostExecuteWithdraw:
 
 
 class TestPostExecuteClaimRewards:
+    """TestPostExecuteClaimRewards."""
+
     def test_returns_update(self):
+        """Test returns update."""
         b = _make_behaviour()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 999.0
@@ -909,13 +981,17 @@ class TestPostExecuteClaimRewards:
 
 
 class TestProcessRouteExecution:
+    """TestProcessRouteExecution."""
+
     def test_no_routes(self):
+        """Test no routes."""
         b = _make_behaviour()
         b.synchronized_data.routes = []
         result = _exhaust(b._process_route_execution([]))
         assert result == (Event.DONE.value, {})
 
     def test_no_more_routes(self):
+        """Test no more routes."""
         b = _make_behaviour()
         b.synchronized_data.routes = [{"steps": []}]
         b.synchronized_data.last_executed_route_index = 0
@@ -924,6 +1000,7 @@ class TestProcessRouteExecution:
         assert result == (Event.DONE.value, {})
 
     def test_all_steps_executed(self):
+        """Test all steps executed."""
         b = _make_behaviour()
         b.synchronized_data.routes = [{"steps": [{"action": {}}]}]
         b.synchronized_data.last_executed_route_index = None
@@ -933,6 +1010,7 @@ class TestProcessRouteExecution:
         assert result[1]["last_action"] == Action.BRIDGE_SWAP_EXECUTED.value
 
     def test_execute_step(self):
+        """Test execute step."""
         b = _make_behaviour()
         b.synchronized_data.routes = [{"steps": [{"action": {}}, {"action": {}}]}]
         b.synchronized_data.last_executed_route_index = None
@@ -943,7 +1021,10 @@ class TestProcessRouteExecution:
 
 
 class TestExecuteRouteStep:
+    """TestExecuteRouteStep."""
+
     def test_first_step_profitable(self):
+        """Test first step profitable."""
         b = _make_behaviour()
         b.check_if_route_is_profitable = _make_gen_method((True, 0.5, 0.3))
         b.check_step_costs = _make_gen_method(
@@ -965,6 +1046,7 @@ class TestExecuteRouteStep:
         assert result[1]["last_action"] == Action.EXECUTE_STEP.value
 
     def test_first_step_not_profitable_false(self):
+        """Test first step not profitable false."""
         b = _make_behaviour()
         b.check_if_route_is_profitable = _make_gen_method((False, None, None))
         routes = [{"steps": [{"action": {}}]}]
@@ -973,6 +1055,7 @@ class TestExecuteRouteStep:
         assert result[1]["last_action"] == Action.SWITCH_ROUTE.value
 
     def test_first_step_not_profitable_none(self):
+        """Test first step not profitable none."""
         b = _make_behaviour()
         b.check_if_route_is_profitable = _make_gen_method((None, None, None))
         routes = [{"steps": [{"action": {}}]}]
@@ -981,6 +1064,7 @@ class TestExecuteRouteStep:
         assert result[1]["last_action"] == Action.SWITCH_ROUTE.value
 
     def test_non_first_step(self):
+        """Test non first step."""
         b = _make_behaviour()
         b.synchronized_data.fee_details = {
             "remaining_fee_allowance": 1.0,
@@ -1004,6 +1088,7 @@ class TestExecuteRouteStep:
         assert result[0] == Event.UPDATE.value
 
     def test_step_not_profitable(self):
+        """Test step not profitable."""
         b = _make_behaviour()
         b.check_if_route_is_profitable = _make_gen_method((True, 1.0, 1.0))
         b.check_step_costs = _make_gen_method((False, None))
@@ -1012,6 +1097,7 @@ class TestExecuteRouteStep:
         assert result == (Event.DONE.value, {})
 
     def test_bridge_swap_action_none(self):
+        """Test bridge swap action none."""
         b = _make_behaviour()
         b.check_if_route_is_profitable = _make_gen_method((True, 1.0, 1.0))
         b.check_step_costs = _make_gen_method(
@@ -1023,12 +1109,12 @@ class TestExecuteRouteStep:
                     "target_token_symbol": "B",
                     "to_chain": "mode",
                     "tool": "lifi",
-                    "from_chain": "optimism",
-                    "to_chain": "mode",
+                    "from_chain": "optimism",  # noqa: B041
+                    "to_chain": "mode",  # noqa: B041
                     "source_token": "0x1",
-                    "source_token_symbol": "A",
+                    "source_token_symbol": "A",  # noqa: B041
                     "target_token": "0x2",
-                    "target_token_symbol": "B",
+                    "target_token_symbol": "B",  # noqa: B041
                 },
             )
         )
@@ -1040,12 +1126,16 @@ class TestExecuteRouteStep:
 
 
 class TestHandleFailedStep:
+    """TestHandleFailedStep."""
+
     def test_first_step_failed(self):
+        """Test first step failed."""
         b = _make_behaviour()
         result = b._handle_failed_step(0, 0, {}, 3)
         assert result[1]["last_action"] == Action.SWITCH_ROUTE.value
 
     def test_intermediate_step_within_retry(self):
+        """Test intermediate step within retry."""
         b = _make_behaviour()
         b.synchronized_data.routes_retry_attempt = 0
         step_data = {
@@ -1060,6 +1150,7 @@ class TestHandleFailedStep:
         assert result[1]["last_action"] == Action.FIND_ROUTE.value
 
     def test_intermediate_step_exceeded_retries(self):
+        """Test intermediate step exceeded retries."""
         b = _make_behaviour()
         b.synchronized_data.routes_retry_attempt = MAX_RETRIES_FOR_ROUTES + 1
         result = b._handle_failed_step(1, 0, {}, 3)
@@ -1067,31 +1158,38 @@ class TestHandleFailedStep:
 
 
 class TestGetDecisionOnSwap:
+    """TestGetDecisionOnSwap."""
+
     def test_done_status(self):
+        """Test done status."""
         b = _make_behaviour()
         b.get_swap_status = _make_gen_method(("DONE", "COMPLETED"))
         result = _exhaust(b.get_decision_on_swap())
         assert result == Decision.CONTINUE
 
     def test_pending_status(self):
+        """Test pending status."""
         b = _make_behaviour()
         b.get_swap_status = _make_gen_method(("PENDING", "WAIT_FOR_CONFIRMATION"))
         result = _exhaust(b.get_decision_on_swap())
         assert result == Decision.WAIT
 
     def test_failed_status(self):
+        """Test failed status."""
         b = _make_behaviour()
         b.get_swap_status = _make_gen_method(("FAILED", "ERROR"))
         result = _exhaust(b.get_decision_on_swap())
         assert result == Decision.EXIT
 
     def test_none_status(self):
+        """Test none status."""
         b = _make_behaviour()
         b.get_swap_status = _make_gen_method((None, None))
         result = _exhaust(b.get_decision_on_swap())
         assert result == Decision.EXIT
 
     def test_no_tx_hash(self):
+        """Test no tx hash."""
         b = _make_behaviour()
         type(b.synchronized_data).final_tx_hash = PropertyMock(
             side_effect=Exception("no hash")
@@ -1101,7 +1199,10 @@ class TestGetDecisionOnSwap:
 
 
 class TestGetSwapStatus:
+    """TestGetSwapStatus."""
+
     def test_ok_response(self):
+        """Test ok response."""
         b = _make_behaviour()
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -1111,10 +1212,12 @@ class TestGetSwapStatus:
         assert result == ("DONE", "COMPLETED")
 
     def test_not_found_then_ok(self):
+        """Test not found then ok."""
         b = _make_behaviour()
         call_count = [0]
 
         def http_gen(*a, **kw):
+            """Http gen."""
             call_count[0] += 1
             if call_count[0] == 1:
                 resp = MagicMock()
@@ -1134,6 +1237,7 @@ class TestGetSwapStatus:
         assert result == ("DONE", "OK")
 
     def test_error_status_code(self):
+        """Test error status code."""
         b = _make_behaviour()
         mock_resp = MagicMock()
         mock_resp.status_code = 500
@@ -1143,6 +1247,7 @@ class TestGetSwapStatus:
         assert result == (None, None)
 
     def test_json_parse_error(self):
+        """Test json parse error."""
         b = _make_behaviour()
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -1152,6 +1257,7 @@ class TestGetSwapStatus:
         assert result == (None, None)
 
     def test_no_status_in_response(self):
+        """Test no status in response."""
         b = _make_behaviour()
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -1161,10 +1267,12 @@ class TestGetSwapStatus:
         assert result == (None, "X")
 
     def test_400_not_found(self):
+        """Test 400 not found."""
         b = _make_behaviour()
         call_count = [0]
 
         def http_gen(*a, **kw):
+            """Http gen."""
             call_count[0] += 1
             if call_count[0] == 1:
                 resp = MagicMock()
@@ -1188,6 +1296,7 @@ class TestGetSwapStatus:
         b = _make_behaviour()
 
         def always_404(*a, **kw):
+            """Always 404."""
             resp = MagicMock()
             resp.status_code = 404
             resp.body = "not found"
@@ -1205,6 +1314,7 @@ class TestGetSwapStatus:
         b = _make_behaviour()
 
         def always_400(*a, **kw):
+            """Always 400."""
             resp = MagicMock()
             resp.status_code = 400
             resp.body = "bad request"
@@ -1218,42 +1328,52 @@ class TestGetSwapStatus:
 
 
 class TestCalculateMinHoldDays:
+    """TestCalculateMinHoldDays."""
+
     def test_zero_apr(self):
+        """Test zero apr."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(0.0, 100, 10, False)
         assert result == MIN_TIME_IN_POSITION
 
     def test_zero_principal(self):
+        """Test zero principal."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(0.2, 0.0, 10, False)
         assert result == MIN_TIME_IN_POSITION
 
     def test_zero_entry_cost(self):
+        """Test zero entry cost."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(0.2, 100, 0.0, False)
         assert result == MIN_TIME_IN_POSITION
 
     def test_normal_non_cl(self):
+        """Test normal non cl."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(0.20, 1000, 10, False)
         assert 12.0 <= result <= MIN_TIME_IN_POSITION
 
     def test_cl_pool(self):
+        """Test cl pool."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(0.20, 1000, 10, True, 0.8)
         assert 12.0 <= result <= MIN_TIME_IN_POSITION
 
     def test_very_high_cost(self):
+        """Test very high cost."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(0.01, 100, 50, False)
         assert result == MIN_TIME_IN_POSITION
 
     def test_very_low_cost(self):
+        """Test very low cost."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(1.0, 10000, 0.01, False)
         assert result == 12.0
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
         result = b._calculate_min_hold_days(float("nan"), 100, 10, False)
         # Should still return something valid
@@ -1261,13 +1381,17 @@ class TestCalculateMinHoldDays:
 
 
 class TestRecordTipPerformance:
+    """TestRecordTipPerformance."""
+
     def test_no_enter_timestamp(self):
+        """Test no enter timestamp."""
         b = _make_behaviour()
         pos = {}
         b._record_tip_performance(pos)
         assert "cost_recovered" not in pos
 
     def test_with_data(self):
+        """Test with data."""
         b = _make_behaviour()
         b._get_current_timestamp = MagicMock(return_value=2000)
         pos = {
@@ -1281,6 +1405,7 @@ class TestRecordTipPerformance:
         assert pos["cost_recovered"] is True
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
         b._get_current_timestamp = MagicMock(side_effect=RuntimeError("err"))
         pos = {"enter_timestamp": 1000}
@@ -1288,7 +1413,10 @@ class TestRecordTipPerformance:
 
 
 class TestGetSignature:
+    """TestGetSignature."""
+
     def test_signature(self):
+        """Test signature."""
         b = _make_behaviour()
         sig = b._get_signature("0x" + "ab" * 20)
         assert isinstance(sig, str)
@@ -1296,15 +1424,20 @@ class TestGetSignature:
 
 
 class TestResetWithdrawalFlags:
+    """TestResetWithdrawalFlags."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._write_kv = _make_gen_method(True)
         _exhaust(b._reset_withdrawal_flags())
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("err")
             yield  # noqa
 
@@ -1313,7 +1446,10 @@ class TestResetWithdrawalFlags:
 
 
 class TestEntryCostsKeys:
+    """TestEntryCostsKeys."""
+
     def test_get_entry_costs_key(self):
+        """Test get entry costs key."""
         b = _make_behaviour()
         assert (
             b._get_entry_costs_key("optimism", "0xPOOL")
@@ -1321,6 +1457,7 @@ class TestEntryCostsKeys:
         )
 
     def test_get_updated_entry_costs_key(self):
+        """Test get updated entry costs key."""
         b = _make_behaviour()
         assert (
             b._get_updated_entry_costs_key("optimism", "0xPOOL", "123")
@@ -1329,22 +1466,28 @@ class TestEntryCostsKeys:
 
 
 class TestGetEntryCosts:
+    """TestGetEntryCosts."""
+
     def test_found(self):
+        """Test found."""
         b = _make_behaviour()
         b._get_all_entry_costs = _make_gen_method({"entry_costs_optimism_0xPOOL": 5.0})
         result = _exhaust(b._get_entry_costs("optimism", "0xPOOL"))
         assert result == 5.0
 
     def test_not_found(self):
+        """Test not found."""
         b = _make_behaviour()
         b._get_all_entry_costs = _make_gen_method({})
         result = _exhaust(b._get_entry_costs("optimism", "0xPOOL"))
         assert result == 0.0
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("err")
             yield  # noqa
 
@@ -1354,7 +1497,10 @@ class TestGetEntryCosts:
 
 
 class TestGetUpdatedEntryCosts:
+    """TestGetUpdatedEntryCosts."""
+
     def test_found(self):
+        """Test found."""
         b = _make_behaviour()
         b._get_all_entry_costs = _make_gen_method(
             {"entry_costs_optimism_0xPOOL_123": 7.0}
@@ -1363,15 +1509,18 @@ class TestGetUpdatedEntryCosts:
         assert result == 7.0
 
     def test_not_found(self):
+        """Test not found."""
         b = _make_behaviour()
         b._get_all_entry_costs = _make_gen_method({})
         result = _exhaust(b._get_updated_entry_costs("optimism", "0xPOOL", "123"))
         assert result == 0.0
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("err")
             yield  # noqa
 
@@ -1381,7 +1530,10 @@ class TestGetUpdatedEntryCosts:
 
 
 class TestUpdateEntryCosts:
+    """TestUpdateEntryCosts."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._get_entry_costs = _make_gen_method(3.0)
         b._store_entry_costs = _make_gen_method(None)
@@ -1389,9 +1541,11 @@ class TestUpdateEntryCosts:
         assert result == 5.0
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("err")
             yield  # noqa
 
@@ -1401,7 +1555,10 @@ class TestUpdateEntryCosts:
 
 
 class TestRenameEntryCostsKey:
+    """TestRenameEntryCostsKey."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._get_all_entry_costs = _make_gen_method({"entry_costs_optimism_0xPOOL": 5.0})
         b._write_kv = _make_gen_method(True)
@@ -1409,6 +1566,7 @@ class TestRenameEntryCostsKey:
         _exhaust(b._rename_entry_costs_key(pos))
 
     def test_old_key_not_found(self):
+        """Test old key not found."""
         b = _make_behaviour()
         b._get_all_entry_costs = _make_gen_method({})
         b._write_kv = _make_gen_method(True)
@@ -1417,6 +1575,7 @@ class TestRenameEntryCostsKey:
         _exhaust(b._rename_entry_costs_key(pos))
 
     def test_new_key_exists(self):
+        """Test new key exists."""
         b = _make_behaviour()
         b._get_all_entry_costs = _make_gen_method(
             {
@@ -1430,7 +1589,10 @@ class TestRenameEntryCostsKey:
 
 
 class TestPostExecuteStakeLpTokens:
+    """TestPostExecuteStakeLpTokens."""
+
     def test_updates_position(self):
+        """Test updates position."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xstake"
         b._get_current_timestamp = MagicMock(return_value=3000)
@@ -1447,6 +1609,7 @@ class TestPostExecuteStakeLpTokens:
         assert b.current_positions[0]["staked"] is True
 
     def test_cl_pool(self):
+        """Test cl pool."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xstake"
         b._get_current_timestamp = MagicMock(return_value=3000)
@@ -1463,6 +1626,7 @@ class TestPostExecuteStakeLpTokens:
         assert b.current_positions[0]["staked_cl_pool"] is True
 
     def test_no_matching_position(self):
+        """Test no matching position."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xstake"
         b._get_current_timestamp = MagicMock(return_value=3000)
@@ -1473,7 +1637,10 @@ class TestPostExecuteStakeLpTokens:
 
 
 class TestPostExecuteUnstakeLpTokens:
+    """TestPostExecuteUnstakeLpTokens."""
+
     def test_updates_position(self):
+        """Test updates position."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xunstake"
         b._get_current_timestamp = MagicMock(return_value=4000)
@@ -1492,6 +1659,7 @@ class TestPostExecuteUnstakeLpTokens:
         assert b.current_positions[0]["staked_cl_pool"] is False
 
     def test_no_cl_key(self):
+        """Test no cl key."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xunstake"
         b._get_current_timestamp = MagicMock(return_value=4000)
@@ -1505,7 +1673,10 @@ class TestPostExecuteUnstakeLpTokens:
 
 
 class TestPostExecuteClaimStakingRewards:
+    """TestPostExecuteClaimStakingRewards."""
+
     def test_updates_position(self):
+        """Test updates position."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xclaim"
         b._get_current_timestamp = MagicMock(return_value=5000)
@@ -1518,6 +1689,7 @@ class TestPostExecuteClaimStakingRewards:
         assert b.current_positions[0]["last_reward_claim_tx_hash"] == "0xclaim"
 
     def test_no_matching(self):
+        """Test no matching."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xclaim"
         b._get_current_timestamp = MagicMock(return_value=5000)
@@ -1528,7 +1700,10 @@ class TestPostExecuteClaimStakingRewards:
 
 
 class TestSetStepAddresses:
+    """TestSetStepAddresses."""
+
     def test_sets_addresses(self):
+        """Test sets addresses."""
         b = _make_behaviour()
         step = {"action": {"fromChainId": 10, "toChainId": 34443}}
         result = b._set_step_addresses(step)
@@ -1537,7 +1712,10 @@ class TestSetStepAddresses:
 
 
 class TestEnforcePoolAllocationCap:
+    """TestEnforcePoolAllocationCap."""
+
     def test_none_max_position_size(self):
+        """Test none max position size."""
         b = _make_behaviour()
         result = _exhaust(
             b._enforce_pool_allocation_cap([100, 200], None, "optimism", ["0x1", "0x2"])
@@ -1545,6 +1723,7 @@ class TestEnforcePoolAllocationCap:
         assert result == [100, 200]
 
     def test_zero_max_position_size(self):
+        """Test zero max position size."""
         b = _make_behaviour()
         result = _exhaust(
             b._enforce_pool_allocation_cap([100, 200], 0, "optimism", ["0x1", "0x2"])
@@ -1552,6 +1731,7 @@ class TestEnforcePoolAllocationCap:
         assert result == [100, 200]
 
     def test_negative_max_position_size(self):
+        """Test negative max position size."""
         b = _make_behaviour()
         result = _exhaust(
             b._enforce_pool_allocation_cap([100, 200], -1, "optimism", ["0x1", "0x2"])
@@ -1559,6 +1739,7 @@ class TestEnforcePoolAllocationCap:
         assert result == [100, 200]
 
     def test_below_cap(self):
+        """Test below cap."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(18)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -1571,6 +1752,7 @@ class TestEnforcePoolAllocationCap:
         assert result == [100, 200]
 
     def test_above_cap(self):
+        """Test above cap."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -1583,6 +1765,7 @@ class TestEnforcePoolAllocationCap:
         assert result[0] < 1_000_000
 
     def test_decimals_none(self):
+        """Test decimals none."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(None)
         result = _exhaust(
@@ -1591,11 +1774,13 @@ class TestEnforcePoolAllocationCap:
         assert result == [100, 200]
 
     def test_price_none(self):
+        """Test price none."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(18)
         call_count = [0]
 
         def price_gen(*a, **kw):
+            """Price gen."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -1609,9 +1794,11 @@ class TestEnforcePoolAllocationCap:
         assert result == [100, 200]
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("err")
             yield  # noqa
 
@@ -1622,6 +1809,7 @@ class TestEnforcePoolAllocationCap:
         assert result == [100, 200]
 
     def test_zero_total_usd(self):
+        """Test zero total usd."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(18)
         b._fetch_token_price = _make_gen_method(0.0)
@@ -1633,7 +1821,10 @@ class TestEnforcePoolAllocationCap:
 
 
 class TestCalculateInvestmentAmountsFromDollarCap:
+    """TestCalculateInvestmentAmountsFromDollarCap."""
+
     def test_no_invested_amount(self):
+        """Test no invested amount."""
         b = _make_behaviour()
         result = _exhaust(
             b._calculate_investment_amounts_from_dollar_cap(
@@ -1643,6 +1834,7 @@ class TestCalculateInvestmentAmountsFromDollarCap:
         assert result is None
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -1662,6 +1854,7 @@ class TestCalculateInvestmentAmountsFromDollarCap:
         assert len(result) == 2
 
     def test_decimals_none(self):
+        """Test decimals none."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(None)
         action = {"invested_amount": 100, "token0": "0x1", "token1": "0x2"}
@@ -1673,6 +1866,7 @@ class TestCalculateInvestmentAmountsFromDollarCap:
         assert result is None
 
     def test_price_none(self):
+        """Test price none."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(None)
@@ -1685,11 +1879,13 @@ class TestCalculateInvestmentAmountsFromDollarCap:
         assert result is None
 
     def test_token1_price_none(self):
+        """Test token1 price none."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         call_count = [0]
 
         def price_gen(*a, **kw):
+            """Price gen."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -1707,6 +1903,7 @@ class TestCalculateInvestmentAmountsFromDollarCap:
         assert result is None
 
     def test_no_relative_funds(self):
+        """Test no relative funds."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -1725,6 +1922,7 @@ class TestCalculateInvestmentAmountsFromDollarCap:
         assert result is None
 
     def test_negative_amounts(self):
+        """Test negative amounts."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(-1.0)
@@ -1744,7 +1942,10 @@ class TestCalculateInvestmentAmountsFromDollarCap:
 
 
 class TestGetTokenBalancesAndCalculateAmounts:
+    """TestGetTokenBalancesAndCalculateAmounts."""
+
     def test_balance_none(self):
+        """Test balance none."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=None)
         result = _exhaust(
@@ -1753,6 +1954,7 @@ class TestGetTokenBalancesAndCalculateAmounts:
         assert result == (None, None, None)
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         result = _exhaust(
@@ -1763,6 +1965,7 @@ class TestGetTokenBalancesAndCalculateAmounts:
         assert result[0] == [1000, 1000]
 
     def test_with_max_investment_amounts(self):
+        """Test with max investment amounts."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=10**18)
         b._get_token_decimals = _make_gen_method(18)
@@ -1774,6 +1977,7 @@ class TestGetTokenBalancesAndCalculateAmounts:
         assert result[0] is not None
 
     def test_decimals_none_with_max_investment(self):
+        """Test decimals none with max investment."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b._get_token_decimals = _make_gen_method(None)
@@ -1785,6 +1989,7 @@ class TestGetTokenBalancesAndCalculateAmounts:
         assert result == (None, None, None)
 
     def test_with_percentage(self):
+        """Test with percentage."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         result = _exhaust(
@@ -1795,6 +2000,7 @@ class TestGetTokenBalancesAndCalculateAmounts:
         assert result[0] == [500, 500]
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
         b._get_balance = MagicMock(side_effect=RuntimeError("err"))
         result = _exhaust(
@@ -1804,19 +2010,24 @@ class TestGetTokenBalancesAndCalculateAmounts:
 
 
 class TestGetTokenBalances:
+    """TestGetTokenBalances."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=500)
         result = b._get_token_balances("optimism", ["0x1", "0x2"], [])
         assert result == (500, 500)
 
     def test_one_none(self):
+        """Test one none."""
         b = _make_behaviour()
         b._get_balance = MagicMock(side_effect=[100, None])
         result = b._get_token_balances("optimism", ["0x1", "0x2"], [])
         assert result == (None, None)
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
         b._get_balance = MagicMock(side_effect=RuntimeError("err"))
         result = b._get_token_balances("optimism", ["0x1", "0x2"], [])
@@ -1824,7 +2035,10 @@ class TestGetTokenBalances:
 
 
 class TestGetApprovalTxHash:
+    """TestGetApprovalTxHash."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method("0xdata")
         result = _exhaust(
@@ -1833,6 +2047,7 @@ class TestGetApprovalTxHash:
         assert result["to"] == "0xTOKEN"
 
     def test_failure(self):
+        """Test failure."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method(None)
         result = _exhaust(
@@ -1842,7 +2057,10 @@ class TestGetApprovalTxHash:
 
 
 class TestAccumulateTransactionCosts:
+    """TestAccumulateTransactionCosts."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._get_gas_cost_usd = _make_gen_method(0.5)
         b._update_entry_costs = _make_gen_method(1.0)
@@ -1850,9 +2068,11 @@ class TestAccumulateTransactionCosts:
         _exhaust(b._accumulate_transaction_costs("0xhash", pos))
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -1865,7 +2085,10 @@ class TestAccumulateTransactionCosts:
 
 
 class TestAddSlippageCosts:
+    """TestAddSlippageCosts."""
+
     def test_with_enter_pool_action(self):
+        """Test with enter pool action."""
         b = _make_behaviour()
         b._calculate_actual_slippage_cost = _make_gen_method(0.1)
         b.synchronized_data.actions = [
@@ -1875,21 +2098,25 @@ class TestAddSlippageCosts:
         _exhaust(b._add_slippage_costs("0xhash"))
 
     def test_no_pool_address(self):
+        """Test no pool address."""
         b = _make_behaviour()
         b._calculate_actual_slippage_cost = _make_gen_method(0.1)
         b.synchronized_data.actions = [{"action": "EnterPool"}]
         _exhaust(b._add_slippage_costs("0xhash"))
 
     def test_no_enter_pool_action(self):
+        """Test no enter pool action."""
         b = _make_behaviour()
         b._calculate_actual_slippage_cost = _make_gen_method(0.1)
         b.synchronized_data.actions = [{"action": "ExitPool"}]
         _exhaust(b._add_slippage_costs("0xhash"))
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -1898,7 +2125,10 @@ class TestAddSlippageCosts:
 
 
 class TestGetGasCostUsd:
+    """TestGetGasCostUsd."""
+
     def test_with_receipt(self):
+        """Test with receipt."""
         b = _make_behaviour()
         receipt = {"gasUsed": 100000, "effectiveGasPrice": 10**9, "l1Fee": "0x0"}
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -1907,12 +2137,14 @@ class TestGetGasCostUsd:
         assert result > 0
 
     def test_no_receipt(self):
+        """Test no receipt."""
         b = _make_behaviour()
         b.get_transaction_receipt = _make_gen_method(None)
         result = _exhaust(b._get_gas_cost_usd("0xhash", "optimism"))
         assert result == 0.0
 
     def test_no_eth_price(self):
+        """Test no eth price."""
         b = _make_behaviour()
         receipt = {"gasUsed": 100000, "effectiveGasPrice": 10**9, "l1Fee": "0x0"}
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -1921,9 +2153,11 @@ class TestGetGasCostUsd:
         assert result == 0.0
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -1933,7 +2167,10 @@ class TestGetGasCostUsd:
 
 
 class TestCalculateActualSlippageCost:
+    """TestCalculateActualSlippageCost."""
+
     def test_positive_slippage(self):
+        """Test positive slippage."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
@@ -1948,6 +2185,7 @@ class TestCalculateActualSlippageCost:
         assert result == 1.0
 
     def test_no_slippage(self):
+        """Test no slippage."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
@@ -1962,6 +2200,7 @@ class TestCalculateActualSlippageCost:
         assert result == 0.0
 
     def test_non_ok_response(self):
+        """Test non ok response."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 500
@@ -1971,6 +2210,7 @@ class TestCalculateActualSlippageCost:
         assert result == 0.0
 
     def test_parse_error(self):
+        """Test parse error."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
@@ -1981,7 +2221,10 @@ class TestCalculateActualSlippageCost:
 
 
 class TestCalculateAndStoreTipData:
+    """TestCalculateAndStoreTipData."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._convert_amounts_to_usd = _make_gen_method(100.0)
         b._get_updated_entry_costs = _make_gen_method(5.0)
@@ -2000,6 +2243,7 @@ class TestCalculateAndStoreTipData:
         assert pos["min_hold_days"] == 14.0
 
     def test_missing_chain(self):
+        """Test missing chain."""
         b = _make_behaviour()
         b._convert_amounts_to_usd = _make_gen_method(100.0)
         pos = {"amount0": 1000, "amount1": 2000}
@@ -2008,9 +2252,11 @@ class TestCalculateAndStoreTipData:
         assert pos.get("min_hold_days") is not None  # fallback applied
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -2027,7 +2273,10 @@ class TestCalculateAndStoreTipData:
 
 
 class TestConvertAmountsToUsd:
+    """TestConvertAmountsToUsd."""
+
     def test_both_tokens(self):
+        """Test both tokens."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -2037,6 +2286,7 @@ class TestConvertAmountsToUsd:
         assert result == 3.0
 
     def test_zero_address_token(self):
+        """Test zero address token."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(18)
         b._fetch_zero_address_price = _make_gen_method(2000.0)
@@ -2047,6 +2297,7 @@ class TestConvertAmountsToUsd:
         assert result > 0
 
     def test_no_amount0(self):
+        """Test no amount0."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -2056,6 +2307,7 @@ class TestConvertAmountsToUsd:
         assert result == 1.0
 
     def test_no_amount1(self):
+        """Test no amount1."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -2065,6 +2317,7 @@ class TestConvertAmountsToUsd:
         assert result == 1.0
 
     def test_decimals_none(self):
+        """Test decimals none."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(None)
         result = _exhaust(
@@ -2073,6 +2326,7 @@ class TestConvertAmountsToUsd:
         assert result == 0.0
 
     def test_price_none(self):
+        """Test price none."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(6)
         b._fetch_token_price = _make_gen_method(None)
@@ -2082,9 +2336,11 @@ class TestConvertAmountsToUsd:
         assert result == 0.0
 
     def test_exception(self):
+        """Test exception."""
         b = _make_behaviour()
 
         def raise_gen(*a, **kw):
+            """Raise gen."""
             raise RuntimeError("fail")
             yield  # noqa
 
@@ -2095,6 +2351,7 @@ class TestConvertAmountsToUsd:
         assert result == 0.0
 
     def test_token1_zero_address(self):
+        """Test token1 zero address."""
         b = _make_behaviour()
         b._get_token_decimals = _make_gen_method(18)
         b._fetch_token_price = _make_gen_method(1.0)
@@ -2106,6 +2363,8 @@ class TestConvertAmountsToUsd:
 
 
 class TestPrepareNextAction:
+    """TestPrepareNextAction."""
+
     def _setup(self, action_name, **extra_action_fields):
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
@@ -2114,12 +2373,14 @@ class TestPrepareNextAction:
         return b, action
 
     def test_no_action_name(self):
+        """Test no action name."""
         b, action = self._setup(None)
         action["action"] = None
         result = _exhaust(b._prepare_next_action([], [action], 0, "x"))
         assert result == (Event.DONE.value, {})
 
     def test_enter_pool_success(self):
+        """Test enter pool success."""
         b, action = self._setup(Action.ENTER_POOL.value)
         b.get_enter_pool_tx_hash = _make_gen_method(("0xhash", "optimism", "0xSAFE"))
         with patch(
@@ -2130,12 +2391,14 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_enter_pool_no_hash(self):
+        """Test enter pool no hash."""
         b, action = self._setup(Action.ENTER_POOL.value)
         b.get_enter_pool_tx_hash = _make_gen_method((None, None, None))
         result = _exhaust(b._prepare_next_action([], [action], 0, "x"))
         assert result == (Event.DONE.value, {})
 
     def test_exit_pool(self):
+        """Test exit pool."""
         b, action = self._setup(Action.EXIT_POOL.value)
         b.get_exit_pool_tx_hash = _make_gen_method(("0xhash", "optimism", "0xSAFE"))
         with patch(
@@ -2146,6 +2409,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_exit_pool_withdrawal(self):
+        """Test exit pool withdrawal."""
         b, action = self._setup(Action.EXIT_POOL.value)
         b._read_investing_paused = _make_gen_method(True)
         b._read_withdrawal_status = _make_gen_method("WITHDRAWING")
@@ -2159,6 +2423,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_find_bridge_route_success(self):
+        """Test find bridge route success."""
         b, action = self._setup(Action.FIND_BRIDGE_ROUTE.value)
         b.fetch_routes = _make_gen_method([{"steps": []}])
         result = _exhaust(b._prepare_next_action([], [action], 0, "x"))
@@ -2166,18 +2431,21 @@ class TestPrepareNextAction:
         assert result[1]["last_action"] == Action.ROUTES_FETCHED.value
 
     def test_find_bridge_route_no_routes(self):
+        """Test find bridge route no routes."""
         b, action = self._setup(Action.FIND_BRIDGE_ROUTE.value)
         b.fetch_routes = _make_gen_method(None)
         result = _exhaust(b._prepare_next_action([], [action], 0, "x"))
         assert result == (Event.DONE.value, {})
 
     def test_find_bridge_route_no_routes_withdrawal(self):
+        """Test find bridge route no routes withdrawal."""
         b, action = self._setup(Action.FIND_BRIDGE_ROUTE.value)
         b.fetch_routes = _make_gen_method(None)
         # After first _read_investing_paused returns False, the code reads again
         call_count = [0]
 
         def paused_gen(*a, **kw):
+            """Paused gen."""
             call_count[0] += 1
             yield
             if call_count[0] <= 1:
@@ -2188,6 +2456,7 @@ class TestPrepareNextAction:
         status_count = [0]
 
         def status_gen(*a, **kw):
+            """Status gen."""
             status_count[0] += 1
             yield
             if status_count[0] <= 1:
@@ -2201,6 +2470,7 @@ class TestPrepareNextAction:
         assert result == (Event.DONE.value, {})
 
     def test_find_bridge_route_max_steps_filter(self):
+        """Test find bridge route max steps filter."""
         b, action = self._setup(Action.FIND_BRIDGE_ROUTE.value)
         b.fetch_routes = _make_gen_method([{"steps": [1, 2, 3]}, {"steps": [1]}])
         b.synchronized_data.max_allowed_steps_in_a_route = 2
@@ -2208,6 +2478,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.UPDATE.value
 
     def test_find_bridge_route_max_steps_none_left(self):
+        """Test find bridge route max steps none left."""
         b, action = self._setup(Action.FIND_BRIDGE_ROUTE.value)
         b.fetch_routes = _make_gen_method([{"steps": [1, 2, 3]}])
         b.synchronized_data.max_allowed_steps_in_a_route = 1
@@ -2215,12 +2486,14 @@ class TestPrepareNextAction:
         assert result == (Event.DONE.value, {})
 
     def test_find_bridge_route_max_steps_none_left_withdrawal(self):
+        """Test find bridge route max steps none left withdrawal."""
         b, action = self._setup(Action.FIND_BRIDGE_ROUTE.value)
         b.fetch_routes = _make_gen_method([{"steps": [1, 2, 3]}])
         b.synchronized_data.max_allowed_steps_in_a_route = 1
         call_count = [0]
 
         def paused_gen(*a, **kw):
+            """Paused gen."""
             call_count[0] += 1
             yield
             if call_count[0] <= 1:
@@ -2231,6 +2504,7 @@ class TestPrepareNextAction:
         status_count = [0]
 
         def status_gen(*a, **kw):
+            """Status gen."""
             status_count[0] += 1
             yield
             if status_count[0] <= 1:
@@ -2244,6 +2518,7 @@ class TestPrepareNextAction:
         assert result == (Event.DONE.value, {})
 
     def test_bridge_swap(self):
+        """Test bridge swap."""
         b, action = self._setup(
             Action.BRIDGE_SWAP.value,
             payload="0xpayload",
@@ -2259,6 +2534,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_bridge_swap_withdrawal(self):
+        """Test bridge swap withdrawal."""
         b, action = self._setup(
             Action.BRIDGE_SWAP.value,
             payload="0xpayload",
@@ -2277,6 +2553,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_claim_rewards(self):
+        """Test claim rewards."""
         b, action = self._setup(Action.CLAIM_REWARDS.value)
         b.get_claim_rewards_tx_hash = _make_gen_method(("0xhash", "optimism", "0xSAFE"))
         with patch(
@@ -2287,6 +2564,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_deposit(self):
+        """Test deposit."""
         b, action = self._setup(Action.DEPOSIT.value)
         b.get_deposit_tx_hash = _make_gen_method(("0xhash", "optimism", "0xSAFE"))
         with patch(
@@ -2297,6 +2575,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_withdraw_token_transfer(self):
+        """Test withdraw token transfer."""
         b, action = self._setup(
             Action.WITHDRAW.value, token_address="0xTOKEN", to_address="0xDEST"
         )
@@ -2311,6 +2590,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_withdraw_vault(self):
+        """Test withdraw vault."""
         b, action = self._setup(Action.WITHDRAW.value)
         b.get_withdraw_tx_hash = _make_gen_method(("0xhash", "optimism", "0xSAFE"))
         with patch(
@@ -2321,6 +2601,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_withdraw_paused(self):
+        """Test withdraw paused."""
         b, action = self._setup(Action.WITHDRAW.value)
         b._read_investing_paused = _make_gen_method(True)
         b._read_withdrawal_status = _make_gen_method("WITHDRAWING")
@@ -2334,6 +2615,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_stake_lp_tokens(self):
+        """Test stake lp tokens."""
         b, action = self._setup(Action.STAKE_LP_TOKENS.value)
         b.get_stake_lp_tokens_tx_hash = _make_gen_method(
             ("0xhash", "optimism", "0xSAFE")
@@ -2346,6 +2628,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_unstake_lp_tokens(self):
+        """Test unstake lp tokens."""
         b, action = self._setup(Action.UNSTAKE_LP_TOKENS.value)
         b.get_unstake_lp_tokens_tx_hash = _make_gen_method(
             ("0xhash", "optimism", "0xSAFE")
@@ -2358,6 +2641,7 @@ class TestPrepareNextAction:
         assert result[0] == Event.SETTLE.value
 
     def test_claim_staking_rewards(self):
+        """Test claim staking rewards."""
         b, action = self._setup(Action.CLAIM_STAKING_REWARDS.value)
         b.get_claim_staking_rewards_tx_hash = _make_gen_method(
             ("0xhash", "optimism", "0xSAFE")
@@ -2384,7 +2668,10 @@ class TestPrepareNextAction:
 
 
 class TestCheckIfRouteIsProfitable:
+    """TestCheckIfRouteIsProfitable."""
+
     def test_profitable(self):
+        """Test profitable."""
         b = _make_behaviour()
         b._get_step_transactions_data = _make_gen_method(
             [{"fee": 0.1, "gas_cost": 0.1}]
@@ -2394,6 +2681,7 @@ class TestCheckIfRouteIsProfitable:
         assert result[0] is True
 
     def test_not_profitable_fees(self):
+        """Test not profitable fees."""
         b = _make_behaviour()
         b._get_step_transactions_data = _make_gen_method([{"fee": 50, "gas_cost": 0}])
         route = {"fromAmountUSD": "100", "toAmountUSD": "50", "steps": []}
@@ -2401,6 +2689,7 @@ class TestCheckIfRouteIsProfitable:
         assert result[0] is False
 
     def test_no_step_transactions(self):
+        """Test no step transactions."""
         b = _make_behaviour()
         b._get_step_transactions_data = _make_gen_method(None)
         route = {"steps": []}
@@ -2408,6 +2697,7 @@ class TestCheckIfRouteIsProfitable:
         assert result == (None, None, None)
 
     def test_zero_amounts(self):
+        """Test zero amounts."""
         b = _make_behaviour()
         b._get_step_transactions_data = _make_gen_method([{"fee": 0, "gas_cost": 0}])
         route = {"fromAmountUSD": "0", "toAmountUSD": "0", "steps": []}
@@ -2416,7 +2706,10 @@ class TestCheckIfRouteIsProfitable:
 
 
 class TestCheckStepCosts:
+    """TestCheckStepCosts."""
+
     def test_step_profitable(self):
+        """Test step profitable."""
         b = _make_behaviour()
         b._set_step_addresses = MagicMock(side_effect=lambda x: x)
         b._get_step_transaction = _make_gen_method({"fee": 0.01, "gas_cost": 0.01})
@@ -2424,6 +2717,7 @@ class TestCheckStepCosts:
         assert result[0] is True
 
     def test_step_data_none(self):
+        """Test step data none."""
         b = _make_behaviour()
         b._set_step_addresses = MagicMock(side_effect=lambda x: x)
         b._get_step_transaction = _make_gen_method(None)
@@ -2431,6 +2725,7 @@ class TestCheckStepCosts:
         assert result[0] is False
 
     def test_last_step_exceeds_allowance(self):
+        """Test last step exceeds allowance."""
         b = _make_behaviour()
         b._set_step_addresses = MagicMock(side_effect=lambda x: x)
         b._get_step_transaction = _make_gen_method({"fee": 1.0, "gas_cost": 1.0})
@@ -2438,6 +2733,7 @@ class TestCheckStepCosts:
         assert result[0] is False
 
     def test_non_last_step_exceeds_allowance(self):
+        """Test non last step exceeds allowance."""
         b = _make_behaviour()
         b._set_step_addresses = MagicMock(side_effect=lambda x: x)
         b._get_step_transaction = _make_gen_method({"fee": 2.0, "gas_cost": 0})
@@ -2445,6 +2741,7 @@ class TestCheckStepCosts:
         assert result[0] is False
 
     def test_single_step_within_allowance(self):
+        """Test single step within allowance."""
         b = _make_behaviour()
         b._set_step_addresses = MagicMock(side_effect=lambda x: x)
         b._get_step_transaction = _make_gen_method({"fee": 0.5, "gas_cost": 0.5})
@@ -2453,7 +2750,10 @@ class TestCheckStepCosts:
 
 
 class TestCalculateVelodromeInvestmentAmounts:
+    """TestCalculateVelodromeInvestmentAmounts."""
+
     def test_success_with_token_requirements(self):
+        """Test success with token requirements."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1_000_000)
         b._get_token_decimals = _make_gen_method(6)
@@ -2472,6 +2772,7 @@ class TestCalculateVelodromeInvestmentAmounts:
         assert result is not None
 
     def test_zero_available(self):
+        """Test zero available."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=0)
         b._get_token_decimals = _make_gen_method(6)
@@ -2485,6 +2786,7 @@ class TestCalculateVelodromeInvestmentAmounts:
         assert result is None
 
     def test_decimals_none(self):
+        """Test decimals none."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b._get_token_decimals = _make_gen_method(None)
@@ -2497,6 +2799,7 @@ class TestCalculateVelodromeInvestmentAmounts:
         assert result is None
 
     def test_price_none(self):
+        """Test price none."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b._get_token_decimals = _make_gen_method(6)
@@ -2510,6 +2813,7 @@ class TestCalculateVelodromeInvestmentAmounts:
         assert result is None
 
     def test_with_percentage_fallback(self):
+        """Test with percentage fallback."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1_000_000)
         b._get_token_decimals = _make_gen_method(6)
@@ -2527,6 +2831,7 @@ class TestCalculateVelodromeInvestmentAmounts:
         assert result is not None
 
     def test_negative_amounts(self):
+        """Test negative amounts."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1_000_000)
         b._get_token_decimals = _make_gen_method(6)
@@ -2545,6 +2850,7 @@ class TestCalculateVelodromeInvestmentAmounts:
         assert result is None
 
     def test_token_requirements_exception(self):
+        """Test token requirements exception."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1_000_000)
         b._get_token_decimals = _make_gen_method(6)
@@ -2563,7 +2869,10 @@ class TestCalculateVelodromeInvestmentAmounts:
 
 
 class TestBuildSafeTx:
+    """TestBuildSafeTx."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method("0x" + "ab" * 32)
         multisend_addr = "0x" + "cc" * 20
@@ -2573,6 +2882,7 @@ class TestBuildSafeTx:
         assert result is not None
 
     def test_no_safe_tx_hash(self):
+        """Test no safe tx hash."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method(None)
         multisend_addr = "0x" + "cc" * 20
@@ -2583,7 +2893,10 @@ class TestBuildSafeTx:
 
 
 class TestBuildMultisendTx:
+    """TestBuildMultisendTx."""
+
     def test_with_approval(self):
+        """Test with approval."""
         b = _make_behaviour()
         b.get_approval_tx_hash = _make_gen_method(
             {"to": "0x1", "data": b"x", "value": 0, "operation": 0}
@@ -2600,6 +2913,7 @@ class TestBuildMultisendTx:
         assert result is not None
 
     def test_zero_address_source(self):
+        """Test zero address source."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method("0xmultihash")
         tx_info = {
@@ -2613,6 +2927,7 @@ class TestBuildMultisendTx:
         assert result is not None
 
     def test_approval_fails(self):
+        """Test approval fails."""
         b = _make_behaviour()
         b.get_approval_tx_hash = _make_gen_method({})
         tx_info = {
@@ -2627,7 +2942,10 @@ class TestBuildMultisendTx:
 
 
 class TestPrepareBridgeSwapAction:
+    """TestPrepareBridgeSwapAction."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._build_multisend_tx = _make_gen_method("0x" + "ab" * 32)
         b._build_safe_tx = _make_gen_method("payload_string")
@@ -2648,12 +2966,14 @@ class TestPrepareBridgeSwapAction:
         assert result["action"] == Action.BRIDGE_SWAP.value
 
     def test_no_multisend(self):
+        """Test no multisend."""
         b = _make_behaviour()
         b._build_multisend_tx = _make_gen_method(None)
         result = _exhaust(b.prepare_bridge_swap_action([], {}, 1.0, 1.0))
         assert result is None
 
     def test_no_safe_tx(self):
+        """Test no safe tx."""
         b = _make_behaviour()
         b._build_multisend_tx = _make_gen_method("0x" + "ab" * 32)
         b._build_safe_tx = _make_gen_method(None)
@@ -2674,7 +2994,10 @@ class TestPrepareBridgeSwapAction:
 
 
 class TestGetBlock:
+    """TestGetBlock."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         mock_resp = MagicMock()
         mock_resp.performative = "state"
@@ -2688,6 +3011,7 @@ class TestGetBlock:
         assert result == {"timestamp": 12345}
 
     def test_failure(self):
+        """Test failure."""
         b = _make_behaviour()
         mock_resp = MagicMock()
         mock_resp.performative = MagicMock()  # non-STATE
@@ -2696,6 +3020,7 @@ class TestGetBlock:
         assert result is None
 
     def test_no_block_number(self):
+        """Test no block number."""
         b = _make_behaviour()
         mock_resp = MagicMock()
         from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -2708,7 +3033,10 @@ class TestGetBlock:
 
 
 class TestMatchingRound:
+    """TestMatchingRound."""
+
     def test_matching_round(self):
+        """Test matching round."""
         from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
             DecisionMakingRound,
         )
@@ -2717,7 +3045,10 @@ class TestMatchingRound:
 
 
 class TestAsyncAct:
+    """TestAsyncAct."""
+
     def test_withdrawal_initiated(self):
+        """Test withdrawal initiated."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(True)
         b._read_withdrawal_status = _make_gen_method("INITIATED")
@@ -2729,6 +3060,7 @@ class TestAsyncAct:
         b.set_done.assert_called_once()
 
     def test_normal_flow(self):
+        """Test normal flow."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b.get_next_event = _make_gen_method((Event.DONE.value, {}))
@@ -2740,6 +3072,7 @@ class TestAsyncAct:
         b.set_done.assert_called_once()
 
     def test_paused_but_not_initiated(self):
+        """Test paused but not initiated."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(True)
         b._read_withdrawal_status = _make_gen_method("WITHDRAWING")
@@ -2753,6 +3086,8 @@ class TestAsyncAct:
 
 
 class TestPostExecuteEnterPool:
+    """TestPostExecuteEnterPool."""
+
     def _base_action(self, dex_type, **extra):
         return {
             "chain": "optimism",
@@ -2768,6 +3103,7 @@ class TestPostExecuteEnterPool:
         }
 
     def test_uniswap_v3(self):
+        """Test uniswap v3."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xhash"
         b._get_data_from_mint_tx_receipt = _make_gen_method((1, 1000, 500, 600, 12345))
@@ -2781,6 +3117,7 @@ class TestPostExecuteEnterPool:
         assert b.current_positions[0]["token_id"] == 1
 
     def test_velodrome_cl_multiple_positions(self):
+        """Test velodrome cl multiple positions."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xhash"
         b._get_all_positions_from_tx_receipt = _make_gen_method(
@@ -2800,6 +3137,7 @@ class TestPostExecuteEnterPool:
         assert len(b.current_positions[0]["positions"]) == 2
 
     def test_velodrome_cl_fallback_single(self):
+        """Test velodrome cl fallback single."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xhash"
         b._get_all_positions_from_tx_receipt = _make_gen_method(None)
@@ -2813,6 +3151,7 @@ class TestPostExecuteEnterPool:
         assert len(b.current_positions) == 1
 
     def test_velodrome_cl_empty_positions(self):
+        """Test velodrome cl empty positions."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xhash"
         b._get_all_positions_from_tx_receipt = _make_gen_method([])
@@ -2826,6 +3165,7 @@ class TestPostExecuteEnterPool:
         assert len(b.current_positions) == 1
 
     def test_velodrome_non_cl(self):
+        """Test velodrome non cl."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xhash"
         b._get_data_from_velodrome_mint_event = _make_gen_method((500, 600, 12345))
@@ -2838,6 +3178,7 @@ class TestPostExecuteEnterPool:
         assert len(b.current_positions) == 1
 
     def test_balancer(self):
+        """Test balancer."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xhash"
         b._get_data_from_join_pool_tx_receipt = _make_gen_method((500, 600, 12345))
@@ -2850,6 +3191,7 @@ class TestPostExecuteEnterPool:
         assert len(b.current_positions) == 1
 
     def test_sturdy(self):
+        """Test sturdy."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xhash"
         b._get_data_from_deposit_tx_receipt = _make_gen_method((1000, 500, 12345))
@@ -2864,6 +3206,8 @@ class TestPostExecuteEnterPool:
 
 
 class TestGetEnterPoolTxHash:
+    """TestGetEnterPoolTxHash."""
+
     def _base_action(self, dex_type=DexType.UNISWAP_V3.value, **extra):
         return {
             "dex_type": dex_type,
@@ -2879,6 +3223,7 @@ class TestGetEnterPoolTxHash:
         }
 
     def test_missing_params(self):
+        """Test missing params."""
         b = _make_behaviour()
         action = {
             "dex_type": None,
@@ -2891,6 +3236,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_too_few_assets(self):
+        """Test too few assets."""
         b = _make_behaviour()
         action = self._base_action()
         action["token0"] = "0xT0"
@@ -2901,6 +3247,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_unknown_dex_type(self):
+        """Test unknown dex type."""
         b = _make_behaviour()
         action = self._base_action(dex_type="UnknownDex")
         b.pools = {}
@@ -2908,6 +3255,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_no_relative_funds_non_velodrome(self):
+        """Test no relative funds non velodrome."""
         b = _make_behaviour()
         b.pools = {DexType.UNISWAP_V3.value: MagicMock()}
         action = self._base_action()
@@ -2916,6 +3264,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_balance_none(self):
+        """Test balance none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         b.pools = {DexType.UNISWAP_V3.value: mock_pool}
@@ -2928,6 +3277,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_zero_amounts(self):
+        """Test zero amounts."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         b.pools = {DexType.UNISWAP_V3.value: mock_pool}
@@ -2939,6 +3289,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_success_single_tx_hash(self):
+        """Test success single tx hash."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -2955,6 +3306,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_success_list_tx_hashes(self):
+        """Test success list tx hashes."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method((["0xtx1", "0xtx2"], "0xCONTRACT"))
@@ -2971,6 +3323,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_pool_enter_returns_none(self):
+        """Test pool enter returns none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(None)
@@ -2983,6 +3336,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_pool_enter_returns_none_hashes(self):
+        """Test pool enter returns none hashes."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method((None, "0xCONTRACT"))
@@ -2995,6 +3349,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_approval_fails(self):
+        """Test approval fails."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3008,6 +3363,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_safe_tx_hash_none(self):
+        """Test safe tx hash none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0x" + "cc" * 20))
@@ -3021,6 +3377,7 @@ class TestGetEnterPoolTxHash:
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3033,6 +3390,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_zero_address_asset0(self):
+        """Test zero address asset0."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3050,6 +3408,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_zero_address_asset1(self):
+        """Test zero address asset1."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3067,6 +3426,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_velodrome_cl_pool(self):
+        """Test velodrome cl pool."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3086,6 +3446,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_velodrome_cl_pool_none_amounts(self):
+        """Test velodrome cl pool none amounts."""
         b = _make_behaviour()
         b.pools = {DexType.VELODROME.value: MagicMock()}
         b._calculate_velodrome_investment_amounts = _make_gen_method(None)
@@ -3094,6 +3455,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_velodrome_non_cl(self):
+        """Test velodrome non cl."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3110,6 +3472,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_velodrome_non_cl_no_relative_funds(self):
+        """Test velodrome non cl no relative funds."""
         b = _make_behaviour()
         b.pools = {DexType.VELODROME.value: MagicMock()}
         action = self._base_action(dex_type=DexType.VELODROME.value, is_cl_pool=False)
@@ -3118,6 +3481,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_velodrome_non_cl_zero_amount(self):
+        """Test velodrome non cl zero amount."""
         b = _make_behaviour()
         b.pools = {DexType.VELODROME.value: MagicMock()}
         b._get_token_balances_and_calculate_amounts = _make_gen_method(
@@ -3128,6 +3492,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_with_invested_amount_and_current_positions(self):
+        """Test with invested amount and current positions."""
         b = _make_behaviour()
         b.current_positions = [{"pool_address": "0xOTHER"}]
         mock_pool = MagicMock()
@@ -3146,6 +3511,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_with_invested_amount_returns_none(self):
+        """Test with invested amount returns none."""
         b = _make_behaviour()
         b.current_positions = [{"pool_address": "0xOTHER"}]
         b.pools = {DexType.UNISWAP_V3.value: MagicMock()}
@@ -3155,6 +3521,7 @@ class TestGetEnterPoolTxHash:
         assert result == (None, None, None)
 
     def test_velodrome_cl_with_max_position_size(self):
+        """Test velodrome cl with max position size."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3172,6 +3539,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_velodrome_non_cl_with_max_position_size(self):
+        """Test velodrome non cl with max position size."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3191,6 +3559,7 @@ class TestGetEnterPoolTxHash:
         assert result[0] is not None
 
     def test_with_pool_fee(self):
+        """Test with pool fee."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.enter = _make_gen_method(("0xtx", "0xCONTRACT"))
@@ -3208,7 +3577,10 @@ class TestGetEnterPoolTxHash:
 
 
 class TestGetExitPoolTxHash:
+    """TestGetExitPoolTxHash."""
+
     def test_unknown_dex(self):
+        """Test unknown dex."""
         b = _make_behaviour()
         b.pools = {}
         action = {"dex_type": "unknown", "chain": "optimism"}
@@ -3216,6 +3588,7 @@ class TestGetExitPoolTxHash:
         assert result == (None, None, None)
 
     def test_uniswap_success(self):
+        """Test uniswap success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method((b"txhash", "0x" + "cc" * 20, False))
@@ -3233,6 +3606,7 @@ class TestGetExitPoolTxHash:
         assert result[0] is not None
 
     def test_uniswap_multisend(self):
+        """Test uniswap multisend."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method((b"txhash", "0x" + "cc" * 20, True))
@@ -3250,6 +3624,7 @@ class TestGetExitPoolTxHash:
         assert result[0] is not None
 
     def test_pool_exit_none(self):
+        """Test pool exit none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method((None, None, False))
@@ -3266,6 +3641,7 @@ class TestGetExitPoolTxHash:
         assert result == (None, None, None)
 
     def test_pool_exit_returns_none_object(self):
+        """Test pool exit returns none object."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method(None)
@@ -3282,6 +3658,7 @@ class TestGetExitPoolTxHash:
         assert result == (None, None, None)
 
     def test_safe_tx_hash_none(self):
+        """Test safe tx hash none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method((b"txhash", "0x" + "cc" * 20, False))
@@ -3299,6 +3676,7 @@ class TestGetExitPoolTxHash:
         assert result == (None, None, None)
 
     def test_velodrome_cl(self):
+        """Test velodrome cl."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method((b"txhash", "0x" + "cc" * 20, True))
@@ -3318,6 +3696,7 @@ class TestGetExitPoolTxHash:
         assert result[0] is not None
 
     def test_velodrome_non_cl(self):
+        """Test velodrome non cl."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method((b"txhash", "0x" + "cc" * 20, False))
@@ -3337,6 +3716,7 @@ class TestGetExitPoolTxHash:
         assert result[0] is not None
 
     def test_velodrome_non_cl_no_assets(self):
+        """Test velodrome non cl no assets."""
         b = _make_behaviour()
         b.pools = {DexType.VELODROME.value: MagicMock()}
         action = {
@@ -3353,6 +3733,7 @@ class TestGetExitPoolTxHash:
         assert result == (None, None, None)
 
     def test_balancer_no_assets(self):
+        """Test balancer no assets."""
         b = _make_behaviour()
         b.pools = {DexType.BALANCER.value: MagicMock()}
         action = {
@@ -3366,6 +3747,7 @@ class TestGetExitPoolTxHash:
         assert result == (None, None, None)
 
     def test_balancer_success(self):
+        """Test balancer success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.exit = _make_gen_method((b"txhash", "0x" + "cc" * 20, False))
@@ -3382,6 +3764,7 @@ class TestGetExitPoolTxHash:
         assert result[0] is not None
 
     def test_else_unknown_dex_with_pool(self):
+        """Test else unknown dex with pool."""
         b = _make_behaviour()
         b.pools = {"someDex": MagicMock()}
         action = {
@@ -3395,10 +3778,13 @@ class TestGetExitPoolTxHash:
 
 
 class TestGetDepositTxHash:
+    """TestGetDepositTxHash."""
+
     POOL_ADDR = "0x" + "e1" * 20
     TOKEN_ADDR = "0x" + "e2" * 20
 
     def test_no_relative_funds(self):
+        """Test no relative funds."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         action = {
@@ -3411,6 +3797,7 @@ class TestGetDepositTxHash:
         assert result == (None, None, None)
 
     def test_missing_info(self):
+        """Test missing info."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=0)
         action = {
@@ -3423,6 +3810,7 @@ class TestGetDepositTxHash:
         assert result == (None, None, None)
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b.get_approval_tx_hash = _make_gen_method(
@@ -3439,6 +3827,7 @@ class TestGetDepositTxHash:
         assert result[0] is not None
 
     def test_approval_fails(self):
+        """Test approval fails."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b.get_approval_tx_hash = _make_gen_method({})
@@ -3452,6 +3841,7 @@ class TestGetDepositTxHash:
         assert result == (None, None, None)
 
     def test_deposit_tx_none(self):
+        """Test deposit tx none."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b.get_approval_tx_hash = _make_gen_method(
@@ -3460,6 +3850,7 @@ class TestGetDepositTxHash:
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3477,6 +3868,7 @@ class TestGetDepositTxHash:
         assert result == (None, None, None)
 
     def test_safe_tx_hash_none(self):
+        """Test safe tx hash none."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b.get_approval_tx_hash = _make_gen_method(
@@ -3485,6 +3877,7 @@ class TestGetDepositTxHash:
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] <= 2:
@@ -3503,9 +3896,12 @@ class TestGetDepositTxHash:
 
 
 class TestGetWithdrawTxHash:
+    """TestGetWithdrawTxHash."""
+
     POOL_ADDR = "0x" + "f1" * 20
 
     def test_no_receiver(self):
+        """Test no receiver."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {"optimism": None}
         action = {"chain": "optimism", "pool_address": self.POOL_ADDR, "dex_type": "X"}
@@ -3513,10 +3909,12 @@ class TestGetWithdrawTxHash:
         assert result == (None, None, None)
 
     def test_sturdy_success(self):
+        """Test sturdy success."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3535,10 +3933,12 @@ class TestGetWithdrawTxHash:
         assert result[0] is not None
 
     def test_sturdy_no_shares(self):
+        """Test sturdy no shares."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3555,10 +3955,12 @@ class TestGetWithdrawTxHash:
         assert result == (None, None, None)
 
     def test_non_sturdy_success(self):
+        """Test non sturdy success."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3577,10 +3979,12 @@ class TestGetWithdrawTxHash:
         assert result[0] is not None
 
     def test_non_sturdy_no_amount(self):
+        """Test non sturdy no amount."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3602,6 +4006,7 @@ class TestGetWithdrawTxHash:
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3626,6 +4031,7 @@ class TestGetWithdrawTxHash:
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3642,10 +4048,12 @@ class TestGetWithdrawTxHash:
         assert result == (None, None, None)
 
     def test_tx_hash_none(self):
+        """Test tx hash none."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] <= 1:
@@ -3662,10 +4070,12 @@ class TestGetWithdrawTxHash:
         assert result == (None, None, None)
 
     def test_safe_tx_none(self):
+        """Test safe tx none."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] <= 2:
@@ -3683,16 +4093,20 @@ class TestGetWithdrawTxHash:
 
 
 class TestGetTokenTransferTxHash:
+    """TestGetTokenTransferTxHash."""
+
     ADDR_DEST = "0x" + "d1" * 20
     ADDR_TOK = "0x" + "d2" * 20
 
     def test_missing_info(self):
+        """Test missing info."""
         b = _make_behaviour()
         action = {"chain": "optimism"}
         result = _exhaust(b.get_token_transfer_tx_hash(action))
         assert result == (None, None, None)
 
     def test_balance_none(self):
+        """Test balance none."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method(None)
         action = {
@@ -3704,6 +4118,7 @@ class TestGetTokenTransferTxHash:
         assert result == (None, None, None)
 
     def test_zero_balance(self):
+        """Test zero balance."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method(0)
         action = {
@@ -3715,10 +4130,12 @@ class TestGetTokenTransferTxHash:
         assert result == (None, None, None)
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3737,10 +4154,12 @@ class TestGetTokenTransferTxHash:
         assert result[0] is not None
 
     def test_transfer_tx_none(self):
+        """Test transfer tx none."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3759,10 +4178,12 @@ class TestGetTokenTransferTxHash:
         assert result == (None, None, None)
 
     def test_safe_tx_none(self):
+        """Test safe tx none."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3782,20 +4203,25 @@ class TestGetTokenTransferTxHash:
 
 
 class TestGetClaimRewardsTxHash:
+    """TestGetClaimRewardsTxHash."""
+
     ADDR_USER = "0x" + "c1" * 20
     ADDR_TOKEN = "0x" + "c2" * 20
 
     def test_missing_info(self):
+        """Test missing info."""
         b = _make_behaviour()
         action = {"chain": "optimism"}
         result = _exhaust(b.get_claim_rewards_tx_hash(action))
         assert result == (None, None, None)
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3814,6 +4240,7 @@ class TestGetClaimRewardsTxHash:
         assert result[0] is not None
 
     def test_tx_hash_none(self):
+        """Test tx hash none."""
         b = _make_behaviour()
         b.contract_interact = _make_gen_method(None)
         action = {
@@ -3827,10 +4254,12 @@ class TestGetClaimRewardsTxHash:
         assert result == (None, None, None)
 
     def test_safe_tx_none(self):
+        """Test safe tx none."""
         b = _make_behaviour()
         call_count = [0]
 
         def ci(*a, **kw):
+            """Ci."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -3850,7 +4279,10 @@ class TestGetClaimRewardsTxHash:
 
 
 class TestGetStepTransactionsData:
+    """TestGetStepTransactionsData."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._set_step_addresses = MagicMock(side_effect=lambda x: x)
         b._get_step_transaction = _make_gen_method({"fee": 0.1, "gas_cost": 0.1})
@@ -3859,6 +4291,7 @@ class TestGetStepTransactionsData:
         assert len(result) == 2
 
     def test_step_returns_none(self):
+        """Test step returns none."""
         b = _make_behaviour()
         b._set_step_addresses = MagicMock(side_effect=lambda x: x)
         b._get_step_transaction = _make_gen_method(None)
@@ -3867,6 +4300,7 @@ class TestGetStepTransactionsData:
         assert result is None
 
     def test_empty_steps(self):
+        """Test empty steps."""
         b = _make_behaviour()
         route = {"steps": []}
         result = _exhaust(b._get_step_transactions_data(route))
@@ -3874,7 +4308,10 @@ class TestGetStepTransactionsData:
 
 
 class TestGetStepTransaction:
+    """TestGetStepTransaction."""
+
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
@@ -3903,6 +4340,7 @@ class TestGetStepTransaction:
         assert result["source_token"] == "0x1"
 
     def test_error_status_code(self):
+        """Test error status code."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 500
@@ -3912,6 +4350,7 @@ class TestGetStepTransaction:
         assert result is None
 
     def test_error_status_code_bad_json(self):
+        """Test error status code bad json."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 500
@@ -3935,6 +4374,7 @@ class TestGetStepTransaction:
         assert "Unknown error" in logged_msg
 
     def test_parse_error(self):
+        """Test parse error."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
@@ -3944,6 +4384,7 @@ class TestGetStepTransaction:
         assert result is None
 
     def test_invalid_tx_data(self):
+        """Test invalid tx data."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
@@ -3965,6 +4406,7 @@ class TestGetStepTransaction:
         assert result is None
 
     def test_invalid_hex_data(self):
+        """Test invalid hex data."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
@@ -3987,6 +4429,8 @@ class TestGetStepTransaction:
 
 
 class TestFetchRoutes:
+    """TestFetchRoutes."""
+
     def _base_action(self):
         return {
             "from_chain": "optimism",
@@ -4004,6 +4448,7 @@ class TestFetchRoutes:
         ]
 
     def test_no_balance(self):
+        """Test no balance."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=None)
@@ -4011,6 +4456,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_zero_amount(self):
+        """Test zero amount."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=0)
@@ -4018,6 +4464,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4031,6 +4478,7 @@ class TestFetchRoutes:
         assert len(result) == 1
 
     def test_api_error_json(self):
+        """Test api error json."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4043,6 +4491,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_api_error_non_json(self):
+        """Test api error non json."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4055,6 +4504,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_empty_body(self):
+        """Test empty body."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4067,6 +4517,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_no_routes_in_response(self):
+        """Test no routes in response."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4079,6 +4530,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_parse_error(self):
+        """Test parse error."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4091,6 +4543,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_none_param_values(self):
+        """Test none param values."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4100,6 +4553,7 @@ class TestFetchRoutes:
         assert result is None
 
     def test_with_snapshot_balance(self):
+        """Test with snapshot balance."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4114,6 +4568,7 @@ class TestFetchRoutes:
         assert result is not None
 
     def test_investing_paused_higher_slippage(self):
+        """Test investing paused higher slippage."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(True)
         b._get_balance = MagicMock(return_value=10000)
@@ -4126,6 +4581,7 @@ class TestFetchRoutes:
         assert result is not None
 
     def test_zero_address_token(self):
+        """Test zero address token."""
         b = _make_behaviour()
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
@@ -4140,6 +4596,8 @@ class TestFetchRoutes:
 
 
 class TestStakeUnstakeClaimStakingRewards:
+    """TestStakeUnstakeClaimStakingRewards."""
+
     def _velodrome_action(self, is_cl_pool=False, **extra):
         return {
             "dex_type": "velodrome",
@@ -4150,6 +4608,7 @@ class TestStakeUnstakeClaimStakingRewards:
         }
 
     def test_stake_non_velodrome(self):
+        """Test stake non velodrome."""
         b = _make_behaviour()
         result = _exhaust(
             b.get_stake_lp_tokens_tx_hash(
@@ -4159,6 +4618,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_missing_params(self):
+        """Test stake missing params."""
         b = _make_behaviour()
         result = _exhaust(
             b.get_stake_lp_tokens_tx_hash(
@@ -4168,12 +4628,14 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_no_pool_behaviour(self):
+        """Test stake no pool behaviour."""
         b = _make_behaviour()
         b.pools = {}
         result = _exhaust(b.get_stake_lp_tokens_tx_hash(self._velodrome_action()))
         assert result == (None, None, None)
 
     def test_stake_cl_success(self):
+        """Test stake cl success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.stake_cl_lp_tokens = _make_gen_method(
@@ -4192,6 +4654,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_stake_cl_find_position(self):
+        """Test stake cl find position."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method("0xGAUGE")
@@ -4213,6 +4676,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_stake_cl_no_matching_position(self):
+        """Test stake cl no matching position."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         b.pools = {"velodrome": mock_pool}
@@ -4222,6 +4686,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_cl_no_token_ids_gauge(self):
+        """Test stake cl no token ids gauge."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method(None)
@@ -4239,6 +4704,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_non_cl_success(self):
+        """Test stake non cl success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.stake_lp_tokens = _make_gen_method(
@@ -4252,6 +4718,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_stake_non_cl_no_balance(self):
+        """Test stake non cl no balance."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         b.pools = {"velodrome": mock_pool}
@@ -4261,6 +4728,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_result_error(self):
+        """Test stake result error."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.stake_lp_tokens = _make_gen_method({"error": "fail"})
@@ -4271,6 +4739,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_result_none(self):
+        """Test stake result none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.stake_lp_tokens = _make_gen_method(None)
@@ -4281,6 +4750,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_missing_tx_hash(self):
+        """Test stake missing tx hash."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.stake_lp_tokens = _make_gen_method(
@@ -4293,6 +4763,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_safe_tx_none(self):
+        """Test stake safe tx none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.stake_lp_tokens = _make_gen_method(
@@ -4306,12 +4777,14 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_stake_exception(self):
+        """Test stake exception."""
         b = _make_behaviour()
         b.pools = {"velodrome": MagicMock(side_effect=RuntimeError)}
         b._get_token_balance = _make_gen_method(1000)
 
         # Force exception in the try block
         def raise_err(*a, **kw):
+            """Raise err."""
             raise RuntimeError("boom")
             yield  # noqa
 
@@ -4324,6 +4797,7 @@ class TestStakeUnstakeClaimStakingRewards:
 
     # Unstake tests
     def test_unstake_non_velodrome(self):
+        """Test unstake non velodrome."""
         b = _make_behaviour()
         result = _exhaust(
             b.get_unstake_lp_tokens_tx_hash(
@@ -4333,6 +4807,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_unstake_missing_params(self):
+        """Test unstake missing params."""
         b = _make_behaviour()
         result = _exhaust(
             b.get_unstake_lp_tokens_tx_hash(
@@ -4342,12 +4817,14 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_unstake_no_pool(self):
+        """Test unstake no pool."""
         b = _make_behaviour()
         b.pools = {}
         result = _exhaust(b.get_unstake_lp_tokens_tx_hash(self._velodrome_action()))
         assert result == (None, None, None)
 
     def test_unstake_cl_success(self):
+        """Test unstake cl success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.unstake_cl_lp_tokens = _make_gen_method(
@@ -4362,6 +4839,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_unstake_cl_find_position(self):
+        """Test unstake cl find position."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method("0xGAUGE")
@@ -4383,6 +4861,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_unstake_non_cl_success(self):
+        """Test unstake non cl success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_staked_balance = _make_gen_method(1000)
@@ -4396,6 +4875,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_unstake_non_cl_no_staked(self):
+        """Test unstake non cl no staked."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_staked_balance = _make_gen_method(0)
@@ -4405,6 +4885,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_unstake_result_error(self):
+        """Test unstake result error."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_staked_balance = _make_gen_method(1000)
@@ -4415,10 +4896,12 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_unstake_exception(self):
+        """Test unstake exception."""
         b = _make_behaviour()
         mock_pool = MagicMock()
 
         def raise_err(*a, **kw):
+            """Raise err."""
             raise RuntimeError("boom")
             yield  # noqa
 
@@ -4430,6 +4913,7 @@ class TestStakeUnstakeClaimStakingRewards:
 
     # Claim staking rewards tests
     def test_claim_non_velodrome(self):
+        """Test claim non velodrome."""
         b = _make_behaviour()
         result = _exhaust(
             b.get_claim_staking_rewards_tx_hash(
@@ -4439,6 +4923,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_claim_missing_params(self):
+        """Test claim missing params."""
         b = _make_behaviour()
         result = _exhaust(
             b.get_claim_staking_rewards_tx_hash(
@@ -4448,12 +4933,14 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_claim_no_pool(self):
+        """Test claim no pool."""
         b = _make_behaviour()
         b.pools = {}
         result = _exhaust(b.get_claim_staking_rewards_tx_hash(self._velodrome_action()))
         assert result == (None, None, None)
 
     def test_claim_cl_success(self):
+        """Test claim cl success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.claim_cl_rewards = _make_gen_method(
@@ -4468,6 +4955,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_claim_cl_find_position(self):
+        """Test claim cl find position."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method("0xGAUGE")
@@ -4489,6 +4977,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_claim_non_cl_success(self):
+        """Test claim non cl success."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.claim_rewards = _make_gen_method(
@@ -4501,6 +4990,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result[0] is not None
 
     def test_claim_result_none(self):
+        """Test claim result none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.claim_rewards = _make_gen_method(None)
@@ -4510,10 +5000,12 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_claim_exception(self):
+        """Test claim exception."""
         b = _make_behaviour()
         mock_pool = MagicMock()
 
         def raise_err(*a, **kw):
+            """Raise err."""
             raise RuntimeError("boom")
             yield  # noqa
 
@@ -4524,6 +5016,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_claim_cl_no_matching_position(self):
+        """Test claim cl no matching position."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         b.pools = {"velodrome": mock_pool}
@@ -4540,6 +5033,7 @@ class TestStakeUnstakeClaimStakingRewards:
         captured = {}
 
         def fake_claim(behaviour, **kwargs):
+            """Fake claim."""
             captured["token_ids"] = kwargs["token_ids"]
             yield
             return {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
@@ -4575,6 +5069,7 @@ class TestStakeUnstakeClaimStakingRewards:
         captured = {}
 
         def fake_claim(behaviour, **kwargs):
+            """Fake claim."""
             captured["token_ids"] = kwargs["token_ids"]
             yield
             return {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
@@ -4590,7 +5085,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert captured["token_ids"] == [1, 2]
 
     def test_claim_cl_emits_structured_warning_on_verification_failure(self):
-        """The claim path must surface the same structured warning the
+        """The claim path must surface the same structured warning the # noqa: D205
         unstake path does so dashboards covering "fallback fired,
         on-chain state not actually verified" pick up both code paths.
         """
@@ -4599,6 +5094,7 @@ class TestStakeUnstakeClaimStakingRewards:
         mock_pool.is_cl_token_staked = _make_gen_method(None)
 
         def fake_claim(behaviour, **kwargs):
+            """Fake claim."""
             yield
             return {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
 
@@ -4619,6 +5115,7 @@ class TestStakeUnstakeClaimStakingRewards:
         )
 
     def test_unstake_cl_no_matching_position(self):
+        """Test unstake cl no matching position."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         b.pools = {"velodrome": mock_pool}
@@ -4628,6 +5125,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_unstake_safe_tx_none(self):
+        """Test unstake safe tx none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_staked_balance = _make_gen_method(1000)
@@ -4641,6 +5139,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_unstake_missing_tx_hash(self):
+        """Test unstake missing tx hash."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_staked_balance = _make_gen_method(1000)
@@ -4653,6 +5152,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_claim_safe_tx_none(self):
+        """Test claim safe tx none."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.claim_rewards = _make_gen_method(
@@ -4665,6 +5165,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_claim_missing_tx_hash(self):
+        """Test claim missing tx hash."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.claim_rewards = _make_gen_method(
@@ -4676,6 +5177,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_claim_cl_no_token_ids_gauge(self):
+        """Test claim cl no token ids gauge."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method(None)
@@ -4693,6 +5195,7 @@ class TestStakeUnstakeClaimStakingRewards:
         assert result == (None, None, None)
 
     def test_unstake_cl_no_token_ids_gauge(self):
+        """Test unstake cl no token ids gauge."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method(None)
@@ -4711,6 +5214,8 @@ class TestStakeUnstakeClaimStakingRewards:
 
 
 class TestUpdateWithdrawalCompletionFinalTxHashBranch:
+    """TestUpdateWithdrawalCompletionFinalTxHashBranch."""
+
     def test_with_truthy_final_tx_hash(self):
         """When final_tx_hash is truthy, tx hashes are stored."""
         b = _make_behaviour()
@@ -4718,6 +5223,7 @@ class TestUpdateWithdrawalCompletionFinalTxHashBranch:
         kv_calls = []
 
         def capture_kv(*a, **kw):
+            """Capture kv."""
             kv_calls.append(a)
             yield
 
@@ -4735,6 +5241,7 @@ class TestUpdateWithdrawalCompletionFinalTxHashBranch:
         kv_calls = []
 
         def capture_kv(*a, **kw):
+            """Capture kv."""
             kv_calls.append(a)
             yield
 
@@ -4746,8 +5253,10 @@ class TestUpdateWithdrawalCompletionFinalTxHashBranch:
 
 
 class TestPostExecuteStepContinueBranch:
+    """TestPostExecuteStepContinueBranch."""
+
     def test_continue_returns_result(self):
-        """decision == CONTINUE: slippage costs added, returns update."""
+        """decision == CONTINUE: slippage costs added, returns update."""  # noqa: D403
         b = _make_behaviour()
         b.sleep = _make_gen_method(None)
         b.get_decision_on_swap = _make_gen_method(Decision.CONTINUE)
@@ -4768,6 +5277,8 @@ class TestPostExecuteStepContinueBranch:
 
 
 class TestWaitForSwapConfirmationLoop:
+    """TestWaitForSwapConfirmationLoop."""
+
     def test_wait_then_continue(self):
         """First call returns WAIT, second returns CONTINUE."""
         b = _make_behaviour()
@@ -4775,6 +5286,7 @@ class TestWaitForSwapConfirmationLoop:
         call_count = [0]
 
         def swap_gen(*a, **kw):
+            """Swap gen."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4793,6 +5305,7 @@ class TestWaitForSwapConfirmationLoop:
         call_count = [0]
 
         def swap_gen(*a, **kw):
+            """Swap gen."""
             call_count[0] += 1
             yield
             if call_count[0] <= 2:
@@ -4810,6 +5323,8 @@ class TestWaitForSwapConfirmationLoop:
 
 
 class TestPrepareNextActionElseBranch:
+    """TestPrepareNextActionElseBranch."""
+
     def test_unknown_action_triggers_else(self):
         """An Action value not handled in if/elif triggers the else branch."""
         b = _make_behaviour()
@@ -4822,6 +5337,8 @@ class TestPrepareNextActionElseBranch:
 
 
 class TestEnforcePoolAllocationCapZeroTotalUsd:
+    """TestEnforcePoolAllocationCapZeroTotalUsd."""
+
     def test_zero_usd_above_cap_triggers_5050_fallback(self):
         """When current_total_usd is 0 but code somehow reaches ratio calc.
 
@@ -4835,6 +5352,8 @@ class TestEnforcePoolAllocationCapZeroTotalUsd:
 
 
 class TestCalculateVelodromeInvestmentAmountsTokenRatioException:
+    """TestCalculateVelodromeInvestmentAmountsTokenRatioException."""
+
     def test_token1_ratio_exception_falls_back_to_percentage(self):
         """When overall_token1_ratio raises, falls back to token1_percentage."""
         b = _make_behaviour()
@@ -4858,6 +5377,8 @@ class TestCalculateVelodromeInvestmentAmountsTokenRatioException:
 
 
 class TestCalculateVelodromeNegativeAmounts:
+    """TestCalculateVelodromeNegativeAmounts."""
+
     def test_negative_amount_returns_none(self):
         """When calculated amounts are negative, return None."""
         b = _make_behaviour()
@@ -4879,6 +5400,8 @@ class TestCalculateVelodromeNegativeAmounts:
 
 
 class TestGetEnterPoolTxHashFewerAssets:
+    """TestGetEnterPoolTxHashFewerAssets."""
+
     def test_one_asset(self):
         """When only one token is set, assets < 2, returns None."""
         b = _make_behaviour()
@@ -4894,6 +5417,8 @@ class TestGetEnterPoolTxHashFewerAssets:
 
 
 class TestGetEnterPoolTxHashVelodromeNonCLMaxAmounts:
+    """TestGetEnterPoolTxHashVelodromeNonCLMaxAmounts."""
+
     def test_max_amounts_in_none(self):
         """Velodrome non-CL, invested_amount set, balances returns None."""
         b = _make_behaviour()
@@ -4951,6 +5476,8 @@ class TestGetEnterPoolTxHashVelodromeNonCLMaxAmounts:
 
 
 class TestGetEnterPoolNonVelodromeZeroAmounts:
+    """TestGetEnterPoolNonVelodromeZeroAmounts."""
+
     def test_zero_amount_in_non_velodrome(self):
         """Non-velodrome dex with zero amounts returns None."""
         b = _make_behaviour()
@@ -4997,6 +5524,8 @@ class TestGetEnterPoolNonVelodromeZeroAmounts:
 
 
 class TestGetEnterPoolToken1ApprovalFails:
+    """TestGetEnterPoolToken1ApprovalFails."""
+
     def test_token1_approval_fails(self):
         """When token1 approval fails, returns None."""
         b = _make_behaviour()
@@ -5009,6 +5538,7 @@ class TestGetEnterPoolToken1ApprovalFails:
         call_count = [0]
 
         def approval_gen(*a, **kw):
+            """Approval gen."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -5032,6 +5562,8 @@ class TestGetEnterPoolToken1ApprovalFails:
 
 
 class TestGetExitPoolVelodromeCLNoTokenIds:
+    """TestGetExitPoolVelodromeCLNoTokenIds."""
+
     def test_velodrome_cl_without_token_ids(self):
         """Velodrome CL exit without token_ids/liquidities -> falls to else."""
         b = _make_behaviour()
@@ -5054,6 +5586,8 @@ class TestGetExitPoolVelodromeCLNoTokenIds:
 
 
 class TestCheckStepCostsLastStepPasses:
+    """TestCheckStepCostsLastStepPasses."""
+
     def test_last_step_within_allowance(self):
         """Last step fee/gas within 50% * remaining + tolerance passes."""
         b = _make_behaviour()
@@ -5066,6 +5600,8 @@ class TestCheckStepCostsLastStepPasses:
 
 
 class TestFetchRoutesNon18Decimals:
+    """TestFetchRoutesNon18Decimals."""
+
     def test_non_18_decimal_token(self):
         """Token with non-18 decimals returns amount as-is (no rounding)."""
         b = _make_behaviour()
@@ -5100,6 +5636,8 @@ class TestFetchRoutesNon18Decimals:
 
 
 class TestFetchRoutesBodyMissing:
+    """TestFetchRoutesBodyMissing."""
+
     def test_api_error_no_body_attribute(self):
         """When response has no body attribute during non-JSON parse."""
         b = _make_behaviour()
@@ -5114,10 +5652,12 @@ class TestFetchRoutesBodyMissing:
         # and then hasattr(response, "body") returns False
         # Create a special object:
         class FakeResp:
+            """FakeResp."""
+
             status_code = 500
             # body intentionally not defined so hasattr returns False
 
-        fake_resp = FakeResp()
+        FakeResp()
         # But we need json.loads to fail, so body must be something that fails
         # Actually, the code does routes_response.body = json.loads(routes_response.body)
         # first in the try block, then in except it checks hasattr
@@ -5125,10 +5665,11 @@ class TestFetchRoutesBodyMissing:
         # hasattr(routes_response, "body") to be False
         # That's contradictory because we need .body to exist for json.loads but not for hasattr
         # This means line 2658 is dead code (body must exist to be read by json.loads).
-        pass
 
 
 class TestGetAllPositionsFromTxReceipt:
+    """TestGetAllPositionsFromTxReceipt."""
+
     def _make_log(self, token_id=1, liquidity=100, amount0=50, amount1=60):
         from eth_abi import encode
         from eth_utils import keccak, to_hex
@@ -5145,6 +5686,7 @@ class TestGetAllPositionsFromTxReceipt:
         return {"topics": [sig_hex, token_id_hex], "data": data_hex}
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         log = self._make_log(token_id=1, liquidity=100, amount0=50, amount1=60)
         receipt = {"logs": [log], "blockNumber": "0x10"}
@@ -5156,6 +5698,7 @@ class TestGetAllPositionsFromTxReceipt:
         assert result[0][0] == 1  # token_id
 
     def test_multiple_positions(self):
+        """Test multiple positions."""
         b = _make_behaviour()
         log1 = self._make_log(token_id=1, liquidity=100, amount0=50, amount1=60)
         log2 = self._make_log(token_id=2, liquidity=200, amount0=70, amount1=80)
@@ -5166,12 +5709,14 @@ class TestGetAllPositionsFromTxReceipt:
         assert len(result) == 2
 
     def test_no_response(self):
+        """Test no response."""
         b = _make_behaviour()
         b.get_transaction_receipt = _make_gen_method(None)
         result = _exhaust(b._get_all_positions_from_tx_receipt("0xhash", "optimism"))
         assert result is None
 
     def test_no_matching_logs(self):
+        """Test no matching logs."""
         b = _make_behaviour()
         receipt = {
             "logs": [{"topics": ["0xwrong"], "data": "0x00"}],
@@ -5182,6 +5727,7 @@ class TestGetAllPositionsFromTxReceipt:
         assert result is None
 
     def test_no_block_number(self):
+        """Test no block number."""
         b = _make_behaviour()
         log = self._make_log()
         receipt = {"logs": [log]}
@@ -5190,6 +5736,7 @@ class TestGetAllPositionsFromTxReceipt:
         assert result is None
 
     def test_block_fetch_fails(self):
+        """Test block fetch fails."""
         b = _make_behaviour()
         log = self._make_log()
         receipt = {"logs": [log], "blockNumber": "0x10"}
@@ -5199,6 +5746,7 @@ class TestGetAllPositionsFromTxReceipt:
         assert result is None
 
     def test_no_timestamp(self):
+        """Test no timestamp."""
         b = _make_behaviour()
         log = self._make_log()
         receipt = {"logs": [log], "blockNumber": "0x10"}
@@ -5255,6 +5803,8 @@ class TestGetAllPositionsFromTxReceipt:
 
 
 class TestGetDataFromMintTxReceipt:
+    """TestGetDataFromMintTxReceipt."""
+
     def _make_receipt(self, token_id=1, liquidity=100, amount0=50, amount1=60):
         from eth_abi import encode
         from eth_utils import keccak, to_hex
@@ -5272,6 +5822,7 @@ class TestGetDataFromMintTxReceipt:
         return {"logs": [log], "blockNumber": "0x10"}
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         receipt = self._make_receipt(
             token_id=5, liquidity=200, amount0=100, amount1=150
@@ -5282,12 +5833,14 @@ class TestGetDataFromMintTxReceipt:
         assert result == (5, 200, 100, 150, 99999)
 
     def test_no_response(self):
+        """Test no response."""
         b = _make_behaviour()
         b.get_transaction_receipt = _make_gen_method(None)
         result = _exhaust(b._get_data_from_mint_tx_receipt("0xhash", "optimism"))
         assert result == (None, None, None, None, None)
 
     def test_no_matching_log(self):
+        """Test no matching log."""
         b = _make_behaviour()
         receipt = {"logs": [{"topics": ["0xbad"], "data": "0x00"}]}
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5295,6 +5848,7 @@ class TestGetDataFromMintTxReceipt:
         assert result == (None, None, None, None, None)
 
     def test_missing_token_id_topic(self):
+        """Test missing token id topic."""
         from eth_utils import keccak, to_hex
 
         event_sig = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
@@ -5307,6 +5861,7 @@ class TestGetDataFromMintTxReceipt:
         assert result == (None, None, None, None, None)
 
     def test_empty_data_field(self):
+        """Test empty data field."""
         from eth_abi import encode
         from eth_utils import keccak, to_hex
 
@@ -5321,6 +5876,7 @@ class TestGetDataFromMintTxReceipt:
         assert result == (None, None, None, None, None)
 
     def test_no_block_number(self):
+        """Test no block number."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         del receipt["blockNumber"]
@@ -5329,6 +5885,7 @@ class TestGetDataFromMintTxReceipt:
         assert result == (None, None, None, None, None)
 
     def test_block_fetch_fails(self):
+        """Test block fetch fails."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5337,6 +5894,7 @@ class TestGetDataFromMintTxReceipt:
         assert result == (None, None, None, None, None)
 
     def test_no_timestamp(self):
+        """Test no timestamp."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5345,6 +5903,7 @@ class TestGetDataFromMintTxReceipt:
         assert result == (None, None, None, None, None)
 
     def test_decode_exception(self):
+        """Test decode exception."""
         from eth_abi import encode
         from eth_utils import keccak, to_hex
 
@@ -5360,6 +5919,8 @@ class TestGetDataFromMintTxReceipt:
 
 
 class TestGetDataFromJoinPoolTxReceipt:
+    """TestGetDataFromJoinPoolTxReceipt."""
+
     def _make_receipt(self, tokens=None, deltas=None):
         from eth_abi import encode
         from eth_utils import keccak
@@ -5385,6 +5946,7 @@ class TestGetDataFromJoinPoolTxReceipt:
         return {"logs": [log], "blockNumber": "0x10"}
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5395,12 +5957,14 @@ class TestGetDataFromJoinPoolTxReceipt:
         assert result[2] == 12345
 
     def test_no_response(self):
+        """Test no response."""
         b = _make_behaviour()
         b.get_transaction_receipt = _make_gen_method(None)
         result = _exhaust(b._get_data_from_join_pool_tx_receipt("0xhash", "optimism"))
         assert result == (None, None, None)
 
     def test_no_matching_log(self):
+        """Test no matching log."""
         b = _make_behaviour()
         receipt = {
             "logs": [{"topics": ["0xwrong"], "data": "0x00"}],
@@ -5411,6 +5975,7 @@ class TestGetDataFromJoinPoolTxReceipt:
         assert result == (None, None, None)
 
     def test_empty_data(self):
+        """Test empty data."""
         from eth_utils import keccak
 
         event_sig = "PoolBalanceChanged(bytes32,address,address[],int256[],uint256[])"
@@ -5423,6 +5988,7 @@ class TestGetDataFromJoinPoolTxReceipt:
         assert result == (None, None, None)
 
     def test_no_block_number(self):
+        """Test no block number."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         del receipt["blockNumber"]
@@ -5432,6 +5998,7 @@ class TestGetDataFromJoinPoolTxReceipt:
         assert result == (None, None, None)
 
     def test_block_fetch_fails(self):
+        """Test block fetch fails."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5440,6 +6007,7 @@ class TestGetDataFromJoinPoolTxReceipt:
         assert result == (None, None, None)
 
     def test_no_timestamp(self):
+        """Test no timestamp."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5448,6 +6016,7 @@ class TestGetDataFromJoinPoolTxReceipt:
         assert result == (None, None, None)
 
     def test_decode_exception(self):
+        """Test decode exception."""
         from eth_utils import keccak
 
         event_sig = "PoolBalanceChanged(bytes32,address,address[],int256[],uint256[])"
@@ -5480,6 +6049,8 @@ class TestGetDataFromJoinPoolTxReceipt:
 
 
 class TestGetDataFromVelodromeMintEvent:
+    """TestGetDataFromVelodromeMintEvent."""
+
     def _make_receipt(self, alt_sig=False):
         from eth_abi import encode
         from eth_utils import keccak, to_hex
@@ -5495,6 +6066,7 @@ class TestGetDataFromVelodromeMintEvent:
         return {"logs": [log], "blockNumber": "0x10"}
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5503,6 +6075,7 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (500, 600, 12345)
 
     def test_alternative_signature(self):
+        """Test alternative signature."""
         b = _make_behaviour()
         receipt = self._make_receipt(alt_sig=True)
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5511,12 +6084,14 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (500, 600, 12345)
 
     def test_no_response(self):
+        """Test no response."""
         b = _make_behaviour()
         b.get_transaction_receipt = _make_gen_method(None)
         result = _exhaust(b._get_data_from_velodrome_mint_event("0xhash", "optimism"))
         assert result == (None, None, None)
 
     def test_no_matching_log(self):
+        """Test no matching log."""
         b = _make_behaviour()
         receipt = {
             "logs": [{"topics": ["0xwrong"], "data": "0x00"}],
@@ -5527,6 +6102,7 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (None, None, None)
 
     def test_missing_sender_topic(self):
+        """Test missing sender topic."""
         from eth_utils import keccak, to_hex
 
         event_sig = "Mint(address,uint256,uint256)"
@@ -5540,6 +6116,7 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (None, None, None)
 
     def test_empty_data(self):
+        """Test empty data."""
         from eth_abi import encode
         from eth_utils import keccak, to_hex
 
@@ -5555,6 +6132,7 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (None, None, None)
 
     def test_no_block_number(self):
+        """Test no block number."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         del receipt["blockNumber"]
@@ -5564,6 +6142,7 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (None, None, None)
 
     def test_block_fetch_fails(self):
+        """Test block fetch fails."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5572,6 +6151,7 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (None, None, None)
 
     def test_no_timestamp(self):
+        """Test no timestamp."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5580,6 +6160,7 @@ class TestGetDataFromVelodromeMintEvent:
         assert result == (None, None, None)
 
     def test_decode_exception(self):
+        """Test decode exception."""
         from eth_abi import encode
         from eth_utils import keccak, to_hex
 
@@ -5596,6 +6177,8 @@ class TestGetDataFromVelodromeMintEvent:
 
 
 class TestGetDataFromDepositTxReceipt:
+    """TestGetDataFromDepositTxReceipt."""
+
     def _make_receipt(self, assets_val=1000, shares_val=500):
         from eth_utils import keccak
 
@@ -5611,6 +6194,7 @@ class TestGetDataFromDepositTxReceipt:
         return {"logs": [log], "blockNumber": "0x10"}
 
     def test_success(self):
+        """Test success."""
         b = _make_behaviour()
         receipt = self._make_receipt(assets_val=1000, shares_val=500)
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5619,12 +6203,14 @@ class TestGetDataFromDepositTxReceipt:
         assert result == (1000, 500, 12345)
 
     def test_no_receipt(self):
+        """Test no receipt."""
         b = _make_behaviour()
         b.get_transaction_receipt = _make_gen_method(None)
         result = _exhaust(b._get_data_from_deposit_tx_receipt("0xhash", "optimism"))
         assert result == (None, None, None)
 
     def test_no_matching_log(self):
+        """Test no matching log."""
         b = _make_behaviour()
         receipt = {
             "logs": [{"topics": ["0xbad"], "data": "0x00"}],
@@ -5635,6 +6221,7 @@ class TestGetDataFromDepositTxReceipt:
         assert result == (None, None, None)
 
     def test_unexpected_data_length(self):
+        """Test unexpected data length."""
         from eth_utils import keccak
 
         event_sig = "Deposit(address,address,uint256,uint256)"
@@ -5647,6 +6234,7 @@ class TestGetDataFromDepositTxReceipt:
         assert result == (None, None, None)
 
     def test_no_block_number(self):
+        """Test no block number."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         del receipt["blockNumber"]
@@ -5655,6 +6243,7 @@ class TestGetDataFromDepositTxReceipt:
         assert result == (None, None, None)
 
     def test_block_fetch_fails(self):
+        """Test block fetch fails."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5663,6 +6252,7 @@ class TestGetDataFromDepositTxReceipt:
         assert result == (None, None, None)
 
     def test_no_timestamp(self):
+        """Test no timestamp."""
         b = _make_behaviour()
         receipt = self._make_receipt()
         b.get_transaction_receipt = _make_gen_method(receipt)
@@ -5672,6 +6262,8 @@ class TestGetDataFromDepositTxReceipt:
 
 
 class TestCalculateMinHoldDaysExceptionBranch:
+    """TestCalculateMinHoldDaysExceptionBranch."""
+
     def test_exception_returns_fallback(self):
         """When an exception occurs, return MIN_TIME_IN_POSITION."""
         b = _make_behaviour()
@@ -5763,6 +6355,7 @@ class TestStakeUnstakeCLPositionLoops:
         assert result[0] is not None
 
     def test_unstake_cl_multiple_positions_before_match(self):
+        """Test unstake cl multiple positions before match."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method("0xGAUGE")
@@ -5790,6 +6383,7 @@ class TestStakeUnstakeCLPositionLoops:
         assert result[0] is not None
 
     def test_unstake_cl_has_token_ids_no_gauge(self):
+        """Test unstake cl has token ids no gauge."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method("0xGAUGE")
@@ -5811,6 +6405,7 @@ class TestStakeUnstakeCLPositionLoops:
         assert result[0] is not None
 
     def test_claim_cl_multiple_positions_before_match(self):
+        """Test claim cl multiple positions before match."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method("0xGAUGE")
@@ -5838,6 +6433,7 @@ class TestStakeUnstakeCLPositionLoops:
         assert result[0] is not None
 
     def test_claim_cl_has_token_ids_no_gauge(self):
+        """Test claim cl has token ids no gauge."""
         b = _make_behaviour()
         mock_pool = MagicMock()
         mock_pool.get_gauge_address = _make_gen_method("0xGAUGE")
@@ -5860,6 +6456,8 @@ class TestStakeUnstakeCLPositionLoops:
 
 
 class TestPostExecuteStakeLpTokensLoop:
+    """TestPostExecuteStakeLpTokensLoop."""
+
     def test_multiple_positions_before_match(self):
         """Loop iterates through non-matching positions first."""
         b = _make_behaviour()
@@ -5891,7 +6489,10 @@ class TestPostExecuteStakeLpTokensLoop:
 
 
 class TestPostExecuteUnstakeLpTokensLoop:
+    """TestPostExecuteUnstakeLpTokensLoop."""
+
     def test_multiple_positions_before_match(self):
+        """Test multiple positions before match."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xunstake"
         b._get_current_timestamp = MagicMock(return_value=4000)
@@ -5907,6 +6508,7 @@ class TestPostExecuteUnstakeLpTokensLoop:
         assert b.current_positions[0]["staked"] is True
 
     def test_no_matching_position(self):
+        """Test no matching position."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xunstake"
         b._get_current_timestamp = MagicMock(return_value=4000)
@@ -5920,7 +6522,10 @@ class TestPostExecuteUnstakeLpTokensLoop:
 
 
 class TestPostExecuteClaimStakingRewardsLoop:
+    """TestPostExecuteClaimStakingRewardsLoop."""
+
     def test_multiple_positions_before_match(self):
+        """Test multiple positions before match."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xclaim"
         b._get_current_timestamp = MagicMock(return_value=5000)
@@ -5936,6 +6541,7 @@ class TestPostExecuteClaimStakingRewardsLoop:
         assert b.current_positions[0].get("last_reward_claim_tx_hash") is None
 
     def test_no_matching_position(self):
+        """Test no matching position."""
         b = _make_behaviour()
         b.synchronized_data.final_tx_hash = "0xclaim"
         b._get_current_timestamp = MagicMock(return_value=5000)
@@ -5949,6 +6555,8 @@ class TestPostExecuteClaimStakingRewardsLoop:
 
 
 class TestPostExecuteStepFallThrough:
+    """TestPostExecuteStepFallThrough."""
+
     def test_decision_none_falls_through(self):
         """When get_decision_on_swap returns None, the function falls through."""
         b = _make_behaviour()
@@ -5963,6 +6571,8 @@ class TestPostExecuteStepFallThrough:
 
 
 class TestPostExecuteEnterPoolUnknownDex:
+    """TestPostExecuteEnterPoolUnknownDex."""
+
     def test_unknown_dex_type_falls_through_to_accumulate(self):
         """An unrecognized dex_type skips all if/elif, falls to line 559."""
         b = _make_behaviour()
@@ -5986,6 +6596,8 @@ class TestPostExecuteEnterPoolUnknownDex:
 
 
 class TestCalculateVelodromeNegativeAmountsViaCap:
+    """TestCalculateVelodromeNegativeAmountsViaCap."""
+
     def test_negative_via_max_amounts_cap(self):
         """Negative amounts via max_amounts cap causes return None."""
         b = _make_behaviour()
@@ -6008,6 +6620,8 @@ class TestCalculateVelodromeNegativeAmountsViaCap:
 
 
 class TestGetEnterPoolNonVelodromeNegativeAmounts:
+    """TestGetEnterPoolNonVelodromeNegativeAmounts."""
+
     def test_negative_amount_in_non_velodrome(self):
         """Non-velodrome dex with a negative amount returns None."""
         b = _make_behaviour()
@@ -6032,6 +6646,8 @@ class TestGetEnterPoolNonVelodromeNegativeAmounts:
 
 
 class TestGetDataFromJoinPoolEmptyTopics:
+    """TestGetDataFromJoinPoolEmptyTopics."""
+
     def test_log_with_empty_topics_is_skipped(self):
         """A log with empty topics list should be skipped via continue."""
         from eth_abi import encode
@@ -6065,6 +6681,8 @@ class TestGetDataFromJoinPoolEmptyTopics:
 
 
 class TestCalculateMinHoldDaysActualException:
+    """TestCalculateMinHoldDaysActualException."""
+
     def test_string_apr_causes_exception(self):
         """Passing a non-numeric type for apr causes TypeError in the try block."""
         b = _make_behaviour()
@@ -6079,7 +6697,7 @@ class TestCalculateMinHoldDaysActualException:
 
 
 class TestCLPositionLoopIterationAndGaugeSkip:
-    """Cover: (a) for-loop iterates past non-matching positions (loop back),
+    """Cover: (a) for-loop iterates past non-matching positions (loop back), # noqa: D205,D209
     and (b) gauge_address already provided, so `if not gauge_address:` is skipped."""
 
     def _velodrome_action(self, is_cl_pool=False, **extra):

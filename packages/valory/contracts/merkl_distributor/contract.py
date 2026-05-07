@@ -16,15 +16,12 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for distributor contract interface."""
-import logging
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
-
 
 PUBLIC_ID = PublicId.from_str("valory/merkl_distributor:0.1.0")
 

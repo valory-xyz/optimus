@@ -6,11 +6,11 @@ description: The contract package for the Merkl Distributor interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeia76dsgqtenfqruy2657fap5pqye7b3axrsx2xh5hpyvitbnq6jli
+  __init__.py: bafybeih5gogw5ip7zfib6neuxcb6uwy4liw7mrfpgucojne4waewn2lonm
   build/Distributor.json: bafybeihtbkqhzavgficpiikharncvtysmoyacmqbkntsilrvwph44fkm3a
-  contract.py: bafybeifeyv2zmd7al75bq7cdlszlnel26uhgaxtvhwlc3pyluwnrhub5jq
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeiaw7443pvhxzhb4jks56v2amjwsplimvw7jj5amcu4ntbkye2sh2q
+  contract.py: bafybeiakuwgdmyxhjigff3wtr6eftnr473p4tvsvqalvpyz44odlg2alme
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeidttidsf5c4w3uflblkkyrrw6gcwqhkoyrjh7klu5xdxzphvenv7m
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: DistributorContract

@@ -25,7 +25,6 @@ import json
 import tempfile
 import time as time_module
 from datetime import datetime
-from pathlib import Path
 from time import time
 from unittest.mock import MagicMock, patch
 
@@ -640,7 +639,7 @@ class TestParams:
             kwargs = self._make_kwargs(tmpdir)
             params = object.__new__(Params)
             with patch.object(Params.__bases__[0], "__init__", return_value=None):
-                params.__init__(**kwargs)
+                params.__init__(**kwargs)  # type: ignore[misc]
             assert params.apr_threshold == 5
             assert params.round_threshold == 10
             assert params.allowed_chains == ["ethereum"]
@@ -658,7 +657,7 @@ class TestParams:
             kwargs["stoploss_threshold_multiplier"] = 0.5
             params = object.__new__(Params)
             with patch.object(Params.__bases__[0], "__init__", return_value=None):
-                params.__init__(**kwargs)
+                params.__init__(**kwargs)  # type: ignore[misc]
             assert params.stoploss_threshold_multiplier == 0.5
 
     def test_initialization_with_tenderly_params(self) -> None:
@@ -671,7 +670,7 @@ class TestParams:
             kwargs["tenderly_project_slug"] = "project"
             params = object.__new__(Params)
             with patch.object(Params.__bases__[0], "__init__", return_value=None):
-                params.__init__(**kwargs)
+                params.__init__(**kwargs)  # type: ignore[misc]
             assert (
                 params.tenderly_bundle_simulation_url == "https://tenderly.example.com"
             )
@@ -683,7 +682,7 @@ class TestParams:
             kwargs = self._make_kwargs(tmpdir)
             params = object.__new__(Params)
             with patch.object(Params.__bases__[0], "__init__", return_value=None):
-                params.__init__(**kwargs)
+                params.__init__(**kwargs)  # type: ignore[misc]
             assert params.tenderly_bundle_simulation_url == ""
             assert params.tenderly_access_key == ""
             assert params.tenderly_account_slug == ""

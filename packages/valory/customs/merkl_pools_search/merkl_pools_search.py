@@ -17,7 +17,7 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
+"""Merkl pools search module."""
 
 import json
 from enum import Enum
@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlencode
 
 import requests
-
 
 CAMPAIGN_TYPES = [1, 2]
 HTTP_OK = [200, 201]
@@ -114,7 +113,7 @@ def highest_apr_opportunity(
             }
 
     def filter_eligible_pools(
-        all_pools: Dict[str, Any]
+        all_pools: Dict[str, Any],
     ) -> Union[List[Dict[str, Any]], Dict[str, str]]:
         """Filter pools based on allowed assets and LP pools and sort by APR."""
         eligible_pools = []
@@ -166,7 +165,7 @@ def highest_apr_opportunity(
         return eligible_pools
 
     def determine_highest_apr_pool(
-        eligible_pools: List[Dict[str, Any]]
+        eligible_pools: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Determine the pool with the highest APR from the eligible pools."""
         for pool_info in eligible_pools:
@@ -183,7 +182,7 @@ def highest_apr_opportunity(
             if dex_type == DexTypes.BALANCER.value:
                 pool_id = highest_apr_pool.get("pool_id")
                 tokensList = fetch_balancer_pool_info(
-                    pool_id, chain, detail="tokensList"
+                    pool_id, chain, detail="tokensList"  # type: ignore[arg-type]
                 )
                 if "error" in tokensList or len(tokensList.get("tokensList", [])) != 2:
                     continue
@@ -192,7 +191,9 @@ def highest_apr_opportunity(
 
         return {"error": "No highest APR pool found."}
 
-    def extract_pool_info(dex_type, chain, apr, campaign) -> Dict[str, Any]:
+    def extract_pool_info(
+        dex_type: Any, chain: Any, apr: Any, campaign: Any
+    ) -> Dict[str, Any]:
         """Extract pool info from campaign data."""
         pool_address = campaign.get("mainParameter")
         pool_token_dict = {}
@@ -295,13 +296,13 @@ def highest_apr_opportunity(
 
     eligible_pools = filter_eligible_pools(all_pools)
     if "error" in eligible_pools:
-        return eligible_pools
+        return eligible_pools  # type: ignore[return-value]
 
-    highest_apr_pool = determine_highest_apr_pool(eligible_pools)
+    highest_apr_pool = determine_highest_apr_pool(eligible_pools)  # type: ignore[arg-type]
     return highest_apr_pool
 
 
-def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
+def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""
     missing = check_missing_fields(kwargs)
     if len(missing) > 0:

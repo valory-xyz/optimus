@@ -26,7 +26,7 @@ import logging
 import re
 import ssl
 from functools import wraps
-from typing import Any, Dict, Optional, Union, cast
+from typing import Any, Callable, Dict, Optional, Union, cast
 
 import aiohttp
 import certifi
@@ -40,7 +40,6 @@ from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from packages.valory.protocols.srr.dialogues import SrrDialogue
 from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
 from packages.valory.protocols.srr.message import SrrMessage
-
 
 PUBLIC_ID = PublicId.from_str("valory/mirror_db:0.1.0")
 
@@ -66,19 +65,23 @@ _RETRYABLE_NETWORK_EXCEPTIONS: tuple = (
 def _is_retryable(exc: BaseException) -> bool:
     """Return True if the exception is a transient failure worth retrying."""
     if isinstance(exc, MirrorDBHTTPError):
-        return (
-            exc.status_code in (408, 429)
-            or 500 <= exc.status_code < 600
-        )
+        return exc.status_code in (408, 429) or 500 <= exc.status_code < 600
     return isinstance(exc, _RETRYABLE_NETWORK_EXCEPTIONS)
 
 
-def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_factor=2):  # type: ignore
+def retry_with_exponential_backoff(  # type: ignore
+    max_retries: int = 5, initial_delay: float = 1, backoff_factor: float = 2
+) -> Callable[..., Any]:
     """Retry a function with exponential backoff on transient failures.
 
     Retries 408, 429, 5xx, and transient network errors (ClientConnectorError,
     ServerTimeoutError, asyncio.TimeoutError). All other exceptions propagate
     immediately.
+
+    :param max_retries: maximum retry attempts before giving up.
+    :param initial_delay: seconds to sleep before the first retry.
+    :param backoff_factor: multiplier applied to the delay on each subsequent retry.
+    :return: a decorator wrapping the target async function with retry logic.
     """
 
     def decorator(func):  # type: ignore
@@ -103,9 +106,7 @@ def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_facto
                         )
                         await asyncio.sleep(delay)
                         delay *= backoff_factor
-            logger.error(
-                f"Max retries ({max_retries}) reached for mirror_db request"
-            )
+            logger.error(f"Max retries ({max_retries}) reached for mirror_db request")
             raise last_exception  # type: ignore
 
         return wrapper
@@ -171,7 +172,7 @@ class GenericMirrorDBConnection(Connection):
         """
         super().__init__(*args, **kwargs)
         self.base_url = self.configuration.config.get("mirror_db_base_url")
-        # self.api_key: Optional[str] = None
+        # self.api_key: Optional[str] = None # noqa: E800
         self.session: Optional[aiohttp.ClientSession] = None
         self.dialogues = SrrDialogues(connection_id=PUBLIC_ID)
         self._response_envelopes: Optional[asyncio.Queue] = None
@@ -180,7 +181,7 @@ class GenericMirrorDBConnection(Connection):
 
         # Store all configuration in a single dictionary
         self._config = {
-            # "api_key": self.api_key,
+            # "api_key": self.api_key, # noqa: E800
             "base_url": self.base_url,
             # Add other default configs here
         }
@@ -272,8 +273,7 @@ class GenericMirrorDBConnection(Connection):
     def _is_valid_endpoint(cls, endpoint: str) -> bool:
         """Return True if the endpoint matches one of the allowed patterns."""
         return any(
-            re.match(pattern, endpoint) is not None
-            for pattern in cls._VALID_ENDPOINTS
+            re.match(pattern, endpoint) is not None for pattern in cls._VALID_ENDPOINTS
         )
 
     def prepare_error_message(
@@ -344,9 +344,7 @@ class GenericMirrorDBConnection(Connection):
                 f"Backend task failed: {exc}",
             )
         except Exception as build_exc:  # pylint: disable=broad-except
-            self.logger.exception(
-                f"Failed to build typed error message: {build_exc}"
-            )
+            self.logger.exception(f"Failed to build typed error message: {build_exc}")
             return None
 
     async def _get_response(
@@ -369,9 +367,7 @@ class GenericMirrorDBConnection(Connection):
         try:
             payload = json.loads(srr_message.payload)
         except (json.JSONDecodeError, TypeError) as e:
-            self.logger.error(
-                f"Failed to parse mirror_db request payload: {e}"
-            )
+            self.logger.error(f"Failed to parse mirror_db request payload: {e}")
             return self.prepare_error_message(
                 srr_message,
                 dialogue,
@@ -463,7 +459,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.post(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"creating resource via {method_name}"
@@ -481,7 +477,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.get(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"reading resource via {method_name}"
@@ -501,7 +497,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.put(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"updating resource via {method_name}"
@@ -519,7 +515,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.delete(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            # headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"}, # noqa: E800
         ) as response:
             await self._raise_for_response(
                 response, f"deleting resource via {method_name}"

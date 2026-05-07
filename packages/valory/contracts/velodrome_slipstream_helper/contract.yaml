@@ -8,9 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiareyehjhmlrbkc45s2a3yyex2svhgz2ilukrrtlfkb5uzj6emw7y
   build/contract_interface.json: bafybeiejabouynogilagtlora6rxoqwdji4sp246rcjhuzky2ekmejz5sq
-  contract.py: bafybeid3zccgndlb3ap4w4szmibba2q3p4cjxkku4angozupcwlxpltvui
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeicxlqyibtiruxotzisel54ovh4wp2jb2egagvy6psx4c7medqxep4
+  contract.py: bafybeihob4bwpu3tlhuhzygc54lj3iem67fj24sanb7gflwu4s5zx7nsfu
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeicczuu6mzd4rsokhshmhzvkszo7uuvhq4uzpm3shxehe3mlwgy5ji
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeSlipstreamHelperContract

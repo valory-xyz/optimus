@@ -6,15 +6,15 @@ description: GenericMirrorDB connection for interacting with REST APIs.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeiehjywwi6tm3rviegrsy75msin3mfumjeddbfxjtprsuvb7hjx7ay
-  connection.py: bafybeibzjpei5ssawxbpdly54iznly2lx6hn6l2shgjmdjatkldme4alzm
+  __init__.py: bafybeigbsl2ifkuqbe75ibww3eva4uiygc2mi3kvyqt5gltzzyf2mmgjly
+  connection.py: bafybeifbdx27s53jkob647ns4mhb54wdyvihiw6dy2amgdfl7b4a2fwyxa
   readme.md: bafybeib453wcfkqkvybozrgmll4bqo7tvntfmcbl4tb76a7vo445njlgxe
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_connection.py: bafybeif2tdhs6slmgsmbrht234th6peqnov3urrkhfqdbbvregfi57o7ma
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_connection.py: bafybeihn6ypbzdfh6rmbhztto56yrp3tpcgw5c3rx36bub5oxkwhwgq5m4
 fingerprint_ignore_patterns: []
 connections: []
 protocols:
-- valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
+- valory/srr:0.1.0:bafybeibfs6osw7guctdpollf4iwt4vhd6yk7ai34tqk5djuxtgowjwdjb4
 class_name: GenericMirrorDBConnection
 config:
   mirror_db_base_url: https://afmdb.autonolas.tech

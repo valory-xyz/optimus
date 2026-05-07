@@ -6,11 +6,11 @@ description: The contract package for the balancer queries interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeihcactdzibr2wl5i2asspgu4qmk2b5plf6ttn5tquqmcyml7rcpmu
+  __init__.py: bafybeibcwb327vnnleu733l3cwzsa5v7e5fjjxa2gthffkjhmwnbpb3w7e
   build/BalancerQueries.json: bafybeig7jr63urawg7xct3q2xpydruk4ysusi4g6qyygd2f5oiwhbrzxae
-  contract.py: bafybeig5llhuo5cpoq2n37ntktqax6zwlywp2dvveq34btao2nb2iff4cm
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeiebkojz7sgcltgelr63cjbwo7do6ot653fvnv7oyv7q26ozp263qq
+  contract.py: bafybeiayb7e6ykprqn3etz5na462ceskxezzbeyyejsktulntj5pv23mxi
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeiapgelbdaq2ly63dh675dm5cb5c5jgwv2i37fknotajxi4chjmbky
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: BalancerQueriesContract

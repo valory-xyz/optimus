@@ -22,8 +22,7 @@
 # pylint: skip-file
 
 import json
-import math
-from typing import Dict
+from typing import Any
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -82,14 +81,16 @@ def test_load_fsm_spec() -> None:
     assert "alphabet_in" in spec
 
 
-def _make_concrete_base_handler():
+def _make_concrete_base_handler() -> Any:
     """Create a concrete subclass of BaseHandler for testing."""
 
     class ConcreteHandler(BaseHandler):
+        """ConcreteHandler."""
+
         SUPPORTED_PROTOCOL = None
 
-        def handle(self, message):
-            pass
+        def handle(self, message: Any) -> None:
+            """Handle."""
 
     handler = ConcreteHandler.__new__(ConcreteHandler)
     mock_context = MagicMock()
@@ -347,7 +348,7 @@ class TestSrrHandler:
             mock_super_handle.assert_called_once()
 
 
-def _make_http_handler():
+def _make_http_handler() -> Any:
     """Create an HttpHandler instance with mocked dependencies."""
     handler = HttpHandler.__new__(HttpHandler)
     mock_context = MagicMock()
@@ -1328,7 +1329,7 @@ class TestHttpHandlerMethods:
 
         mock_fn = MagicMock()
         ctx.shared_state = {GET_FUNDS_STATUS_METHOD_NAME: mock_fn}
-        result = handler.funds_status
+        _ = handler.funds_status  # noqa: F841 — property access triggers mock_fn
         mock_fn.assert_called_once()
 
     def test_read_kv(self) -> None:
@@ -1515,6 +1516,7 @@ class TestHttpHandlerMethods:
         call_count = {"n": 0}
 
         def flaky() -> str:
+            """Flaky."""
             call_count["n"] += 1
             if call_count["n"] == 1:
                 raise requests.exceptions.Timeout("slow")
@@ -1532,6 +1534,7 @@ class TestHttpHandlerMethods:
         call_count = {"n": 0}
 
         def reverting() -> None:
+            """Reverting."""
             call_count["n"] += 1
             raise Exception("execution reverted")
 
@@ -1546,6 +1549,7 @@ class TestHttpHandlerMethods:
         call_count = {"n": 0}
 
         def always_timeout() -> None:
+            """Always timeout."""
             call_count["n"] += 1
             raise requests.exceptions.Timeout("slow")
 
@@ -1597,6 +1601,7 @@ class TestHttpHandlerMethods:
             mock_shared.return_value = mock_ss
 
             def revert() -> None:
+                """Revert."""
                 raise Exception("execution reverted")
 
             for _ in range(2):
@@ -1644,7 +1649,7 @@ class TestHttpHandlerMethods:
         assert result is None
 
     def test_check_usdc_balance_propagates_circuit_breaker_open(self) -> None:
-        """CircuitBreakerOpenError must propagate; the catch-all does not eat it."""
+        """CircuitBreakerOpenError must propagate; the catch-all does not eat it."""  # noqa: D403
         from packages.valory.skills.liquidity_trader_abci.models import (
             CircuitBreakerOpenError,
         )
@@ -1814,7 +1819,7 @@ class TestHttpHandlerMethods:
             patch("pathlib.Path.open", MagicMock()),
         ):
             result = handler._get_eoa_account()
-        # Returns mock_account on success
+        assert result is mock_account
 
     def test_get_eoa_account_no_password_failure(self) -> None:
         """Test _get_eoa_account with no password and failed read."""
@@ -3725,9 +3730,6 @@ class TestHttpHandlerMethods:
         ctx.params.service_endpoint_base = "http://localhost:8000"
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.available_strategies = {"optimism": ["balancer_pools_search"]}
-        rounds_info_mock = {
-            "test_round": {"transitions": {}},
-        }
         with (
             patch(
                 "packages.valory.skills.optimus_abci.handlers.load_fsm_spec"
@@ -3805,7 +3807,7 @@ class TestHttpHandlerMethods:
         assert call_data["status"] == "unknown"
 
     def test_parse_llm_response_error_attribute_error(self) -> None:
-        """Test _parse_llm_response when error parsing triggers AttributeError.
+        r"""Test _parse_llm_response when error parsing triggers AttributeError.
 
         When error_details is a dict with 'message: \"' as a key, the `in` check passes
         but .split() raises AttributeError since dict has no split method.
@@ -3867,7 +3869,7 @@ class TestHttpHandlerMethods:
         assert "error" in call_args[2]
         assert "Failed to parse LLM response" in call_args[2]["error"]
 
-    def test_handle_llm_response_generic_exception(self) -> None:
+    def test_handle_llm_response_value_error_in_float(self) -> None:
         """Test _handle_llm_response when a non-JSON exception occurs (generic Exception path).
 
         The code at line 1662 does float(strategy_data.get("max_loss_percentage", 10)).

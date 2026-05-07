@@ -16,10 +16,7 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains the class to interact with the Velodrome Slipstream Helper contract."""
-
-from typing import Any, Dict, List, Tuple
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -64,7 +61,7 @@ class VelodromeSlipstreamHelperContract(Contract):
             sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
         ).call()
         return {"amounts": result}
-    
+
     @classmethod
     def get_sqrt_ratio_at_tick(
         cls,

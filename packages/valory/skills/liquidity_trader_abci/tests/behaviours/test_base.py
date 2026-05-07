@@ -25,7 +25,7 @@ import json
 import os
 import tempfile
 import time
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -138,7 +138,7 @@ def _make_behaviour(**overrides: Any) -> LiquidityTraderBaseBehaviour:
     return b
 
 
-def _exhaust(gen, sends=None):
+def _exhaust(gen: Any, sends: Any = None) -> Any:
     """Drive a generator to completion, returning its return value."""
     if not hasattr(gen, "__next__"):
         return gen
@@ -153,20 +153,22 @@ def _exhaust(gen, sends=None):
         return e.value
 
 
-def _make_gen(return_value):
+def _make_gen(return_value: Any) -> Any:
     """Create a generator function that yields once and returns return_value."""
 
-    def method(*args, **kwargs):
+    def method(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        """Method."""
         yield
         return return_value
 
     return method
 
 
-def _make_gen_none():
+def _make_gen_none() -> Any:
     """Generator that returns None."""
 
-    def method(*args, **kwargs):
+    def method(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+        """Method."""
         if False:
             yield
         return None
@@ -183,11 +185,13 @@ class TestGasCostTracker:
     """Test GasCostTracker class."""
 
     def test_init(self) -> None:
+        """Test init."""
         tracker = GasCostTracker(file_path="/tmp/gas_costs.json")
         assert tracker.file_path == "/tmp/gas_costs.json"
         assert tracker.data == {}
 
     def test_log_gas_usage_new_chain(self) -> None:
+        """Test log gas usage new chain."""
         tracker = GasCostTracker(file_path="/tmp/gas_costs.json")
         tracker.log_gas_usage("1", 1000, "0xhash", 21000, 50)
         assert "1" in tracker.data
@@ -198,12 +202,14 @@ class TestGasCostTracker:
         assert tracker.data["1"][0]["timestamp"] == 1000
 
     def test_log_gas_usage_existing_chain(self) -> None:
+        """Test log gas usage existing chain."""
         tracker = GasCostTracker(file_path="/tmp/gas_costs.json")
         tracker.log_gas_usage("1", 1000, "0xhash1", 21000, 50)
         tracker.log_gas_usage("1", 2000, "0xhash2", 22000, 55)
         assert len(tracker.data["1"]) == 2
 
     def test_log_gas_usage_max_records(self) -> None:
+        """Test log gas usage max records."""
         tracker = GasCostTracker(file_path="/tmp/gas_costs.json")
         for i in range(25):
             tracker.log_gas_usage("1", i * 100, f"0xhash{i}", 21000, 50)
@@ -212,6 +218,7 @@ class TestGasCostTracker:
         assert tracker.data["1"][-1]["timestamp"] == 2400
 
     def test_update_data(self) -> None:
+        """Test update data."""
         tracker = GasCostTracker(file_path="/tmp/gas_costs.json")
         tracker.log_gas_usage("1", 1000, "0xhash", 21000, 50)
         new_data = {"2": [{"timestamp": 2000, "tx_hash": "0xnew"}]}
@@ -224,14 +231,17 @@ class TestProperties:
     """Test synchronized_data, params, shared_state properties."""
 
     def test_synchronized_data(self) -> None:
+        """Test synchronized data."""
         b = _make_behaviour()
         assert b.synchronized_data is not None
 
     def test_params(self) -> None:
+        """Test params."""
         b = _make_behaviour()
         assert b.params is not None
 
     def test_shared_state(self) -> None:
+        """Test shared state."""
         b = _make_behaviour()
         assert b.shared_state is not None
 
@@ -240,11 +250,13 @@ class TestErrorMethods:
     """Test error logging methods."""
 
     def test_default_error_logs(self) -> None:
+        """Test default error logs."""
         b = _make_behaviour()
         b.default_error("contract_id", "callable_name", MagicMock())
         b.context.logger.error.assert_called_once()
 
     def test_contract_interaction_error_info(self) -> None:
+        """Test contract interaction error info."""
         b = _make_behaviour()
         msg = MagicMock()
         msg.raw_transaction.body = {"info": "informational"}
@@ -252,6 +264,7 @@ class TestErrorMethods:
         b.context.logger.info.assert_called()
 
     def test_contract_interaction_error_warning(self) -> None:
+        """Test contract interaction error warning."""
         b = _make_behaviour()
         msg = MagicMock()
         msg.raw_transaction.body = {"warning": "watch out"}
@@ -259,6 +272,7 @@ class TestErrorMethods:
         b.context.logger.warning.assert_called()
 
     def test_contract_interaction_error_error(self) -> None:
+        """Test contract interaction error error."""
         b = _make_behaviour()
         msg = MagicMock()
         msg.raw_transaction.body = {"error": "something broke"}
@@ -266,6 +280,7 @@ class TestErrorMethods:
         b.context.logger.error.assert_called()
 
     def test_contract_interaction_error_fallback(self) -> None:
+        """Test contract interaction error fallback."""
         b = _make_behaviour()
         msg = MagicMock()
         msg.raw_transaction.body = {}
@@ -277,23 +292,27 @@ class TestConvertToTokenUnits:
     """Test _convert_to_token_units."""
 
     def test_standard_18_decimals(self) -> None:
+        """Test standard 18 decimals."""
         b = _make_behaviour()
         result = b._convert_to_token_units(10**18, 18)
         assert result == f"{1.0:.18f}"
 
     def test_6_decimals(self) -> None:
+        """Test 6 decimals."""
         b = _make_behaviour()
         result = b._convert_to_token_units(1_000_000, 6)
         assert result == f"{1.0:.6f}"
 
     def test_none_amount(self) -> None:
+        """Test none amount."""
         b = _make_behaviour()
-        result = b._convert_to_token_units(None, 18)
+        result = b._convert_to_token_units(None, 18)  # type: ignore[arg-type]
         assert result is None
 
     def test_none_decimal(self) -> None:
+        """Test none decimal."""
         b = _make_behaviour()
-        result = b._convert_to_token_units(1000, None)
+        result = b._convert_to_token_units(1000, None)  # type: ignore[arg-type]
         assert result is None
 
 
@@ -301,11 +320,13 @@ class TestGetPriceCacheKey:
     """Test _get_price_cache_key."""
 
     def test_with_date(self) -> None:
+        """Test with date."""
         b = _make_behaviour()
         key = b._get_price_cache_key("0xABC", "01-01-2025")
         assert key == f"{PRICE_CACHE_KEY_PREFIX}0xabc_01-01-2025"
 
     def test_with_none_date(self) -> None:
+        """Test with none date."""
         b = _make_behaviour()
         key = b._get_price_cache_key("0xABC", None)
         assert key == f"{PRICE_CACHE_KEY_PREFIX}0xabc_None"
@@ -315,14 +336,17 @@ class TestGetBalance:
     """Test _get_balance."""
 
     def test_no_positions(self) -> None:
+        """Test no positions."""
         b = _make_behaviour()
         assert b._get_balance("optimism", "0xToken", None) is None
 
     def test_empty_positions(self) -> None:
+        """Test empty positions."""
         b = _make_behaviour()
         assert b._get_balance("optimism", "0xToken", []) is None
 
     def test_matching_token(self) -> None:
+        """Test matching token."""
         b = _make_behaviour()
         positions = [
             {
@@ -333,6 +357,7 @@ class TestGetBalance:
         assert b._get_balance("optimism", "0xToken", positions) == 1000
 
     def test_no_match(self) -> None:
+        """Test no match."""
         b = _make_behaviour()
         positions = [
             {
@@ -343,6 +368,7 @@ class TestGetBalance:
         assert b._get_balance("optimism", "0xToken", positions) is None
 
     def test_case_insensitive(self) -> None:
+        """Test case insensitive."""
         b = _make_behaviour()
         positions = [
             {
@@ -357,11 +383,13 @@ class TestGetActiveLpAddresses:
     """Test _get_active_lp_addresses."""
 
     def test_no_positions(self) -> None:
+        """Test no positions."""
         b = _make_behaviour()
         result = b._get_active_lp_addresses()
         assert result == set()
 
     def test_open_positions(self) -> None:
+        """Test open positions."""
         b = _make_behaviour(
             current_positions=[
                 {"status": "open", "pool_address": "0xPool1"},
@@ -373,6 +401,7 @@ class TestGetActiveLpAddresses:
         assert "0xpool2" not in result
 
     def test_no_pool_address(self) -> None:
+        """Test no pool address."""
         b = _make_behaviour(current_positions=[{"status": "open"}])
         result = b._get_active_lp_addresses()
         assert len(result) == 0
@@ -382,11 +411,13 @@ class TestGetRewardTokenAddresses:
     """Test _get_reward_token_addresses."""
 
     def test_known_chain(self) -> None:
+        """Test known chain."""
         b = _make_behaviour()
         result = b._get_reward_token_addresses("optimism")
         assert len(result) > 0
 
     def test_unknown_chain(self) -> None:
+        """Test unknown chain."""
         b = _make_behaviour()
         result = b._get_reward_token_addresses("unknown_chain")
         assert len(result) == 0
@@ -396,17 +427,20 @@ class TestGetCoinIdFromSymbol:
     """Test get_coin_id_from_symbol."""
 
     def test_known_symbol(self) -> None:
+        """Test known symbol."""
         b = _make_behaviour()
         # USDC is in COIN_ID_MAPPING for both chains
         result = b.get_coin_id_from_symbol("usdc", "optimism")
         assert result is not None
 
     def test_unknown_symbol(self) -> None:
+        """Test unknown symbol."""
         b = _make_behaviour()
         result = b.get_coin_id_from_symbol("XYZTOKEN", "optimism")
         assert result is None
 
     def test_unknown_chain(self) -> None:
+        """Test unknown chain."""
         b = _make_behaviour()
         result = b.get_coin_id_from_symbol("usdc", "nonexistent")
         assert result is None
@@ -416,31 +450,37 @@ class TestChainAddresses:
     """Test _get_usdc_address and _get_olas_address."""
 
     def test_usdc_optimism(self) -> None:
+        """Test usdc optimism."""
         b = _make_behaviour()
         addr = b._get_usdc_address("optimism")
         assert addr is not None
 
     def test_usdc_mode(self) -> None:
+        """Test usdc mode."""
         b = _make_behaviour()
         addr = b._get_usdc_address("mode")
         assert addr is not None
 
     def test_usdc_unknown_chain(self) -> None:
+        """Test usdc unknown chain."""
         b = _make_behaviour()
         addr = b._get_usdc_address("unknown")
         assert addr is None
 
     def test_olas_optimism(self) -> None:
+        """Test olas optimism."""
         b = _make_behaviour()
         addr = b._get_olas_address("optimism")
         assert addr is not None
 
     def test_olas_mode(self) -> None:
+        """Test olas mode."""
         b = _make_behaviour()
         addr = b._get_olas_address("mode")
         assert addr is not None
 
     def test_olas_unknown(self) -> None:
+        """Test olas unknown."""
         b = _make_behaviour()
         addr = b._get_olas_address("unknown")
         assert addr is None
@@ -450,22 +490,27 @@ class TestHasStakingMetadata:
     """Test _has_staking_metadata."""
 
     def test_with_gauge_address(self) -> None:
+        """Test with gauge address."""
         b = _make_behaviour()
         assert b._has_staking_metadata({"gauge_address": "0x123"}) is True
 
     def test_with_staked_true(self) -> None:
+        """Test with staked true."""
         b = _make_behaviour()
         assert b._has_staking_metadata({"staked": True}) is True
 
     def test_with_staked_amount(self) -> None:
+        """Test with staked amount."""
         b = _make_behaviour()
         assert b._has_staking_metadata({"staked_amount": 100}) is True
 
     def test_no_metadata(self) -> None:
+        """Test no metadata."""
         b = _make_behaviour()
         assert b._has_staking_metadata({}) is False
 
     def test_zero_staked_amount(self) -> None:
+        """Test zero staked amount."""
         b = _make_behaviour()
         assert b._has_staking_metadata({"staked_amount": 0}) is False
 
@@ -474,6 +519,7 @@ class TestIsAirdropTransfer:
     """Test _is_airdrop_transfer."""
 
     def test_valid_airdrop(self) -> None:
+        """Test valid airdrop."""
         b = _make_behaviour()
         transfer = {
             "from_address": "0xAirdropContract",
@@ -483,6 +529,7 @@ class TestIsAirdropTransfer:
         assert b._is_airdrop_transfer(transfer, "0xAirdropContract") is True
 
     def test_wrong_sender(self) -> None:
+        """Test wrong sender."""
         b = _make_behaviour()
         transfer = {
             "from_address": "0xOther",
@@ -492,6 +539,7 @@ class TestIsAirdropTransfer:
         assert b._is_airdrop_transfer(transfer, "0xAirdropContract") is False
 
     def test_wrong_symbol(self) -> None:
+        """Test wrong symbol."""
         b = _make_behaviour()
         transfer = {
             "from_address": "0xAirdropContract",
@@ -501,25 +549,29 @@ class TestIsAirdropTransfer:
         assert b._is_airdrop_transfer(transfer, "0xAirdropContract") is False
 
     def test_no_airdrop_contract(self) -> None:
+        """Test no airdrop contract."""
         b = _make_behaviour()
         assert b._is_airdrop_transfer({}, "") is False
-        assert b._is_airdrop_transfer({}, None) is False
+        assert b._is_airdrop_transfer({}, None) is False  # type: ignore[arg-type]
 
 
 class TestTimeCalculations:
     """Test time-related methods."""
 
     def test_calculate_days_since_entry(self) -> None:
+        """Test calculate days since entry."""
         b = _make_behaviour()
-        b._get_current_timestamp = lambda: 1700000000 + 3 * 24 * 3600
+        b._get_current_timestamp = lambda: 1700000000 + 3 * 24 * 3600  # type: ignore[method-assign]
         result = b._calculate_days_since_entry(1700000000)
         assert abs(result - 3.0) < 0.01
 
     def test_check_minimum_time_met_no_timestamp(self) -> None:
+        """Test check minimum time met no timestamp."""
         b = _make_behaviour()
         assert b._check_minimum_time_met({}) is True
 
     def test_check_minimum_time_met_zero_days(self) -> None:
+        """Test check minimum time met zero days."""
         b = _make_behaviour()
         assert (
             b._check_minimum_time_met({"enter_timestamp": 100, "min_hold_days": 0})
@@ -527,16 +579,18 @@ class TestTimeCalculations:
         )
 
     def test_check_minimum_time_met_true(self) -> None:
+        """Test check minimum time met true."""
         b = _make_behaviour()
-        b._get_current_timestamp = lambda: 1700000000 + 30 * 24 * 3600
+        b._get_current_timestamp = lambda: 1700000000 + 30 * 24 * 3600  # type: ignore[method-assign]
         result = b._check_minimum_time_met(
             {"enter_timestamp": 1700000000, "min_hold_days": 21.0}
         )
         assert result is True
 
     def test_check_minimum_time_met_false(self) -> None:
+        """Test check minimum time met false."""
         b = _make_behaviour()
-        b._get_current_timestamp = lambda: 1700000000 + 1 * 24 * 3600
+        b._get_current_timestamp = lambda: 1700000000 + 1 * 24 * 3600  # type: ignore[method-assign]
         result = b._check_minimum_time_met(
             {"enter_timestamp": 1700000000, "min_hold_days": 21.0}
         )
@@ -547,6 +601,7 @@ class TestGetEntryCostsKey:
     """Test _get_entry_costs_key."""
 
     def test_format(self) -> None:
+        """Test format."""
         b = _make_behaviour()
         key = b._get_entry_costs_key("optimism", "pool123")
         assert key == "entry_costs_optimism_pool123"
@@ -556,6 +611,7 @@ class TestGetCurrentTimestamp:
     """Test _get_current_timestamp."""
 
     def test_returns_int(self) -> None:
+        """Test returns int."""
         b = _make_behaviour()
         ts = b._get_current_timestamp()
         assert isinstance(ts, int)
@@ -566,19 +622,22 @@ class TestNameGeneration:
     """Test name generation methods."""
 
     def test_generate_phonetic_syllable(self) -> None:
+        """Test generate phonetic syllable."""
         b = _make_behaviour()
         result = b.generate_phonetic_syllable(0)
         assert isinstance(result, str)
         assert len(result) >= 2
 
     def test_generate_phonetic_syllable_wraps(self) -> None:
+        """Test generate phonetic syllable wraps."""
         b = _make_behaviour()
-        r1 = b.generate_phonetic_syllable(0)
+        b.generate_phonetic_syllable(0)
         r2 = b.generate_phonetic_syllable(1000)
         # Wrapping via modulo
         assert isinstance(r2, str)
 
     def test_generate_phonetic_name(self) -> None:
+        """Test generate phonetic name."""
         b = _make_behaviour()
         # Needs hex address string of sufficient length
         address = "0x" + "a1b2c3d4" * 10
@@ -587,6 +646,7 @@ class TestNameGeneration:
         assert len(result) > 0
 
     def test_generate_name(self) -> None:
+        """Test generate name."""
         b = _make_behaviour()
         address = "0x" + "a1b2c3d4" * 10
         result = b.generate_name(address)
@@ -594,6 +654,7 @@ class TestNameGeneration:
         assert "-" in result  # first_name-last_name_prefixNN format
 
     def test_generate_name_deterministic(self) -> None:
+        """Test generate name deterministic."""
         b = _make_behaviour()
         address = "0x1234567890abcdef1234567890abcdef12345678"
         r1 = b.generate_name(address)
@@ -605,11 +666,13 @@ class TestStoreReadData:
     """Test _store_data and _read_data."""
 
     def test_store_data_none(self) -> None:
+        """Test store data none."""
         b = _make_behaviour()
         b._store_data(None, "test", "/tmp/test.json")
         b.context.logger.warning.assert_called()
 
     def test_store_and_read_data(self) -> None:
+        """Test store and read data."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             filepath = f.name
@@ -622,6 +685,7 @@ class TestStoreReadData:
             os.unlink(filepath)
 
     def test_read_data_file_not_found(self) -> None:
+        """Test read data file not found."""
         b = _make_behaviour()
         with tempfile.TemporaryDirectory() as td:
             filepath = os.path.join(td, "nonexistent_test_file_abc123.json")
@@ -632,6 +696,7 @@ class TestStoreReadData:
                 assert json.load(f) == []
 
     def test_read_data_json_decode_error(self) -> None:
+        """Test read data json decode error."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("not valid json{{{")
@@ -643,6 +708,7 @@ class TestStoreReadData:
             os.unlink(filepath)
 
     def test_read_data_attribute_not_exist(self) -> None:
+        """Test read data attribute not exist."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"key": "val"}, f)
@@ -666,6 +732,7 @@ class TestStoreReadData:
             os.unlink(filepath)
 
     def test_store_data_io_error(self) -> None:
+        """Test store data io error."""
         b = _make_behaviour()
         b._store_data({"key": "val"}, "test", "/nonexistent_dir/file.json")
         b.context.logger.error.assert_called()
@@ -675,6 +742,7 @@ class TestStoreReadConvenience:
     """Test store_* and read_* methods."""
 
     def test_store_current_positions(self) -> None:
+        """Test store current positions."""
         b = _make_behaviour()
         b.current_positions = [{"pool": "test"}]
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
@@ -687,6 +755,7 @@ class TestStoreReadConvenience:
             os.unlink(b.current_positions_filepath)
 
     def test_store_whitelisted_assets(self) -> None:
+        """Test store whitelisted assets."""
         b = _make_behaviour()
         b.whitelisted_assets = {"mode": {"0x1": "USDC"}}
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
@@ -699,6 +768,7 @@ class TestStoreReadConvenience:
             os.unlink(b.whitelisted_assets_filepath)
 
     def test_store_funding_events(self) -> None:
+        """Test store funding events."""
         b = _make_behaviour()
         b.funding_events = {"event": "test"}
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
@@ -709,6 +779,7 @@ class TestStoreReadConvenience:
             os.unlink(b.funding_events_filepath)
 
     def test_store_gas_costs(self) -> None:
+        """Test store gas costs."""
         b = _make_behaviour()
         b.gas_cost_tracker.data = {"1": []}
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
@@ -719,6 +790,7 @@ class TestStoreReadConvenience:
             os.unlink(b.gas_cost_tracker.file_path)
 
     def test_store_portfolio_data(self) -> None:
+        """Test store portfolio data."""
         b = _make_behaviour()
         b.portfolio_data = {"total": 100}
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
@@ -729,6 +801,7 @@ class TestStoreReadConvenience:
             os.unlink(b.portfolio_data_filepath)
 
     def test_read_current_positions(self) -> None:
+        """Test read current positions."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump([{"pool": "test"}], f)
@@ -740,6 +813,7 @@ class TestStoreReadConvenience:
             os.unlink(b.current_positions_filepath)
 
     def test_read_gas_costs(self) -> None:
+        """Test read gas costs."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"chain1": []}, f)
@@ -755,12 +829,14 @@ class TestAgentPerformance:
     """Test agent performance methods."""
 
     def test_initialize(self) -> None:
+        """Test initialize."""
         b = _make_behaviour()
         b.initialize_agent_performance()
         assert b.agent_performance["timestamp"] is None
         assert b.agent_performance["metrics"] == []
 
     def test_update_timestamp(self) -> None:
+        """Test update timestamp."""
         b = _make_behaviour()
         b.agent_performance = {"timestamp": None}
         b.update_agent_performance_timestamp()
@@ -768,6 +844,7 @@ class TestAgentPerformance:
         assert isinstance(b.agent_performance["timestamp"], int)
 
     def test_read_agent_performance_empty(self) -> None:
+        """Test read agent performance empty."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({}, f)
@@ -780,9 +857,10 @@ class TestAgentPerformance:
             os.unlink(b.agent_performance_filepath)
 
     def test_read_agent_performance_exception(self) -> None:
+        """Test read agent performance exception."""
         b = _make_behaviour()
         b.agent_performance_filepath = "/tmp/nonexistent_dir_xyz/perf.json"
-        b._read_data = MagicMock(side_effect=Exception("fail"))
+        b._read_data = MagicMock(side_effect=Exception("fail"))  # type: ignore[method-assign]
         b.read_agent_performance()
         assert "timestamp" in b.agent_performance
 
@@ -791,16 +869,19 @@ class TestCalculateRateLimitWaitTime:
     """Test _calculate_rate_limit_wait_time."""
 
     def test_no_rate_limiter(self) -> None:
+        """Test no rate limiter."""
         b = _make_behaviour()
         del b.context.coingecko.rate_limiter
         assert b._calculate_rate_limit_wait_time() == 0
 
     def test_no_credits(self) -> None:
+        """Test no credits."""
         b = _make_behaviour()
         b.context.coingecko.rate_limiter.no_credits = True
         assert b._calculate_rate_limit_wait_time() == 0
 
     def test_rate_limited(self) -> None:
+        """Test rate limited."""
         b = _make_behaviour()
         b.context.coingecko.rate_limiter.no_credits = False
         b.context.coingecko.rate_limiter.rate_limited = True
@@ -809,6 +890,7 @@ class TestCalculateRateLimitWaitTime:
         assert 0 <= result <= 60
 
     def test_not_rate_limited(self) -> None:
+        """Test not rate limited."""
         b = _make_behaviour()
         b.context.coingecko.rate_limiter.no_credits = False
         b.context.coingecko.rate_limiter.rate_limited = False
@@ -819,16 +901,17 @@ class TestContractInteract:
     """Test contract_interact generator."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         from packages.valory.protocols.contract_api import ContractApiMessage
 
         resp = MagicMock()
         resp.performative = ContractApiMessage.Performative.RAW_TRANSACTION
         resp.raw_transaction.body = {"data": "result_value"}
-        b.get_contract_api_response = _make_gen(resp)
+        b.get_contract_api_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address="0x123",
                 contract_public_id=MagicMock(),
                 contract_callable="test_method",
@@ -838,15 +921,16 @@ class TestContractInteract:
         assert result == "result_value"
 
     def test_wrong_performative(self) -> None:
+        """Test wrong performative."""
         b = _make_behaviour()
         from packages.valory.protocols.contract_api import ContractApiMessage
 
         resp = MagicMock()
         resp.performative = ContractApiMessage.Performative.ERROR
-        b.get_contract_api_response = _make_gen(resp)
+        b.get_contract_api_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address="0x123",
                 contract_public_id=MagicMock(),
                 contract_callable="test_method",
@@ -856,16 +940,17 @@ class TestContractInteract:
         assert result is None
 
     def test_missing_data_key(self) -> None:
+        """Test missing data key."""
         b = _make_behaviour()
         from packages.valory.protocols.contract_api import ContractApiMessage
 
         resp = MagicMock()
         resp.performative = ContractApiMessage.Performative.RAW_TRANSACTION
         resp.raw_transaction.body = {"other_key": "val"}
-        b.get_contract_api_response = _make_gen(resp)
+        b.get_contract_api_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
                 contract_address="0x123",
                 contract_public_id=MagicMock(),
                 contract_callable="test_method",
@@ -879,21 +964,23 @@ class TestGetPositions:
     """Test get_positions generator."""
 
     def test_optimism_and_mode(self) -> None:
+        """Test optimism and mode."""
         b = _make_behaviour()
         b.params.target_investment_chains = ["optimism", "mode"]
-        b._get_optimism_balances_from_safe_api = _make_gen(
+        b._get_optimism_balances_from_safe_api = _make_gen(  # type: ignore[assignment,method-assign]
             [{"asset_symbol": "USDC", "balance": 100}]
         )
-        b._get_mode_balances_from_explorer_api = _make_gen(
+        b._get_mode_balances_from_explorer_api = _make_gen(  # type: ignore[assignment,method-assign]
             [{"asset_symbol": "ETH", "balance": 200}]
         )
         result = _exhaust(b.get_positions())
         assert len(result) == 2
 
     def test_empty_balances(self) -> None:
+        """Test empty balances."""
         b = _make_behaviour()
         b.params.target_investment_chains = ["optimism"]
-        b._get_optimism_balances_from_safe_api = _make_gen([])
+        b._get_optimism_balances_from_safe_api = _make_gen([])  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_positions())
         assert result == []
 
@@ -902,15 +989,17 @@ class TestGetOptimismBalances:
     """Test _get_optimism_balances_from_safe_api."""
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert result == []
 
     def test_with_balances(self) -> None:
+        """Test with balances."""
         b = _make_behaviour()
         token_addr = "0x" + "ab" * 20
-        b._fetch_safe_balances_with_pagination = _make_gen(
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (
                 True,
                 [
@@ -923,17 +1012,18 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        b._write_kv = _make_gen(True)
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
         assert result[0]["asset_symbol"] == "ETH"
         assert result[1]["asset_symbol"] == "USDC"
 
     def test_skips_filtered_token(self) -> None:
+        """Test skips filtered token."""
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen(
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (
                 True,
                 [
@@ -945,16 +1035,16 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        b._write_kv = _make_gen(True)
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
     def test_skips_token_without_info(self) -> None:
         """ERC-20 token with no token info is skipped."""
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen(
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (
                 True,
                 [
@@ -966,29 +1056,29 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        b._write_kv = _make_gen(True)
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
     def test_api_success_empty_no_cache_fallback(self) -> None:
         """API succeeds but Safe is empty - must NOT fall back to cache."""
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen((True, []))
-        b._write_kv = _make_gen(True)
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._fetch_safe_balances_with_pagination = _make_gen((True, []))  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
     def test_api_success_empty_with_rewards(self) -> None:
         """API succeeds, Safe empty, but reward tokens exist."""
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen((True, []))
-        b._write_kv = _make_gen(True)
-        b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 100}])
-        b._fetch_ousdt_balance = _make_gen({"asset_symbol": "oUSDT", "balance": 50})
+        b._fetch_safe_balances_with_pagination = _make_gen((True, []))  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 100}])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen({"asset_symbol": "oUSDT", "balance": 50})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
 
@@ -1003,10 +1093,10 @@ class TestGetOptimismBalances:
             },
         ]
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen((False, []))
-        b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
         assert result[0]["asset_symbol"] == "ETH"
@@ -1015,10 +1105,10 @@ class TestGetOptimismBalances:
     def test_api_failure_no_cache(self) -> None:
         """API fails and cache has no data - return empty."""
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen((False, []))
-        b._read_kv = _make_gen({"safe_balances_optimism": None})
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({"safe_balances_optimism": None})  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
@@ -1031,12 +1121,12 @@ class TestGetOptimismBalances:
             raise ConnectionError("KV write failed")
 
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen(
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (True, [{"tokenAddress": None, "balance": "1000"}])
         )
-        b._write_kv = _failing_write
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._write_kv = _failing_write  # type: ignore[method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 1
 
@@ -1049,10 +1139,10 @@ class TestGetOptimismBalances:
             raise ConnectionError("KV read failed")
 
         b = _make_behaviour()
-        b._fetch_safe_balances_with_pagination = _make_gen((False, []))
-        b._read_kv = _failing_read
-        b._fetch_reward_balances = _make_gen([])
-        b._fetch_ousdt_balance = _make_gen(None)
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
+        b._read_kv = _failing_read  # type: ignore[method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
@@ -1061,15 +1151,17 @@ class TestGetModeBalances:
     """Test _get_mode_balances_from_explorer_api."""
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = _exhaust(b._get_mode_balances_from_explorer_api())
         assert result == []
 
     def test_with_eth_and_tokens(self) -> None:
+        """Test with eth and tokens."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(10**18)
-        b._fetch_mode_token_balances = _make_gen(
+        b._get_native_balance = _make_gen(10**18)  # type: ignore[assignment,method-assign]
+        b._fetch_mode_token_balances = _make_gen(  # type: ignore[assignment,method-assign]
             [{"asset_symbol": "USDC", "balance": 1000}]
         )
         result = _exhaust(b._get_mode_balances_from_explorer_api())
@@ -1077,9 +1169,10 @@ class TestGetModeBalances:
         assert result[0]["asset_symbol"] == "ETH"
 
     def test_zero_eth(self) -> None:
+        """Test zero eth."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(0)
-        b._fetch_mode_token_balances = _make_gen([])
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._fetch_mode_token_balances = _make_gen([])  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_mode_balances_from_explorer_api())
         assert len(result) == 0
 
@@ -1088,10 +1181,11 @@ class TestFetchModeTokenBalances:
     """Test _fetch_mode_token_balances."""
 
     def test_renames_xvelo(self) -> None:
+        """Test renames xvelo."""
         b = _make_behaviour()
         b.current_positions = []
         token_addr = "0x" + "cd" * 20
-        b._fetch_mode_tokens_with_pagination = _make_gen(
+        b._fetch_mode_tokens_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             [{"token": {"address": token_addr, "symbol": "XVELO"}, "value": "1000"}]
         )
         result = _exhaust(b._fetch_mode_token_balances("0xSafe"))
@@ -1099,30 +1193,33 @@ class TestFetchModeTokenBalances:
         assert result[0]["asset_symbol"] == "VELO"
 
     def test_filters_lp_tokens(self) -> None:
+        """Test filters lp tokens."""
         lp_addr = "0x" + "ee" * 20
         b = _make_behaviour()
         b.current_positions = [{"status": "open", "pool_address": lp_addr}]
-        b._fetch_mode_tokens_with_pagination = _make_gen(
+        b._fetch_mode_tokens_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             [{"token": {"address": lp_addr, "symbol": "LP"}, "value": "1000"}]
         )
         result = _exhaust(b._fetch_mode_token_balances("0xSafe"))
         assert len(result) == 0
 
     def test_filters_zero_balance(self) -> None:
+        """Test filters zero balance."""
         b = _make_behaviour()
         b.current_positions = []
         token_addr = "0x" + "dd" * 20
-        b._fetch_mode_tokens_with_pagination = _make_gen(
+        b._fetch_mode_tokens_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             [{"token": {"address": token_addr, "symbol": "TOK"}, "value": "0"}]
         )
         result = _exhaust(b._fetch_mode_token_balances("0xSafe"))
         assert len(result) == 0
 
     def test_invalid_balance_value(self) -> None:
+        """Test invalid balance value."""
         b = _make_behaviour()
         b.current_positions = []
         token_addr = "0x" + "ff" * 20
-        b._fetch_mode_tokens_with_pagination = _make_gen(
+        b._fetch_mode_tokens_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             [
                 {
                     "token": {"address": token_addr, "symbol": "TOK"},
@@ -1138,7 +1235,7 @@ class TestFetchModeTokenBalances:
         b = _make_behaviour()
         b.current_positions = []
         token_addr = "0x" + "cc" * 20
-        b._fetch_mode_tokens_with_pagination = _make_gen(
+        b._fetch_mode_tokens_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             [{"token": {"address": token_addr, "symbol": "TOK"}, "value": "-1"}]
         )
         result = _exhaust(b._fetch_mode_token_balances("0xSafe"))
@@ -1149,34 +1246,39 @@ class TestIsStakingKpiMet:
     """Test _is_staking_kpi_met generator."""
 
     def test_not_staked(self) -> None:
+        """Test not staked."""
         b = _make_behaviour()
-        b.synchronized_data.service_staking_state = StakingState.UNSTAKED.value
+        b.synchronized_data.service_staking_state = StakingState.UNSTAKED.value  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
         assert result is None
 
     def test_no_min_tx(self) -> None:
+        """Test no min tx."""
         b = _make_behaviour()
-        b.synchronized_data.min_num_of_safe_tx_required = None
+        b.synchronized_data.min_num_of_safe_tx_required = None  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
         assert result is None
 
     def test_kpi_met(self) -> None:
+        """Test kpi met."""
         b = _make_behaviour()
-        b._get_multisig_nonces_since_last_cp = _make_gen(10)
-        b.synchronized_data.min_num_of_safe_tx_required = 5
+        b._get_multisig_nonces_since_last_cp = _make_gen(10)  # type: ignore[assignment,method-assign]
+        b.synchronized_data.min_num_of_safe_tx_required = 5  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
         assert result is True
 
     def test_kpi_not_met(self) -> None:
+        """Test kpi not met."""
         b = _make_behaviour()
-        b._get_multisig_nonces_since_last_cp = _make_gen(2)
-        b.synchronized_data.min_num_of_safe_tx_required = 5
+        b._get_multisig_nonces_since_last_cp = _make_gen(2)  # type: ignore[assignment,method-assign]
+        b.synchronized_data.min_num_of_safe_tx_required = 5  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
         assert result is False
 
     def test_nonces_none(self) -> None:
+        """Test nonces none."""
         b = _make_behaviour()
-        b._get_multisig_nonces_since_last_cp = _make_gen(None)
+        b._get_multisig_nonces_since_last_cp = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._is_staking_kpi_met())
         assert result is None
 
@@ -1185,44 +1287,50 @@ class TestMultisigNonces:
     """Test multisig nonce methods."""
 
     def test_get_nonces_success(self) -> None:
+        """Test get nonces success."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen([42])
+        b.contract_interact = _make_gen([42])  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_multisig_nonces("optimism", "0xMultisig"))
         assert result == 42
 
     def test_get_nonces_none(self) -> None:
+        """Test get nonces none."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(None)
+        b.contract_interact = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_multisig_nonces("optimism", "0xMultisig"))
         assert result is None
 
     def test_get_nonces_empty(self) -> None:
+        """Test get nonces empty."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen([])
+        b.contract_interact = _make_gen([])  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_multisig_nonces("optimism", "0xMultisig"))
         assert result is None
 
     def test_nonces_since_last_cp_success(self) -> None:
+        """Test nonces since last cp success."""
         b = _make_behaviour()
-        b._get_multisig_nonces = _make_gen(50)
-        b._get_service_info = _make_gen((0, 0, (40,)))
+        b._get_multisig_nonces = _make_gen(50)  # type: ignore[assignment,method-assign]
+        b._get_service_info = _make_gen((0, 0, (40,)))  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b._get_multisig_nonces_since_last_cp("optimism", "0xMultisig")
         )
         assert result == 10
 
     def test_nonces_since_last_cp_nonces_none(self) -> None:
+        """Test nonces since last cp nonces none."""
         b = _make_behaviour()
-        b._get_multisig_nonces = _make_gen(None)
+        b._get_multisig_nonces = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b._get_multisig_nonces_since_last_cp("optimism", "0xMultisig")
         )
         assert result is None
 
     def test_nonces_since_last_cp_service_info_none(self) -> None:
+        """Test nonces since last cp service info none."""
         b = _make_behaviour()
-        b._get_multisig_nonces = _make_gen(50)
-        b._get_service_info = _make_gen(None)
+        b._get_multisig_nonces = _make_gen(50)  # type: ignore[assignment,method-assign]
+        b._get_service_info = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b._get_multisig_nonces_since_last_cp("optimism", "0xMultisig")
         )
@@ -1233,32 +1341,37 @@ class TestServiceInfo:
     """Test service info methods."""
 
     def test_get_service_info_no_service_id(self) -> None:
+        """Test get service info no service id."""
         b = _make_behaviour()
         b.params.on_chain_service_id = None
         result = _exhaust(b._get_service_info("optimism"))
         assert result is None
 
     def test_get_service_info_success(self) -> None:
+        """Test get service info success."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen((1, 2, (3, 4)))
+        b.contract_interact = _make_gen((1, 2, (3, 4)))  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_service_info("optimism"))
         assert result == (1, 2, (3, 4))
 
     def test_get_staking_state_no_service_id(self) -> None:
+        """Test get staking state no service id."""
         b = _make_behaviour()
         b.params.on_chain_service_id = None
         _exhaust(b._get_service_staking_state("optimism"))
         assert b.service_staking_state == StakingState.UNSTAKED
 
     def test_get_staking_state_none_response(self) -> None:
+        """Test get staking state none response."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(None)
+        b.contract_interact = _make_gen(None)  # type: ignore[assignment,method-assign]
         _exhaust(b._get_service_staking_state("optimism"))
         assert b.service_staking_state == StakingState.UNSTAKED
 
     def test_get_staking_state_staked(self) -> None:
+        """Test get staking state staked."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(StakingState.STAKED.value)
+        b.contract_interact = _make_gen(StakingState.STAKED.value)  # type: ignore[assignment,method-assign]
         _exhaust(b._get_service_staking_state("optimism"))
         assert b.service_staking_state == StakingState.STAKED
 
@@ -1267,33 +1380,38 @@ class TestLiveness:
     """Test liveness methods."""
 
     def test_liveness_ratio_valid(self) -> None:
+        """Test liveness ratio valid."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(1000)
+        b.contract_interact = _make_gen(1000)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_ratio("optimism"))
         assert result == 1000
 
     def test_liveness_ratio_zero(self) -> None:
+        """Test liveness ratio zero."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(0)
+        b.contract_interact = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_ratio("optimism"))
         assert result == 0
         b.context.logger.error.assert_called()
 
     def test_liveness_ratio_none(self) -> None:
+        """Test liveness ratio none."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(None)
+        b.contract_interact = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_ratio("optimism"))
         assert result is None
 
     def test_liveness_period_valid(self) -> None:
+        """Test liveness period valid."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(86400)
+        b.contract_interact = _make_gen(86400)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_period("optimism"))
         assert result == 86400
 
     def test_liveness_period_zero(self) -> None:
+        """Test liveness period zero."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(0)
+        b.contract_interact = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_period("optimism"))
         assert result == 0
         b.context.logger.error.assert_called()
@@ -1303,44 +1421,50 @@ class TestPriceCache:
     """Test price caching methods."""
 
     def test_get_cached_price_no_result(self) -> None:
+        """Test get cached price no result."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_cached_price("0xToken", "01-01-2025"))
         assert result is None
 
     def test_get_cached_price_historical(self) -> None:
+        """Test get cached price historical."""
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "01-01-2025")
-        b._read_kv = _make_gen({cache_key: json.dumps({"01-01-2025": 1.5})})
+        b._read_kv = _make_gen({cache_key: json.dumps({"01-01-2025": 1.5})})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_cached_price("0xToken", "01-01-2025"))
         assert result == 1.5
 
     def test_get_cached_price_invalid_json(self) -> None:
+        """Test get cached price invalid json."""
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "01-01-2025")
-        b._read_kv = _make_gen({cache_key: "not json"})
+        b._read_kv = _make_gen({cache_key: "not json"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_cached_price("0xToken", "01-01-2025"))
         assert result is None
 
     def test_cache_price_new(self) -> None:
+        """Test cache price new."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({})
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._cache_price("0xToken", 1.5, "01-01-2025"))
         # No error should be raised
 
     def test_cache_price_existing(self) -> None:
+        """Test cache price existing."""
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "01-01-2025")
-        b._read_kv = _make_gen({cache_key: json.dumps({"old_date": 1.0})})
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen({cache_key: json.dumps({"old_date": 1.0})})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._cache_price("0xToken", 1.5, "01-01-2025"))
 
     def test_cache_price_invalid_existing(self) -> None:
+        """Test cache price invalid existing."""
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "01-01-2025")
-        b._read_kv = _make_gen({cache_key: "bad json"})
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen({cache_key: "bad json"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._cache_price("0xToken", 1.5, "01-01-2025"))
         b.context.logger.error.assert_called()
 
@@ -1349,9 +1473,10 @@ class TestFetchTokenPrices:
     """Test _fetch_token_prices generator."""
 
     def test_fetches_normal_and_zero_address(self) -> None:
+        """Test fetches normal and zero address."""
         b = _make_behaviour()
-        b._fetch_zero_address_price = _make_gen(3000.0)
-        b._fetch_token_price = _make_gen(1.0)
+        b._fetch_zero_address_price = _make_gen(3000.0)  # type: ignore[assignment,method-assign]
+        b._fetch_token_price = _make_gen(1.0)  # type: ignore[assignment,method-assign]
         tokens = [
             {"token": ZERO_ADDRESS, "chain": "optimism"},
             {"token": "0xUSDC", "chain": "optimism"},
@@ -1361,14 +1486,16 @@ class TestFetchTokenPrices:
         assert "0xUSDC" in result
 
     def test_missing_chain(self) -> None:
+        """Test missing chain."""
         b = _make_behaviour()
         tokens = [{"token": "0xToken"}]
         result = _exhaust(b._fetch_token_prices(tokens))
         assert result == {}
 
     def test_price_none_skipped(self) -> None:
+        """Test price none skipped."""
         b = _make_behaviour()
-        b._fetch_token_price = _make_gen(None)
+        b._fetch_token_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         tokens = [{"token": "0xToken", "chain": "optimism"}]
         result = _exhaust(b._fetch_token_prices(tokens))
         assert result == {}
@@ -1378,11 +1505,13 @@ class TestBuildExitPoolAction:
     """Test _build_exit_pool_action_base."""
 
     def test_no_position(self) -> None:
+        """Test no position."""
         b = _make_behaviour()
-        result = b._build_exit_pool_action_base(None)
+        result = b._build_exit_pool_action_base(None)  # type: ignore[arg-type]
         assert result is None
 
     def test_empty_position(self) -> None:
+        """Test empty position."""
         b = _make_behaviour()
         result = b._build_exit_pool_action_base({})
         assert result is None
@@ -1392,16 +1521,19 @@ class TestBuildUnstakeAction:
     """Test _build_unstake_lp_tokens_action."""
 
     def test_non_velodrome_dex(self) -> None:
+        """Test non velodrome dex."""
         b = _make_behaviour()
         result = b._build_unstake_lp_tokens_action({"dex_type": "uniswap"})
         assert result is None
 
     def test_missing_params(self) -> None:
+        """Test missing params."""
         b = _make_behaviour()
         result = b._build_unstake_lp_tokens_action({"dex_type": "velodrome"})
         assert result is None
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = b._build_unstake_lp_tokens_action(
@@ -1414,52 +1546,59 @@ class TestEthRemainingAmount:
     """Test ETH remaining amount methods."""
 
     def test_get_not_in_kv(self) -> None:
+        """Test get not in kv."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b.reset_eth_remaining_amount = _make_gen(5000)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.reset_eth_remaining_amount = _make_gen(5000)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 5000
 
     def test_get_synced_with_chain(self) -> None:
+        """Test get synced with chain."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})
-        b._get_native_balance = _make_gen(2000)
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})  # type: ignore[assignment,method-assign]
+        b._get_native_balance = _make_gen(2000)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 2000
 
     def test_get_cached_matches_chain(self) -> None:
+        """Test get cached matches chain."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})
-        b._get_native_balance = _make_gen(1000)
+        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})  # type: ignore[assignment,method-assign]
+        b._get_native_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 1000
 
     def test_get_invalid_value(self) -> None:
+        """Test get invalid value."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({ETH_REMAINING_KEY: "not_a_number"})
-        b.reset_eth_remaining_amount = _make_gen(0)
+        b._read_kv = _make_gen({ETH_REMAINING_KEY: "not_a_number"})  # type: ignore[assignment,method-assign]
+        b.reset_eth_remaining_amount = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 0
 
     def test_reset(self) -> None:
+        """Test reset."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(5000)
-        b._write_kv = _make_gen(True)
+        b._get_native_balance = _make_gen(5000)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.reset_eth_remaining_amount())
         assert result == 5000
 
     def test_reset_none_balance(self) -> None:
+        """Test reset none balance."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(None)
-        b._write_kv = _make_gen(True)
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.reset_eth_remaining_amount())
         assert result == 0
 
     def test_update(self) -> None:
+        """Test update."""
         b = _make_behaviour()
-        b.get_eth_remaining_amount = _make_gen(1000)
-        b._write_kv = _make_gen(True)
+        b.get_eth_remaining_amount = _make_gen(1000)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_eth_remaining_amount(300))
         # Should have written 700
 
@@ -1468,39 +1607,44 @@ class TestShouldUpdateRewards:
     """Test should_update_rewards_from_subgraph."""
 
     def test_period_zero(self) -> None:
+        """Test period zero."""
         b = _make_behaviour()
-        b.synchronized_data.period_count = 0
+        b.synchronized_data.period_count = 0  # type: ignore[misc]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is True
 
     def test_no_previous_update(self) -> None:
+        """Test no previous update."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is True
 
     def test_recent_update(self) -> None:
+        """Test recent update."""
         b = _make_behaviour()
-        b._get_current_timestamp = lambda: 1700000000
+        b._get_current_timestamp = lambda: 1700000000  # type: ignore[method-assign]
         update_key = f"{REWARD_UPDATE_KEY_PREFIX}optimism"
-        b._read_kv = _make_gen({update_key: str(1700000000 - 100)})
+        b._read_kv = _make_gen({update_key: str(1700000000 - 100)})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is False
 
     def test_old_update(self) -> None:
+        """Test old update."""
         b = _make_behaviour()
-        b._get_current_timestamp = lambda: 1700000000
+        b._get_current_timestamp = lambda: 1700000000  # type: ignore[method-assign]
         update_key = f"{REWARD_UPDATE_KEY_PREFIX}optimism"
-        b._read_kv = _make_gen(
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
             {update_key: str(1700000000 - REWARD_UPDATE_INTERVAL - 1)}
         )
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is True
 
     def test_invalid_timestamp(self) -> None:
+        """Test invalid timestamp."""
         b = _make_behaviour()
         update_key = f"{REWARD_UPDATE_KEY_PREFIX}optimism"
-        b._read_kv = _make_gen({update_key: "not_a_number"})
+        b._read_kv = _make_gen({update_key: "not_a_number"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is True
 
@@ -1509,29 +1653,33 @@ class TestGetAccumulatedRewards:
     """Test get_accumulated_rewards_for_token."""
 
     def test_no_result(self) -> None:
+        """Test no result."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 0
 
     def test_valid_value(self) -> None:
+        """Test valid value."""
         b = _make_behaviour()
         key = "accumulated_rewards_optimism_0xtoken"
-        b._read_kv = _make_gen({key: "12345"})
+        b._read_kv = _make_gen({key: "12345"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 12345
 
     def test_none_value(self) -> None:
+        """Test none value."""
         b = _make_behaviour()
         key = "accumulated_rewards_optimism_0xtoken"
-        b._read_kv = _make_gen({key: None})
+        b._read_kv = _make_gen({key: None})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 0
 
     def test_invalid_value(self) -> None:
+        """Test invalid value."""
         b = _make_behaviour()
         key = "accumulated_rewards_optimism_0xtoken"
-        b._read_kv = _make_gen({key: "not_int"})
+        b._read_kv = _make_gen({key: "not_int"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_accumulated_rewards_for_token("optimism", "0xToken"))
         assert result == 0
 
@@ -1540,28 +1688,34 @@ class TestEntryCosts:
     """Test entry cost methods."""
 
     def test_get_all_entry_costs_empty(self) -> None:
+        """Test get all entry costs empty."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_all_entry_costs())
         assert result == {}
 
     def test_get_all_entry_costs_valid(self) -> None:
+        """Test get all entry costs valid."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
             {"entry_costs_dict": json.dumps({"key1": 1.5, "key2": 2.0})}
         )
         result = _exhaust(b._get_all_entry_costs())
         assert result == {"key1": 1.5, "key2": 2.0}
 
     def test_store_entry_costs(self) -> None:
+        """Test store entry costs."""
         b = _make_behaviour()
-        b._get_all_entry_costs = _make_gen({})
-        b._write_kv = _make_gen(True)
+        b._get_all_entry_costs = _make_gen({})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._store_entry_costs("optimism", "pool1", 5.0))
 
     def test_store_entry_costs_exception(self) -> None:
+        """Test store entry costs exception."""
         b = _make_behaviour()
-        b._get_all_entry_costs = _make_gen(None)  # Will cause error
+        b._get_all_entry_costs = _make_gen(  # type: ignore[method-assign]
+            None
+        )  # Will cause error  # type: ignore[method-assign]
         # This should not raise
         _exhaust(b._store_entry_costs("optimism", "pool1", 5.0))
         b.context.logger.error.assert_called()
@@ -1571,37 +1725,43 @@ class TestAirdropRewards:
     """Test airdrop reward methods."""
 
     def test_get_total_zero(self) -> None:
+        """Test get total zero."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_total_airdrop_rewards("mode"))
         assert result == 0
 
     def test_get_total_valid(self) -> None:
+        """Test get total valid."""
         b = _make_behaviour()
         key = f"{AIRDROP_TOTAL_KEY}_mode"
-        b._read_kv = _make_gen({key: "100"})
+        b._read_kv = _make_gen({key: "100"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_total_airdrop_rewards("mode"))
         assert result == 100
 
     def test_get_total_invalid(self) -> None:
+        """Test get total invalid."""
         b = _make_behaviour()
         key = f"{AIRDROP_TOTAL_KEY}_mode"
-        b._read_kv = _make_gen({key: "bad"})
+        b._read_kv = _make_gen({key: "bad"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_total_airdrop_rewards("mode"))
         assert result == 0
 
     def test_update_no_dedup(self) -> None:
+        """Test update no dedup."""
         b = _make_behaviour()
-        b._get_total_airdrop_rewards = _make_gen(50)
-        b._write_kv = _make_gen(True)
+        b._get_total_airdrop_rewards = _make_gen(50)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._update_airdrop_rewards(25, "mode"))
 
     def test_update_with_dedup_new(self) -> None:
+        """Test update with dedup new."""
         b = _make_behaviour()
         # First read for dedup check returns nothing
         call_count = [0]
 
-        def fake_read_kv(*args, **kwargs):
+        def fake_read_kv(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Fake read kv."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -1609,15 +1769,16 @@ class TestAirdropRewards:
             yield
             return {}
 
-        b._read_kv = fake_read_kv
-        b._get_total_airdrop_rewards = _make_gen(0)
-        b._write_kv = _make_gen(True)
+        b._read_kv = fake_read_kv  # type: ignore[method-assign]
+        b._get_total_airdrop_rewards = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._update_airdrop_rewards(100, "mode", tx_hash="0xabc"))
 
     def test_update_with_dedup_already_processed(self) -> None:
+        """Test update with dedup already processed."""
         b = _make_behaviour()
         processed_key = "airdrop_processed_mode_0xabc"
-        b._read_kv = _make_gen({processed_key: "true"})
+        b._read_kv = _make_gen({processed_key: "true"})  # type: ignore[assignment,method-assign]
         _exhaust(b._update_airdrop_rewards(100, "mode", tx_hash="0xabc"))
         # Should return early without updating
 
@@ -1626,14 +1787,16 @@ class TestSignMessage:
     """Test sign_message generator."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b.get_signature = _make_gen("0xdeadbeef")
+        b.get_signature = _make_gen("0xdeadbeef")  # type: ignore[assignment,method-assign]
         result = _exhaust(b.sign_message("hello"))
         assert result == "deadbeef"
 
     def test_no_signature(self) -> None:
+        """Test no signature."""
         b = _make_behaviour()
-        b.get_signature = _make_gen(None)
+        b.get_signature = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.sign_message("hello"))
         assert result is None
 
@@ -1642,21 +1805,24 @@ class TestCalculateInitialInvestment:
     """Test calculate_initial_investment generator."""
 
     def test_no_open_positions(self) -> None:
+        """Test no open positions."""
         b = _make_behaviour()
         b.current_positions = [{"status": "closed"}]
         result = _exhaust(b.calculate_initial_investment())
         assert result is None
 
     def test_with_positions(self) -> None:
+        """Test with positions."""
         b = _make_behaviour()
         b.current_positions = [
             {"status": "open", "pool_address": "0xPool", "tx_hash": "0xHash"}
         ]
-        b.calculate_initial_investment_value = _make_gen(100.0)
+        b.calculate_initial_investment_value = _make_gen(100.0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.calculate_initial_investment())
         assert result == 100.0
 
     def test_null_value_skipped(self) -> None:
+        """Test null value skipped."""
         b = _make_behaviour()
         b.current_positions = [
             {"status": "open", "id": "p1"},
@@ -1664,7 +1830,8 @@ class TestCalculateInitialInvestment:
         ]
         call_count = [0]
 
-        def fake_calc(*args, **kwargs):
+        def fake_calc(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Fake calc."""
             call_count[0] += 1
             if call_count[0] == 1:
                 yield
@@ -1672,7 +1839,7 @@ class TestCalculateInitialInvestment:
             yield
             return 50.0
 
-        b.calculate_initial_investment_value = fake_calc
+        b.calculate_initial_investment_value = fake_calc  # type: ignore[method-assign]
         result = _exhaust(b.calculate_initial_investment())
         assert result == 50.0
 
@@ -1681,19 +1848,23 @@ class TestExecuteStrategy:
     """Test the execute_strategy module-level function."""
 
     def test_no_executable(self) -> None:
+        """Test no executable."""
         result = execute_strategy("unknown", {})
         assert result is None
 
     def test_no_callable_in_exec(self) -> None:
+        """Test no callable in exec."""
         result = execute_strategy("test", {"test": ("x = 1", "nonexistent_method")})
         assert result is None
 
     def test_valid_strategy(self) -> None:
+        """Test valid strategy."""
         code = "def test_func(**kwargs):\n    return {'result': 42}"
         result = execute_strategy("strat", {"strat": (code, "test_func")})
         assert result == {"result": 42}
 
     def test_generator_strategy(self) -> None:
+        """Test generator strategy."""
         code = "def gen_func(**kwargs):\n    yield 1\n    yield 2"
         result = execute_strategy("strat", {"strat": (code, "gen_func")})
         assert result == [1, 2]
@@ -1703,25 +1874,29 @@ class TestFetchRewardBalances:
     """Test _fetch_reward_balances generator."""
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = _exhaust(b._fetch_reward_balances("optimism"))
         assert result == []
 
     def test_no_reward_tokens(self) -> None:
+        """Test no reward tokens."""
         b = _make_behaviour()
         result = _exhaust(b._fetch_reward_balances("unknown_chain"))
         assert result == []
 
     def test_with_balances(self) -> None:
+        """Test with balances."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(1000)
+        b._get_token_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_reward_balances("optimism"))
         assert len(result) > 0
 
     def test_zero_balance(self) -> None:
+        """Test zero balance."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(0)
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_reward_balances("optimism"))
         assert result == []
 
@@ -1730,33 +1905,38 @@ class TestFetchOusdtBalance:
     """Test _fetch_ousdt_balance generator."""
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
 
     def test_positive_balance(self) -> None:
+        """Test positive balance."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(5000)
+        b._get_token_balance = _make_gen(5000)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is not None
         assert result["asset_symbol"] == "oUSDT"
         assert result["balance"] == 5000
 
     def test_zero_balance(self) -> None:
+        """Test zero balance."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(0)
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
 
-        def bad_gen(*a, **kw):
+        def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._get_token_balance = bad_gen
+        b._get_token_balance = bad_gen  # type: ignore[method-assign]
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
 
@@ -1765,18 +1945,20 @@ class TestAdjustPositions:
     """Test _adjust_current_positions_for_backward_compatibility."""
 
     def test_dict_input(self) -> None:
+        """Test dict input."""
         b = _make_behaviour()
-        b.store_current_positions = MagicMock()
-        b._get_token_symbol = _make_gen("USDC")
+        b.store_current_positions = MagicMock()  # type: ignore[method-assign]
+        b._get_token_symbol = _make_gen("USDC")  # type: ignore[assignment,method-assign]
         data = {"pool_address": "0xPool", "status": "open"}
         _exhaust(b._adjust_current_positions_for_backward_compatibility(data))
         assert len(b.current_positions) == 1
         assert b.current_positions[0]["entry_cost"] == 0.0
 
     def test_list_with_address_and_assets(self) -> None:
+        """Test list with address and assets."""
         b = _make_behaviour()
-        b.store_current_positions = MagicMock()
-        b._get_token_symbol = _make_gen("TOKEN")
+        b.store_current_positions = MagicMock()  # type: ignore[method-assign]
+        b._get_token_symbol = _make_gen("TOKEN")  # type: ignore[assignment,method-assign]
         data = [{"address": "0xPool", "assets": ["0xT0", "0xT1"], "chain": "optimism"}]
         _exhaust(b._adjust_current_positions_for_backward_compatibility(data))
         assert b.current_positions[0]["pool_address"] == "0xPool"
@@ -1785,8 +1967,9 @@ class TestAdjustPositions:
         assert b.current_positions[0]["token1"] == "0xT1"
 
     def test_adds_default_fields(self) -> None:
+        """Test adds default fields."""
         b = _make_behaviour()
-        b.store_current_positions = MagicMock()
+        b.store_current_positions = MagicMock()  # type: ignore[method-assign]
         data = [{"pool_address": "0x1", "enter_timestamp": 100}]
         _exhaust(b._adjust_current_positions_for_backward_compatibility(data))
         pos = b.current_positions[0]
@@ -1797,13 +1980,15 @@ class TestAdjustPositions:
         assert pos["principal_usd"] == 0.0
 
     def test_entry_apr_from_apr(self) -> None:
+        """Test entry apr from apr."""
         b = _make_behaviour()
-        b.store_current_positions = MagicMock()
+        b.store_current_positions = MagicMock()  # type: ignore[method-assign]
         data = [{"apr": 5.0}]
         _exhaust(b._adjust_current_positions_for_backward_compatibility(data))
         assert b.current_positions[0]["entry_apr"] == 5.0
 
     def test_unexpected_format(self) -> None:
+        """Test unexpected format."""
         b = _make_behaviour()
         _exhaust(b._adjust_current_positions_for_backward_compatibility("invalid"))
         assert b.current_positions == []
@@ -1813,32 +1998,36 @@ class TestCalculateMinSafeTx:
     """Test _calculate_min_num_of_safe_tx_required."""
 
     def test_no_liveness_ratio(self) -> None:
+        """Test no liveness ratio."""
         b = _make_behaviour()
-        b._get_liveness_ratio = _make_gen(None)
-        b._get_liveness_period = _make_gen(86400)
+        b._get_liveness_ratio = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_liveness_period = _make_gen(86400)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
         assert result is None
 
     def test_no_liveness_period(self) -> None:
+        """Test no liveness period."""
         b = _make_behaviour()
-        b._get_liveness_ratio = _make_gen(1000)
-        b._get_liveness_period = _make_gen(None)
+        b._get_liveness_ratio = _make_gen(1000)  # type: ignore[assignment,method-assign]
+        b._get_liveness_period = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
         assert result is None
 
     def test_no_checkpoint(self) -> None:
+        """Test no checkpoint."""
         b = _make_behaviour()
-        b._get_liveness_ratio = _make_gen(10**18)
-        b._get_liveness_period = _make_gen(86400)
-        b._get_ts_checkpoint = _make_gen(None)
+        b._get_liveness_ratio = _make_gen(10**18)  # type: ignore[assignment,method-assign]
+        b._get_liveness_period = _make_gen(86400)  # type: ignore[assignment,method-assign]
+        b._get_ts_checkpoint = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
         assert result is None
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b._get_liveness_ratio = _make_gen(10**18)
-        b._get_liveness_period = _make_gen(86400)
-        b._get_ts_checkpoint = _make_gen(1700000000 - 86400)
+        b._get_liveness_ratio = _make_gen(10**18)  # type: ignore[assignment,method-assign]
+        b._get_liveness_period = _make_gen(86400)  # type: ignore[assignment,method-assign]
+        b._get_ts_checkpoint = _make_gen(1700000000 - 86400)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
         assert isinstance(result, int)
         assert result > 0
@@ -1848,19 +2037,22 @@ class TestInvalidateClPoolCache:
     """Test _invalidate_cl_pool_cache."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b._write_kv = _make_gen(True)
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._invalidate_cl_pool_cache("optimism"))
         b.context.logger.info.assert_called()
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
 
-        def bad_write(*a, **kw):
+        def bad_write(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad write."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._write_kv = bad_write
+        b._write_kv = bad_write  # type: ignore[method-assign]
         _exhaust(b._invalidate_cl_pool_cache("optimism"))
         b.context.logger.error.assert_called()
 
@@ -1869,6 +2061,7 @@ class TestStoreReadMethods:
     """Test store_*/read_* convenience methods that delegate to _store_data/_read_data."""
 
     def test_store_whitelisted_assets(self) -> None:
+        """Test store whitelisted assets."""
         b = _make_behaviour()
         b.whitelisted_assets = {"tok": "val"}
         with patch.object(b, "_store_data") as mock_store:
@@ -1876,12 +2069,14 @@ class TestStoreReadMethods:
             mock_store.assert_called_once()
 
     def test_read_whitelisted_assets(self) -> None:
+        """Test read whitelisted assets."""
         b = _make_behaviour()
         with patch.object(b, "_read_data") as mock_read:
             b.read_whitelisted_assets()
             mock_read.assert_called_once()
 
     def test_store_funding_events(self) -> None:
+        """Test store funding events."""
         b = _make_behaviour()
         b.funding_events = {"e": 1}
         with patch.object(b, "_store_data") as mock_store:
@@ -1889,12 +2084,14 @@ class TestStoreReadMethods:
             mock_store.assert_called_once()
 
     def test_read_funding_events(self) -> None:
+        """Test read funding events."""
         b = _make_behaviour()
         with patch.object(b, "_read_data") as mock_read:
             b.read_funding_events()
             mock_read.assert_called_once()
 
     def test_store_portfolio_data(self) -> None:
+        """Test store portfolio data."""
         b = _make_behaviour()
         b.portfolio_data = {"k": "v"}
         with patch.object(b, "_store_data") as mock_store:
@@ -1902,12 +2099,14 @@ class TestStoreReadMethods:
             mock_store.assert_called_once()
 
     def test_read_portfolio_data(self) -> None:
+        """Test read portfolio data."""
         b = _make_behaviour()
         with patch.object(b, "_read_data") as mock_read:
             b.read_portfolio_data()
             mock_read.assert_called_once()
 
     def test_store_agent_performance(self) -> None:
+        """Test store agent performance."""
         b = _make_behaviour()
         b.agent_performance = {"ts": 1}
         with patch.object(b, "_store_data") as mock_store:
@@ -1915,12 +2114,14 @@ class TestStoreReadMethods:
             mock_store.assert_called_once()
 
     def test_store_gas_costs(self) -> None:
+        """Test store gas costs."""
         b = _make_behaviour()
         with patch.object(b, "_store_data") as mock_store:
             b.store_gas_costs()
             mock_store.assert_called_once()
 
     def test_read_gas_costs(self) -> None:
+        """Test read gas costs."""
         b = _make_behaviour()
         with patch.object(b, "_read_data") as mock_read:
             b.read_gas_costs()
@@ -1931,6 +2132,7 @@ class TestReadDataFilePaths:
     """Test _read_data with various file conditions."""
 
     def test_read_data_file_not_found_creates_file(self) -> None:
+        """Test read data file not found creates file."""
         b = _make_behaviour()
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "nonexistent.json")
@@ -1941,12 +2143,14 @@ class TestReadDataFilePaths:
             assert data == []
 
     def test_read_data_permission_error(self) -> None:
+        """Test read data permission error."""
         b = _make_behaviour()
         with patch("builtins.open", side_effect=PermissionError("denied")):
             b._read_data("current_positions", "/fake/path.json")
             b.context.logger.error.assert_called()
 
     def test_read_data_json_decode_error(self) -> None:
+        """Test read data json decode error."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("not json")
@@ -1963,8 +2167,9 @@ class TestUpdateAgentPerformanceTimestampException:
     """Test update_agent_performance_timestamp exception path."""
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
-        b.agent_performance = None  # Will cause TypeError on key access
+        b.agent_performance = None  # type: ignore[assignment]  # Will cause TypeError on key access
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.datetime"
         ) as mock_dt:
@@ -1977,8 +2182,9 @@ class TestGetTokenDecimals:
     """Test _get_token_decimals."""
 
     def test_returns_decimals(self) -> None:
+        """Test returns decimals."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(18)
+        b.contract_interact = _make_gen(18)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_token_decimals("optimism", "0x" + "ab" * 20))
         assert result == 18
 
@@ -1987,8 +2193,9 @@ class TestGetTokenSymbol:
     """Test _get_token_symbol."""
 
     def test_returns_symbol(self) -> None:
+        """Test returns symbol."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen("USDC")
+        b.contract_interact = _make_gen("USDC")  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_token_symbol("optimism", "0x" + "ab" * 20))
         assert result == "USDC"
 
@@ -1997,6 +2204,7 @@ class TestGetNativeBalance:
     """Test _get_native_balance."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         mock_response = MagicMock()
         mock_response.performative = MagicMock()
@@ -2006,11 +2214,12 @@ class TestGetNativeBalance:
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.LedgerApiMessage"
         ) as mock_msg:
             mock_msg.Performative.STATE = mock_response.performative
-            b.get_ledger_api_response = _make_gen(mock_response)
+            b.get_ledger_api_response = _make_gen(mock_response)  # type: ignore[assignment,method-assign]
             result = _exhaust(b._get_native_balance("optimism", "0xSafe"))
             assert result == 1000
 
     def test_failure(self) -> None:
+        """Test failure."""
         b = _make_behaviour()
         mock_response = MagicMock()
         mock_response.performative = "FAILURE"
@@ -2018,7 +2227,7 @@ class TestGetNativeBalance:
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.LedgerApiMessage"
         ) as mock_msg:
             mock_msg.Performative.STATE = "STATE"
-            b.get_ledger_api_response = _make_gen(mock_response)
+            b.get_ledger_api_response = _make_gen(mock_response)  # type: ignore[assignment,method-assign]
             result = _exhaust(b._get_native_balance("optimism", "0xSafe"))
             assert result is None
 
@@ -2027,8 +2236,9 @@ class TestGetTokenBalance:
     """Test _get_token_balance."""
 
     def test_returns_balance(self) -> None:
+        """Test returns balance."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(500)
+        b.contract_interact = _make_gen(500)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_token_balance("optimism", "0xSafe", "0xToken"))
         assert result == 500
 
@@ -2037,8 +2247,9 @@ class TestGetNextCheckpoint:
     """Test _get_next_checkpoint."""
 
     def test_returns_timestamp(self) -> None:
+        """Test returns timestamp."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(1700000100)
+        b.contract_interact = _make_gen(1700000100)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_next_checkpoint("optimism"))
         assert result == 1700000100
 
@@ -2047,8 +2258,9 @@ class TestGetTsCheckpoint:
     """Test _get_ts_checkpoint."""
 
     def test_returns_timestamp(self) -> None:
+        """Test returns timestamp."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(1700000050)
+        b.contract_interact = _make_gen(1700000050)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_ts_checkpoint("optimism"))
         assert result == 1700000050
 
@@ -2057,14 +2269,16 @@ class TestGetLivenessRatio:
     """Test _get_liveness_ratio."""
 
     def test_valid(self) -> None:
+        """Test valid."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(100)
+        b.contract_interact = _make_gen(100)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_ratio("optimism"))
         assert result == 100
 
     def test_zero_logs_error(self) -> None:
+        """Test zero logs error."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(0)
+        b.contract_interact = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_ratio("optimism"))
         assert result == 0
         b.context.logger.error.assert_called()
@@ -2074,8 +2288,9 @@ class TestGetLivenessPeriod:
     """Test _get_liveness_period."""
 
     def test_valid(self) -> None:
+        """Test valid."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(3600)
+        b.contract_interact = _make_gen(3600)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_liveness_period("optimism"))
         assert result == 3600
 
@@ -2084,8 +2299,9 @@ class TestFetchTokenNameFromContract:
     """Test _fetch_token_name_from_contract."""
 
     def test_returns_name(self) -> None:
+        """Test returns name."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen("Wrapped Ether")
+        b.contract_interact = _make_gen("Wrapped Ether")  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b._fetch_token_name_from_contract("optimism", "0x" + "ab" * 20)
         )
@@ -2096,66 +2312,73 @@ class TestFetchTokenPriceFull:
     """Test _fetch_token_price method."""
 
     def test_cached_price(self) -> None:
+        """Test cached price."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(1.5)
+        b._get_cached_price = _make_gen(1.5)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_token_price("0x" + "ab" * 20, "optimism"))
         assert result == 1.5
 
     def test_success_with_price(self) -> None:
+        """Test success with price."""
         b = _make_behaviour()
         token_addr = "0x" + "ab" * 20
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, {token_addr.lower(): {"usd": 2.5}})
         )
-        b._cache_price = _make_gen(None)
-        b._get_last_known_price = _make_gen(None)
+        b._cache_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_last_known_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_token_price(token_addr, "optimism"))
         assert result == 2.5
 
     def test_success_no_price_data(self) -> None:
+        """Test success no price data."""
         b = _make_behaviour()
         token_addr = "0x" + "ab" * 20
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, {token_addr.lower(): {"usd": 0}})
         )
-        b._get_last_known_price = _make_gen(None)
+        b._get_last_known_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_token_price(token_addr, "optimism"))
         assert result == 0
 
     def test_success_processing_exception(self) -> None:
+        """Test success processing exception."""
         b = _make_behaviour()
         token_addr = "0x" + "ab" * 20
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, None)  # Will cause AttributeError on .get()
         )
-        b._get_last_known_price = _make_gen(None)
+        b._get_last_known_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_token_price(token_addr, "optimism"))
         assert result is None
 
     def test_failure_with_last_known(self) -> None:
+        """Test failure with last known."""
         b = _make_behaviour()
         token_addr = "0x" + "ab" * 20
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(return_value=(False, {}))
-        b._get_last_known_price = _make_gen(3.0)
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(return_value=(False, {}))  # type: ignore[method-assign]
+        b._get_last_known_price = _make_gen(3.0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_token_price(token_addr, "optimism"))
         assert result == 3.0
 
     def test_failure_no_last_known(self) -> None:
+        """Test failure no last known."""
         b = _make_behaviour()
         token_addr = "0x" + "ab" * 20
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(return_value=(False, {}))
-        b._get_last_known_price = _make_gen(None)
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(return_value=(False, {}))  # type: ignore[method-assign]
+        b._get_last_known_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_token_price(token_addr, "optimism"))
         assert result is None
 
     def test_no_platform_id(self) -> None:
+        """Test no platform id."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         b.coingecko.chain_to_platform_id_mapping = {}
         result = _exhaust(b._fetch_token_price("0x" + "ab" * 20, "optimism"))
         assert result is None
@@ -2165,64 +2388,72 @@ class TestFetchCoinPrice:
     """Test _fetch_coin_price method."""
 
     def test_cached(self) -> None:
+        """Test cached."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(1800.0)
+        b._get_cached_price = _make_gen(1800.0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result == 1800.0
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, {"ethereum": {"usd": 1900.0}})
         )
-        b._cache_price = _make_gen(None)
+        b._cache_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result == 1900.0
 
     def test_success_no_price(self) -> None:
+        """Test success no price."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(return_value=(True, {"ethereum": {"usd": 0}}))
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(return_value=(True, {"ethereum": {"usd": 0}}))  # type: ignore[method-assign]
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result == 0
 
     def test_success_exception(self) -> None:
+        """Test success exception."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(return_value=(True, None))
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(return_value=(True, None))  # type: ignore[method-assign]
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result is None
 
     def test_failure(self) -> None:
+        """Test failure."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(return_value=(False, {}))
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(return_value=(False, {}))  # type: ignore[method-assign]
         result = _exhaust(b._fetch_coin_price("ethereum"))
         assert result is None
 
 
-class TestFetchTokenPrices:
+class TestFetchTokenPricesMethod:
     """Test _fetch_token_prices method."""
 
     def test_with_zero_address(self) -> None:
+        """Test with zero address."""
         b = _make_behaviour()
-        b._fetch_zero_address_price = _make_gen(1800.0)
-        b._fetch_token_price = _make_gen(None)
+        b._fetch_zero_address_price = _make_gen(1800.0)  # type: ignore[assignment,method-assign]
+        b._fetch_token_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         token_balances = [{"token": ZERO_ADDRESS, "chain": "optimism"}]
         result = _exhaust(b._fetch_token_prices(token_balances))
         assert result[ZERO_ADDRESS] == 1800.0
 
     def test_missing_chain(self) -> None:
+        """Test missing chain."""
         b = _make_behaviour()
         token_balances = [{"token": "0x" + "ab" * 20}]
         result = _exhaust(b._fetch_token_prices(token_balances))
         assert result == {}
 
     def test_with_erc20(self) -> None:
+        """Test with erc20."""
         b = _make_behaviour()
         addr = "0x" + "ab" * 20
-        b._fetch_token_price = _make_gen(2.5)
+        b._fetch_token_price = _make_gen(2.5)  # type: ignore[assignment,method-assign]
         token_balances = [{"token": addr, "chain": "optimism"}]
         result = _exhaust(b._fetch_token_prices(token_balances))
         assert result[addr] == 2.5
@@ -2232,23 +2463,26 @@ class TestGetCachedPriceEdge:
     """Test _get_cached_price edge cases."""
 
     def test_no_result(self) -> None:
+        """Test no result."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_cached_price("0xToken", "01-01-2024"))
         assert result is None
 
     def test_with_date_returns_price(self) -> None:
+        """Test with date returns price."""
         b = _make_behaviour()
         cache_data = json.dumps({"01-01-2024": 5.0})
         key = b._get_price_cache_key("0xToken", "01-01-2024")
-        b._read_kv = _make_gen({key: cache_data})
+        b._read_kv = _make_gen({key: cache_data})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_cached_price("0xToken", "01-01-2024"))
         assert result == 5.0
 
     def test_invalid_json(self) -> None:
+        """Test invalid json."""
         b = _make_behaviour()
         key = b._get_price_cache_key("0xToken", "01-01-2024")
-        b._read_kv = _make_gen({key: "not json"})
+        b._read_kv = _make_gen({key: "not json"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_cached_price("0xToken", "01-01-2024"))
         assert result is None
 
@@ -2257,16 +2491,18 @@ class TestCachePrice:
     """Test _cache_price."""
 
     def test_with_date(self) -> None:
+        """Test with date."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._cache_price("ethereum", 1800.0, "01-01-2024"))
 
     def test_existing_cache_invalid_json(self) -> None:
+        """Test existing cache invalid json."""
         b = _make_behaviour()
         key = b._get_price_cache_key("ethereum", "01-01-2024")
-        b._read_kv = _make_gen({key: "not json"})
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen({key: "not json"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._cache_price("ethereum", 1800.0, "01-01-2024"))
         b.context.logger.error.assert_called()
 
@@ -2274,16 +2510,17 @@ class TestCachePrice:
 class TestRequestWithRetries:
     """Test _request_with_retries."""
 
-    def _mock_response(self, status_code, body):
+    def _mock_response(self, status_code: Any, body: Any) -> Any:
         resp = MagicMock()
         resp.status_code = status_code
         resp.body = json.dumps(body).encode("utf-8") if isinstance(body, dict) else body
         return resp
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         resp = self._mock_response(200, {"result": "ok"})
-        b.get_http_response = _make_gen(resp)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -2296,10 +2533,11 @@ class TestRequestWithRetries:
         assert data["result"] == "ok"
 
     def test_rate_limited_exhausts_retries(self) -> None:
+        """Test rate limited exhausts retries."""
         b = _make_behaviour()
         resp = self._mock_response(429, {"error": "rate limited"})
-        b.get_http_response = _make_gen(resp)
-        b.sleep = _make_gen(None)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -2311,10 +2549,11 @@ class TestRequestWithRetries:
         assert success is False
 
     def test_503_exhausts_retries(self) -> None:
+        """Test 503 exhausts retries."""
         b = _make_behaviour()
         resp = self._mock_response(503, {"error": "unavailable"})
-        b.get_http_response = _make_gen(resp)
-        b.sleep = _make_gen(None)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -2326,10 +2565,11 @@ class TestRequestWithRetries:
         assert success is False
 
     def test_other_error_exhausts_retries(self) -> None:
+        """Test other error exhausts retries."""
         b = _make_behaviour()
         resp = self._mock_response(500, {"error": "server"})
-        b.get_http_response = _make_gen(resp)
-        b.sleep = _make_gen(None)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -2342,12 +2582,13 @@ class TestRequestWithRetries:
         assert success is False
 
     def test_json_decode_error(self) -> None:
+        """Test json decode error."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
         resp.body = b"not json"
-        b.get_http_response = _make_gen(resp)
-        b.sleep = _make_gen(None)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -2361,10 +2602,11 @@ class TestRequestWithRetries:
         assert "exception" in data
 
     def test_coingecko_adds_delay(self) -> None:
+        """Test coingecko adds delay."""
         b = _make_behaviour()
         resp = self._mock_response(200, {"result": "ok"})
-        b.get_http_response = _make_gen(resp)
-        b.sleep = _make_gen(None)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, _ = _exhaust(
             b._request_with_retries(
                 endpoint="https://api.coingecko.com/v3/simple/price",
@@ -2380,15 +2622,16 @@ class TestDoConnectionRequest:
     """Test _do_connection_request."""
 
     def test_returns_response(self) -> None:
+        """Test returns response."""
         b = _make_behaviour()
-        b._get_request_nonce_from_dialogue = MagicMock(return_value="nonce_1")
-        b.get_callback_request = MagicMock(return_value=lambda: None)
+        b._get_request_nonce_from_dialogue = MagicMock(return_value="nonce_1")  # type: ignore[method-assign]
+        b.get_callback_request = MagicMock(return_value=lambda: None)  # type: ignore[method-assign]
         b.context.outbox = MagicMock()
         mock_requests = MagicMock()
         mock_requests.request_id_to_callback = {}
         b.context.requests = mock_requests
         expected = MagicMock()
-        b.wait_for_message = _make_gen(expected)
+        b.wait_for_message = _make_gen(expected)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._do_connection_request(MagicMock(), MagicMock()))
         assert result == expected
 
@@ -2397,10 +2640,11 @@ class TestCallMirrordb:
     """Test _call_mirrordb."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         response_mock = MagicMock()
         response_mock.payload = json.dumps({"response": {"id": 1}})
-        b._do_connection_request = _make_gen(response_mock)
+        b._do_connection_request = _make_gen(response_mock)  # type: ignore[assignment,method-assign]
         srr_dialogues = MagicMock()
         srr_dialogues.create.return_value = (MagicMock(), MagicMock())
         b.context.srr_dialogues = srr_dialogues
@@ -2408,10 +2652,11 @@ class TestCallMirrordb:
         assert result == {"id": 1}
 
     def test_error_response(self) -> None:
+        """Test error response."""
         b = _make_behaviour()
         response_mock = MagicMock()
         response_mock.payload = json.dumps({"error": "not found"})
-        b._do_connection_request = _make_gen(response_mock)
+        b._do_connection_request = _make_gen(response_mock)  # type: ignore[assignment,method-assign]
         srr_dialogues = MagicMock()
         srr_dialogues.create.return_value = (MagicMock(), MagicMock())
         b.context.srr_dialogues = srr_dialogues
@@ -2419,6 +2664,7 @@ class TestCallMirrordb:
         assert result is None
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
         srr_dialogues = MagicMock()
         srr_dialogues.create.side_effect = Exception("connection error")
@@ -2431,6 +2677,7 @@ class TestReadWriteKV:
     """Test _read_kv and _write_kv."""
 
     def test_read_kv_success(self) -> None:
+        """Test read kv success."""
         b = _make_behaviour()
         mock_response = MagicMock()
         mock_response.performative = MagicMock()
@@ -2443,11 +2690,12 @@ class TestReadWriteKV:
             kv_dialogues = MagicMock()
             kv_dialogues.create.return_value = (MagicMock(), MagicMock())
             b.context.kv_store_dialogues = kv_dialogues
-            b._do_connection_request = _make_gen(mock_response)
+            b._do_connection_request = _make_gen(mock_response)  # type: ignore[assignment,method-assign]
             result = _exhaust(b._read_kv(("key1",)))
             assert result == {"key1": "val1"}
 
     def test_read_kv_wrong_performative(self) -> None:
+        """Test read kv wrong performative."""
         b = _make_behaviour()
         mock_response = MagicMock()
         mock_response.performative = "WRONG"
@@ -2458,11 +2706,12 @@ class TestReadWriteKV:
             kv_dialogues = MagicMock()
             kv_dialogues.create.return_value = (MagicMock(), MagicMock())
             b.context.kv_store_dialogues = kv_dialogues
-            b._do_connection_request = _make_gen(mock_response)
+            b._do_connection_request = _make_gen(mock_response)  # type: ignore[assignment,method-assign]
             result = _exhaust(b._read_kv(("key1",)))
             assert result is None
 
     def test_write_kv(self) -> None:
+        """Test write kv."""
         b = _make_behaviour()
         mock_response = MagicMock()
         with patch(
@@ -2473,7 +2722,7 @@ class TestReadWriteKV:
             kv_dialogues = MagicMock()
             kv_dialogues.create.return_value = (MagicMock(), MagicMock())
             b.context.kv_store_dialogues = kv_dialogues
-            b._do_connection_request = _make_gen(mock_response)
+            b._do_connection_request = _make_gen(mock_response)  # type: ignore[assignment,method-assign]
             _exhaust(b._write_kv({"key1": "val1"}))
 
 
@@ -2481,23 +2730,26 @@ class TestFetchSafeBalancesWithPagination:
     """Test _fetch_safe_balances_with_pagination."""
 
     def test_success_single_page(self) -> None:
+        """Test success single page."""
         b = _make_behaviour()
         page_data = {"results": [{"tokenAddress": None}], "next": None}
-        b._request_with_retries = _make_gen((True, page_data))
+        b._request_with_retries = _make_gen((True, page_data))  # type: ignore[assignment,method-assign]
         success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
         assert success is True
         assert len(result) == 1
 
     def test_failure(self) -> None:
+        """Test failure."""
         b = _make_behaviour()
-        b._request_with_retries = _make_gen((False, {"error": "fail"}))
+        b._request_with_retries = _make_gen((False, {"error": "fail"}))  # type: ignore[assignment,method-assign]
         success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
         assert success is False
         assert result == []
 
     def test_empty_results(self) -> None:
+        """Test empty results."""
         b = _make_behaviour()
-        b._request_with_retries = _make_gen((True, {"results": []}))
+        b._request_with_retries = _make_gen((True, {"results": []}))  # type: ignore[assignment,method-assign]
         success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
         assert success is True
         assert result == []
@@ -2507,21 +2759,24 @@ class TestFetchModeTokensWithPagination:
     """Test _fetch_mode_tokens_with_pagination."""
 
     def test_success_single_page(self) -> None:
+        """Test success single page."""
         b = _make_behaviour()
         page_data = {"items": [{"token": {"address": "0xA"}}], "next_page_params": None}
-        b._request_with_retries = _make_gen((True, page_data))
+        b._request_with_retries = _make_gen((True, page_data))  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_mode_tokens_with_pagination("0xSafe"))
         assert len(result) == 1
 
     def test_failure(self) -> None:
+        """Test failure."""
         b = _make_behaviour()
-        b._request_with_retries = _make_gen((False, {"error": "fail"}))
+        b._request_with_retries = _make_gen((False, {"error": "fail"}))  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_mode_tokens_with_pagination("0xSafe"))
         assert result == []
 
     def test_empty_items(self) -> None:
+        """Test empty items."""
         b = _make_behaviour()
-        b._request_with_retries = _make_gen((True, {"items": []}))
+        b._request_with_retries = _make_gen((True, {"items": []}))  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_mode_tokens_with_pagination("0xSafe"))
         assert result == []
 
@@ -2530,9 +2785,10 @@ class TestAdjustCurrentPositions:
     """Test _adjust_current_positions_for_backward_compatibility."""
 
     def test_dict_input_converted_to_list(self) -> None:
+        """Test dict input converted to list."""
         b = _make_behaviour()
         with patch.object(b, "store_current_positions"):
-            b._get_token_symbol = _make_gen("ETH")
+            b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
             _exhaust(
                 b._adjust_current_positions_for_backward_compatibility(
                     {"pool_address": "0xPool", "chain": "optimism"}
@@ -2542,9 +2798,10 @@ class TestAdjustCurrentPositions:
             assert b.current_positions[0]["status"] == "open"
 
     def test_list_with_assets(self) -> None:
+        """Test list with assets."""
         b = _make_behaviour()
         with patch.object(b, "store_current_positions"):
-            b._get_token_symbol = _make_gen("SYM")
+            b._get_token_symbol = _make_gen("SYM")  # type: ignore[assignment,method-assign]
             _exhaust(
                 b._adjust_current_positions_for_backward_compatibility(
                     [
@@ -2561,9 +2818,10 @@ class TestAdjustCurrentPositions:
             assert "token1" in b.current_positions[0]
 
     def test_list_with_one_asset(self) -> None:
+        """Test list with one asset."""
         b = _make_behaviour()
         with patch.object(b, "store_current_positions"):
-            b._get_token_symbol = _make_gen("SYM")
+            b._get_token_symbol = _make_gen("SYM")  # type: ignore[assignment,method-assign]
             _exhaust(
                 b._adjust_current_positions_for_backward_compatibility(
                     [{"chain": "optimism", "assets": ["0xToken0"]}]
@@ -2573,12 +2831,14 @@ class TestAdjustCurrentPositions:
             assert "token1" not in b.current_positions[0]
 
     def test_unexpected_format(self) -> None:
+        """Test unexpected format."""
         b = _make_behaviour()
         _exhaust(b._adjust_current_positions_for_backward_compatibility("invalid"))
         assert b.current_positions == []
         b.context.logger.warning.assert_called()
 
     def test_backward_compat_fields_added(self) -> None:
+        """Test backward compat fields added."""
         b = _make_behaviour()
         with patch.object(b, "store_current_positions"):
             _exhaust(
@@ -2593,6 +2853,7 @@ class TestAdjustCurrentPositions:
             assert "principal_usd" in pos
 
     def test_entry_apr_from_apr(self) -> None:
+        """Test entry apr from apr."""
         b = _make_behaviour()
         with patch.object(b, "store_current_positions"):
             _exhaust(
@@ -2607,13 +2868,15 @@ class TestCalculateInitialInvestmentValue:
     """Test calculate_initial_investment_value."""
 
     def test_missing_data(self) -> None:
+        """Test missing data."""
         b = _make_behaviour()
         result = _exhaust(b.calculate_initial_investment_value({}))
         assert result is None
 
     def test_no_token0_decimals(self) -> None:
+        """Test no token0 decimals."""
         b = _make_behaviour()
-        b._get_token_decimals = _make_gen(None)
+        b._get_token_decimals = _make_gen(None)  # type: ignore[assignment,method-assign]
         pos = {
             "token0": "0xT0",
             "amount0": 1000,
@@ -2624,9 +2887,10 @@ class TestCalculateInitialInvestmentValue:
         assert result is None
 
     def test_single_token(self) -> None:
+        """Test single token."""
         b = _make_behaviour()
-        b._get_token_decimals = _make_gen(6)
-        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0})
+        b._get_token_decimals = _make_gen(6)  # type: ignore[assignment,method-assign]
+        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0})  # type: ignore[assignment,method-assign]
         pos = {
             "token0": "0xT0",
             "token0_symbol": "USDC",
@@ -2638,9 +2902,10 @@ class TestCalculateInitialInvestmentValue:
         assert result == 1.0
 
     def test_two_tokens(self) -> None:
+        """Test two tokens."""
         b = _make_behaviour()
-        b._get_token_decimals = _make_gen(18)
-        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0, "0xT1": 2.0})
+        b._get_token_decimals = _make_gen(18)  # type: ignore[assignment,method-assign]
+        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0, "0xT1": 2.0})  # type: ignore[assignment,method-assign]
         pos = {
             "token0": "0xT0",
             "token0_symbol": "A",
@@ -2655,9 +2920,10 @@ class TestCalculateInitialInvestmentValue:
         assert result == 3.0  # 1.0 * 1.0 + 1.0 * 2.0
 
     def test_no_historical_prices(self) -> None:
+        """Test no historical prices."""
         b = _make_behaviour()
-        b._get_token_decimals = _make_gen(18)
-        b._fetch_historical_token_prices = _make_gen({})
+        b._get_token_decimals = _make_gen(18)  # type: ignore[assignment,method-assign]
+        b._fetch_historical_token_prices = _make_gen({})  # type: ignore[assignment,method-assign]
         pos = {
             "token0": "0xT0",
             "token0_symbol": "A",
@@ -2669,9 +2935,10 @@ class TestCalculateInitialInvestmentValue:
         assert result is None
 
     def test_no_price_for_token0(self) -> None:
+        """Test no price for token0."""
         b = _make_behaviour()
-        b._get_token_decimals = _make_gen(18)
-        b._fetch_historical_token_prices = _make_gen({"0xOther": 1.0})
+        b._get_token_decimals = _make_gen(18)  # type: ignore[assignment,method-assign]
+        b._fetch_historical_token_prices = _make_gen({"0xOther": 1.0})  # type: ignore[assignment,method-assign]
         pos = {
             "token0": "0xT0",
             "token0_symbol": "A",
@@ -2683,31 +2950,34 @@ class TestCalculateInitialInvestmentValue:
         assert result is None
 
 
-class TestCalculateInitialInvestment:
+class TestCalculateInitialInvestmentNoPositions:
     """Test calculate_initial_investment."""
 
     def test_no_open_positions(self) -> None:
+        """Test no open positions."""
         b = _make_behaviour()
         b.current_positions = [{"status": "closed"}]
-        b.calculate_initial_investment_value = _make_gen(None)
+        b.calculate_initial_investment_value = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.calculate_initial_investment())
         assert result is None
 
     def test_with_values(self) -> None:
+        """Test with values."""
         b = _make_behaviour()
         b.current_positions = [
             {"status": "open", "pool_address": "0xPool", "tx_hash": "0xhash"},
         ]
-        b.calculate_initial_investment_value = _make_gen(100.0)
+        b.calculate_initial_investment_value = _make_gen(100.0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.calculate_initial_investment())
         assert result == 100.0
 
     def test_null_position_value(self) -> None:
+        """Test null position value."""
         b = _make_behaviour()
         b.current_positions = [
             {"status": "open", "pool_address": "0xP", "tx_hash": "0xh", "id": "x"},
         ]
-        b.calculate_initial_investment_value = _make_gen(None)
+        b.calculate_initial_investment_value = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.calculate_initial_investment())
         assert result is None
 
@@ -2716,8 +2986,9 @@ class TestFetchHistoricalTokenPrices:
     """Test _fetch_historical_token_prices."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b._fetch_historical_token_price = _make_gen(5.0)
+        b._fetch_historical_token_price = _make_gen(5.0)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="usd-coin"):
             result = _exhaust(
                 b._fetch_historical_token_prices(
@@ -2727,6 +2998,7 @@ class TestFetchHistoricalTokenPrices:
             assert result["0xAddr"] == 5.0
 
     def test_no_coingecko_id(self) -> None:
+        """Test no coingecko id."""
         b = _make_behaviour()
         with patch.object(b, "get_coin_id_from_symbol", return_value=None):
             result = _exhaust(
@@ -2741,44 +3013,49 @@ class TestFetchHistoricalTokenPrice:
     """Test _fetch_historical_token_price."""
 
     def test_cached(self) -> None:
+        """Test cached."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(10.0)
+        b._get_cached_price = _make_gen(10.0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_historical_token_price("usd-coin", "01-01-2024"))
         assert result == 10.0
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(
                 True,
                 {"market_data": {"current_price": {"usd": 1.0}}},
             )
         )
-        b._cache_price = _make_gen(None)
+        b._cache_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_historical_token_price("usd-coin", "01-01-2024"))
         assert result == 1.0
 
     def test_success_no_price(self) -> None:
+        """Test success no price."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, {"market_data": {"current_price": {}}})
         )
         result = _exhaust(b._fetch_historical_token_price("usd-coin", "01-01-2024"))
         assert result is None
 
     def test_success_exception(self) -> None:
+        """Test success exception."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(return_value=(True, None))
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(return_value=(True, None))  # type: ignore[method-assign]
         result = _exhaust(b._fetch_historical_token_price("usd-coin", "01-01-2024"))
         assert result is None
 
     def test_failure(self) -> None:
+        """Test failure."""
         b = _make_behaviour()
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(return_value=(False, {}))
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(return_value=(False, {}))  # type: ignore[method-assign]
         result = _exhaust(b._fetch_historical_token_price("usd-coin", "01-01-2024"))
         assert result is None
 
@@ -2787,24 +3064,27 @@ class TestFetchTokenPricesSma:
     """Test _fetch_token_prices_sma."""
 
     def test_no_symbol(self) -> None:
+        """Test no symbol."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen(None)
+        b._get_token_symbol = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
         assert result is None
 
     def test_no_coingecko_id(self) -> None:
+        """Test no coingecko id."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("TOK")
+        b._get_token_symbol = _make_gen("TOK")  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value=None):
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
             assert result is None
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(
+            b.coingecko.request = MagicMock(  # type: ignore[method-assign]
                 return_value=(
                     True,
                     {"prices": [[1700000000, 100.0], [1700003600, 200.0]]},
@@ -2814,38 +3094,42 @@ class TestFetchTokenPricesSma:
             assert result == 150.0
 
     def test_failure(self) -> None:
+        """Test failure."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(return_value=(False, {}))
+            b.coingecko.request = MagicMock(return_value=(False, {}))  # type: ignore[method-assign]
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
             assert result is None
 
     def test_rate_limited(self) -> None:
+        """Test rate limited."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(
+            b.coingecko.request = MagicMock(  # type: ignore[method-assign]
                 return_value=(True, {"status": {"error_code": 429}})
             )
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
             assert result is None
 
     def test_empty_prices(self) -> None:
+        """Test empty prices."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(return_value=(True, {"prices": []}))
+            b.coingecko.request = MagicMock(return_value=(True, {"prices": []}))  # type: ignore[method-assign]
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
             assert result is None
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", side_effect=Exception("err")):
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
             assert result is None
@@ -2855,31 +3139,34 @@ class TestQueryServiceRewards:
     """Test query_service_rewards."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
         resp.body = json.dumps(
             {"data": {"service": {"olasRewardsEarned": "100"}}}
         ).encode("utf-8")
-        b.get_http_response = _make_gen(resp)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.query_service_rewards("optimism"))
         assert result["olasRewardsEarned"] == "100"
 
     def test_no_service_data(self) -> None:
+        """Test no service data."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 200
         resp.body = json.dumps({"data": {"service": None}}).encode("utf-8")
-        b.get_http_response = _make_gen(resp)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.query_service_rewards("optimism"))
         assert result is None
 
     def test_failure(self) -> None:
+        """Test failure."""
         b = _make_behaviour()
         resp = MagicMock()
         resp.status_code = 500
         resp.body = b"error"
-        b.get_http_response = _make_gen(resp)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.query_service_rewards("optimism"))
         assert result is None
 
@@ -2889,7 +3176,7 @@ class TestQueryServiceRewards:
         resp = MagicMock()
         resp.status_code = 200
         resp.body = b"not valid json {"
-        b.get_http_response = _make_gen(resp)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.query_service_rewards("optimism"))
         assert result is None
         b.context.logger.error.assert_called()
@@ -2900,7 +3187,7 @@ class TestQueryServiceRewards:
         resp = MagicMock()
         resp.status_code = 200
         resp.body = json.dumps({"data": None}).encode("utf-8")
-        b.get_http_response = _make_gen(resp)
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.query_service_rewards("optimism"))
         assert result is None
 
@@ -2909,28 +3196,32 @@ class TestUpdateAccumulatedRewardsForChain:
     """Test update_accumulated_rewards_for_chain."""
 
     def test_skip_update(self) -> None:
+        """Test skip update."""
         b = _make_behaviour()
-        b.should_update_rewards_from_subgraph = _make_gen(False)
+        b.should_update_rewards_from_subgraph = _make_gen(False)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
 
     def test_no_service_data(self) -> None:
+        """Test no service data."""
         b = _make_behaviour()
-        b.should_update_rewards_from_subgraph = _make_gen(True)
-        b.query_service_rewards = _make_gen(None)
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen(None)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b.should_update_rewards_from_subgraph = _make_gen(True)
-        b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})
-        b._write_kv = _make_gen(True)
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
 
     def test_invalid_rewards_value(self) -> None:
+        """Test invalid rewards value."""
         b = _make_behaviour()
-        b.should_update_rewards_from_subgraph = _make_gen(True)
-        b.query_service_rewards = _make_gen({"olasRewardsEarned": "not_a_number"})
-        b._write_kv = _make_gen(True)
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({"olasRewardsEarned": "not_a_number"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
 
 
@@ -2938,28 +3229,32 @@ class TestShouldUpdateRewardsFromSubgraph:
     """Test should_update_rewards_from_subgraph."""
 
     def test_period_zero(self) -> None:
+        """Test period zero."""
         b = _make_behaviour()
-        b.synchronized_data.period_count = 0
+        b.synchronized_data.period_count = 0  # type: ignore[misc]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is True
 
     def test_no_kv_data(self) -> None:
+        """Test no kv data."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is True
 
     def test_invalid_timestamp(self) -> None:
+        """Test invalid timestamp."""
         b = _make_behaviour()
         key = f"{REWARD_UPDATE_KEY_PREFIX}optimism"
-        b._read_kv = _make_gen({key: "not_a_number"})
+        b._read_kv = _make_gen({key: "not_a_number"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is True
 
     def test_recent_update(self) -> None:
+        """Test recent update."""
         b = _make_behaviour()
         key = f"{REWARD_UPDATE_KEY_PREFIX}optimism"
-        b._read_kv = _make_gen({key: str(time.time())})
+        b._read_kv = _make_gen({key: str(time.time())})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.should_update_rewards_from_subgraph("optimism"))
         assert result is False
 
@@ -2968,13 +3263,15 @@ class TestGetAllEntryCostsException:
     """Test _get_all_entry_costs exception path."""
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
 
-        def bad_read(*a, **kw):
+        def bad_read(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad read."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._read_kv = bad_read
+        b._read_kv = bad_read  # type: ignore[method-assign]
         result = _exhaust(b._get_all_entry_costs())
         assert result == {}
 
@@ -2983,6 +3280,7 @@ class TestBuildExitPoolActionBaseFull:
     """Test _build_exit_pool_action_base with all branches."""
 
     def test_velodrome_cl_multi_position(self) -> None:
+        """Test velodrome cl multi position."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -2997,10 +3295,11 @@ class TestBuildExitPoolActionBaseFull:
             ],
         }
         result = b._build_exit_pool_action_base(pos)
-        assert result["token_ids"] == [1, 2]
-        assert result["liquidities"] == [100, 200]
+        assert result["token_ids"] == [1, 2]  # type: ignore[index]
+        assert result["liquidities"] == [100, 200]  # type: ignore[index]
 
     def test_single_token_id(self) -> None:
+        """Test single token id."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -3013,10 +3312,11 @@ class TestBuildExitPoolActionBaseFull:
             "liquidity": 999,
         }
         result = b._build_exit_pool_action_base(pos)
-        assert result["token_id"] == 42
-        assert result["liquidity"] == 999
+        assert result["token_id"] == 42  # type: ignore[index]
+        assert result["liquidity"] == 999  # type: ignore[index]
 
     def test_sturdy_action_type(self) -> None:
+        """Test sturdy action type."""
         b = _make_behaviour()
         pos = {
             "dex_type": "Sturdy",
@@ -3027,9 +3327,10 @@ class TestBuildExitPoolActionBaseFull:
             "is_cl_pool": False,
         }
         result = b._build_exit_pool_action_base(pos)
-        assert result["action"] == Action.WITHDRAW.value
+        assert result["action"] == Action.WITHDRAW.value  # type: ignore[index]
 
     def test_with_tokens(self) -> None:
+        """Test with tokens."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -3041,43 +3342,49 @@ class TestBuildExitPoolActionBaseFull:
         }
         tokens = [{"token": "0xA"}, {"token": "0xB"}]
         result = b._build_exit_pool_action_base(pos, tokens)
-        assert result["assets"] == ["0xA", "0xB"]
+        assert result["assets"] == ["0xA", "0xB"]  # type: ignore[index]
 
 
 class TestBuildSwapToUsdcAction:
     """Test _build_swap_to_usdc_action."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         result = b._build_swap_to_usdc_action("optimism", "0x" + "ab" * 20, "WETH")
         assert result is not None
         assert result["action"] == Action.FIND_BRIDGE_ROUTE.value
 
     def test_already_usdc(self) -> None:
+        """Test already usdc."""
         b = _make_behaviour()
         usdc = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
         result = b._build_swap_to_usdc_action("optimism", usdc, "USDC")
         assert result is None
 
     def test_skip_olas(self) -> None:
+        """Test skip olas."""
         b = _make_behaviour()
         olas = "0xfc2e6e6bcbd49ccf3a5f029c79984372dcbfe527"
         result = b._build_swap_to_usdc_action("optimism", olas, "OLAS")
         assert result is None
 
     def test_no_usdc_address(self) -> None:
+        """Test no usdc address."""
         b = _make_behaviour()
         result = b._build_swap_to_usdc_action("unknown_chain", "0x" + "ab" * 20, "TOK")
         assert result is None
 
     def test_with_description(self) -> None:
+        """Test with description."""
         b = _make_behaviour()
         result = b._build_swap_to_usdc_action(
             "optimism", "0x" + "ab" * 20, "WETH", description="swap for exit"
         )
-        assert result["description"] == "swap for exit"
+        assert result["description"] == "swap for exit"  # type: ignore[index]
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
         with patch.object(b, "_get_usdc_address", side_effect=Exception("boom")):
             result = b._build_swap_to_usdc_action("optimism", "0x" + "ab" * 20, "WETH")
@@ -3088,6 +3395,7 @@ class TestGetUsdcAddressException:
     """Test _get_usdc_address exception path."""
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.to_checksum_address",
@@ -3101,11 +3409,12 @@ class TestVelodromePositionPrincipal:
     """Test get_velodrome_position_principal."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {
             "optimism": "0x" + "55" * 20
         }
-        b.contract_interact = _make_gen([100, 200])
+        b.contract_interact = _make_gen([100, 200])  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.get_velodrome_position_principal(
                 "optimism", "0xPM", 1, 79228162514264337593543950336
@@ -3114,6 +3423,7 @@ class TestVelodromePositionPrincipal:
         assert result == (100, 200)
 
     def test_no_sugar_address(self) -> None:
+        """Test no sugar address."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {}
         result = _exhaust(
@@ -3124,11 +3434,12 @@ class TestVelodromePositionPrincipal:
         assert result == (0, 0)
 
     def test_no_amounts(self) -> None:
+        """Test no amounts."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {
             "optimism": "0x" + "55" * 20
         }
-        b.contract_interact = _make_gen(None)
+        b.contract_interact = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.get_velodrome_position_principal(
                 "optimism", "0xPM", 1, 79228162514264337593543950336
@@ -3141,17 +3452,19 @@ class TestVelodromeAmountsForLiquidity:
     """Test get_velodrome_amounts_for_liquidity."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {
             "optimism": "0x" + "55" * 20
         }
-        b.contract_interact = _make_gen([300, 400])
+        b.contract_interact = _make_gen([300, 400])  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.get_velodrome_amounts_for_liquidity("optimism", 1000, 500, 2000, 100)
         )
         assert result == (300, 400)
 
     def test_no_sugar(self) -> None:
+        """Test no sugar."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {}
         result = _exhaust(
@@ -3160,11 +3473,12 @@ class TestVelodromeAmountsForLiquidity:
         assert result == (0, 0)
 
     def test_no_amounts(self) -> None:
+        """Test no amounts."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {
             "optimism": "0x" + "55" * 20
         }
-        b.contract_interact = _make_gen(None)
+        b.contract_interact = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.get_velodrome_amounts_for_liquidity("optimism", 1000, 500, 2000, 100)
         )
@@ -3175,26 +3489,29 @@ class TestVelodromeSqrtRatioAtTick:
     """Test get_velodrome_sqrt_ratio_at_tick."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {
             "optimism": "0x" + "55" * 20
         }
-        b.contract_interact = _make_gen(79228162514264337593543950336)
+        b.contract_interact = _make_gen(79228162514264337593543950336)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_velodrome_sqrt_ratio_at_tick("optimism", 0))
         assert result == 79228162514264337593543950336
 
     def test_no_sugar(self) -> None:
+        """Test no sugar."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {}
         result = _exhaust(b.get_velodrome_sqrt_ratio_at_tick("optimism", 0))
         assert result == 0
 
     def test_no_result(self) -> None:
+        """Test no result."""
         b = _make_behaviour()
         b.params.velodrome_slipstream_helper_contract_addresses = {
             "optimism": "0x" + "55" * 20
         }
-        b.contract_interact = _make_gen(None)
+        b.contract_interact = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_velodrome_sqrt_ratio_at_tick("optimism", 0))
         assert result == 0
 
@@ -3203,6 +3520,7 @@ class TestBuildUnstakeActionFull:
     """Test _build_unstake_lp_tokens_action full coverage."""
 
     def test_cl_pool_with_positions(self) -> None:
+        """Test cl pool with positions."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -3213,11 +3531,12 @@ class TestBuildUnstakeActionFull:
             "positions": [{"token_id": 1}, {"token_id": 2}],
         }
         result = b._build_unstake_lp_tokens_action(pos)
-        assert result["is_cl_pool"] is True
-        assert result["token_ids"] == [1, 2]
-        assert result["gauge_address"] == "0xGauge"
+        assert result["is_cl_pool"] is True  # type: ignore[index]
+        assert result["token_ids"] == [1, 2]  # type: ignore[index]
+        assert result["gauge_address"] == "0xGauge"  # type: ignore[index]
 
     def test_cl_pool_single_token_id(self) -> None:
+        """Test cl pool single token id."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -3228,9 +3547,10 @@ class TestBuildUnstakeActionFull:
             "token_id": 42,
         }
         result = b._build_unstake_lp_tokens_action(pos)
-        assert result["token_ids"] == [42]
+        assert result["token_ids"] == [42]  # type: ignore[index]
 
     def test_cl_pool_no_token_ids(self) -> None:
+        """Test cl pool no token ids."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -3243,6 +3563,7 @@ class TestBuildUnstakeActionFull:
         assert result is None
 
     def test_regular_pool(self) -> None:
+        """Test regular pool."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -3251,9 +3572,10 @@ class TestBuildUnstakeActionFull:
             "is_cl_pool": False,
         }
         result = b._build_unstake_lp_tokens_action(pos)
-        assert result["is_cl_pool"] is False
+        assert result["is_cl_pool"] is False  # type: ignore[index]
 
     def test_non_velodrome(self) -> None:
+        """Test non velodrome."""
         b = _make_behaviour()
         pos = {
             "dex_type": "UniswapV3",
@@ -3264,12 +3586,14 @@ class TestBuildUnstakeActionFull:
         assert result is None
 
     def test_missing_params(self) -> None:
+        """Test missing params."""
         b = _make_behaviour()
         pos = {"dex_type": "velodrome"}
         result = b._build_unstake_lp_tokens_action(pos)
         assert result is None
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         pos = {
@@ -3282,6 +3606,7 @@ class TestBuildUnstakeActionFull:
         assert result is None
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -3318,11 +3643,13 @@ class TestBuildUnstakeActionVerified:
         class _Pool:
             @staticmethod
             def get_gauge_address(behaviour, pool_address, **kwargs):
+                """Get gauge address."""
                 yield
                 return gauge_address
 
             @staticmethod
             def is_cl_token_staked(behaviour, account, token_id, **kwargs):
+                """Is cl token staked."""
                 yield
                 return is_staked_map.get(token_id)
 
@@ -3349,6 +3676,7 @@ class TestBuildUnstakeActionVerified:
         assert result["action"] == "UnstakeLpTokens"
 
     def test_all_tokens_staked_on_chain_emits_full_action(self) -> None:
+        """Test all tokens staked on chain emits full action."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: True})}
         result = _exhaust(
@@ -3368,6 +3696,7 @@ class TestBuildUnstakeActionVerified:
         assert result is None
 
     def test_partial_staked_filters_token_ids(self) -> None:
+        """Test partial staked filters token ids."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: False})}
         result = _exhaust(
@@ -3377,7 +3706,7 @@ class TestBuildUnstakeActionVerified:
         assert result["token_ids"] == [1]
 
     def test_partial_staked_drops_stale_top_level_token_id(self) -> None:
-        """A position carrying both a positions list and a top-level token_id
+        """A position carrying both a positions list and a top-level token_id # noqa: D205,D209
         for an unstaked entry must not leave the stale top-level token_id on
         the filtered position."""
         b = _make_behaviour()
@@ -3400,6 +3729,7 @@ class TestBuildUnstakeActionVerified:
         assert result["token_ids"] == [1, 2]
 
     def test_resolves_missing_gauge_via_voter(self) -> None:
+        """Test resolves missing gauge via voter."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: True})}
         pos = self._cl_position()
@@ -3459,6 +3789,7 @@ class TestBuildUnstakeActionVerified:
         assert result["token_ids"] == [1, 2]
 
     def test_falls_back_when_gauge_unresolvable(self) -> None:
+        """Test falls back when gauge unresolvable."""
         b = _make_behaviour()
         b.pools = {"velodrome": self._pool_stub({1: True, 2: True}, gauge_address=None)}
         pos = self._cl_position()
@@ -3475,62 +3806,71 @@ class TestAgentRegistryMethods:
     """Test MirrorDB agent registry generator methods."""
 
     def test_get_agent_type_by_name(self) -> None:
+        """Test get agent type by name."""
         b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"type_id": "t1", "type_name": "optimus"})
+        b._call_mirrordb = _make_gen({"type_id": "t1", "type_name": "optimus"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_agent_type_by_name("optimus"))
         assert result["type_id"] == "t1"
 
     def test_create_agent_type(self) -> None:
+        """Test create agent type."""
         b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"type_id": "t2"})
+        b._call_mirrordb = _make_gen({"type_id": "t2"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.create_agent_type("optimus", "desc"))
         assert result["type_id"] == "t2"
 
     def test_get_attr_def_by_name(self) -> None:
+        """Test get attr def by name."""
         b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"attr_id": "a1"})
+        b._call_mirrordb = _make_gen({"attr_id": "a1"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_attr_def_by_name("metrics"))
         assert result["attr_id"] == "a1"
 
     def test_create_attribute_definition(self) -> None:
+        """Test create attribute definition."""
         b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"attr_id": "a2"})
-        b.sign_message = _make_gen("sig_hex")
+        b._call_mirrordb = _make_gen({"attr_id": "a2"})  # type: ignore[assignment,method-assign]
+        b.sign_message = _make_gen("sig_hex")  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.create_attribute_definition("t1", "metrics", "json", True, "{}", "agent1")
         )
         assert result["attr_id"] == "a2"
 
     def test_create_attribute_definition_no_signature(self) -> None:
+        """Test create attribute definition no signature."""
         b = _make_behaviour()
-        b.sign_message = _make_gen(None)
+        b.sign_message = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b.create_attribute_definition("t1", "metrics", "json", True, "{}", "agent1")
         )
         assert result is None
 
     def test_get_agent_registry_by_address(self) -> None:
+        """Test get agent registry by address."""
         b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"agent_id": "ag1"})
+        b._call_mirrordb = _make_gen({"agent_id": "ag1"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_agent_registry_by_address("0xAgent"))
         assert result["agent_id"] == "ag1"
 
     def test_create_agent_registry(self) -> None:
+        """Test create agent registry."""
         b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"agent_id": "ag2"})
+        b._call_mirrordb = _make_gen({"agent_id": "ag2"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b.create_agent_registry("agent_name", "t1", "0xAgent"))
         assert result["agent_id"] == "ag2"
 
     def test_create_agent_attribute(self) -> None:
+        """Test create agent attribute."""
         b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"attr_val_id": "av1"})
-        b.sign_message = _make_gen("sig_hex")
+        b._call_mirrordb = _make_gen({"attr_val_id": "av1"})  # type: ignore[assignment,method-assign]
+        b.sign_message = _make_gen("sig_hex")  # type: ignore[assignment,method-assign]
         result = _exhaust(b.create_agent_attribute("ag1", "a1", json_value='{"k":"v"}'))
         assert result["attr_val_id"] == "av1"
 
     def test_create_agent_attribute_no_signature(self) -> None:
+        """Test create agent attribute no signature."""
         b = _make_behaviour()
-        b.sign_message = _make_gen(None)
+        b.sign_message = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.create_agent_attribute("ag1", "a1"))
         assert result is None
 
@@ -3539,24 +3879,27 @@ class TestGetOrCreateAgentType:
     """Test _get_or_create_agent_type."""
 
     def test_cached(self) -> None:
+        """Test cached."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({"agent_type": json.dumps({"type_id": "t1"})})
+        b._read_kv = _make_gen({"agent_type": json.dumps({"type_id": "t1"})})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_agent_type("0xAddr"))
         assert result["type_id"] == "t1"
 
     def test_fetch_existing(self) -> None:
+        """Test fetch existing."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b.get_agent_type_by_name = _make_gen({"type_id": "t2"})
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.get_agent_type_by_name = _make_gen({"type_id": "t2"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_agent_type("0xAddr"))
         assert result["type_id"] == "t2"
 
     def test_create_new(self) -> None:
+        """Test create new."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b.get_agent_type_by_name = _make_gen(None)
-        b.create_agent_type = _make_gen({"type_id": "t3"})
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.get_agent_type_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.create_agent_type = _make_gen({"type_id": "t3"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_agent_type("0xAddr"))
         assert result["type_id"] == "t3"
 
@@ -3565,24 +3908,27 @@ class TestGetOrCreateAttrDef:
     """Test _get_or_create_attr_def."""
 
     def test_cached(self) -> None:
+        """Test cached."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({"attr_def": json.dumps({"attr_id": "a1"})})
+        b._read_kv = _make_gen({"attr_def": json.dumps({"attr_id": "a1"})})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_attr_def("t1", "ag1"))
         assert result["attr_id"] == "a1"
 
     def test_fetch_existing(self) -> None:
+        """Test fetch existing."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b.get_attr_def_by_name = _make_gen({"attr_id": "a2"})
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.get_attr_def_by_name = _make_gen({"attr_id": "a2"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_attr_def("t1", "ag1"))
         assert result["attr_id"] == "a2"
 
     def test_create_new(self) -> None:
+        """Test create new."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b.get_attr_def_by_name = _make_gen(None)
-        b.create_attribute_definition = _make_gen({"attr_id": "a3"})
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.get_attr_def_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.create_attribute_definition = _make_gen({"attr_id": "a3"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_attr_def("t1", "ag1"))
         assert result["attr_id"] == "a3"
 
@@ -3591,46 +3937,52 @@ class TestGetOrCreateAgentRegistry:
     """Test _get_or_create_agent_registry."""
 
     def test_cached(self) -> None:
+        """Test cached."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({"agent_registry": json.dumps({"agent_id": "ag1"})})
+        b._read_kv = _make_gen({"agent_registry": json.dumps({"agent_id": "ag1"})})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_agent_registry())
         assert result["agent_id"] == "ag1"
 
     def test_fetch_existing(self) -> None:
+        """Test fetch existing."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})
-        b.get_agent_registry_by_address = _make_gen({"agent_id": "ag2"})
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})  # type: ignore[assignment,method-assign]
+        b.get_agent_registry_by_address = _make_gen({"agent_id": "ag2"})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_agent_registry())
         assert result["agent_id"] == "ag2"
 
     def test_create_new(self) -> None:
+        """Test create new."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})
-        b.get_agent_registry_by_address = _make_gen(None)
-        b.create_agent_registry = _make_gen({"agent_id": "ag3"})
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})  # type: ignore[assignment,method-assign]
+        b.get_agent_registry_by_address = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.create_agent_registry = _make_gen({"agent_id": "ag3"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         with patch.object(b, "generate_name", return_value="test-name01"):
             result = _exhaust(b._get_or_create_agent_registry())
             assert result["agent_id"] == "ag3"
 
     def test_no_agent_type(self) -> None:
+        """Test no agent type."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b._get_or_create_agent_type = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_or_create_agent_type = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_or_create_agent_registry())
         assert result is None
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
 
-        def bad_gen(*a, **kw):
+        def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._get_or_create_agent_type = bad_gen
+        b._get_or_create_agent_type = bad_gen  # type: ignore[method-assign]
         result = _exhaust(b._get_or_create_agent_registry())
         assert result is None
 
@@ -3639,27 +3991,31 @@ class TestUpdateAirdropRewardsException:
     """Test _update_airdrop_rewards exception path."""
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
 
-        def bad_read(*a, **kw):
+        def bad_read(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad read."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._read_kv = bad_read
+        b._read_kv = bad_read  # type: ignore[method-assign]
         _exhaust(b._update_airdrop_rewards(100, "optimism", "0xhash"))
         b.context.logger.error.assert_called()
 
 
-class TestFetchRewardBalances:
+class TestFetchRewardBalancesNoSafe:
     """Test _fetch_reward_balances."""
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = _exhaust(b._fetch_reward_balances("optimism"))
         assert result == []
 
     def test_no_reward_tokens(self) -> None:
+        """Test no reward tokens."""
         b = _make_behaviour()
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.REWARD_TOKEN_ADDRESSES",
@@ -3669,8 +4025,9 @@ class TestFetchRewardBalances:
             assert result == []
 
     def test_with_balance(self) -> None:
+        """Test with balance."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(1000)
+        b._get_token_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.REWARD_TOKEN_ADDRESSES",
             {"optimism": {"0x" + "11" * 20: "OLAS"}},
@@ -3680,8 +4037,9 @@ class TestFetchRewardBalances:
             assert result[0]["asset_symbol"] == "OLAS"
 
     def test_zero_balance(self) -> None:
+        """Test zero balance."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(0)
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.REWARD_TOKEN_ADDRESSES",
             {"optimism": {"0x" + "11" * 20: "OLAS"}},
@@ -3690,13 +4048,15 @@ class TestFetchRewardBalances:
             assert result == []
 
     def test_token_exception(self) -> None:
+        """Test token exception."""
         b = _make_behaviour()
 
-        def bad_balance(*a, **kw):
+        def bad_balance(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad balance."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._get_token_balance = bad_balance
+        b._get_token_balance = bad_balance  # type: ignore[method-assign]
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.REWARD_TOKEN_ADDRESSES",
             {"optimism": {"0x" + "11" * 20: "OLAS"}},
@@ -3705,6 +4065,7 @@ class TestFetchRewardBalances:
             assert result == []
 
     def test_outer_exception(self) -> None:
+        """Test outer exception."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {"optimism": "0x" + "aa" * 20}
         with patch(
@@ -3719,83 +4080,95 @@ class TestGetLastKnownPrice:
     """Test _get_last_known_price."""
 
     def test_found_current_price(self) -> None:
+        """Test found current price."""
         b = _make_behaviour()
         cache_data = json.dumps({"current": [5.0, time.time()]})
-        key = b._get_price_cache_key("0xToken", None)
+        b._get_price_cache_key("0xToken", None)
 
         # We need to mock _read_kv to return data for any cache key
-        def mock_read(*args, **kwargs):
+        def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock read."""
             keys = args[0] if args else kwargs.get("keys", ())
             k = keys[0]
             yield
             return {k: cache_data}
 
-        b._read_kv = mock_read
+        b._read_kv = mock_read  # type: ignore[method-assign]
         result = _exhaust(b._get_last_known_price("0xToken"))
         assert result == 5.0
 
     def test_not_found(self) -> None:
+        """Test not found."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_last_known_price("0xToken"))
         assert result is None
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
 
-        def bad_read(*a, **kw):
+        def bad_read(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad read."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._read_kv = bad_read
+        b._read_kv = bad_read  # type: ignore[method-assign]
         result = _exhaust(b._get_last_known_price("0xToken"))
         assert result is None
 
     def test_invalid_cache_data(self) -> None:
+        """Test invalid cache data."""
         b = _make_behaviour()
 
-        def mock_read(*args, **kwargs):
+        def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock read."""
             keys = args[0] if args else kwargs.get("keys", ())
             k = keys[0]
             yield
             return {k: "not json"}
 
-        b._read_kv = mock_read
+        b._read_kv = mock_read  # type: ignore[method-assign]
         result = _exhaust(b._get_last_known_price("0xToken"))
         # Should continue to next dates and eventually return None
         assert result is None
 
 
-class TestFetchOusdtBalance:
+class TestFetchOusdtBalanceNoSafe:
     """Test _fetch_ousdt_balance."""
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
 
     def test_with_balance(self) -> None:
+        """Test with balance."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(1000)
+        b._get_token_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result["asset_symbol"] == "oUSDT"
         assert result["balance"] == 1000
 
     def test_zero_balance(self) -> None:
+        """Test zero balance."""
         b = _make_behaviour()
-        b._get_token_balance = _make_gen(0)
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
 
-        def bad_balance(*a, **kw):
+        def bad_balance(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad balance."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._get_token_balance = bad_balance
+        b._get_token_balance = bad_balance  # type: ignore[method-assign]
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
 
@@ -3804,20 +4177,23 @@ class TestGetServiceStakingState:
     """Test _get_service_staking_state."""
 
     def test_no_service_id(self) -> None:
+        """Test no service id."""
         b = _make_behaviour()
         b.params.on_chain_service_id = None
         _exhaust(b._get_service_staking_state("optimism"))
         assert b.service_staking_state == StakingState.UNSTAKED
 
     def test_returns_state(self) -> None:
+        """Test returns state."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(StakingState.STAKED.value)
+        b.contract_interact = _make_gen(StakingState.STAKED.value)  # type: ignore[assignment,method-assign]
         _exhaust(b._get_service_staking_state("optimism"))
         assert b.service_staking_state == StakingState.STAKED
 
     def test_none_state(self) -> None:
+        """Test none state."""
         b = _make_behaviour()
-        b.contract_interact = _make_gen(None)
+        b.contract_interact = _make_gen(None)  # type: ignore[assignment,method-assign]
         _exhaust(b._get_service_staking_state("optimism"))
         assert b.service_staking_state == StakingState.UNSTAKED
 
@@ -3826,15 +4202,17 @@ class TestGetServiceInfo:
     """Test _get_service_info."""
 
     def test_no_service_id(self) -> None:
+        """Test no service id."""
         b = _make_behaviour()
         b.params.on_chain_service_id = None
         result = _exhaust(b._get_service_info("optimism"))
         assert result is None
 
     def test_returns_info(self) -> None:
+        """Test returns info."""
         b = _make_behaviour()
         expected = (1, 2, (3, 4))
-        b.contract_interact = _make_gen(expected)
+        b.contract_interact = _make_gen(expected)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_service_info("optimism"))
         assert result == expected
 
@@ -3843,24 +4221,27 @@ class TestGetEthRemainingAmountEdge:
     """Test get_eth_remaining_amount edge cases."""
 
     def test_on_chain_matches_cached(self) -> None:
+        """Test on chain matches cached."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})
-        b._get_native_balance = _make_gen(1000)
+        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})  # type: ignore[assignment,method-assign]
+        b._get_native_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 1000
 
     def test_on_chain_none_returns_cached(self) -> None:
+        """Test on chain none returns cached."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})
-        b._get_native_balance = _make_gen(None)
+        b._read_kv = _make_gen({ETH_REMAINING_KEY: "1000"})  # type: ignore[assignment,method-assign]
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 1000
 
     def test_on_chain_mismatch_syncs(self) -> None:
+        """Test on chain mismatch syncs."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({ETH_REMAINING_KEY: "500"})
-        b._get_native_balance = _make_gen(1000)
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen({ETH_REMAINING_KEY: "500"})  # type: ignore[assignment,method-assign]
+        b._get_native_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_eth_remaining_amount())
         assert result == 1000
 
@@ -3869,9 +4250,10 @@ class TestUpdateEthRemainingAmount:
     """Test update_eth_remaining_amount."""
 
     def test_update(self) -> None:
+        """Test update."""
         b = _make_behaviour()
-        b.get_eth_remaining_amount = _make_gen(1000)
-        b._write_kv = _make_gen(True)
+        b.get_eth_remaining_amount = _make_gen(1000)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_eth_remaining_amount(300))
 
 
@@ -3879,16 +4261,18 @@ class TestResetEthRemainingAmount:
     """Test reset_eth_remaining_amount."""
 
     def test_reset(self) -> None:
+        """Test reset."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(5000)
-        b._write_kv = _make_gen(True)
+        b._get_native_balance = _make_gen(5000)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.reset_eth_remaining_amount())
         assert result == 5000
 
     def test_reset_none_balance(self) -> None:
+        """Test reset none balance."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(None)
-        b._write_kv = _make_gen(True)
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.reset_eth_remaining_amount())
         assert result == 0
 
@@ -3897,19 +4281,22 @@ class TestStoreEntryCosts:
     """Test _store_entry_costs."""
 
     def test_success(self) -> None:
+        """Test success."""
         b = _make_behaviour()
-        b._get_all_entry_costs = _make_gen({})
-        b._write_kv = _make_gen(True)
+        b._get_all_entry_costs = _make_gen({})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._store_entry_costs("optimism", "pos1", 0.5))
 
     def test_exception(self) -> None:
+        """Test exception."""
         b = _make_behaviour()
 
-        def bad_gen(*a, **kw):
+        def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("fail")
             yield  # noqa: unreachable
 
-        b._get_all_entry_costs = bad_gen
+        b._get_all_entry_costs = bad_gen  # type: ignore[method-assign]
         _exhaust(b._store_entry_costs("optimism", "pos1", 0.5))
         b.context.logger.error.assert_called()
 
@@ -3918,15 +4305,17 @@ class TestGetModeBalancesFromExplorerApi:
     """Test _get_mode_balances_from_explorer_api."""
 
     def test_no_safe_address(self) -> None:
+        """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
         result = _exhaust(b._get_mode_balances_from_explorer_api())
         assert result == []
 
     def test_with_eth_and_tokens(self) -> None:
+        """Test with eth and tokens."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(1000)
-        b._fetch_mode_token_balances = _make_gen(
+        b._get_native_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
+        b._fetch_mode_token_balances = _make_gen(  # type: ignore[assignment,method-assign]
             [
                 {
                     "asset_symbol": "USDC",
@@ -3940,9 +4329,10 @@ class TestGetModeBalancesFromExplorerApi:
         assert len(result) == 2  # ETH + USDC
 
     def test_zero_eth(self) -> None:
+        """Test zero eth."""
         b = _make_behaviour()
-        b._get_native_balance = _make_gen(0)
-        b._fetch_mode_token_balances = _make_gen([])
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._fetch_mode_token_balances = _make_gen([])  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_mode_balances_from_explorer_api())
         assert result == []
 
@@ -3951,30 +4341,34 @@ class TestUpdateAirdropRewardsFull:
     """Test _update_airdrop_rewards full paths."""
 
     def test_dedup_skips(self) -> None:
+        """Test dedup skips."""
         b = _make_behaviour()
-        b._read_kv = _make_gen({"airdrop_processed_optimism_0xhash": "true"})
+        b._read_kv = _make_gen({"airdrop_processed_optimism_0xhash": "true"})  # type: ignore[assignment,method-assign]
         _exhaust(b._update_airdrop_rewards(100, "optimism", "0xhash"))
 
     def test_new_tx(self) -> None:
+        """Test new tx."""
         b = _make_behaviour()
         # First call returns no processed key, second returns 0 total
         call_count = [0]
 
-        def mock_read(*args, **kwargs):
+        def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock read."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
                 return {}  # not processed yet
             return {}  # no total yet
 
-        b._read_kv = mock_read
-        b._write_kv = _make_gen(True)
+        b._read_kv = mock_read  # type: ignore[method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._update_airdrop_rewards(100, "optimism", "0xhash"))
 
     def test_no_tx_hash(self) -> None:
+        """Test no tx hash."""
         b = _make_behaviour()
-        b._get_total_airdrop_rewards = _make_gen(50)
-        b._write_kv = _make_gen(True)
+        b._get_total_airdrop_rewards = _make_gen(50)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         _exhaust(b._update_airdrop_rewards(100, "optimism"))
 
 
@@ -3982,6 +4376,7 @@ class TestStoreDataIOError:
     """Test _store_data with IOError during json.dump."""
 
     def test_io_error(self) -> None:
+        """Test io error."""
         b = _make_behaviour()
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             fname = f.name
@@ -3997,6 +4392,7 @@ class TestGetCachedPriceCurrentPrice:
     """Test _get_cached_price with current price (no date key)."""
 
     def test_current_price_valid_ttl(self) -> None:
+        """Test current price valid ttl."""
         b = _make_behaviour()
         # The _get_cached_price with date="" triggers the else branch at line 1357
         # But line 1354 checks `if date:` — we need to pass an empty string for date
@@ -4004,26 +4400,28 @@ class TestGetCachedPriceCurrentPrice:
         # The else branch at 1357 is for when date is falsy
         cache_key = b._get_price_cache_key("0xToken", "")
         cache_data = json.dumps({"current": [5.0, time.time()]})
-        b._read_kv = _make_gen({cache_key: cache_data})
+        b._read_kv = _make_gen({cache_key: cache_data})  # type: ignore[assignment,method-assign]
         # Need to mock _get_current_timestamp to return recent time
         with patch.object(b, "_get_current_timestamp", return_value=time.time()):
             result = _exhaust(b._get_cached_price("0xToken", ""))
             assert result == 5.0
 
     def test_current_price_expired_ttl(self) -> None:
+        """Test current price expired ttl."""
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "")
         cache_data = json.dumps({"current": [5.0, 0]})  # old timestamp
-        b._read_kv = _make_gen({cache_key: cache_data})
+        b._read_kv = _make_gen({cache_key: cache_data})  # type: ignore[assignment,method-assign]
         with patch.object(b, "_get_current_timestamp", return_value=time.time()):
             result = _exhaust(b._get_cached_price("0xToken", ""))
             assert result is None
 
     def test_current_price_no_current_data(self) -> None:
+        """Test current price no current data."""
         b = _make_behaviour()
         cache_key = b._get_price_cache_key("0xToken", "")
         cache_data = json.dumps({})
-        b._read_kv = _make_gen({cache_key: cache_data})
+        b._read_kv = _make_gen({cache_key: cache_data})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_cached_price("0xToken", ""))
         assert result is None
 
@@ -4032,9 +4430,10 @@ class TestCachePriceNoDate:
     """Test _cache_price without date (current price mode)."""
 
     def test_cache_current_price(self) -> None:
+        """Test cache current price."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b._write_kv = _make_gen(True)
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         with patch.object(b, "_get_current_timestamp", return_value=1700000000):
             _exhaust(b._cache_price("0xToken", 5.0, ""))
 
@@ -4043,8 +4442,9 @@ class TestFetchZeroAddressPrice:
     """Test _fetch_zero_address_price."""
 
     def test_returns_eth_price(self) -> None:
+        """Test returns eth price."""
         b = _make_behaviour()
-        b._fetch_coin_price = _make_gen(1800.0)
+        b._fetch_coin_price = _make_gen(1800.0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_zero_address_price())
         assert result == 1800.0
 
@@ -4053,15 +4453,17 @@ class TestCalcInitInvestEdge:
     """Test calculate_initial_investment_value additional edge cases."""
 
     def test_token1_decimals_none(self) -> None:
+        """Test token1 decimals none."""
         b = _make_behaviour()
         call_count = [0]
 
-        def mock_decimals(*args, **kwargs):
+        def mock_decimals(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock decimals."""
             call_count[0] += 1
             yield
             return 18 if call_count[0] == 1 else None
 
-        b._get_token_decimals = mock_decimals
+        b._get_token_decimals = mock_decimals  # type: ignore[method-assign]
         pos = {
             "token0": "0xT0",
             "token0_symbol": "A",
@@ -4076,9 +4478,10 @@ class TestCalcInitInvestEdge:
         assert result is None
 
     def test_token1_no_historical_price(self) -> None:
+        """Test token1 no historical price."""
         b = _make_behaviour()
-        b._get_token_decimals = _make_gen(18)
-        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0})
+        b._get_token_decimals = _make_gen(18)  # type: ignore[assignment,method-assign]
+        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0})  # type: ignore[assignment,method-assign]
         pos = {
             "token0": "0xT0",
             "token0_symbol": "A",
@@ -4093,9 +4496,10 @@ class TestCalcInitInvestEdge:
         assert result is None
 
     def test_enter_timestamp_fallback(self) -> None:
+        """Test enter timestamp fallback."""
         b = _make_behaviour()
-        b._get_token_decimals = _make_gen(6)
-        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0})
+        b._get_token_decimals = _make_gen(6)  # type: ignore[assignment,method-assign]
+        b._fetch_historical_token_prices = _make_gen({"0xT0": 1.0})  # type: ignore[assignment,method-assign]
         pos = {
             "token0": "0xT0",
             "token0_symbol": "USDC",
@@ -4113,12 +4517,12 @@ class TestFetchTokenPricesSmaEdge:
     def test_prices_truncated_to_num_hours(self) -> None:
         """Test that prices list is truncated when longer than num_hours."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         # Create 30 data points; num_hours=2 should truncate to last 2
         prices = [[i * 3600, 100 + i] for i in range(30)]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(return_value=(True, {"prices": prices}))
+            b.coingecko.request = MagicMock(return_value=(True, {"prices": prices}))  # type: ignore[method-assign]
             result = _exhaust(
                 b._fetch_token_prices_sma("0xToken", "optimism", num_hours=2)
             )
@@ -4130,10 +4534,13 @@ class TestGetOrCreateAgentTypeFailure:
     """Test _get_or_create_agent_type when creation fails."""
 
     def test_create_failure_raises(self) -> None:
+        """Test create failure raises."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b.get_agent_type_by_name = _make_gen(None)
-        b.create_agent_type = _make_gen(None)  # creation fails
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.get_agent_type_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.create_agent_type = _make_gen(  # type: ignore[method-assign]
+            None
+        )  # creation fails  # type: ignore[method-assign]
         with pytest.raises(Exception, match="Failed to create agent type"):
             _exhaust(b._get_or_create_agent_type("0xAddr"))
 
@@ -4142,10 +4549,13 @@ class TestGetOrCreateAttrDefFailure:
     """Test _get_or_create_attr_def when creation fails."""
 
     def test_create_failure_raises(self) -> None:
+        """Test create failure raises."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b.get_attr_def_by_name = _make_gen(None)
-        b.create_attribute_definition = _make_gen(None)  # creation fails
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.get_attr_def_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.create_attribute_definition = _make_gen(  # type: ignore[method-assign]
+            None
+        )  # creation fails  # type: ignore[method-assign]
         with pytest.raises(Exception, match="Failed to create attribute definition"):
             _exhaust(b._get_or_create_attr_def("t1", "ag1"))
 
@@ -4154,11 +4564,14 @@ class TestGetOrCreateAgentRegistryCreateFails:
     """Test _get_or_create_agent_registry when create_agent_registry returns None."""
 
     def test_create_fails(self) -> None:
+        """Test create fails."""
         b = _make_behaviour()
-        b._read_kv = _make_gen(None)
-        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})
-        b.get_agent_registry_by_address = _make_gen(None)
-        b.create_agent_registry = _make_gen(None)  # creation fails
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})  # type: ignore[assignment,method-assign]
+        b.get_agent_registry_by_address = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.create_agent_registry = _make_gen(  # type: ignore[method-assign]
+            None
+        )  # creation fails  # type: ignore[method-assign]
         with patch.object(b, "generate_name", return_value="test-name01"):
             result = _exhaust(b._get_or_create_agent_registry())
             assert result is None
@@ -4168,6 +4581,7 @@ class TestGetLastKnownPriceHistorical:
     """Test _get_last_known_price finding historical price."""
 
     def test_found_historical_price(self) -> None:
+        """Test found historical price."""
         b = _make_behaviour()
         from datetime import datetime
 
@@ -4176,13 +4590,14 @@ class TestGetLastKnownPriceHistorical:
             date_str = datetime.utcfromtimestamp(1700000000).strftime("%d-%m-%Y")
             cache_data = json.dumps({date_str: 42.5})
 
-            def mock_read(*args, **kwargs):
+            def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Mock read."""
                 keys = args[0] if args else kwargs.get("keys", ())
                 k = keys[0]
                 yield
                 return {k: cache_data}
 
-            b._read_kv = mock_read
+            b._read_kv = mock_read  # type: ignore[method-assign]
             result = _exhaust(b._get_last_known_price("0xToken"))
             assert result == 42.5
 
@@ -4191,6 +4606,7 @@ class TestFetchRewardBalancesOuterException:
     """Test _fetch_reward_balances outer exception."""
 
     def test_outer_exception_catches(self) -> None:
+        """Test outer exception catches."""
         b = _make_behaviour()
         # Make safe_contract_addresses.get raise an exception
         b.params.safe_contract_addresses = MagicMock()
@@ -4203,10 +4619,12 @@ class TestPaginationMultiPage:
     """Test pagination methods with multiple pages."""
 
     def test_safe_balances_two_pages(self) -> None:
+        """Test safe balances two pages."""
         b = _make_behaviour()
         call_count = [0]
 
-        def mock_request(*args, **kwargs):
+        def mock_request(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock request."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4216,15 +4634,17 @@ class TestPaginationMultiPage:
                 {"results": [{"tokenAddress": "0x" + "ab" * 20}], "next": None},
             )
 
-        b._request_with_retries = mock_request
+        b._request_with_retries = mock_request  # type: ignore[method-assign]
         result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
         assert len(result) == 2
 
     def test_mode_tokens_two_pages(self) -> None:
+        """Test mode tokens two pages."""
         b = _make_behaviour()
         call_count = [0]
 
-        def mock_request(*args, **kwargs):
+        def mock_request(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock request."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4240,7 +4660,7 @@ class TestPaginationMultiPage:
                 {"items": [{"token": {"address": "0xB"}}], "next_page_params": None},
             )
 
-        b._request_with_retries = mock_request
+        b._request_with_retries = mock_request  # type: ignore[method-assign]
         result = _exhaust(b._fetch_mode_tokens_with_pagination("0xSafe"))
         assert len(result) == 2
 
@@ -4253,7 +4673,8 @@ class TestRequestWithRetriesMultiIteration:
         b = _make_behaviour()
         call_count = [0]
 
-        def mock_http(*args, **kwargs):
+        def mock_http(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock http."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4266,8 +4687,8 @@ class TestRequestWithRetriesMultiIteration:
             resp.body = json.dumps({"result": "ok"}).encode("utf-8")
             return resp
 
-        b.get_http_response = mock_http
-        b.sleep = _make_gen(None)
+        b.get_http_response = mock_http  # type: ignore[method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -4283,7 +4704,8 @@ class TestRequestWithRetriesMultiIteration:
         b = _make_behaviour()
         call_count = [0]
 
-        def mock_http(*args, **kwargs):
+        def mock_http(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock http."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4296,8 +4718,8 @@ class TestRequestWithRetriesMultiIteration:
             resp.body = json.dumps({"result": "ok"}).encode("utf-8")
             return resp
 
-        b.get_http_response = mock_http
-        b.sleep = _make_gen(None)
+        b.get_http_response = mock_http  # type: ignore[method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -4313,7 +4735,8 @@ class TestRequestWithRetriesMultiIteration:
         b = _make_behaviour()
         call_count = [0]
 
-        def mock_http(*args, **kwargs):
+        def mock_http(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Mock http."""
             call_count[0] += 1
             yield
             if call_count[0] == 1:
@@ -4326,8 +4749,8 @@ class TestRequestWithRetriesMultiIteration:
             resp.body = json.dumps({"result": "ok"}).encode("utf-8")
             return resp
 
-        b.get_http_response = mock_http
-        b.sleep = _make_gen(None)
+        b.get_http_response = mock_http  # type: ignore[method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         success, data = _exhaust(
             b._request_with_retries(
                 endpoint="https://example.com",
@@ -4344,12 +4767,13 @@ class TestFetchTokenPricesSmaEmptyAfterFilter:
     """Test SMA with entries that produce empty prices after filter."""
 
     def test_empty_after_filter(self) -> None:
+        """Test empty after filter."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         # Entries with len < 2 will be filtered out
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(
+            b.coingecko.request = MagicMock(  # type: ignore[method-assign]
                 return_value=(True, {"prices": [[1700000000]]})  # single element entry
             )
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
@@ -4360,6 +4784,7 @@ class TestExecuteStrategyIsolatedNamespace:
     """Test execute_strategy uses isolated namespaces instead of globals."""
 
     def test_isolated_namespace(self) -> None:
+        """Test isolated namespace."""
         import packages.valory.skills.liquidity_trader_abci.behaviours.base as base_mod
 
         method_name = "_test_strategy_method"
@@ -4367,7 +4792,7 @@ class TestExecuteStrategyIsolatedNamespace:
         executables = {"test_strat": (strategy_code, method_name)}
 
         result = execute_strategy("test_strat", executables)
-        assert result["result"] == "new"
+        assert result["result"] == "new"  # type: ignore[index]
 
         # Verify the function was NOT injected into module globals
         assert method_name not in base_mod.__dict__
@@ -4377,13 +4802,15 @@ class TestFetchOusdtBalanceExceptionInner:
     """Test _fetch_ousdt_balance with exception during balance fetch."""
 
     def test_exception_during_get_balance(self) -> None:
+        """Test exception during get balance."""
         b = _make_behaviour()
 
-        def bad_gen(*a, **kw):
+        def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Bad gen."""
             raise Exception("contract error")
             yield  # noqa: unreachable
 
-        b._get_token_balance = bad_gen
+        b._get_token_balance = bad_gen  # type: ignore[method-assign]
         result = _exhaust(b._fetch_ousdt_balance("optimism"))
         assert result is None
 
@@ -4444,6 +4871,7 @@ class TestReadAgentPerformanceFalseBranch:
     """Test read_agent_performance when data already exists."""
 
     def test_with_existing_data(self) -> None:
+        """Test with existing data."""
         b = _make_behaviour()
         b.agent_performance = {"timestamp": 123, "metrics": [], "agent_behavior": None}
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -4461,6 +4889,7 @@ class TestGetBalanceChainMatch:
     """Test _get_balance with matching chain and token."""
 
     def test_matching_chain_and_token(self) -> None:
+        """Test matching chain and token."""
         b = _make_behaviour()
         token = "0x" + "ab" * 20
         positions = [
@@ -4475,6 +4904,7 @@ class TestGetBalanceChainMatch:
         assert result == 1000
 
     def test_no_matching_chain(self) -> None:
+        """Test no matching chain."""
         b = _make_behaviour()
         positions = [{"chain": "mode", "assets": []}]
         result = b._get_balance("optimism", "0xToken", positions)
@@ -4485,8 +4915,9 @@ class TestFetchTokenPricesPriceNone:
     """Test _fetch_token_prices when price is None (not added to dict)."""
 
     def test_price_none_not_added(self) -> None:
+        """Test price none not added."""
         b = _make_behaviour()
-        b._fetch_token_price = _make_gen(None)
+        b._fetch_token_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         token_balances = [{"token": "0x" + "ab" * 20, "chain": "optimism"}]
         result = _exhaust(b._fetch_token_prices(token_balances))
         assert result == {}
@@ -4496,8 +4927,9 @@ class TestFetchHistoricalTokenPricesFalsy:
     """Test _fetch_historical_token_prices when price is falsy."""
 
     def test_price_zero_not_added(self) -> None:
+        """Test price zero not added."""
         b = _make_behaviour()
-        b._fetch_historical_token_price = _make_gen(0)
+        b._fetch_historical_token_price = _make_gen(0)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="usd-coin"):
             result = _exhaust(
                 b._fetch_historical_token_prices(
@@ -4511,15 +4943,16 @@ class TestUseX402True:
     """Test methods with use_x402=True to cover the other branch."""
 
     def test_fetch_token_price_x402(self) -> None:
+        """Test fetch token price x402."""
         b = _make_behaviour()
         b.params.use_x402 = True
-        b._get_cached_price = _make_gen(None)
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         token_addr = "0x" + "ab" * 20
-        b.coingecko.request = MagicMock(
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, {token_addr.lower(): {"usd": 1.0}})
         )
-        b._cache_price = _make_gen(None)
-        b._get_last_known_price = _make_gen(None)
+        b._cache_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_last_known_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         # Need eoa_account property mock
         with patch.object(
             type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()
@@ -4528,13 +4961,14 @@ class TestUseX402True:
             assert result == 1.0
 
     def test_fetch_coin_price_x402(self) -> None:
+        """Test fetch coin price x402."""
         b = _make_behaviour()
         b.params.use_x402 = True
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, {"ethereum": {"usd": 1800.0}})
         )
-        b._cache_price = _make_gen(None)
+        b._cache_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(
             type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()
         ):
@@ -4542,13 +4976,14 @@ class TestUseX402True:
             assert result == 1800.0
 
     def test_fetch_historical_price_x402(self) -> None:
+        """Test fetch historical price x402."""
         b = _make_behaviour()
         b.params.use_x402 = True
-        b._get_cached_price = _make_gen(None)
-        b.coingecko.request = MagicMock(
+        b._get_cached_price = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b.coingecko.request = MagicMock(  # type: ignore[method-assign]
             return_value=(True, {"market_data": {"current_price": {"usd": 1.0}}})
         )
-        b._cache_price = _make_gen(None)
+        b._cache_price = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(
             type(b), "eoa_account", new_callable=PropertyMock, return_value=MagicMock()
         ):
@@ -4556,12 +4991,13 @@ class TestUseX402True:
             assert result == 1.0
 
     def test_fetch_sma_x402(self) -> None:
+        """Test fetch sma x402."""
         b = _make_behaviour()
         b.params.use_x402 = True
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
-            b.coingecko.request = MagicMock(
+            b.coingecko.request = MagicMock(  # type: ignore[method-assign]
                 return_value=(True, {"prices": [[1, 100.0]]})
             )
             with patch.object(
@@ -4578,12 +5014,13 @@ class TestFetchSmaResponseNotDict:
     """Test SMA when response is not a dict (non-dict check at 1953)."""
 
     def test_response_is_list(self) -> None:
+        """Test response is list."""
         b = _make_behaviour()
-        b._get_token_symbol = _make_gen("ETH")
-        b.sleep = _make_gen(None)
+        b._get_token_symbol = _make_gen("ETH")  # type: ignore[assignment,method-assign]
+        b.sleep = _make_gen(None)  # type: ignore[assignment,method-assign]
         with patch.object(b, "get_coin_id_from_symbol", return_value="ethereum"):
             # Return a list instead of dict - should still extract prices if it has "prices" key
-            b.coingecko.request = MagicMock(
+            b.coingecko.request = MagicMock(  # type: ignore[method-assign]
                 return_value=(True, {"prices": [[1, 100.0]]})
             )
             result = _exhaust(b._fetch_token_prices_sma("0xToken", "optimism"))
@@ -4594,10 +5031,11 @@ class TestUpdateAccumulatedRewardsNoOlas:
     """Test update_accumulated_rewards_for_chain when no OLAS address."""
 
     def test_no_olas_address(self) -> None:
+        """Test no olas address."""
         b = _make_behaviour()
-        b.should_update_rewards_from_subgraph = _make_gen(True)
-        b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})
-        b._write_kv = _make_gen(True)
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.OLAS_ADDRESSES",
             {},
@@ -4609,6 +5047,7 @@ class TestBuildExitPoolActionBaseEmptyPositions:
     """Test _build_exit_pool_action_base with CL pool but empty positions."""
 
     def test_cl_pool_empty_positions(self) -> None:
+        """Test cl pool empty positions."""
         b = _make_behaviour()
         pos = {
             "dex_type": "velodrome",
@@ -4621,7 +5060,7 @@ class TestBuildExitPoolActionBaseEmptyPositions:
         }
         result = b._build_exit_pool_action_base(pos)
         # token_ids and liquidities will be empty, so the if check is False
-        assert "token_ids" not in result
+        assert "token_ids" not in result  # type: ignore[operator]
 
 
 class TestGetLastKnownPriceHistoricalBranch:
@@ -4637,12 +5076,13 @@ class TestGetLastKnownPriceHistoricalBranch:
             # Cache without "current" key, only historical
             cache_data = json.dumps({date_str: 42.5})
 
-            def mock_read(*args, **kwargs):
+            def mock_read(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Mock read."""
                 keys = args[0] if args else kwargs.get("keys", ())
                 k = keys[0]
                 yield
                 return {k: cache_data}
 
-            b._read_kv = mock_read
+            b._read_kv = mock_read  # type: ignore[method-assign]
             result = _exhaust(b._get_last_known_price("0xToken"))
             assert result == 42.5

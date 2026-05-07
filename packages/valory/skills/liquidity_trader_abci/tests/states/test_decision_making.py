@@ -53,9 +53,9 @@ class TestDecisionMakingRound:
         mock_synced.actions = []
         mock_synced.last_executed_action_index = None
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         mock_synced.update.return_value = mock_synced
 
         result = round_obj.end_block()
@@ -72,9 +72,9 @@ class TestDecisionMakingRound:
         mock_synced.actions = []
         mock_synced.last_executed_action_index = None
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         mock_synced.update.return_value = mock_synced
 
         result = round_obj.end_block()
@@ -97,9 +97,9 @@ class TestDecisionMakingRound:
         mock_synced.actions = [{"action": "existing"}]
         mock_synced.last_executed_action_index = 0
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         mock_synced.update.return_value = mock_synced
 
         result = round_obj.end_block()
@@ -120,9 +120,9 @@ class TestDecisionMakingRound:
         mock_synced.actions = []
         mock_synced.last_executed_action_index = None
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         mock_synced.update.return_value = mock_synced
 
         result = round_obj.end_block()
@@ -142,9 +142,9 @@ class TestDecisionMakingRound:
         mock_synced.actions = []
         mock_synced.last_executed_action_index = None
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=True)
-        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         mock_synced.update.return_value = mock_synced
 
         result = round_obj.end_block()
@@ -154,10 +154,10 @@ class TestDecisionMakingRound:
         """Test end_block returns NO_MAJORITY when majority not possible."""
         round_obj = object.__new__(DecisionMakingRound)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=False)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.nb_participants = 4
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         type(round_obj).collection = PropertyMock(return_value={})
 
         with patch.object(
@@ -172,10 +172,10 @@ class TestDecisionMakingRound:
         """Test end_block returns None when waiting for threshold."""
         round_obj = object.__new__(DecisionMakingRound)
 
-        type(round_obj).threshold_reached = PropertyMock(return_value=False)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.nb_participants = 4
-        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
         type(round_obj).collection = PropertyMock(return_value={})
 
         with patch.object(

@@ -64,7 +64,7 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
                 return synced_data, Event.WITHDRAWAL_INITIATED
 
         if event != Event.DONE:
-            return res
+            return res  # type: ignore[return-value]
 
         if not synced_data.actions:
             return synced_data, Event.WAIT

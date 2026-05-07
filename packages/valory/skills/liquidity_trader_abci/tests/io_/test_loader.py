@@ -45,8 +45,8 @@ class TestComponentPackageLoader:
         component_yaml, entry_point, callable_method = ComponentPackageLoader.load(
             serialized_objects
         )
-        assert component_yaml["entry_point"] == "main.py"
-        assert component_yaml["callable"] == "run"
+        assert component_yaml["entry_point"] == "main.py"  # type: ignore[index]
+        assert component_yaml["callable"] == "run"  # type: ignore[index]
         assert entry_point == "def run(): pass"
         assert callable_method == "run"
 

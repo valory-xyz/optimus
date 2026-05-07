@@ -65,7 +65,7 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         synced_data, event = cast(Tuple[SynchronizedData, Event], res)
 
         if event != Event.DONE:
-            return res
+            return res  # type: ignore[return-value]
 
         if synced_data.is_staking_kpi_met is None:
             return synced_data, Event.ERROR

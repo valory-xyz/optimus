@@ -23,10 +23,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.velodrome_gauge.contract import VelodromeGaugeContract
-
 
 MOCK_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
 MOCK_ACCOUNT = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
@@ -37,10 +34,7 @@ class TestEncodeCall:
     """Tests for the _encode_call method."""
 
     def test_encode_call_returns_tx_hash(self) -> None:
-        """Test that _encode_call returns a dict with the tx_hash key.
-
-        :return: None
-        """
+        """Test that _encode_call returns a dict with the tx_hash key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         encoded_data = "0xabcdef"
@@ -58,10 +52,7 @@ class TestEncodeCall:
         assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_encode_call_calls_encode_abi_with_correct_args(self) -> None:
-        """Test that _encode_call calls encode_abi with the correct method name and args.
-
-        :return: None
-        """
+        """Test that _encode_call calls encode_abi with the correct method name and args."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.encode_abi.return_value = "0x00"
@@ -84,10 +75,7 @@ class TestDeposit:
     """Tests for the deposit method."""
 
     def test_deposit_with_valid_amount_returns_tx_hash(self) -> None:
-        """Test that deposit returns a dict with tx_hash for a valid positive amount.
-
-        :return: None
-        """
+        """Test that deposit returns a dict with tx_hash for a valid positive amount."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         encoded_data = "0xde90517da70a"
@@ -103,10 +91,7 @@ class TestDeposit:
         assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_deposit_calls_encode_abi_with_correct_args(self) -> None:
-        """Test that deposit calls encode_abi with 'deposit' method name and amount tuple.
-
-        :return: None
-        """
+        """Test that deposit calls encode_abi with 'deposit' method name and amount tuple."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.encode_abi.return_value = "0x00"
@@ -123,10 +108,7 @@ class TestDeposit:
         )
 
     def test_deposit_with_zero_amount_returns_error(self) -> None:
-        """Test that deposit returns an error dict when amount is zero.
-
-        :return: None
-        """
+        """Test that deposit returns an error dict when amount is zero."""
         mock_ledger_api = MagicMock()
 
         result = VelodromeGaugeContract.deposit(mock_ledger_api, MOCK_ADDRESS, 0)
@@ -138,10 +120,7 @@ class TestWithdraw:
     """Tests for the withdraw method."""
 
     def test_withdraw_with_valid_amount_returns_tx_hash(self) -> None:
-        """Test that withdraw returns a dict with tx_hash for a valid positive amount.
-
-        :return: None
-        """
+        """Test that withdraw returns a dict with tx_hash for a valid positive amount."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         encoded_data = "0xa17fd7a7"
@@ -159,10 +138,7 @@ class TestWithdraw:
         assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_withdraw_calls_encode_abi_with_correct_args(self) -> None:
-        """Test that withdraw calls encode_abi with 'withdraw' method name and amount tuple.
-
-        :return: None
-        """
+        """Test that withdraw calls encode_abi with 'withdraw' method name and amount tuple."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.encode_abi.return_value = "0x00"
@@ -179,10 +155,7 @@ class TestWithdraw:
         )
 
     def test_withdraw_with_zero_amount_returns_error(self) -> None:
-        """Test that withdraw returns an error dict when amount is zero.
-
-        :return: None
-        """
+        """Test that withdraw returns an error dict when amount is zero."""
         mock_ledger_api = MagicMock()
 
         result = VelodromeGaugeContract.withdraw(mock_ledger_api, MOCK_ADDRESS, 0)
@@ -194,10 +167,7 @@ class TestGetReward:
     """Tests for the get_reward method."""
 
     def test_get_reward_returns_tx_hash(self) -> None:
-        """Test that get_reward returns a dict with the tx_hash key.
-
-        :return: None
-        """
+        """Test that get_reward returns a dict with the tx_hash key."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -216,10 +186,7 @@ class TestGetReward:
         assert result == {"tx_hash": bytes.fromhex(encoded_data[2:])}
 
     def test_get_reward_checksums_account(self) -> None:
-        """Test that get_reward checksums the account address before encoding.
-
-        :return: None
-        """
+        """Test that get_reward checksums the account address before encoding."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -241,10 +208,7 @@ class TestEarned:
     """Tests for the earned method."""
 
     def test_earned_returns_earned_amount(self) -> None:
-        """Test that earned returns a dict with the earned key.
-
-        :return: None
-        """
+        """Test that earned returns a dict with the earned key."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -262,10 +226,7 @@ class TestEarned:
         assert result == {"earned": 5000}
 
     def test_earned_checksums_account(self) -> None:
-        """Test that earned checksums the account address before querying.
-
-        :return: None
-        """
+        """Test that earned checksums the account address before querying."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -281,10 +242,7 @@ class TestEarned:
         mock_ledger_api.api.to_checksum_address.assert_called_once_with(MOCK_ACCOUNT)
 
     def test_earned_calls_contract_function_with_checksummed_account(self) -> None:
-        """Test that earned calls the contract function with the checksummed account.
-
-        :return: None
-        """
+        """Test that earned calls the contract function with the checksummed account."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -306,10 +264,7 @@ class TestBalanceOf:
     """Tests for the balance_of method."""
 
     def test_balance_of_returns_balance(self) -> None:
-        """Test that balance_of returns a dict with the balance key.
-
-        :return: None
-        """
+        """Test that balance_of returns a dict with the balance key."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -327,10 +282,7 @@ class TestBalanceOf:
         assert result == {"balance": 2000}
 
     def test_balance_of_checksums_account(self) -> None:
-        """Test that balance_of checksums the account address before querying.
-
-        :return: None
-        """
+        """Test that balance_of checksums the account address before querying."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -348,10 +300,7 @@ class TestBalanceOf:
         mock_ledger_api.api.to_checksum_address.assert_called_once_with(MOCK_ACCOUNT)
 
     def test_balance_of_calls_contract_function_with_checksummed_account(self) -> None:
-        """Test that balance_of calls the contract function with the checksummed account.
-
-        :return: None
-        """
+        """Test that balance_of calls the contract function with the checksummed account."""
         mock_ledger_api = MagicMock()
         mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
         mock_contract_instance = MagicMock()
@@ -375,10 +324,7 @@ class TestTotalSupply:
     """Tests for the total_supply method."""
 
     def test_total_supply_returns_total(self) -> None:
-        """Test that total_supply returns a dict with the total_supply key.
-
-        :return: None
-        """
+        """Test that total_supply returns a dict with the total_supply key."""
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
         mock_contract_instance.functions.totalSupply.return_value.call.return_value = (

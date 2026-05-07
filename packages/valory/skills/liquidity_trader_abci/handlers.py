@@ -19,7 +19,7 @@
 
 """This module contains the handlers for the skill of LiquidityTraderAbciApp."""
 
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 from aea.configurations.data_types import PublicId
 
@@ -28,7 +28,9 @@ from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
-from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
+from packages.valory.skills.abstract_round_abci.handlers import (
+    AbstractResponseHandler,
+)
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
@@ -66,7 +68,7 @@ class IpfsHandler(AbstractResponseHandler):
         """Get the parameters."""
         return cast(SharedState, self.context.state)
 
-    def handle(self, message: IpfsMessage) -> None:
+    def handle(self, message: IpfsMessage) -> Any:
         """
         Implement the reaction to an IPFS message.
 
@@ -87,7 +89,7 @@ class IpfsHandler(AbstractResponseHandler):
                 f"No callback found for nonce {nonce}, skipping"
             )
             return
-        callback(message, dialogue)
+        callback(message, dialogue)  # type: ignore[operator]
 
 
 class KvStoreHandler(AbstractResponseHandler):

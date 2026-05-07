@@ -16,11 +16,11 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """Tests for max_apr_selection custom component."""
 
 import math
-from unittest.mock import patch
+from typing import Any, Dict, Generator
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -42,8 +42,11 @@ from packages.valory.customs.max_apr_selection.max_apr_selection import (
 
 
 @pytest.fixture(autouse=True)
-def clear_logs():
-    """Clear the global logs list before each test."""
+def clear_logs() -> Generator[Any, Any, Any]:
+    """Clear the global logs list before each test.
+
+    :yield: TODO
+    """
     logs.clear()
     yield
     logs.clear()
@@ -52,20 +55,20 @@ def clear_logs():
 class TestCheckMissingFields:
     """Tests for the check_missing_fields function."""
 
-    def test_no_missing_fields(self):
+    def test_no_missing_fields(self) -> None:
         """Test that no missing fields are returned when all fields are present."""
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
         assert check_missing_fields(kwargs) == []
 
-    def test_all_missing_fields(self):
+    def test_all_missing_fields(self) -> None:
         """Test that all fields are returned when none are present."""
         result = check_missing_fields({})
         assert set(result) == set(REQUIRED_FIELDS)
 
-    def test_none_value_counts_as_missing(self):
+    def test_none_value_counts_as_missing(self) -> None:
         """Test that fields with None value count as missing."""
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
-        kwargs["trading_opportunities"] = None
+        kwargs["trading_opportunities"] = None  # type: ignore[assignment]
         result = check_missing_fields(kwargs)
         assert "trading_opportunities" in result
 
@@ -73,14 +76,14 @@ class TestCheckMissingFields:
 class TestRemoveIrrelevantFields:
     """Tests for the remove_irrelevant_fields function."""
 
-    def test_removes_irrelevant_fields(self):
+    def test_removes_irrelevant_fields(self) -> None:
         """Test that irrelevant fields are removed."""
         kwargs = {field: "value" for field in REQUIRED_FIELDS}
         kwargs["extra"] = "should_go"
         result = remove_irrelevant_fields(kwargs)
         assert "extra" not in result
 
-    def test_empty_kwargs(self):
+    def test_empty_kwargs(self) -> None:
         """Test with empty kwargs."""
         assert remove_irrelevant_fields({}) == {}
 
@@ -88,7 +91,7 @@ class TestRemoveIrrelevantFields:
 class TestCalculateCompositeScore:
     """Tests for the calculate_composite_score function."""
 
-    def test_normal_calculation(self):
+    def test_normal_calculation(self) -> None:
         """Test composite score with valid values."""
         pool = {"sharpe_ratio": 2.0, "depth_score": 100.0, "il_risk_score": -0.3}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
@@ -96,56 +99,56 @@ class TestCalculateCompositeScore:
         assert isinstance(score, float)
         assert score > 0
 
-    def test_none_metrics_returns_zero(self):
+    def test_none_metrics_returns_zero(self) -> None:
         """Test that None metrics return score of 0."""
         pool = {"sharpe_ratio": None, "depth_score": 100.0, "il_risk_score": -0.3}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
         assert calculate_composite_score(pool, max_values) == 0
 
-    def test_none_depth_score_returns_zero(self):
+    def test_none_depth_score_returns_zero(self) -> None:
         """Test that None depth_score returns score of 0."""
         pool = {"sharpe_ratio": 2.0, "depth_score": None, "il_risk_score": -0.3}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
         assert calculate_composite_score(pool, max_values) == 0
 
-    def test_none_il_risk_score_returns_zero(self):
+    def test_none_il_risk_score_returns_zero(self) -> None:
         """Test that None il_risk_score returns score of 0."""
         pool = {"sharpe_ratio": 2.0, "depth_score": 100.0, "il_risk_score": None}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
         assert calculate_composite_score(pool, max_values) == 0
 
-    def test_nan_metrics_returns_zero(self):
+    def test_nan_metrics_returns_zero(self) -> None:
         """Test that NaN metrics return score of 0."""
         pool = {"sharpe_ratio": math.nan, "depth_score": 100.0, "il_risk_score": -0.3}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
         assert calculate_composite_score(pool, max_values) == 0
 
-    def test_nan_depth_score_returns_zero(self):
+    def test_nan_depth_score_returns_zero(self) -> None:
         """Test that NaN depth_score returns score of 0."""
         pool = {"sharpe_ratio": 2.0, "depth_score": math.nan, "il_risk_score": -0.3}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
         assert calculate_composite_score(pool, max_values) == 0
 
-    def test_nan_il_risk_score_returns_zero(self):
+    def test_nan_il_risk_score_returns_zero(self) -> None:
         """Test that NaN il_risk_score returns score of 0."""
         pool = {"sharpe_ratio": 2.0, "depth_score": 100.0, "il_risk_score": math.nan}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
         assert calculate_composite_score(pool, max_values) == 0
 
-    def test_zero_il_risk_max_value(self):
+    def test_zero_il_risk_max_value(self) -> None:
         """Test when max IL risk score is 0."""
         pool = {"sharpe_ratio": 2.0, "depth_score": 100.0, "il_risk_score": 0}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": 0}
         score = calculate_composite_score(pool, max_values)
         assert score > 0
 
-    def test_missing_fields_default_to_nan(self):
+    def test_missing_fields_default_to_nan(self) -> None:
         """Test that missing fields default to nan."""
-        pool = {}
+        pool: Dict[Any, Any] = {}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
         assert calculate_composite_score(pool, max_values) == 0
 
-    def test_il_risk_normalization_clamped(self):
+    def test_il_risk_normalization_clamped(self) -> None:
         """Test that normalized IL risk score is clamped between 0 and 1."""
         pool = {"sharpe_ratio": 2.0, "depth_score": 100.0, "il_risk_score": -0.1}
         max_values = {"sharpe_ratio": 4.0, "depth_score": 200.0, "il_risk_score": -0.6}
@@ -156,7 +159,7 @@ class TestCalculateCompositeScore:
 class TestGetMaxValues:
     """Tests for the get_max_values function."""
 
-    def test_normal_pools(self):
+    def test_normal_pools(self) -> None:
         """Test max values with normal pool data."""
         pools = [
             {"sharpe_ratio": 1.0, "depth_score": 50.0, "il_risk_score": -0.1},
@@ -167,15 +170,15 @@ class TestGetMaxValues:
         assert max_vals["depth_score"] == 150.0
         assert max_vals["il_risk_score"] == -0.5
 
-    def test_missing_fields_default_zero(self):
+    def test_missing_fields_default_zero(self) -> None:
         """Test that missing fields default to 0."""
-        pools = [{}]
+        pools: Any = [{}]
         max_vals = get_max_values(pools)
         assert max_vals["sharpe_ratio"] == 0
         assert max_vals["depth_score"] == 0
         assert max_vals["il_risk_score"] == 0
 
-    def test_il_risk_max_by_abs_value(self):
+    def test_il_risk_max_by_abs_value(self) -> None:
         """Test that IL risk score max is by absolute value (most negative)."""
         pools = [
             {"il_risk_score": -0.1, "sharpe_ratio": 1, "depth_score": 1},
@@ -188,35 +191,35 @@ class TestGetMaxValues:
 class TestIlRiskDescriptor:
     """Tests for the il_risk_descriptor function."""
 
-    def test_none_value(self):
+    def test_none_value(self) -> None:
         """Test with None value."""
         assert il_risk_descriptor(None) == "Unknown"
 
-    def test_high_risk(self):
+    def test_high_risk(self) -> None:
         """Test high risk (< -0.5)."""
         assert il_risk_descriptor(-0.8) == "High"
 
-    def test_moderate_risk(self):
+    def test_moderate_risk(self) -> None:
         """Test moderate risk (-0.5 to -0.2)."""
         assert il_risk_descriptor(-0.3) == "Moderate"
 
-    def test_low_risk(self):
+    def test_low_risk(self) -> None:
         """Test low risk (-0.2 to 0)."""
         assert il_risk_descriptor(-0.1) == "Low"
 
-    def test_minimal_risk(self):
+    def test_minimal_risk(self) -> None:
         """Test minimal risk (>= 0)."""
         assert il_risk_descriptor(0.1) == "Minimal"
 
-    def test_boundary_minus_0_5(self):
+    def test_boundary_minus_0_5(self) -> None:
         """Test boundary value -0.5."""
         assert il_risk_descriptor(-0.5) == "Moderate"
 
-    def test_boundary_minus_0_2(self):
+    def test_boundary_minus_0_2(self) -> None:
         """Test boundary value -0.2."""
         assert il_risk_descriptor(-0.2) == "Low"
 
-    def test_boundary_zero(self):
+    def test_boundary_zero(self) -> None:
         """Test boundary value 0."""
         assert il_risk_descriptor(0) == "Minimal"
 
@@ -224,25 +227,25 @@ class TestIlRiskDescriptor:
 class TestCalculateRelativePercentages:
     """Tests for the calculate_relative_percentages function."""
 
-    def test_equal_percentages(self):
+    def test_equal_percentages(self) -> None:
         """Test with equal percentages."""
         result = calculate_relative_percentages([50, 50])
         assert len(result) == 2
         assert abs(result[0] - 0.5) < 1e-10
 
-    def test_single_value(self):
+    def test_single_value(self) -> None:
         """Test with a single value."""
         result = calculate_relative_percentages([100])
         assert len(result) == 1
         assert abs(result[0] - 1.0) < 1e-10
 
-    def test_zero_total_returns_empty(self):
+    def test_zero_total_returns_empty(self) -> None:
         """Test with all zeros returns empty list."""
         result = calculate_relative_percentages([0, 0, 0])
         assert result == []
         assert any("zero" in log.lower() for log in logs)
 
-    def test_multiple_values(self):
+    def test_multiple_values(self) -> None:
         """Test with multiple values."""
         result = calculate_relative_percentages([60, 30, 10])
         assert len(result) == 3
@@ -252,8 +255,15 @@ class TestCalculateRelativePercentages:
 class TestApplyRiskThresholdsAndSelectOptimalStrategy:
     """Tests for the apply_risk_thresholds_and_select_optimal_strategy function."""
 
-    def _make_opportunity(self, sharpe=1.0, depth=50.0, il_risk=-0.1, apr=10.0,
-                          dex_type="UniswapV3", pool_address="0xpool"):
+    def _make_opportunity(
+        self,
+        sharpe: Any = 1.0,
+        depth: Any = 50.0,
+        il_risk: Any = -0.1,
+        apr: Any = 10.0,
+        dex_type: Any = "UniswapV3",
+        pool_address: Any = "0xpool",
+    ) -> Any:
         """Create a test opportunity."""
         return {
             "sharpe_ratio": sharpe,
@@ -267,7 +277,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
             "advertised_apr": apr,
         }
 
-    def test_no_opportunities_meeting_thresholds(self):
+    def test_no_opportunities_meeting_thresholds(self) -> None:
         """Test with opportunities that fail risk thresholds."""
         opps = [self._make_opportunity(sharpe=0)]
         result = apply_risk_thresholds_and_select_optimal_strategy(
@@ -276,7 +286,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         assert result["optimal_strategies"] == []
         assert result["position_to_exit"] == {}
 
-    def test_sharpe_ratio_below_threshold(self):
+    def test_sharpe_ratio_below_threshold(self) -> None:
         """Test that pools with sharpe_ratio <= threshold are excluded."""
         opps = [self._make_opportunity(sharpe=SHARPE_RATIO_THRESHOLD)]
         result = apply_risk_thresholds_and_select_optimal_strategy(
@@ -284,7 +294,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_depth_score_below_threshold(self):
+    def test_depth_score_below_threshold(self) -> None:
         """Test that pools with depth_score <= threshold are excluded."""
         opps = [self._make_opportunity(depth=DEPTH_SCORE_THRESHOLD)]
         result = apply_risk_thresholds_and_select_optimal_strategy(
@@ -292,7 +302,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_il_risk_above_threshold(self):
+    def test_il_risk_above_threshold(self) -> None:
         """Test that pools with il_risk_score > threshold are excluded."""
         opps = [self._make_opportunity(il_risk=IL_RISK_SCORE_THRESHOLD + 0.1)]
         result = apply_risk_thresholds_and_select_optimal_strategy(
@@ -300,7 +310,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_invalid_metric_types(self):
+    def test_invalid_metric_types(self) -> None:
         """Test with invalid metric types (non-numeric)."""
         opp = self._make_opportunity()
         opp["sharpe_ratio"] = "invalid"
@@ -309,7 +319,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_invalid_depth_score_type(self):
+    def test_invalid_depth_score_type(self) -> None:
         """Test with non-numeric depth_score."""
         opp = self._make_opportunity()
         opp["depth_score"] = "invalid"
@@ -318,7 +328,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_invalid_il_risk_type(self):
+    def test_invalid_il_risk_type(self) -> None:
         """Test with non-numeric il_risk_score."""
         opp = self._make_opportunity()
         opp["il_risk_score"] = "invalid"
@@ -327,12 +337,13 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_new_entry_without_positions(self):
+    def test_new_entry_without_positions(self) -> None:
         """Test optimal strategy selection for new entry (no current positions)."""
         opps = [
             self._make_opportunity(sharpe=2.0, depth=100.0, il_risk=-0.1, apr=20.0),
-            self._make_opportunity(sharpe=1.5, depth=80.0, il_risk=-0.2, apr=15.0,
-                                   pool_address="0xpool2"),
+            self._make_opportunity(
+                sharpe=1.5, depth=80.0, il_risk=-0.2, apr=15.0, pool_address="0xpool2"
+            ),
         ]
         result = apply_risk_thresholds_and_select_optimal_strategy(
             opps, composite_score_threshold=0.0, max_pools=2
@@ -341,7 +352,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         assert result["position_to_exit"] == {}
         assert "reasoning" in result
 
-    def test_new_entry_single_pool(self):
+    def test_new_entry_single_pool(self) -> None:
         """Test selection for new entry with max_pools=1."""
         opps = [
             self._make_opportunity(sharpe=2.0, depth=100.0, il_risk=-0.1, apr=20.0),
@@ -352,7 +363,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         assert len(result["optimal_strategies"]) == 1
         assert "relative_funds_percentage" in result["optimal_strategies"][0]
 
-    def test_new_entry_no_pools_meet_composite_threshold(self):
+    def test_new_entry_no_pools_meet_composite_threshold(self) -> None:
         """Test when no opportunities meet the composite score threshold for new entry."""
         opps = [
             self._make_opportunity(sharpe=0.5, depth=10.0, il_risk=-0.1, apr=5.0),
@@ -362,7 +373,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_with_current_positions_better_opportunity(self):
+    def test_with_current_positions_better_opportunity(self) -> None:
         """Test with current positions and a better opportunity found."""
         opps = [
             self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.05, apr=30.0),
@@ -376,7 +387,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         assert len(result["optimal_strategies"]) == 1
         assert result["position_to_exit"] is not None
 
-    def test_with_current_positions_no_better_opportunity(self):
+    def test_with_current_positions_no_better_opportunity(self) -> None:
         """Test with current positions when no better opportunity is found."""
         opps = [
             self._make_opportunity(sharpe=0.5, depth=10.0, il_risk=-0.1, apr=5.0),
@@ -389,7 +400,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert result["optimal_strategies"] == []
 
-    def test_metrics_improved_comparison(self):
+    def test_metrics_improved_comparison(self) -> None:
         """Test that metrics comparison between old and new pools works."""
         opps = [
             self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.01, apr=30.0),
@@ -403,19 +414,21 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         assert "reasoning" in result
         assert len(result["optimal_strategies"]) > 0
 
-    def test_il_risk_none_in_comparison(self):
+    def test_il_risk_none_in_comparison(self) -> None:
         """Test metrics comparison when il_risk_score is None."""
         opps = [
             self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.01, apr=30.0),
         ]
-        current_pos = self._make_opportunity(sharpe=1.0, depth=50.0, il_risk=-0.3, apr=10.0)
+        current_pos = self._make_opportunity(
+            sharpe=1.0, depth=50.0, il_risk=-0.3, apr=10.0
+        )
         current_pos["il_risk_score"] = None
         result = apply_risk_thresholds_and_select_optimal_strategy(
             opps, composite_score_threshold=0.0, current_positions=[current_pos]
         )
         assert "reasoning" in result
 
-    def test_top_opp_il_risk_none_in_comparison(self):
+    def test_top_opp_il_risk_none_in_comparison(self) -> None:
         """Test metrics comparison when top opp il_risk_score is None."""
         opp = self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.01, apr=30.0)
         opp["il_risk_score"] = None
@@ -427,16 +440,18 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert "reasoning" in result
 
-    def test_multiple_current_positions_least_performing(self):
+    def test_multiple_current_positions_least_performing(self) -> None:
         """Test least performing pool is identified from multiple current positions."""
         opps = [
             self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.05, apr=30.0),
         ]
         current = [
-            self._make_opportunity(sharpe=3.0, depth=100.0, il_risk=-0.1, apr=20.0,
-                                   pool_address="0xgood"),
-            self._make_opportunity(sharpe=0.5, depth=10.0, il_risk=-0.4, apr=5.0,
-                                   pool_address="0xbad"),
+            self._make_opportunity(
+                sharpe=3.0, depth=100.0, il_risk=-0.1, apr=20.0, pool_address="0xgood"
+            ),
+            self._make_opportunity(
+                sharpe=0.5, depth=10.0, il_risk=-0.4, apr=5.0, pool_address="0xbad"
+            ),
         ]
         result = apply_risk_thresholds_and_select_optimal_strategy(
             opps, composite_score_threshold=0.0, current_positions=current
@@ -444,7 +459,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         if result["optimal_strategies"]:
             assert result["position_to_exit"]["pool_address"] == "0xbad"
 
-    def test_relative_funds_percentage_with_positions(self):
+    def test_relative_funds_percentage_with_positions(self) -> None:
         """Test relative_funds_percentage is set to 1.0 when current positions exist."""
         opps = [
             self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.05, apr=30.0),
@@ -462,21 +477,26 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
 class TestRun:
     """Tests for the run function."""
 
-    def test_missing_required_fields(self):
+    def test_missing_required_fields(self) -> None:
         """Test run with missing fields."""
         result = run()
         assert "error" in result
 
-    def test_partial_missing_fields(self):
+    def test_partial_missing_fields(self) -> None:
         """Test run with partial fields."""
         result = run(trading_opportunities=[])
         assert "error" in result
 
-    @patch("packages.valory.customs.max_apr_selection.max_apr_selection.apply_risk_thresholds_and_select_optimal_strategy")
-    def test_run_delegates_correctly(self, mock_fn):
+    @patch(
+        "packages.valory.customs.max_apr_selection.max_apr_selection.apply_risk_thresholds_and_select_optimal_strategy"
+    )
+    def test_run_delegates_correctly(self, mock_fn: MagicMock) -> None:
         """Test that run delegates to apply_risk_thresholds_and_select_optimal_strategy."""
-        mock_fn.return_value = {"optimal_strategies": [], "position_to_exit": {},
-                                "reasoning": "test"}
+        mock_fn.return_value = {
+            "optimal_strategies": [],
+            "position_to_exit": {},
+            "reasoning": "test",
+        }
         kwargs = {
             "trading_opportunities": [],
             "current_positions": [],
@@ -487,11 +507,16 @@ class TestRun:
         mock_fn.assert_called_once()
         assert "logs" in result
 
-    @patch("packages.valory.customs.max_apr_selection.max_apr_selection.apply_risk_thresholds_and_select_optimal_strategy")
-    def test_run_strips_irrelevant_kwargs(self, mock_fn):
+    @patch(
+        "packages.valory.customs.max_apr_selection.max_apr_selection.apply_risk_thresholds_and_select_optimal_strategy"
+    )
+    def test_run_strips_irrelevant_kwargs(self, mock_fn: MagicMock) -> None:
         """Test that run strips extra kwargs."""
-        mock_fn.return_value = {"optimal_strategies": [], "position_to_exit": {},
-                                "reasoning": "test"}
+        mock_fn.return_value = {
+            "optimal_strategies": [],
+            "position_to_exit": {},
+            "reasoning": "test",
+        }
         kwargs = {
             "trading_opportunities": [],
             "current_positions": [],
@@ -499,22 +524,34 @@ class TestRun:
             "composite_score_threshold": 0.5,
             "extra_field": "should_be_removed",
         }
-        result = run(**kwargs)
+        run(**kwargs)
         call_kwargs = mock_fn.call_args[1]
         assert "extra_field" not in call_kwargs
 
-    def test_run_with_positional_args(self):
+    def test_run_with_positional_args(self) -> None:
         """Test that positional args are ignored."""
-        result = run("positional", trading_opportunities=[], current_positions=[],
-                     max_pools=1, composite_score_threshold=0.5)
+        result = run(
+            "positional",
+            trading_opportunities=[],
+            current_positions=[],
+            max_pools=1,
+            composite_score_threshold=0.5,
+        )
         assert "logs" in result
 
 
 class TestBranchCoverage:
     """Tests specifically targeting uncovered branches."""
 
-    def _make_opportunity(self, sharpe=1.0, depth=50.0, il_risk=-0.1, apr=10.0,
-                          dex_type="UniswapV3", pool_address="0xpool"):
+    def _make_opportunity(
+        self,
+        sharpe: Any = 1.0,
+        depth: Any = 50.0,
+        il_risk: Any = -0.1,
+        apr: Any = 10.0,
+        dex_type: Any = "UniswapV3",
+        pool_address: Any = "0xpool",
+    ) -> Any:
         """Create a test opportunity."""
         return {
             "sharpe_ratio": sharpe,
@@ -528,7 +565,7 @@ class TestBranchCoverage:
             "advertised_apr": apr,
         }
 
-    def test_position_to_exit_empty_dict(self):
+    def test_position_to_exit_empty_dict(self) -> None:
         """Test branch 220->231: position_to_exit is an empty dict (falsy).
 
         When a current position is an empty dict, calculate_composite_score
@@ -540,7 +577,7 @@ class TestBranchCoverage:
             self._make_opportunity(sharpe=2.0, depth=100.0, il_risk=-0.1, apr=20.0),
         ]
         # Use an empty dict as one current position so it becomes least performing
-        current = [{}]
+        current: Any = [{}]
         result = apply_risk_thresholds_and_select_optimal_strategy(
             opps, composite_score_threshold=0.0, current_positions=current
         )
@@ -549,7 +586,7 @@ class TestBranchCoverage:
         assert "reasoning" in result
         assert len(result["optimal_strategies"]) == 1
 
-    def test_new_opp_worse_sharpe_and_depth(self):
+    def test_new_opp_worse_sharpe_and_depth(self) -> None:
         """Test branches 235->237 and 237->241: new opportunity has worse sharpe and depth.
 
         When the top opportunity has a lower sharpe_ratio and depth_score than

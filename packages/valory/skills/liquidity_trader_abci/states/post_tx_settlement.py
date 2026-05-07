@@ -76,9 +76,10 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
             event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
 
             if event == Event.CHECKPOINT_TX_EXECUTED:
-                synced_data = synced_data.update(
+                synced_data = synced_data.update(  # type: ignore[assignment]
                     synchronized_data_class=SynchronizedData,
                     period_number_at_last_cp=synced_data.period_count,
                 )
 
             return synced_data, event
+        return None

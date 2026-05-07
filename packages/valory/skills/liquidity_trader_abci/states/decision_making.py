@@ -66,16 +66,16 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
                 )
 
             new_action = payload.get("updates", {}).get("new_action", {})
-            updated_actions = self.synchronized_data.actions
+            updated_actions = self.synchronized_data.actions  # type: ignore[attr-defined]
             if new_action:
-                if self.synchronized_data.last_executed_action_index is None:
+                if self.synchronized_data.last_executed_action_index is None:  # type: ignore[attr-defined]
                     index = 0
                 else:
-                    index = self.synchronized_data.last_executed_action_index + 1
+                    index = self.synchronized_data.last_executed_action_index + 1  # type: ignore[attr-defined]
                 updated_actions.insert(index, new_action)
 
             serialized_actions = json.dumps(updated_actions, ensure_ascii=True)
-            synchronized_data = synchronized_data.update(
+            synchronized_data = synchronized_data.update(  # type: ignore[assignment]
                 synchronized_data_class=SynchronizedData,
                 **payload.get("updates", {}),
                 actions=serialized_actions,

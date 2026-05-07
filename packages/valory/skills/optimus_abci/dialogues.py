@@ -109,7 +109,7 @@ KvStoreDialogue = BaseKvStoreDialogue
 class SrrDialogues(Model, BaseSrrDialogues):
     """The dialogues class keeps track of all dialogues."""
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: Any):
         """
         Initialize dialogues.
 
@@ -138,7 +138,7 @@ class SrrDialogues(Model, BaseSrrDialogues):
 class KvStoreDialogues(Model, BaseKvStoreDialogues):
     """The dialogues class keeps track of all dialogues."""
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: Any):
         """
         Initialize dialogues.
 

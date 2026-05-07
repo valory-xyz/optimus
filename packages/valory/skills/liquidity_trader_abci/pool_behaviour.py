@@ -22,9 +22,8 @@
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional, cast
+from typing import Any, Generator, Optional, cast
 
-from aea.configurations.data_types import PublicId
 from aea_ledger_ethereum.ethereum import EthereumCrypto
 from eth_account import Account
 
@@ -43,19 +42,19 @@ class PoolBehaviour(BaseBehaviour, ABC):
         super().__init__(**kwargs)
 
     @abstractmethod
-    def _get_tokens(self) -> Dict[str, str]:
-        """Get the pool tokens"""
-        pass
+    def _get_tokens(self, *args: Any, **kwargs: Any) -> Any:
+        """Get the pool tokens."""
+        raise NotImplementedError
 
     @abstractmethod
-    def enter(self, **kwargs: Any) -> Generator[None, None, str]:
-        """Enter pool"""
-        pass
+    def enter(self, **kwargs: Any) -> Any:
+        """Enter pool."""
+        raise NotImplementedError
 
     @abstractmethod
-    def exit(self, **kwargs: Any) -> None:
-        """Exit pool"""
-        pass
+    def exit(self, **kwargs: Any) -> Any:
+        """Exit pool."""
+        raise NotImplementedError
 
     @property
     def eoa_account(self) -> Optional[Account]:
@@ -138,9 +137,9 @@ class PoolBehaviour(BaseBehaviour, ABC):
 
     def contract_interact(
         self,
-        performative: ContractApiMessage.Performative,
+        performative: Any,
         contract_address: str,
-        contract_public_id: PublicId,
+        contract_public_id: Any,
         contract_callable: str,
         data_key: str,
         **kwargs: Any,
@@ -176,6 +175,6 @@ class PoolBehaviour(BaseBehaviour, ABC):
 
         return data
 
-    def async_act(self) -> Generator[Any, None, None]:
+    def async_act(self) -> Generator[Any, None, None]:  # type: ignore[override]
         """Async act"""
-        pass
+        yield  # pragma: no cover — abstract pool behaviour, never invoked

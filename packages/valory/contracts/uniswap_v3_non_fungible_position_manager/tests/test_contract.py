@@ -23,8 +23,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
     UniswapV3NonfungiblePositionManagerContract,
 )

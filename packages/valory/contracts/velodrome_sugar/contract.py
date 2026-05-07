@@ -16,10 +16,7 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains the class to interact with the Velodrome Sugar contract."""
-
-from typing import Any, Dict, List, Tuple
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -31,7 +28,6 @@ class VelodromeSugarContract(Contract):
     """The Velodrome Sugar contract."""
 
     contract_id = PublicId.from_str("valory/velodrome_sugar:0.1.0")
-
 
     @classmethod
     def positions(
@@ -48,7 +44,7 @@ class VelodromeSugarContract(Contract):
         result = contract_instance.functions.positions(
             limit, offset, checksumed_account
         ).call()
-        
+
         # Convert the result to a more readable format
         positions = []
         for position in result:
@@ -71,5 +67,5 @@ class VelodromeSugarContract(Contract):
                 "alm": position[15],
             }
             positions.append(position_data)
-        
+
         return {"positions": positions}

@@ -16,23 +16,20 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """Tests for balancer_pools_search custom component."""
 
-import json
 import statistics
 import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from typing import Any, Dict, Generator
+from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import packages.valory.customs.balancer_pools_search.balancer_pools_search as bal_mod
 from packages.valory.customs.balancer_pools_search.balancer_pools_search import (
-    EXCLUDED_APR_TYPES,
     REQUIRED_FIELDS,
-    SUPPORTED_POOL_TYPES,
+    _reset_x402_adapter,
     analyze_pool_liquidity,
     apply_composite_pre_filter,
     calculate_differential_investment,
@@ -66,13 +63,15 @@ from packages.valory.customs.balancer_pools_search.balancer_pools_search import 
     run_query,
     set_cached_price,
     standardize_metrics,
-    _reset_x402_adapter,
 )
 
 
 @pytest.fixture(autouse=True)
-def reset_state():
-    """Reset module state before each test."""
+def reset_state() -> Generator[Any, Any, Any]:
+    """Reset module state before each test.
+
+    :yield: TODO
+    """
     if hasattr(bal_mod._thread_local, "errors"):
         bal_mod._thread_local.errors = []
     bal_mod.create_web3_connection.cache_clear()
@@ -85,13 +84,13 @@ def reset_state():
 class TestGetErrors:
     """Tests for get_errors function."""
 
-    def test_initializes_empty(self):
+    def test_initializes_empty(self) -> None:
         """Test errors list initialization."""
         if hasattr(bal_mod._thread_local, "errors"):
-            delattr(bal_mod._thread_local, "errors")
+            del bal_mod._thread_local.errors
         assert get_errors() == []
 
-    def test_returns_existing(self):
+    def test_returns_existing(self) -> None:
         """Test returning existing errors list."""
         bal_mod._thread_local.errors = ["err1"]
         assert get_errors() == ["err1"]
@@ -100,12 +99,12 @@ class TestGetErrors:
 class TestCheckMissingFields:
     """Tests for check_missing_fields function."""
 
-    def test_no_missing(self):
+    def test_no_missing(self) -> None:
         """Test with all fields present."""
         kwargs = {f: "v" for f in REQUIRED_FIELDS}
         assert check_missing_fields(kwargs) == []
 
-    def test_all_missing(self):
+    def test_all_missing(self) -> None:
         """Test with all fields missing."""
         assert len(check_missing_fields({})) == len(REQUIRED_FIELDS)
 
@@ -113,7 +112,7 @@ class TestCheckMissingFields:
 class TestRemoveIrrelevantFields:
     """Tests for remove_irrelevant_fields function."""
 
-    def test_removes_extras(self):
+    def test_removes_extras(self) -> None:
         """Test removing extra fields."""
         result = remove_irrelevant_fields({"a": 1, "b": 2}, ("a",))
         assert result == {"a": 1}
@@ -125,7 +124,7 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_successful(self, mock_post):
+    def test_successful(self, mock_post: MagicMock) -> None:
         """Test successful query."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -137,7 +136,7 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_error_status(self, mock_post):
+    def test_error_status(self, mock_post: MagicMock) -> None:
         """Test error status code."""
         mock_resp = MagicMock()
         mock_resp.status_code = 500
@@ -148,7 +147,7 @@ class TestRunQuery:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_graphql_errors(self, mock_post):
+    def test_graphql_errors(self, mock_post: MagicMock) -> None:
         """Test GraphQL errors."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -161,7 +160,7 @@ class TestRunQuery:
 class TestGetTotalApr:
     """Tests for get_total_apr function."""
 
-    def test_normal(self):
+    def test_normal(self) -> None:
         """Test normal APR calculation."""
         pool = {
             "dynamicData": {
@@ -174,12 +173,12 @@ class TestGetTotalApr:
         result = get_total_apr(pool)
         assert result == 0.05  # SWAP_FEE is excluded
 
-    def test_empty_apr_items(self):
+    def test_empty_apr_items(self) -> None:
         """Test with empty APR items."""
-        pool = {"dynamicData": {"aprItems": []}}
+        pool: Any = {"dynamicData": {"aprItems": []}}
         assert get_total_apr(pool) == 0
 
-    def test_missing_dynamic_data(self):
+    def test_missing_dynamic_data(self) -> None:
         """Test with missing dynamicData."""
         assert get_total_apr({}) == 0
 
@@ -187,23 +186,23 @@ class TestGetTotalApr:
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
 
-    def test_empty_pools(self):
+    def test_empty_pools(self) -> None:
         """Test with empty pools returns early."""
         assert standardize_metrics([]) == []
 
-    def test_single_pool(self):
+    def test_single_pool(self) -> None:
         """Test with single pool (triggers apr_std==0 and tvl_std==0)."""
         pools = [{"apr": 10, "tvl": 1000}]
         result = standardize_metrics(pools)
         assert "composite_score" in result[0]
 
-    def test_invalid_values(self):
+    def test_invalid_values(self) -> None:
         """Test with invalid values triggers ValueError/TypeError branch."""
         pools = [{"apr": "bad", "tvl": "bad"}]
         result = standardize_metrics(pools)
         assert "composite_score" in result[0]
 
-    def test_multiple_pools(self):
+    def test_multiple_pools(self) -> None:
         """Test with multiple pools to get non-zero std deviations."""
         pools = [
             {"apr": 10, "tvl": 1000},
@@ -216,7 +215,7 @@ class TestStandardizeMetrics:
         # With multiple different values, std should not be zero
         # so the real standardization path is taken
 
-    def test_all_same_values(self):
+    def test_all_same_values(self) -> None:
         """Test pools with identical values (std == 0 both branches)."""
         pools = [
             {"apr": 10, "tvl": 1000},
@@ -225,7 +224,7 @@ class TestStandardizeMetrics:
         result = standardize_metrics(pools)
         assert len(result) == 2
 
-    def test_mixed_valid_invalid(self):
+    def test_mixed_valid_invalid(self) -> None:
         """Test mix of valid and invalid pool values."""
         pools = [
             {"apr": 10, "tvl": 1000},
@@ -240,33 +239,33 @@ class TestStandardizeMetrics:
 class TestApplyCompositePreFilter:
     """Tests for apply_composite_pre_filter function."""
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         """Test with empty pools."""
         assert apply_composite_pre_filter([]) == []
 
-    def test_disabled(self):
+    def test_disabled(self) -> None:
         """Test disabled filter returns pools[:top_n]."""
         pools = [{"tvl": 5000, "apr": 10}]
         result = apply_composite_pre_filter(pools, use_composite_filter=False)
         assert len(result) == 1
 
-    def test_disabled_empty(self):
+    def test_disabled_empty(self) -> None:
         """Test disabled filter with empty returns []."""
         assert apply_composite_pre_filter([], use_composite_filter=False) == []
 
-    def test_below_tvl(self):
+    def test_below_tvl(self) -> None:
         """Test all pools below TVL threshold returns empty."""
         pools = [{"tvl": 100, "apr": 10}]
         result = apply_composite_pre_filter(pools, min_tvl_threshold=1000)
         assert result == []
 
-    def test_invalid_tvl(self):
+    def test_invalid_tvl(self) -> None:
         """Test invalid TVL value (ValueError/TypeError branch)."""
         pools = [{"tvl": "invalid", "apr": 10}]
         result = apply_composite_pre_filter(pools, min_tvl_threshold=0)
         assert result == []
 
-    def test_successful_filtering(self):
+    def test_successful_filtering(self) -> None:
         """Test successful composite pre-filtering with valid pools above threshold."""
         pools = [
             {"tvl": 5000, "apr": 10},
@@ -280,13 +279,13 @@ class TestApplyCompositePreFilter:
             "composite_score", 0
         )
 
-    def test_top_n_limit(self):
+    def test_top_n_limit(self) -> None:
         """Test top_n limits output count."""
         pools = [{"tvl": 5000, "apr": 10 + i} for i in range(5)]
         result = apply_composite_pre_filter(pools, top_n=3, min_tvl_threshold=1000)
         assert len(result) == 3
 
-    def test_none_pools(self):
+    def test_none_pools(self) -> None:
         """Test with not pools (falsy) returns empty."""
         assert apply_composite_pre_filter(None) == []
 
@@ -294,13 +293,13 @@ class TestApplyCompositePreFilter:
 class TestCreateWeb3Connection:
     """Tests for create_web3_connection function."""
 
-    def test_unknown_chain(self):
+    def test_unknown_chain(self) -> None:
         """Test with unknown chain returns None."""
         result = create_web3_connection("unknown_chain_xyz")
         assert result is None
 
     @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.Web3")
-    def test_known_chain_connected(self, mock_web3):
+    def test_known_chain_connected(self, mock_web3: MagicMock) -> None:
         """Test with known chain that connects successfully."""
         mock_instance = MagicMock()
         mock_instance.is_connected.return_value = True
@@ -311,7 +310,7 @@ class TestCreateWeb3Connection:
         assert result == mock_instance
 
     @patch("packages.valory.customs.balancer_pools_search.balancer_pools_search.Web3")
-    def test_known_chain_not_connected(self, mock_web3):
+    def test_known_chain_not_connected(self, mock_web3: MagicMock) -> None:
         """Test with known chain that fails to connect returns None."""
         mock_instance = MagicMock()
         mock_instance.is_connected.return_value = False
@@ -343,7 +342,7 @@ class TestFetchTokenNameFromContract:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection"
     )
-    def test_no_web3(self, mock_conn):
+    def test_no_web3(self, mock_conn: MagicMock) -> None:
         """Test returns None when web3 connection fails."""
         mock_conn.return_value = None
         bal_mod.fetch_token_name_from_contract.cache_clear()
@@ -353,7 +352,7 @@ class TestFetchTokenNameFromContract:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection"
     )
-    def test_successful(self, mock_conn):
+    def test_successful(self, mock_conn: MagicMock) -> None:
         """Test successful token name fetch."""
         mock_web3 = MagicMock()
         mock_contract = MagicMock()
@@ -369,7 +368,7 @@ class TestFetchTokenNameFromContract:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_web3_connection"
     )
-    def test_contract_exception(self, mock_conn):
+    def test_contract_exception(self, mock_conn: MagicMock) -> None:
         """Test returns None on contract call exception."""
         mock_web3 = MagicMock()
         mock_contract = MagicMock()
@@ -389,7 +388,7 @@ class TestGetBalancerPools:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.run_query"
     )
-    def test_success(self, mock_query):
+    def test_success(self, mock_query: MagicMock) -> None:
         """Test successful pool fetch."""
         mock_query.return_value = {"poolGetPools": [{"id": "1"}]}
         result = get_balancer_pools(["optimism"], "https://api.example.com")
@@ -398,7 +397,7 @@ class TestGetBalancerPools:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.run_query"
     )
-    def test_error(self, mock_query):
+    def test_error(self, mock_query: MagicMock) -> None:
         """Test error in query."""
         mock_query.return_value = {"error": "fail"}
         result = get_balancer_pools(["optimism"], "https://api.example.com")
@@ -410,10 +409,10 @@ class TestGetFilteredPoolsForBalancer:
 
     def _make_pool(
         self,
-        pool_type="WEIGHTED",
-        address="0x1234567890abcdef1234567890abcdef12345678",
-        chain="OPTIMISM",
-    ):
+        pool_type: Any = "WEIGHTED",
+        address: Any = "0x1234567890abcdef1234567890abcdef12345678",
+        chain: Any = "OPTIMISM",
+    ) -> Any:
         """Create a test pool."""
         return {
             "type": pool_type,
@@ -432,7 +431,7 @@ class TestGetFilteredPoolsForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
     )
-    def test_basic_filtering(self, mock_filter):
+    def test_basic_filtering(self, mock_filter: MagicMock) -> None:
         """Test basic filtering."""
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool()]
@@ -442,7 +441,7 @@ class TestGetFilteredPoolsForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
     )
-    def test_unsupported_type(self, mock_filter):
+    def test_unsupported_type(self, mock_filter: MagicMock) -> None:
         """Test unsupported pool type."""
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool(pool_type="UNKNOWN")]
@@ -452,7 +451,7 @@ class TestGetFilteredPoolsForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
     )
-    def test_excludes_current_positions(self, mock_filter):
+    def test_excludes_current_positions(self, mock_filter: MagicMock) -> None:
         """Test excluding current positions."""
         mock_filter.side_effect = lambda x, **kw: x
         from web3 import Web3
@@ -467,7 +466,7 @@ class TestGetFilteredPoolsForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
     )
-    def test_chain_not_in_whitelisted(self, mock_filter):
+    def test_chain_not_in_whitelisted(self, mock_filter: MagicMock) -> None:
         """Test pool chain not in whitelisted_assets."""
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool(chain="UNKNOWN_CHAIN")]
@@ -477,7 +476,7 @@ class TestGetFilteredPoolsForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
     )
-    def test_whitelisted_tokens_filtering(self, mock_filter):
+    def test_whitelisted_tokens_filtering(self, mock_filter: MagicMock) -> None:
         """Test filtering with whitelisted tokens where tokens match."""
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool()]
@@ -490,7 +489,7 @@ class TestGetFilteredPoolsForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
     )
-    def test_whitelisted_tokens_mismatch(self, mock_filter):
+    def test_whitelisted_tokens_mismatch(self, mock_filter: MagicMock) -> None:
         """Test filtering with whitelisted tokens where tokens don't match."""
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool()]
@@ -503,7 +502,7 @@ class TestGetFilteredPoolsForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.apply_composite_pre_filter"
     )
-    def test_kwargs_forwarded(self, mock_filter):
+    def test_kwargs_forwarded(self, mock_filter: MagicMock) -> None:
         """Test that kwargs are forwarded to apply_composite_pre_filter."""
         mock_filter.side_effect = lambda x, **kw: x
         pools = [self._make_pool()]
@@ -523,14 +522,14 @@ class TestGetFilteredPoolsForBalancer:
 class TestGetCoinIdFromSymbol:
     """Tests for get_coin_id_from_symbol function."""
 
-    def test_found(self):
+    def test_found(self) -> None:
         """Test found coin ID."""
         assert (
             get_coin_id_from_symbol({"optimism": {"weth": "id"}}, "WETH", "optimism")
             == "id"
         )
 
-    def test_not_found(self):
+    def test_not_found(self) -> None:
         """Test not found."""
         assert get_coin_id_from_symbol({}, "weth", "optimism") is None
 
@@ -538,38 +537,38 @@ class TestGetCoinIdFromSymbol:
 class TestCalculateIlImpactMulti:
     """Tests for calculate_il_impact_multi function."""
 
-    def test_empty_prices(self):
+    def test_empty_prices(self) -> None:
         """Test with empty price lists."""
         assert calculate_il_impact_multi([], []) == 0
 
-    def test_length_mismatch(self):
+    def test_length_mismatch(self) -> None:
         """Test with mismatched lengths."""
         assert calculate_il_impact_multi([1, 2], [1]) == 0
 
-    def test_equal_prices(self):
+    def test_equal_prices(self) -> None:
         """Test with equal prices gives zero IL."""
         result = calculate_il_impact_multi([1.0, 1.0], [1.0, 1.0])
         assert abs(result) < 1e-10
 
-    def test_with_weights(self):
+    def test_with_weights(self) -> None:
         """Test with custom weights."""
         result = calculate_il_impact_multi([1.0, 1.0], [2.0, 0.5], weights=[0.5, 0.5])
         assert isinstance(result, float)
 
-    def test_wrong_weights_length(self):
+    def test_wrong_weights_length(self) -> None:
         """Test with wrong weights length returns 0."""
         result = calculate_il_impact_multi([1.0, 1.0], [2.0, 0.5], weights=[0.5])
         assert result == 0
 
-    def test_no_initial_prices(self):
+    def test_no_initial_prices(self) -> None:
         """Test with no initial prices."""
         assert calculate_il_impact_multi([], [1.0]) == 0
 
-    def test_no_final_prices(self):
+    def test_no_final_prices(self) -> None:
         """Test with no final prices."""
         assert calculate_il_impact_multi([1.0], []) == 0
 
-    def test_default_equal_weights(self):
+    def test_default_equal_weights(self) -> None:
         """Test default equal weights path with 3 tokens."""
         result = calculate_il_impact_multi([1.0, 1.0, 1.0], [2.0, 0.5, 1.5])
         assert isinstance(result, float)
@@ -578,11 +577,11 @@ class TestCalculateIlImpactMulti:
 class TestCalculateIlRiskScoreMulti:
     """Tests for calculate_il_risk_score_multi function."""
 
-    def test_insufficient_token_ids(self):
+    def test_insufficient_token_ids(self) -> None:
         """Test with less than 2 valid token IDs."""
         assert calculate_il_risk_score_multi(["id1", None], "key") is None
 
-    def test_only_none_ids(self):
+    def test_only_none_ids(self) -> None:
         """Test with all None token IDs."""
         assert calculate_il_risk_score_multi([None, None], "key") is None
 
@@ -595,7 +594,9 @@ class TestCalculateIlRiskScoreMulti:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_successful(self, mock_cg, mock_pro, mock_sleep):
+    def test_successful(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test successful calculation with demo key (is_pro=False)."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -616,7 +617,9 @@ class TestCalculateIlRiskScoreMulti:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_successful_pro_key(self, mock_cg, mock_pro, mock_sleep):
+    def test_successful_pro_key(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test successful calculation with pro API key (is_pro=True)."""
         mock_pro.return_value = True
         inst = MagicMock()
@@ -634,7 +637,7 @@ class TestCalculateIlRiskScoreMulti:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_with_x402(self, mock_cg, mock_sleep):
+    def test_with_x402(self, mock_cg: MagicMock, mock_sleep: MagicMock) -> None:
         """Test with x402 session."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = [
@@ -647,7 +650,7 @@ class TestCalculateIlRiskScoreMulti:
         )
         assert isinstance(result, float)
 
-    def test_no_api_key_no_x402(self):
+    def test_no_api_key_no_x402(self) -> None:
         """Test with no API key and no x402."""
         result = calculate_il_risk_score_multi(["t0", "t1"], "")
         assert result is None
@@ -658,7 +661,7 @@ class TestCalculateIlRiskScoreMulti:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_api_exception(self, mock_cg, mock_sleep):
+    def test_api_exception(self, mock_cg: MagicMock, mock_sleep: MagicMock) -> None:
         """Test inner API exception (per-token)."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
@@ -677,7 +680,9 @@ class TestCalculateIlRiskScoreMulti:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_insufficient_data(self, mock_cg, mock_pro, mock_sleep):
+    def test_insufficient_data(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test with insufficient price data (min_length < 2)."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -698,7 +703,9 @@ class TestCalculateIlRiskScoreMulti:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_outer_exception(self, mock_cg, mock_pro, mock_sleep):
+    def test_outer_exception(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test outer exception handling (line 447-449).
 
         This triggers the outer except by making np.corrcoef raise after
@@ -727,7 +734,9 @@ class TestCalculateIlRiskScoreMulti:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_inner_exception_cg_constructor(self, mock_cg, mock_pro, mock_sleep):
+    def test_inner_exception_cg_constructor(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test inner exception when CoinGeckoAPI constructor raises."""
         mock_pro.return_value = False
         mock_cg.side_effect = Exception("constructor fail")
@@ -742,9 +751,11 @@ class TestCreateGraphqlClient:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.RequestsHTTPTransport"
     )
-    def test_creates_client(self, mock_transport, mock_client):
+    def test_creates_client(
+        self, mock_transport: MagicMock, mock_client: MagicMock
+    ) -> None:
         """Test client creation."""
-        result = create_graphql_client()
+        create_graphql_client()
         mock_transport.assert_called_once()
         mock_client.assert_called_once()
 
@@ -752,7 +763,7 @@ class TestCreateGraphqlClient:
 class TestCreatePoolSnapshotsQuery:
     """Tests for create_pool_snapshots_query function."""
 
-    def test_creates_query(self):
+    def test_creates_query(self) -> None:
         """Test query creation."""
         result = create_pool_snapshots_query("pool1", "OPTIMISM")
         assert result is not None
@@ -761,14 +772,14 @@ class TestCreatePoolSnapshotsQuery:
 class TestFetchLiquidityMetrics:
     """Tests for fetch_liquidity_metrics function (the second/overriding definition)."""
 
-    def test_no_snapshots(self):
+    def test_no_snapshots(self) -> None:
         """Test with no snapshots returns None."""
         mock_client = MagicMock()
         mock_client.execute.return_value = {"poolGetSnapshots": []}
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is None
 
-    def test_successful(self):
+    def test_successful(self) -> None:
         """Test successful metric computation."""
         mock_client = MagicMock()
         mock_client.execute.return_value = {
@@ -781,7 +792,7 @@ class TestFetchLiquidityMetrics:
         assert result is not None
         assert "Depth Score" in result
 
-    def test_extreme_values_filtered(self):
+    def test_extreme_values_filtered(self) -> None:
         """Test that extreme values are filtered out."""
         mock_client = MagicMock()
         mock_client.execute.return_value = {
@@ -792,7 +803,7 @@ class TestFetchLiquidityMetrics:
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is None
 
-    def test_invalid_snapshot_values(self):
+    def test_invalid_snapshot_values(self) -> None:
         """Test with invalid snapshot values (ValueError/TypeError)."""
         mock_client = MagicMock()
         mock_client.execute.return_value = {
@@ -803,14 +814,14 @@ class TestFetchLiquidityMetrics:
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is None
 
-    def test_exception(self):
+    def test_exception(self) -> None:
         """Test outer exception handling."""
         mock_client = MagicMock()
         mock_client.execute.side_effect = Exception("network error")
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is None
 
-    def test_small_price_impact(self):
+    def test_small_price_impact(self) -> None:
         """Test with very small price impact (below 0.001 threshold)."""
         mock_client = MagicMock()
         mock_client.execute.return_value = {
@@ -823,7 +834,7 @@ class TestFetchLiquidityMetrics:
         )
         assert result is not None
 
-    def test_zero_avg_tvl_and_volume(self):
+    def test_zero_avg_tvl_and_volume(self) -> None:
         """Test with zero TVL and volume (depth_score == 0 branch)."""
         mock_client = MagicMock()
         mock_client.execute.return_value = {
@@ -836,7 +847,7 @@ class TestFetchLiquidityMetrics:
         assert result["Depth Score"] == 0
         assert result["Liquidity Risk Multiplier"] == 0
 
-    def test_no_client_creates_one(self):
+    def test_no_client_creates_one(self) -> None:
         """Test that None client triggers create_graphql_client."""
         with patch(
             "packages.valory.customs.balancer_pools_search.balancer_pools_search.create_graphql_client"
@@ -848,14 +859,14 @@ class TestFetchLiquidityMetrics:
             mock_create.assert_called_once()
             assert result is None
 
-    def test_missing_poolGetSnapshots_key(self):
+    def test_missing_poolGetSnapshots_key(self) -> None:
         """Test with missing poolGetSnapshots key returns empty list default."""
         mock_client = MagicMock()
         mock_client.execute.return_value = {}
         result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
         assert result is None
 
-    def test_statistics_error(self):
+    def test_statistics_error(self) -> None:
         """Test statistics.StatisticsError branch (lines 589-591).
 
         When filtered_snapshots are valid but statistics.mean raises.
@@ -875,7 +886,7 @@ class TestFetchLiquidityMetrics:
             result = fetch_liquidity_metrics("pool1", "OPTIMISM", client=mock_client)
             assert result is None
 
-    def test_depth_score_calculation_error(self):
+    def test_depth_score_calculation_error(self) -> Any:
         """Test ZeroDivisionError/OverflowError/ValueError in depth calculation (lines 627-630).
 
         Note: This except block catches ZeroDivisionError, OverflowError, ValueError
@@ -894,7 +905,7 @@ class TestFetchLiquidityMetrics:
         original_min = min
         call_count = [0]
 
-        def bad_min(*args, **kwargs):
+        def bad_min(*args: Any, **kwargs: Any) -> Any:
             call_count[0] += 1
             # The first min calls are from filtered_snapshots and mean calcs;
             # We want to fail during depth_score = min(depth_score, 1e6) which is
@@ -914,7 +925,7 @@ class TestAnalyzePoolLiquidity:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics"
     )
-    def test_no_metrics(self, mock_fetch):
+    def test_no_metrics(self, mock_fetch: MagicMock) -> None:
         """Test when metrics are None."""
         mock_fetch.return_value = None
         depth, max_pos = analyze_pool_liquidity("pool1", "OPTIMISM")
@@ -923,7 +934,7 @@ class TestAnalyzePoolLiquidity:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics"
     )
-    def test_with_metrics(self, mock_fetch):
+    def test_with_metrics(self, mock_fetch: MagicMock) -> None:
         """Test with valid metrics."""
         mock_fetch.return_value = {"Depth Score": 100, "Maximum Position Size": 5000}
         depth, max_pos = analyze_pool_liquidity("pool1", "OPTIMISM")
@@ -932,7 +943,7 @@ class TestAnalyzePoolLiquidity:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.fetch_liquidity_metrics"
     )
-    def test_exception(self, mock_fetch):
+    def test_exception(self, mock_fetch: MagicMock) -> None:
         """Test exception handling."""
         mock_fetch.side_effect = Exception("fail")
         depth, max_pos = analyze_pool_liquidity("pool1", "OPTIMISM")
@@ -945,7 +956,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_no_data(self, mock_post):
+    def test_no_data(self, mock_post: MagicMock) -> None:
         """Test with no data returns None."""
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"poolGetSnapshots": []}}
@@ -956,7 +967,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_successful(self, mock_post):
+    def test_successful(self, mock_post: MagicMock) -> None:
         """Test successful Sharpe ratio calculation returns capped value."""
         data = [
             {
@@ -977,7 +988,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_exception(self, mock_post):
+    def test_exception(self, mock_post: MagicMock) -> None:
         """Test outer exception handling."""
         mock_post.side_effect = Exception("fail")
         result = get_balancer_pool_sharpe_ratio("pool1", "OPTIMISM")
@@ -986,7 +997,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_insufficient_returns(self, mock_post):
+    def test_insufficient_returns(self, mock_post: MagicMock) -> None:
         """Test with less than 5 valid returns."""
         data = [
             {
@@ -1006,7 +1017,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_extreme_values_filtered(self, mock_post):
+    def test_extreme_values_filtered(self, mock_post: MagicMock) -> None:
         """Test extreme values are replaced with NaN and warning is logged."""
         data = []
         for i in range(30):
@@ -1030,7 +1041,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_nan_sharpe_ratio(self, mock_post):
+    def test_nan_sharpe_ratio(self, mock_post: MagicMock) -> None:
         """Test NaN/Inf Sharpe ratio returns None."""
         # All identical share prices with no fees -> std=0 -> NaN Sharpe
         data = [
@@ -1051,7 +1062,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_inner_exception(self, mock_post):
+    def test_inner_exception(self, mock_post: MagicMock) -> None:
         """Test inner processing exception."""
         mock_resp = MagicMock()
         # Return data that will cause processing errors
@@ -1063,7 +1074,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_infinite_returns_replaced(self, mock_post):
+    def test_infinite_returns_replaced(self, mock_post: MagicMock) -> None:
         """Test that infinite values in returns are handled and warning is logged."""
         data = []
         for i in range(30):
@@ -1089,7 +1100,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_missing_column(self, mock_post):
+    def test_missing_column(self, mock_post: MagicMock) -> None:
         """Test with data where fees24h is missing (line 693->692 branch: col not in df.columns).
 
         When fees24h column doesn't exist, the `if col in df.columns` check is False
@@ -1115,7 +1126,7 @@ class TestGetBalancerPoolSharpeRatio:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_sharpe_capped_at_bounds(self, mock_post):
+    def test_sharpe_capped_at_bounds(self, mock_post: MagicMock) -> None:
         """Test Sharpe ratio is capped between -10 and 10."""
         # Create data with consistently increasing prices -> high positive Sharpe
         data = [
@@ -1138,16 +1149,16 @@ class TestGetBalancerPoolSharpeRatio:
 class TestGetUnderlyingTokenSymbol:
     """Tests for get_underlying_token_symbol function."""
 
-    def test_known_mapping(self):
+    def test_known_mapping(self) -> None:
         """Test known token mapping."""
         assert get_underlying_token_symbol("weth") == "ethereum"
         assert get_underlying_token_symbol("WETH") == "ethereum"
 
-    def test_unknown_symbol(self):
+    def test_unknown_symbol(self) -> None:
         """Test unknown symbol returns itself."""
         assert get_underlying_token_symbol("unknowntoken") == "unknowntoken"
 
-    def test_additional_mappings(self):
+    def test_additional_mappings(self) -> None:
         """Test additional known mappings."""
         assert get_underlying_token_symbol("csusdc") == "usdc"
         assert get_underlying_token_symbol("wsteth") == "steth"
@@ -1158,18 +1169,18 @@ class TestGetUnderlyingTokenSymbol:
 class TestNormalizeTokenSymbol:
     """Tests for normalize_token_symbol function."""
 
-    def test_removes_prefix(self):
+    def test_removes_prefix(self) -> None:
         """Test removing known prefixes."""
         assert normalize_token_symbol("wETH") == "ETH"
 
-    def test_no_prefix(self):
+    def test_no_prefix(self) -> None:
         """Test with no known prefix returns as-is."""
         # 'ETH' starts with no matching prefix in lowercase
         # Actually 'e' is not in prefixes list
         result = normalize_token_symbol("ETH")
         assert result == "ETH"
 
-    def test_various_prefixes(self):
+    def test_various_prefixes(self) -> None:
         """Test various prefix removals."""
         assert normalize_token_symbol("csUSDC") == "USDC"
         assert normalize_token_symbol("waETH") == "ETH"
@@ -1191,7 +1202,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_with_x402_successful(self, mock_cg, mock_pro, mock_sleep):
+    def test_with_x402_successful(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test price fetching with x402 session."""
         inst = MagicMock()
         inst.get_price.return_value = {"weth": {"usd": 2000.0}}
@@ -1211,7 +1224,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_no_api_key_no_x402_returns_none(self, mock_cg, mock_pro, mock_sleep):
+    def test_no_api_key_no_x402_returns_none(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test with no API key and no x402 returns None."""
         inst = MagicMock()
         mock_cg.return_value = inst
@@ -1227,7 +1242,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_pro_key(self, mock_cg, mock_pro, mock_sleep):
+    def test_pro_key(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test with pro API key."""
         mock_pro.return_value = True
         inst = MagicMock()
@@ -1246,7 +1263,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_demo_key(self, mock_cg, mock_pro, mock_sleep):
+    def test_demo_key(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test with demo API key."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1264,7 +1283,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_price_not_found_usd_pegged(self, mock_cg, mock_pro, mock_sleep):
+    def test_price_not_found_usd_pegged(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test USD-pegged token gets price 1.0 when not found via API."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1284,7 +1305,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_price_not_found_no_usd(self, mock_cg, mock_pro, mock_sleep):
+    def test_price_not_found_no_usd(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test non-USD token with no price found gets 0.0."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1303,7 +1326,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_get_price_exception_tries_next(self, mock_cg, mock_pro, mock_sleep):
+    def test_get_price_exception_tries_next(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test that exception in get_price tries next possible ID."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1318,7 +1343,7 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_outer_exception(self, mock_cg, mock_sleep):
+    def test_outer_exception(self, mock_cg: MagicMock, mock_sleep: MagicMock) -> None:
         """Test outer exception returns fallback dict with all prices 0.0."""
         # The first time.sleep(3) raises, entering the outer except
         mock_sleep.side_effect = Exception("outer fail")
@@ -1334,7 +1359,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_price_found_break(self, mock_cg, mock_pro, mock_sleep):
+    def test_price_found_break(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test that once price is found, inner loop breaks."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1353,7 +1380,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_inner_per_symbol_exception(self, mock_cg, mock_pro, mock_sleep):
+    def test_inner_per_symbol_exception(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test per-symbol exception handler sets price to 0.0."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1382,7 +1411,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_search_fallback_finds_price(self, mock_cg, mock_pro, mock_sleep):
+    def test_search_fallback_finds_price(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test the search fallback path when direct get_price fails."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1412,8 +1443,8 @@ class TestGetPoolTokenPrices:
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
     def test_search_fallback_price_data_missing_coin_id(
-        self, mock_cg, mock_pro, mock_sleep
-    ):
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test search fallback when get_price returns data without the expected coin_id."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1436,7 +1467,9 @@ class TestGetPoolTokenPrices:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_search_fallback_exception(self, mock_cg, mock_pro, mock_sleep):
+    def test_search_fallback_exception(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
         """Test search fallback when search raises an exception (except branch)."""
         mock_pro.return_value = False
         inst = MagicMock()
@@ -1454,48 +1487,48 @@ class TestGetPoolTokenPrices:
 class TestGetTokenInvestmentsMulti:
     """Tests for get_token_investments_multi function."""
 
-    def test_zero_investment(self):
+    def test_zero_investment(self) -> None:
         """Test with zero investment."""
         assert get_token_investments_multi(0, {"TK0": 100}) == []
 
-    def test_negative_investment(self):
+    def test_negative_investment(self) -> None:
         """Test with negative investment."""
         assert get_token_investments_multi(-100, {"TK0": 100}) == []
 
-    def test_empty_prices(self):
+    def test_empty_prices(self) -> None:
         """Test with empty prices."""
         assert get_token_investments_multi(100, {}) == []
 
-    def test_single_token(self):
+    def test_single_token(self) -> None:
         """Test with single token (less than 2)."""
         assert get_token_investments_multi(100, {"TK0": 50}) == []
 
-    def test_both_zero_prices(self):
+    def test_both_zero_prices(self) -> None:
         """Test with both token prices zero."""
         assert get_token_investments_multi(100, {"TK0": 0, "TK1": 0}) == []
 
-    def test_one_zero_price_first(self):
+    def test_one_zero_price_first(self) -> None:
         """Test with first token price zero."""
         result = get_token_investments_multi(100, {"TK0": 0, "TK1": 50})
         assert len(result) >= 2
         assert result[0] == 0
         assert result[1] > 0
 
-    def test_one_zero_price_second(self):
+    def test_one_zero_price_second(self) -> None:
         """Test with second token price zero."""
         result = get_token_investments_multi(100, {"TK0": 50, "TK1": 0})
         assert len(result) >= 2
         assert result[0] > 0
         assert result[1] == 0
 
-    def test_normal(self):
+    def test_normal(self) -> None:
         """Test normal calculation with both valid prices."""
         result = get_token_investments_multi(100, {"TK0": 50, "TK1": 100})
         assert len(result) == 2
         assert result[0] > 0
         assert result[1] > 0
 
-    def test_three_tokens(self):
+    def test_three_tokens(self) -> None:
         """Test with three tokens (third gets zero)."""
         result = get_token_investments_multi(100, {"TK0": 50, "TK1": 100, "TK2": 200})
         assert len(result) == 3
@@ -1507,22 +1540,22 @@ class TestGetTokenInvestmentsMulti:
 class TestCalculateSinglePoolInvestment:
     """Tests for calculate_single_pool_investment function."""
 
-    def test_below_min_apr(self):
+    def test_below_min_apr(self) -> None:
         """Test APR below minimum threshold."""
         assert calculate_single_pool_investment(0.01, 100000) == 0.0
 
-    def test_normal(self):
+    def test_normal(self) -> None:
         """Test normal calculation above min APR."""
         result = calculate_single_pool_investment(0.10, 100000)
         assert result > 0
         assert result <= 1000.0
 
-    def test_small_investment_below_min(self):
+    def test_small_investment_below_min(self) -> None:
         """Test investment below minimum threshold of 100."""
         result = calculate_single_pool_investment(0.021, 10)
         assert result == 0.0
 
-    def test_high_apr_capped(self):
+    def test_high_apr_capped(self) -> None:
         """Test high APR investment is capped at max_investment."""
         result = calculate_single_pool_investment(1.0, 1000000)
         assert result <= 1000.0
@@ -1531,49 +1564,49 @@ class TestCalculateSinglePoolInvestment:
 class TestCalculateDifferentialInvestment:
     """Tests for calculate_differential_investment function."""
 
-    def test_zero_tvl(self):
+    def test_zero_tvl(self) -> None:
         """Test with zero TVL."""
         assert calculate_differential_investment(0.1, 0.05, 0) == 0.0
 
-    def test_single_pool(self):
+    def test_single_pool(self) -> None:
         """Test single pool mode."""
         result = calculate_differential_investment(0.1, 0, 100000, is_single_pool=True)
         assert result >= 0
 
-    def test_low_apr(self):
+    def test_low_apr(self) -> None:
         """Test with very low current APR."""
         assert calculate_differential_investment(0.005, 0, 100000) == 0.0
 
-    def test_zero_base_apr(self):
+    def test_zero_base_apr(self) -> None:
         """Test with zero base APR uses 75% of current APR."""
         result = calculate_differential_investment(0.1, 0, 100000)
         assert result >= 0
 
-    def test_ratio_lte_1(self):
+    def test_ratio_lte_1(self) -> None:
         """Test when ratio <= 1 returns 0."""
         assert calculate_differential_investment(0.05, 0.1, 100000) == 0.0
 
-    def test_normal(self):
+    def test_normal(self) -> None:
         """Test normal differential investment calculation."""
         result = calculate_differential_investment(0.2, 0.1, 100000)
         assert result > 0
         assert result <= 1000.0
 
-    def test_small_diff_below_min(self):
+    def test_small_diff_below_min(self) -> None:
         """Test small differential below min threshold."""
         result = calculate_differential_investment(0.02, 0.019, 100)
         assert result == 0.0
 
-    def test_negative_tvl(self):
+    def test_negative_tvl(self) -> None:
         """Test with negative TVL."""
         assert calculate_differential_investment(0.1, 0.05, -100) == 0.0
 
-    def test_negative_base_apr(self):
+    def test_negative_base_apr(self) -> None:
         """Test with negative base APR triggers apr_base <= 0 branch."""
         result = calculate_differential_investment(0.1, -0.01, 100000)
         assert result >= 0
 
-    def test_single_pool_capped(self):
+    def test_single_pool_capped(self) -> None:
         """Test single pool investment is capped at 1000."""
         result = calculate_differential_investment(1.0, 0, 1000000, is_single_pool=True)
         assert result <= 1000.0
@@ -1582,36 +1615,36 @@ class TestCalculateDifferentialInvestment:
 class TestFilterValidInvestmentPools:
     """Tests for filter_valid_investment_pools function."""
 
-    def test_filters_zero_investment(self):
+    def test_filters_zero_investment(self) -> None:
         """Test filtering out zero investment pools."""
         pools = [{"max_investment_usd": 0, "max_investment_amounts": [1, 1]}]
         assert filter_valid_investment_pools(pools) == []
 
-    def test_filters_missing_amounts(self):
+    def test_filters_missing_amounts(self) -> None:
         """Test filtering out pools with insufficient amounts."""
         pools = [{"max_investment_usd": 100, "max_investment_amounts": [1]}]
         assert filter_valid_investment_pools(pools) == []
 
-    def test_filters_zero_token0(self):
+    def test_filters_zero_token0(self) -> None:
         """Test filtering out pools with zero token0 amount."""
         pools = [{"max_investment_usd": 100, "max_investment_amounts": [0, 1]}]
         assert filter_valid_investment_pools(pools) == []
 
-    def test_filters_zero_token1(self):
+    def test_filters_zero_token1(self) -> None:
         """Test filtering out pools with zero token1 amount."""
         pools = [{"max_investment_usd": 100, "max_investment_amounts": [1, 0]}]
         assert filter_valid_investment_pools(pools) == []
 
-    def test_valid_pool(self):
+    def test_valid_pool(self) -> None:
         """Test valid pool passes filter."""
         pools = [{"max_investment_usd": 100, "max_investment_amounts": [1, 1]}]
         assert len(filter_valid_investment_pools(pools)) == 1
 
-    def test_empty_list(self):
+    def test_empty_list(self) -> None:
         """Test empty list."""
         assert filter_valid_investment_pools([]) == []
 
-    def test_no_amounts_key(self):
+    def test_no_amounts_key(self) -> None:
         """Test pool missing max_investment_amounts key."""
         pools = [{"max_investment_usd": 100}]
         assert filter_valid_investment_pools(pools) == []
@@ -1620,7 +1653,13 @@ class TestFilterValidInvestmentPools:
 class TestFormatPoolData:
     """Tests for format_pool_data function."""
 
-    def _make_pool(self, apr=0.1, tvl=100000, pool_id="pool1", chain="OPTIMISM"):
+    def _make_pool(
+        self,
+        apr: Any = 0.1,
+        tvl: Any = 100000,
+        pool_id: Any = "pool1",
+        chain: Any = "OPTIMISM",
+    ) -> Any:
         """Create a test pool for format_pool_data."""
         return {
             "id": pool_id,
@@ -1652,7 +1691,13 @@ class TestFormatPoolData:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_single_pool(self, mock_cg, mock_pro, mock_prices, mock_sleep):
+    def test_single_pool(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
         """Test formatting a single pool (is_single_pool=True branch)."""
         mock_pro.return_value = False
         mock_prices.return_value = {"TK0": 50.0, "TK1": 100.0}
@@ -1673,7 +1718,13 @@ class TestFormatPoolData:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_multiple_pools(self, mock_cg, mock_pro, mock_prices, mock_sleep):
+    def test_multiple_pools(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
         """Test formatting multiple pools (is_single_pool=False branch)."""
         mock_pro.return_value = False
         mock_prices.return_value = {"TK0": 50.0, "TK1": 100.0}
@@ -1696,7 +1747,13 @@ class TestFormatPoolData:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_low_apr_pool(self, mock_cg, mock_pro, mock_prices, mock_sleep):
+    def test_low_apr_pool(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
         """Test pool with very low APR gets empty investment."""
         mock_pro.return_value = False
         mock_prices.return_value = {"TK0": 50.0, "TK1": 100.0}
@@ -1717,7 +1774,13 @@ class TestFormatPoolData:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_zero_diff_investment(self, mock_cg, mock_pro, mock_prices, mock_sleep):
+    def test_zero_diff_investment(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
         """Test when diff_investment is 0 due to very low APR."""
         mock_pro.return_value = False
         mock_prices.return_value = {"TK0": 50.0, "TK1": 100.0}
@@ -1741,7 +1804,13 @@ class TestFormatPoolData:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_no_token_prices(self, mock_cg, mock_pro, mock_prices, mock_sleep):
+    def test_no_token_prices(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
         """Test when token prices are all zero."""
         mock_pro.return_value = False
         mock_prices.return_value = {"TK0": 0.0, "TK1": 0.0}
@@ -1761,7 +1830,13 @@ class TestFormatPoolData:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_with_x402(self, mock_cg, mock_pro, mock_prices, mock_sleep):
+    def test_with_x402(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
         """Test with x402 session and proxy."""
         mock_pro.return_value = False
         mock_prices.return_value = {"TK0": 50.0, "TK1": 100.0}
@@ -1798,14 +1873,14 @@ class TestGetOpportunitiesForBalancer:
     )
     def test_successful(
         self,
-        mock_get,
-        mock_filter,
-        mock_il,
-        mock_sharpe,
-        mock_liq,
-        mock_format,
-        mock_valid,
-    ):
+        mock_get: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_format: MagicMock,
+        mock_valid: MagicMock,
+    ) -> None:
         """Test successful opportunity search."""
         pool = {
             "id": "pool1",
@@ -1840,7 +1915,7 @@ class TestGetOpportunitiesForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
     )
-    def test_error_from_get_pools(self, mock_get):
+    def test_error_from_get_pools(self, mock_get: MagicMock) -> None:
         """Test error returned from get_balancer_pools."""
         mock_get.return_value = {"error": "API failure"}
         result = get_opportunities_for_balancer(
@@ -1854,7 +1929,9 @@ class TestGetOpportunitiesForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
     )
-    def test_no_filtered_pools(self, mock_get, mock_filter):
+    def test_no_filtered_pools(
+        self, mock_get: MagicMock, mock_filter: MagicMock
+    ) -> None:
         """Test when no pools pass filtering."""
         mock_get.return_value = [{"id": "1"}]
         mock_filter.return_value = []
@@ -1886,14 +1963,14 @@ class TestGetOpportunitiesForBalancer:
     )
     def test_insufficient_valid_token_ids(
         self,
-        mock_get,
-        mock_filter,
-        mock_il,
-        mock_sharpe,
-        mock_liq,
-        mock_format,
-        mock_valid,
-    ):
+        mock_get: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_format: MagicMock,
+        mock_valid: MagicMock,
+    ) -> None:
         """Test when pool has insufficient valid token IDs for IL calculation."""
         pool = {
             "id": "pool1",
@@ -1911,7 +1988,7 @@ class TestGetOpportunitiesForBalancer:
         mock_format.return_value = [{"dex_type": "balancerPool"}]
         mock_valid.return_value = [{"dex_type": "balancerPool"}]
 
-        result = get_opportunities_for_balancer(
+        get_opportunities_for_balancer(
             ["optimism"],
             "url",
             [],
@@ -1931,7 +2008,7 @@ class TestIsProApiKey:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_pro(self, mock_cg):
+    def test_pro(self, mock_cg: MagicMock) -> None:
         """Test pro key returns True."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {"prices": []}
@@ -1941,7 +2018,7 @@ class TestIsProApiKey:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_not_pro(self, mock_cg):
+    def test_not_pro(self, mock_cg: MagicMock) -> None:
         """Test non-pro key returns False."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
@@ -1951,7 +2028,7 @@ class TestIsProApiKey:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_empty_response(self, mock_cg):
+    def test_empty_response(self, mock_cg: MagicMock) -> None:
         """Test empty response (falsy) returns False."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = {}
@@ -1961,7 +2038,7 @@ class TestIsProApiKey:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
     )
-    def test_none_response(self, mock_cg):
+    def test_none_response(self, mock_cg: MagicMock) -> None:
         """Test None response returns False."""
         inst = MagicMock()
         inst.get_coin_market_chart_range_by_id.return_value = None
@@ -1981,7 +2058,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
     )
-    def test_with_token_count(self, mock_il, mock_sharpe, mock_liq):
+    def test_with_token_count(
+        self, mock_il: MagicMock, mock_sharpe: MagicMock, mock_liq: MagicMock
+    ) -> None:
         """Test with token_count in position (token_count > 0 branch)."""
         mock_il.return_value = -0.05
         mock_sharpe.return_value = 1.5
@@ -1998,7 +2077,7 @@ class TestCalculateMetrics:
         result = calculate_metrics(
             position, "key", {"optimism": {"tk0": "id0", "tk1": "id1"}}
         )
-        assert result["il_risk_score"] == -0.05
+        assert result["il_risk_score"] == -0.05  # type: ignore[index]
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
@@ -2006,7 +2085,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
     )
-    def test_fallback_token_format(self, mock_sharpe, mock_liq):
+    def test_fallback_token_format(
+        self, mock_sharpe: MagicMock, mock_liq: MagicMock
+    ) -> None:
         """Test fallback to token0/token1 format (token_count=0)."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
@@ -2020,7 +2101,7 @@ class TestCalculateMetrics:
             "token1_symbol": "TK1",
         }
         result = calculate_metrics(position, "key", {})
-        assert result["il_risk_score"] is None
+        assert result["il_risk_score"] is None  # type: ignore[index]
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
@@ -2028,7 +2109,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
     )
-    def test_insufficient_valid_ids(self, mock_sharpe, mock_liq):
+    def test_insufficient_valid_ids(
+        self, mock_sharpe: MagicMock, mock_liq: MagicMock
+    ) -> None:
         """Test with insufficient valid token IDs."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
@@ -2042,7 +2125,7 @@ class TestCalculateMetrics:
             "token1_symbol": "UNKNOWN1",
         }
         result = calculate_metrics(position, "key", {})
-        assert result["il_risk_score"] is None
+        assert result["il_risk_score"] is None  # type: ignore[index]
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
@@ -2053,7 +2136,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
     )
-    def test_fallback_with_valid_ids(self, mock_il, mock_sharpe, mock_liq):
+    def test_fallback_with_valid_ids(
+        self, mock_il: MagicMock, mock_sharpe: MagicMock, mock_liq: MagicMock
+    ) -> None:
         """Test fallback token0/token1 format with valid IDs >= 2."""
         mock_il.return_value = -0.03
         mock_sharpe.return_value = 1.5
@@ -2070,7 +2155,7 @@ class TestCalculateMetrics:
         result = calculate_metrics(
             position, "key", {"optimism": {"tk0": "id0", "tk1": "id1"}}
         )
-        assert result["il_risk_score"] == -0.03
+        assert result["il_risk_score"] == -0.03  # type: ignore[index]
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
@@ -2078,7 +2163,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
     )
-    def test_no_token_count_key(self, mock_sharpe, mock_liq):
+    def test_no_token_count_key(
+        self, mock_sharpe: MagicMock, mock_liq: MagicMock
+    ) -> None:
         """Test with missing token_count key (defaults to 0)."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
@@ -2101,7 +2188,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
     )
-    def test_token_count_with_missing_keys(self, mock_sharpe, mock_liq):
+    def test_token_count_with_missing_keys(
+        self, mock_sharpe: MagicMock, mock_liq: MagicMock
+    ) -> None:
         """Test token_count > 0 but some token keys missing."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
@@ -2126,7 +2215,9 @@ class TestCalculateMetrics:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
     )
-    def test_no_tokens_at_all(self, mock_sharpe, mock_liq):
+    def test_no_tokens_at_all(
+        self, mock_sharpe: MagicMock, mock_liq: MagicMock
+    ) -> None:
         """Test with token_count=0 and no token0/token1 keys (elif False branch, line 1244->1254)."""
         mock_sharpe.return_value = 1.5
         mock_liq.return_value = (100, 5000)
@@ -2144,7 +2235,7 @@ class TestCalculateMetrics:
 class TestRun:
     """Tests for the run function."""
 
-    def test_missing_fields(self):
+    def test_missing_fields(self) -> None:
         """Test with missing fields."""
         result = run()
         assert "error" in result
@@ -2152,7 +2243,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics"
     )
-    def test_get_metrics(self, mock_calc):
+    def test_get_metrics(self, mock_calc: MagicMock) -> None:
         """Test get_metrics mode with successful result."""
         mock_calc.return_value = {"il_risk_score": -0.05}
         result = run(
@@ -2172,7 +2263,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics"
     )
-    def test_get_metrics_none(self, mock_calc):
+    def test_get_metrics_none(self, mock_calc: MagicMock) -> None:
         """Test get_metrics returning None."""
         mock_calc.return_value = None
         result = run(
@@ -2192,7 +2283,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
     )
-    def test_opportunity_search(self, mock_opp):
+    def test_opportunity_search(self, mock_opp: MagicMock) -> None:
         """Test opportunity search mode with results."""
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
@@ -2207,7 +2298,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
     )
-    def test_opportunity_search_error(self, mock_opp):
+    def test_opportunity_search_error(self, mock_opp: MagicMock) -> None:
         """Test opportunity search returning error dict."""
         mock_opp.return_value = {"error": "fail"}
         result = run(
@@ -2222,7 +2313,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
     )
-    def test_opportunity_search_empty(self, mock_opp):
+    def test_opportunity_search_empty(self, mock_opp: MagicMock) -> None:
         """Test empty opportunity search result."""
         mock_opp.return_value = []
         result = run(
@@ -2237,7 +2328,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_opportunities_for_balancer"
     )
-    def test_opportunity_search_no_errors(self, mock_opp):
+    def test_opportunity_search_no_errors(self, mock_opp: MagicMock) -> None:
         """Test opportunity search with no errors produces clean result."""
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
@@ -2253,7 +2344,7 @@ class TestRun:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_metrics"
     )
-    def test_get_metrics_with_errors(self, mock_calc):
+    def test_get_metrics_with_errors(self, mock_calc: MagicMock) -> None:
         """Test get_metrics when errors are accumulated."""
         mock_calc.return_value = {"il_risk_score": -0.05}
         bal_mod._thread_local.errors = ["some previous error"]
@@ -2275,11 +2366,11 @@ class TestRun:
 class TestResetX402Adapter:
     """Tests for _reset_x402_adapter helper."""
 
-    def test_none_session(self):
+    def test_none_session(self) -> None:
         """No error when session is None."""
         _reset_x402_adapter(None)
 
-    def test_session_with_retry_flag(self):
+    def test_session_with_retry_flag(self) -> None:
         """Resets _is_retry on adapters that have it."""
         adapter = MagicMock()
         adapter._is_retry = True
@@ -2288,14 +2379,14 @@ class TestResetX402Adapter:
         _reset_x402_adapter(session)
         assert adapter._is_retry is False
 
-    def test_session_without_retry_flag(self):
+    def test_session_without_retry_flag(self) -> None:
         """No error when adapter lacks _is_retry."""
         adapter = object()
         session = MagicMock()
         session.adapters = {"https://": adapter}
         _reset_x402_adapter(session)
 
-    def test_empty_adapters(self):
+    def test_empty_adapters(self) -> None:
         """No error when session has no adapters."""
         session = MagicMock()
         session.adapters = {}
@@ -2308,7 +2399,7 @@ class TestSharpeRatioNullData:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_null_data_response(self, mock_post):
+    def test_null_data_response(self, mock_post: MagicMock) -> None:
         """Test that {"data": null} response does not crash."""
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": None}
@@ -2323,7 +2414,7 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_connection_error(self, mock_post):
+    def test_connection_error(self, mock_post: MagicMock) -> None:
         """Test that ConnectionError is caught and returns error dict."""
         import requests as req_lib
 
@@ -2334,7 +2425,7 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_timeout_error(self, mock_post):
+    def test_timeout_error(self, mock_post: MagicMock) -> None:
         """Test that Timeout is caught and returns error dict."""
         import requests as req_lib
 
@@ -2345,7 +2436,7 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_json_decode_error(self, mock_post):
+    def test_json_decode_error(self, mock_post: MagicMock) -> None:
         """Test that JSONDecodeError from response.json() returns error dict."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -2357,7 +2448,7 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_timeout_kwarg_passed(self, mock_post):
+    def test_timeout_kwarg_passed(self, mock_post: MagicMock) -> None:
         """Test that timeout=30 is passed to requests.post."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -2370,7 +2461,7 @@ class TestRunQueryNetworkResilience:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.requests.post"
     )
-    def test_data_null_returns_empty_dict(self, mock_post):
+    def test_data_null_returns_empty_dict(self, mock_post: MagicMock) -> None:
         """Test that {"data": null} returns empty dict instead of crashing."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -2383,18 +2474,18 @@ class TestRunQueryNetworkResilience:
 class TestGetCachedPrice:
     """Tests for get_cached_price function."""
 
-    def test_cache_miss_returns_none(self):
+    def test_cache_miss_returns_none(self) -> None:
         """Test that missing cache key returns None."""
         assert get_cached_price("token", 90, {}, 1800) is None
 
-    def test_cache_hit_returns_data(self):
+    def test_cache_hit_returns_data(self) -> None:
         """Test that valid (non-expired) cache entry returns data."""
-        cache = {}
+        cache: Dict[Any, Any] = {}
         set_cached_price("token", 90, {"prices": [[0, 100]]}, cache)
         result = get_cached_price("token", 90, cache, 1800)
         assert result == {"prices": [[0, 100]]}
 
-    def test_cache_expired_returns_none(self):
+    def test_cache_expired_returns_none(self) -> None:
         """Test that expired cache entry returns None."""
         cache = {
             "il_range_token_90": {
@@ -2409,17 +2500,17 @@ class TestGetCachedPrice:
 class TestCalculateIlRiskScoreMultiWithCache:
     """Tests for calculate_il_risk_score_multi with pre-populated cache."""
 
-    def test_all_tokens_cached(self):
+    def test_all_tokens_cached(self) -> None:
         """Test that cached price data is used without calling CoinGeckoAPI."""
         prices_t0 = {"prices": [[i, 100 + i * 0.5] for i in range(50)]}
         prices_t1 = {"prices": [[i, 200 + i * 0.3] for i in range(50)]}
-        cache = {}
+        cache: Dict[Any, Any] = {}
         set_cached_price("t0", 90, prices_t0, cache)
         set_cached_price("t1", 90, prices_t1, cache)
         result = calculate_il_risk_score_multi(["t0", "t1"], "key", price_cache=cache)
         assert isinstance(result, float)
 
-    def test_price_cache_none_defaults_to_empty_dict(self):
+    def test_price_cache_none_defaults_to_empty_dict(self) -> None:
         """Test that passing price_cache=None does not crash."""
         result = calculate_il_risk_score_multi(["t0", None], "key", price_cache=None)
         assert result is None
@@ -2428,7 +2519,7 @@ class TestCalculateIlRiskScoreMultiWithCache:
 class TestRunWithPriceCache:
     """Tests for run() with explicit price_cache dict."""
 
-    def test_run_with_explicit_price_cache(self):
+    def test_run_with_explicit_price_cache(self) -> None:
         """Test that run() accepts a non-None price_cache without error."""
         result = run(price_cache={}, price_cache_ttl=600)
         assert "error" in result

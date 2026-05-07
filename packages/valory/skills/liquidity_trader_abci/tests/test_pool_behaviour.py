@@ -24,7 +24,7 @@
 import sys
 from pathlib import Path
 from typing import Any, Dict, Generator
-from unittest.mock import MagicMock, PropertyMock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 from packages.valory.protocols.contract_api.message import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -39,12 +39,13 @@ class ConcretePoolBehaviour(PoolBehaviour):
     def _get_tokens(self) -> Dict[str, str]:
         return {"token0": "0xaddr0", "token1": "0xaddr1"}
 
-    def enter(self, **kwargs: Any) -> Generator[None, None, str]:
+    def enter(self, **kwargs: Any) -> Generator[None, None, str]:  # type: ignore[override]
+        """Enter."""
         yield
         return "tx_hash"
 
     def exit(self, **kwargs: Any) -> None:
-        pass
+        """Exit."""
 
 
 def test_import() -> None:
@@ -226,16 +227,19 @@ class TestPoolBehaviour:
         mock_response.performative = ContractApiMessage.Performative.RAW_TRANSACTION
         mock_response.raw_transaction.body.get.return_value = "some_data"
 
-        def fake_get_contract_api_response(*args, **kwargs):
+        def fake_get_contract_api_response(
+            *args: Any, **kwargs: Any
+        ) -> Generator[Any, Any, Any]:
+            """Fake get contract api response."""
             yield
             return mock_response
 
-        obj.get_contract_api_response = fake_get_contract_api_response
+        obj.get_contract_api_response = fake_get_contract_api_response  # type: ignore[method-assign]
 
         from aea.configurations.data_types import PublicId
 
         gen = obj.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
             contract_address="0xaddr",
             contract_public_id=PublicId("valory", "test", "0.1.0"),
             contract_callable="some_method",
@@ -256,16 +260,19 @@ class TestPoolBehaviour:
         mock_response = MagicMock()
         mock_response.performative = ContractApiMessage.Performative.ERROR
 
-        def fake_get_contract_api_response(*args, **kwargs):
+        def fake_get_contract_api_response(
+            *args: Any, **kwargs: Any
+        ) -> Generator[Any, Any, Any]:
+            """Fake get contract api response."""
             yield
             return mock_response
 
-        obj.get_contract_api_response = fake_get_contract_api_response
+        obj.get_contract_api_response = fake_get_contract_api_response  # type: ignore[method-assign]
 
         from aea.configurations.data_types import PublicId
 
         gen = obj.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
             contract_address="0xaddr",
             contract_public_id=PublicId("valory", "test", "0.1.0"),
             contract_callable="some_method",
@@ -286,16 +293,19 @@ class TestPoolBehaviour:
         mock_response.performative = ContractApiMessage.Performative.RAW_TRANSACTION
         mock_response.raw_transaction.body.get.return_value = None
 
-        def fake_get_contract_api_response(*args, **kwargs):
+        def fake_get_contract_api_response(
+            *args: Any, **kwargs: Any
+        ) -> Generator[Any, Any, Any]:
+            """Fake get contract api response."""
             yield
             return mock_response
 
-        obj.get_contract_api_response = fake_get_contract_api_response
+        obj.get_contract_api_response = fake_get_contract_api_response  # type: ignore[method-assign]
 
         from aea.configurations.data_types import PublicId
 
         gen = obj.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore[arg-type]
             contract_address="0xaddr",
             contract_public_id=PublicId("valory", "test", "0.1.0"),
             contract_callable="some_method",
@@ -317,5 +327,5 @@ class TestPoolBehaviour:
     def test_async_act(self) -> None:
         """Test async_act returns a generator that does nothing."""
         obj = self._make_behaviour()
-        gen = obj.async_act()
+        gen = obj.async_act()  # type: ignore[func-returns-value]
         assert gen is None or hasattr(gen, "__next__")

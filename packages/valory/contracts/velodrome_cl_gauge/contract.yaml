@@ -6,11 +6,11 @@ description: The contract package for the Velodrome Gauge interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeicjezx5xj43ucjywdspp4tvtu5jzn7jkqg5isn2l4bkihg72tbxwu
+  __init__.py: bafybeibtmatdlzqmzw6xqqewxkxgxkhg5sd4yzcotrsyx5t6ha4wz3mpmm
   build/contract_interface.json: bafybeif2e3dyo7t6fztyq3brgjgwxv6wum3aob2oaqgxjshm2oofdgom6q
-  contract.py: bafybeibwclh4kqqxxnwlsljhqbkpecrh3rnykep7fsyvyogpv3gce2p6oe
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeieoe5bvnhu3brss3l2shmhdobbghxpurmthc2hbztwa33odljy2te
+  contract.py: bafybeiai7na4xd6fera5etpxhf574ewivaig7jo3wkvetfmvitko77lwty
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeigipww47fwccawwpx6bd4zpregtfxn5iaulansfio6edzubqq6pa4
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeCLGaugeContract

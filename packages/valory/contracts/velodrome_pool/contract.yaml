@@ -6,11 +6,11 @@ description: The contract package for the balancer VelodromePool interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeibc2emcl2u4bzvefcdpnuljyii6yxnoh4sxfxpenzleebrufqhpmy
+  __init__.py: bafybeiedljwemzbpggrfuw3ujdhy7lijrpbtvbs3ppugrwbul2fy7i24ru
   build/VelodromePool.json: bafybeidgimpxtkds5kaha5mvojvr7e5pjefyvw362teh65vn44qqvfcvza
-  contract.py: bafybeiagm6zoi4btjg6lxr4bpot23u4app4exrdfv3t326t452xz5hugeq
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeidj6sn3b7cosne35amq4zlcryc6jtrupwx42pztkyydtwkfxnlrrq
+  contract.py: bafybeiexakmkm2nbe64wtqzvpnrweahsxjmhq5pkwzvtcq2st2ky7pgsny
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeibhn6xy3wolkopi47vtknqx5jxgbhddfki373jakorenxtphdykna
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromePoolContract

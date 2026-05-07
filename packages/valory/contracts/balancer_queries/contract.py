@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains a wrapper for Balancer Queries contract interface."""
 
 from typing import List
@@ -35,7 +34,6 @@ class BalancerQueriesContract(Contract):
 
     contract_id = PUBLIC_ID
 
-
     @classmethod
     def query_join(
         cls,
@@ -52,12 +50,12 @@ class BalancerQueriesContract(Contract):
     ) -> JSONLike:
         """Query join operation to get expected BPT output - view function, no gas cost."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        
+
         encoded_user_data = encode(
             ["uint256", "uint256[]", "uint256"],
             [join_kind, max_amounts_in, minimum_bpt],
         )
-        
+
         # Prepare join request struct
         join_request = (
             assets,
@@ -65,17 +63,14 @@ class BalancerQueriesContract(Contract):
             encoded_user_data,
             from_internal_balance,
         )
-        
+
         # Call queryJoin - this is a view function
         result = contract_instance.functions.queryJoin(
-            bytes.fromhex(pool_id[2:]),
-            sender,
-            recipient,
-            join_request
+            bytes.fromhex(pool_id[2:]), sender, recipient, join_request
         ).call()
-        
+
         # Result contains (bptOut, amountsIn)
-        return {"result":{"bpt_out":result[0], "amounts_in":result[1]}}
+        return {"result": {"bpt_out": result[0], "amounts_in": result[1]}}
 
     @classmethod
     def query_exit(
@@ -93,9 +88,9 @@ class BalancerQueriesContract(Contract):
     ) -> JSONLike:
         """Query exit operation to get expected token amounts - view function, no gas cost."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        
+
         encoded_user_data = encode(["uint256", "uint256"], [exit_kind, bpt_amount_in])
-        
+
         # Prepare exit request struct
         exit_request = (
             assets,
@@ -103,14 +98,10 @@ class BalancerQueriesContract(Contract):
             encoded_user_data,
             to_internal_balance,
         )
-        
+
         # Call queryExit - this is a view function
         result = contract_instance.functions.queryExit(
-            bytes.fromhex(pool_id[2:]),
-            sender,
-            recipient,
-            exit_request
+            bytes.fromhex(pool_id[2:]), sender, recipient, exit_request
         ).call()
-        
 
-        return {"result":{"bpt_in":result[0], "amounts_out":result[1]}}
+        return {"result": {"bpt_in": result[0], "amounts_out": result[1]}}

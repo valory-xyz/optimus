@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains a wrapper for Velodrome Router contract interface."""
 
 from aea.common import JSONLike
@@ -133,7 +132,13 @@ class VelodromeRouterContract(Contract):
             amount_a_desired,
             amount_b_desired,
         ).call()
-        return {"result":{"amount_a": result[0], "amount_b": result[1], "liquidity": result[2]}}
+        return {
+            "result": {
+                "amount_a": result[0],
+                "amount_b": result[1],
+                "liquidity": result[2],
+            }
+        }
 
     @classmethod
     def quote_remove_liquidity(
@@ -155,8 +160,8 @@ class VelodromeRouterContract(Contract):
             factory,
             liquidity,
         ).call()
-        return {"result":{"amount_a": result[0], "amount_b": result[1]}}
-    
+        return {"result": {"amount_a": result[0], "amount_b": result[1]}}
+
     @classmethod
     def quote_add_liquidity_mode(
         cls,
@@ -177,7 +182,13 @@ class VelodromeRouterContract(Contract):
             amount_a_desired,
             amount_b_desired,
         ).call()
-        return {"result":{"amount_a": result[0], "amount_b": result[1], "liquidity": result[2]}}
+        return {
+            "result": {
+                "amount_a": result[0],
+                "amount_b": result[1],
+                "liquidity": result[2],
+            }
+        }
 
     @classmethod
     def quote_remove_liquidity_mode(
@@ -197,15 +208,15 @@ class VelodromeRouterContract(Contract):
             stable,
             liquidity,
         ).call()
-        return {"result":{"amount_a": result[0], "amount_b": result[1]}}
-    
+        return {"result": {"amount_a": result[0], "amount_b": result[1]}}
+
     @classmethod
     def factory(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get factory address using factory() method (Mode)."""
+        """Read the factory address (Mode-style routers use a `factory` method)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.factory().call()
         return {"factory": result}
@@ -216,7 +227,7 @@ class VelodromeRouterContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get factory address using defaultFactory() method (Optimism)."""
+        """Read the factory address (Optimism-style routers use `defaultFactory`)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.defaultFactory().call()
         return {"factory": result}

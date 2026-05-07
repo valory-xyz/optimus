@@ -8,10 +8,10 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihtmxfvz5vio5m3x6w356swgbhzjke3eirjk665bxdg3qvcbtoag4
-  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/conftest.py: bafybeiaovyfq6kvftvezd3yytah7nxipxzlqvd7c7fpbr64foyr47z5ww4
-  tests/test_uniswap_pools_search.py: bafybeih2rsva5tuwr6fj72jgwn72jgl6nys7ojhqntel5crtglivrqte4m
-  uniswap_pools_search.py: bafybeihagqn7pyuhdfnnlypxjlfg366rpw7aw2mnvdx6uwpfos5k5ovshq
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/conftest.py: bafybeiefzxmn3hvzjfydpkc4hbvzpggavakz3j4fmydafv57nbjoztwnnq
+  tests/test_uniswap_pools_search.py: bafybeiecrpsf7s3lhgmkghnwg43o55bpdwdkpvlst2pyyqewixvsa6tyva
+  uniswap_pools_search.py: bafybeiarv5a26vch57u3omdrejtnqqxvh6rofxh3icfiszqqbcgml4lmom
 fingerprint_ignore_patterns: []
 entry_point: uniswap_pools_search.py
 callable: run

@@ -16,16 +16,14 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Sturdy's YearnV3Vault contract interface."""
+
 import logging
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
-from eth_abi import encode
-
 
 PUBLIC_ID = PublicId.from_str("valory/sturdy_yearn_v3_vault:0.1.0")
 _logger = logging.getLogger(
@@ -125,7 +123,7 @@ class YearnV3VaultContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         name = contract_instance.functions.name().call()
         return {"name": name}
-    
+
     @classmethod
     def total_supply(
         cls,

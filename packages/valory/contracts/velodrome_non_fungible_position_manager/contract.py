@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """Wrapper for Velodrome CL Pool Manager contract interface."""
 
 from aea.common import JSONLike
@@ -181,7 +180,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
         return dict(balance=balance)
-    
+
     @classmethod
     def ownerOf(
         cls,
@@ -193,7 +192,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         owner = contract_instance.functions.ownerOf(token_id).call()
         return dict(owner=owner)
-    
+
     @classmethod
     def get_position(
         cls,
@@ -201,25 +200,27 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """get the position info"""
+        """Get the position info"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         position = contract_instance.functions.positions(token_id).call()
         if not position:
             return dict(data={})
-        return dict(data={
-            "nonce": position[0],
-            "operator": position[1],
-            "token0": position[2],
-            "token1": position[3],
-            "tickSpacing": position[4],
-            "tickLower": position[5],
-            "tickUpper": position[6],
-            "liquidity": position[7],
-            "feeGrowthInside0LastX128": position[8],
-            "feeGrowthInside1LastX128": position[9],
-            "tokensOwed0": position[10],
-            "tokensOwed1": position[11],
-        })
+        return dict(
+            data={
+                "nonce": position[0],
+                "operator": position[1],
+                "token0": position[2],
+                "token1": position[3],
+                "tickSpacing": position[4],
+                "tickLower": position[5],
+                "tickUpper": position[6],
+                "liquidity": position[7],
+                "feeGrowthInside0LastX128": position[8],
+                "feeGrowthInside1LastX128": position[9],
+                "tokensOwed0": position[10],
+                "tokensOwed1": position[11],
+            }
+        )
 
     @classmethod
     def approve(
@@ -263,7 +264,9 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
     ) -> JSONLike:
         """Check if operator is approved for all NFTs of owner."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        is_approved = contract_instance.functions.isApprovedForAll(owner, operator).call()
+        is_approved = contract_instance.functions.isApprovedForAll(
+            owner, operator
+        ).call()
         return dict(is_approved=is_approved)
 
     @classmethod
@@ -301,14 +304,16 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         """Get all token IDs owned by an address."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
-        
+
         token_ids = []
         for i in range(balance):
             try:
-                token_id = contract_instance.functions.tokenOfOwnerByIndex(owner, i).call()
+                token_id = contract_instance.functions.tokenOfOwnerByIndex(
+                    owner, i
+                ).call()
                 token_ids.append(token_id)
-            except Exception:
+            except Exception:  # nosec B112 — token enumeration: skip non-existent IDs
                 # Skip if token doesn't exist or error occurs
                 continue
-        
+
         return dict(token_ids=token_ids, count=len(token_ids))

@@ -16,14 +16,12 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Velodrome Pool contract interface."""
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi, LedgerApi
-
 
 PUBLIC_ID = PublicId.from_str("valory/velodrome_pool:0.1.0")
 
@@ -40,11 +38,11 @@ class VelodromePoolContract(Contract):
         contract_address: str,
         account: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """Get the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.balanceOf(account).call()
         return dict(balance=data)
-    
+
     @classmethod
     def build_approval_tx(
         cls,
@@ -56,9 +54,11 @@ class VelodromePoolContract(Contract):
         """Build an ERC20 approval."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         checksumed_spender = ledger_api.api.to_checksum_address(spender)
-        data = contract_instance.encode_abi("approve", args=(checksumed_spender, amount))
+        data = contract_instance.encode_abi(
+            "approve", args=(checksumed_spender, amount)
+        )
         return {"tx_hash": bytes.fromhex(data[2:])}
-    
+
     @classmethod
     def get_reserves(
         cls,
@@ -70,5 +70,3 @@ class VelodromePoolContract(Contract):
         reserve0 = contract_instance.functions.reserve0().call()
         reserve1 = contract_instance.functions.reserve1().call()
         return dict(data=[reserve0, reserve1])
-
-    

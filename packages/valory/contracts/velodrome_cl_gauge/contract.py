@@ -16,17 +16,14 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This class contains a wrapper for Velodrome CL Gauge contract interface."""
 
 import logging
-from typing import Any
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
-from aea_ledger_ethereum import EthereumApi, LedgerApi
-
+from aea_ledger_ethereum import EthereumApi
 
 PUBLIC_ID = PublicId.from_str("valory/velodrome_cl_gauge:0.1.0")
 
@@ -75,7 +72,7 @@ class VelodromeCLGaugeContract(Contract):
         token_id: int,
     ) -> JSONLike:
         """Prepare encoded tx for withdrawing tokens from CL gauge using token ID."""
-        
+
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -92,9 +89,9 @@ class VelodromeCLGaugeContract(Contract):
     ) -> JSONLike:
         """Prepare encoded tx for claiming rewards from CL gauge."""
         _logger.debug(f"Preparing CL getReward transaction for account: {account}")
-        
+
         checksumed_account = ledger_api.api.to_checksum_address(account)
-        
+
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -110,7 +107,7 @@ class VelodromeCLGaugeContract(Contract):
         token_id: int,
     ) -> JSONLike:
         """Prepare encoded tx for claiming rewards for specific token ID from CL gauge."""
-                
+
         return cls._encode_call(
             ledger_api,
             contract_address,
@@ -128,10 +125,12 @@ class VelodromeCLGaugeContract(Contract):
     ) -> JSONLike:
         """Get the amount of rewards earned by an account in CL gauge."""
         _logger.debug(f"Getting CL earned rewards for account: {account}")
-        
+
         checksumed_account = ledger_api.api.to_checksum_address(account)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        earned_amount = contract_instance.functions.earned(checksumed_account, token_id).call()
+        earned_amount = contract_instance.functions.earned(
+            checksumed_account, token_id
+        ).call()
         return dict(earned=earned_amount)
 
     @classmethod
@@ -174,7 +173,7 @@ class VelodromeCLGaugeContract(Contract):
     ) -> JSONLike:
         """Get the total supply of staked tokens in CL gauge."""
         _logger.debug("Getting CL total supply of staked tokens")
-        
+
         contract_instance = cls.get_instance(ledger_api, contract_address)
         total_supply = contract_instance.functions.totalSupply().call()
         _logger.debug(f"CL total supply: {total_supply}")

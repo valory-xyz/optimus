@@ -17,17 +17,13 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+"""Balancer pools search module."""
 
-
-import warnings
-
-warnings.filterwarnings("ignore")  # Suppress all warnings
-
-import json
 import logging
 import statistics
 import threading
 import time
+import warnings
 from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -40,11 +36,13 @@ from gql.transport.requests import RequestsHTTPTransport
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
 
+warnings.filterwarnings("ignore")  # Suppress all warnings
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def _reset_x402_adapter(session):
+def _reset_x402_adapter(session: Any) -> None:
     """Reset x402 adapter retry flag to ensure proper 402 payment flow on session reuse."""
     if session is None:
         return
@@ -133,7 +131,7 @@ def set_cached_price(
     }
 
 
-def get_errors():
+def get_errors() -> Any:
     """Get thread-local error list."""
     if not hasattr(_thread_local, "errors"):
         _thread_local.errors = []
@@ -141,16 +139,21 @@ def get_errors():
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
+    """Check missing fields."""
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
 def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
+    """Remove irrelevant fields."""
     return {key: value for key, value in kwargs.items() if key in required_fields}
 
 
-def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
+def run_query(
+    query: Any, graphql_endpoint: Any, variables: Any = None
+) -> Dict[str, Any]:
+    """Run query."""
     logger.info(f"Executing GraphQL query to endpoint: {graphql_endpoint}")
     headers = {"Content-Type": "application/json"}
     payload = {"query": query, "variables": variables or {}}
@@ -178,14 +181,17 @@ def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     return result.get("data") or {}
 
 
-def get_total_apr(pool) -> float:
+def get_total_apr(pool: Any) -> float:
+    """Get total apr."""
     apr_items = pool.get("dynamicData", {}).get("aprItems", [])
     return sum(
         item["apr"] for item in apr_items if item["type"] not in EXCLUDED_APR_TYPES
     )
 
 
-def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
+def standardize_metrics(
+    pools: Any, apr_weight: Any = 0.7, tvl_weight: Any = 0.3
+) -> Any:
     """
     Standardize APR and TVL using Z-score normalization and calculate composite scores.
 
@@ -246,13 +252,13 @@ def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
 
 
 def apply_composite_pre_filter(
-    pools,
-    top_n=10,
-    apr_weight=0.7,
-    tvl_weight=0.3,
-    min_tvl_threshold=1000,
-    use_composite_filter=True,
-):
+    pools: Any,
+    top_n: Any = 10,
+    apr_weight: Any = 0.7,
+    tvl_weight: Any = 0.3,
+    min_tvl_threshold: Any = 1000,
+    use_composite_filter: Any = True,
+) -> Any:
     """
     Apply composite pre-filtering to select top pools based on standardized APR and TVL.
 
@@ -299,7 +305,8 @@ def apply_composite_pre_filter(
 
 
 @lru_cache(None)
-def create_web3_connection(chain_name: str):
+def create_web3_connection(chain_name: str) -> Any:
+    """Create web3 connection."""
     chain_url = CHAIN_URLS.get(chain_name)
     if not chain_url:
         return None
@@ -313,7 +320,8 @@ def create_web3_connection(chain_name: str):
 
 
 @lru_cache(None)
-def fetch_token_name_from_contract(chain_name, token_address):
+def fetch_token_name_from_contract(chain_name: Any, token_address: Any) -> Any:
+    """Fetch token name from contract."""
     ERC20_ABI = [
         {
             "constant": True,
@@ -333,13 +341,14 @@ def fetch_token_name_from_contract(chain_name, token_address):
     )
     try:
         return contract.functions.name().call()
-    except:
+    except Exception:
         return None
 
 
 def get_balancer_pools(
-    chains, graphql_endpoint
+    chains: Any, graphql_endpoint: Any
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Get balancer pools."""
     logger.info(f"Fetching Balancer pools for chains: {chains}")
     chain_list_str = ", ".join(chain.upper() for chain in chains)
     graphql_query = f"""
@@ -373,8 +382,9 @@ def get_balancer_pools(
 
 
 def get_filtered_pools_for_balancer(
-    pools, current_positions, whitelisted_assets, **kwargs
-):
+    pools: Any, current_positions: Any, whitelisted_assets: Any, **kwargs: Any
+) -> Any:
+    """Get filtered pools for balancer."""
     # Extract composite filtering parameters
     top_n = kwargs.get("top_n", 10)
     apr_weight = kwargs.get("apr_weight", 0.7)
@@ -424,7 +434,9 @@ def get_filtered_pools_for_balancer(
     return filtered_pools
 
 
-def get_coin_id_from_symbol(coin_id_mapping, symbol, chain_name) -> Optional[str]:
+def get_coin_id_from_symbol(
+    coin_id_mapping: Any, symbol: Any, chain_name: Any
+) -> Optional[str]:
     """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
     # Check if coin_list is valid
     symbol = symbol.lower()
@@ -434,7 +446,9 @@ def get_coin_id_from_symbol(coin_id_mapping, symbol, chain_name) -> Optional[str
     return None
 
 
-def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
+def calculate_il_impact_multi(
+    initial_prices: Any, final_prices: Any, weights: Any = None
+) -> Any:
     """
     Calculate impermanent loss impact for multiple tokens.
 
@@ -481,14 +495,14 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
 
 
 def calculate_il_risk_score_multi(
-    token_ids,
+    token_ids: Any,
     coingecko_api_key: str,
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
     time_period: int = 90,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-) -> float:
+) -> Optional[float]:
     """Calculate IL risk score for multiple tokens."""
     if price_cache is None:
         price_cache = {}
@@ -564,7 +578,7 @@ def calculate_il_risk_score_multi(
                 avg_correlation += abs(correlation_matrix[i, j])
                 count += 1
 
-        avg_correlation = avg_correlation / count if count > 0 else 0
+        avg_correlation = avg_correlation / count if count > 0 else 0  # type: ignore[assignment]
 
         # Calculate volatility for each token
         volatilities = [np.std(prices) for prices in aligned_prices]
@@ -582,7 +596,8 @@ def calculate_il_risk_score_multi(
         return None
 
 
-def create_graphql_client(api_url="https://api-v3.balancer.fi") -> Client:
+def create_graphql_client(api_url: Any = "https://api-v3.balancer.fi") -> Client:
+    """Create graphql client."""
     transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
     return Client(transport=transport, fetch_schema_from_transport=False)
 
@@ -590,6 +605,7 @@ def create_graphql_client(api_url="https://api-v3.balancer.fi") -> Client:
 def create_pool_snapshots_query(
     pool_id: str, chain: str, range: str = "NINETY_DAYS"
 ) -> gql:
+    """Create pool snapshots query."""
     return gql(f"""
     query GetLiquidityMetrics {{
       poolGetSnapshots(
@@ -610,7 +626,8 @@ def analyze_pool_liquidity(
     chain: str,
     client: Optional[Client] = None,
     price_impact: float = 0.01,
-):
+) -> Any:
+    """Analyze pool liquidity."""
     try:
         metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
         if metrics is None:
@@ -628,6 +645,7 @@ def fetch_liquidity_metrics(
     client: Optional[Client] = None,
     price_impact: float = 0.01,
 ) -> Optional[Dict[str, Any]]:
+    """Fetch liquidity metrics."""
     logger.info(
         f"Fetching enhanced liquidity metrics for pool {pool_id} on chain {chain}"
     )
@@ -761,7 +779,10 @@ def fetch_liquidity_metrics(
         return None
 
 
-def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
+def get_balancer_pool_sharpe_ratio(
+    pool_id: Any, chain: Any, timerange: Any = "ONE_YEAR"
+) -> Any:
+    """Get balancer pool sharpe ratio."""
     logger.info(
         f"Calculating Sharpe ratio for pool {pool_id} on chain {chain} with timerange {timerange}"
     )
@@ -946,7 +967,7 @@ def get_pool_token_prices(
     coingecko_api_key: Optional[str] = None,
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
-) -> Dict[str, float]:
+) -> Optional[Dict[str, float]]:
     """Enhanced token price fetching with support for synthetic tokens."""
     prices = {}
 
@@ -997,7 +1018,9 @@ def get_pool_token_prices(
                             prices[original_symbol] = response[token_id]["usd"]
                             price_found = True
                             break
-                    except Exception:
+                    except (
+                        Exception
+                    ):  # nosec B112 — best-effort price lookup; try next token
                         continue
 
                 # If still no price, try search
@@ -1016,7 +1039,9 @@ def get_pool_token_prices(
                             if price_data and coin_id in price_data:
                                 prices[original_symbol] = price_data[coin_id]["usd"]
                                 price_found = True
-                    except Exception:
+                    except (
+                        Exception
+                    ):  # nosec B110 — best-effort fallback; price stays unknown
                         pass
 
                 # Special handling for USD-pegged tokens
@@ -1045,10 +1070,10 @@ def get_pool_token_prices(
 def get_token_investments_multi(
     diff_investment: float, token_prices: Dict[str, float]
 ) -> List[float]:
-    """
-    Calculate how many tokens should be invested for multiple tokens based on USD investment amount.
-    Only invests in the first two tokens (indices 0 and 1) with equal distribution.
-    Sets all other token amounts to zero.
+    """Calculate per-token investment amounts from a total USD allocation.
+
+    Only invests in the first two tokens (indices 0 and 1) with equal
+    distribution; all other token amounts are set to zero.
 
     Args:
         diff_investment: Total USD amount to invest in the pool
@@ -1093,7 +1118,7 @@ def get_token_investments_multi(
     if second_token_price > 0:
         valid_token_count += 1
 
-    per_token_investment = diff_investment / valid_token_count
+    per_token_investment = diff_investment / valid_token_count  # type: ignore[assignment]
 
     # Initialize all amounts to 0
     token_amounts = [0.0] * len(token_prices)
@@ -1109,8 +1134,8 @@ def get_token_investments_multi(
 
 
 def calculate_single_pool_investment(apr: float, tvl: float) -> float:
-    """
-    Calculate investment amount for a single pool based on APR thresholds.
+    """Calculate investment amount for a single pool based on APR thresholds.
+
     Enforces a maximum investment amount of $1000.
 
     Args:
@@ -1119,6 +1144,7 @@ def calculate_single_pool_investment(apr: float, tvl: float) -> float:
 
     Returns:
         float: Calculated investment amount, capped at $1000
+    # noqa: DAR101,DAR201
     """
     MIN_APR_THRESHOLD = 0.02  # 2% minimum APR
     MAX_TVL_ALLOCATION = 0.20  # 20% maximum TVL allocation
@@ -1141,10 +1167,10 @@ def calculate_single_pool_investment(apr: float, tvl: float) -> float:
 def calculate_differential_investment(
     apr_current: float, apr_base: float, tvl: float, is_single_pool: bool = False
 ) -> float:
-    """
-    Calculate the differential investment amount based on APR differences or single pool metrics.
-    Enforces a maximum investment amount of $1000.
-    When apr_base is zero, uses a fixed reduction (25%) of the current APR for calculation.
+    """Calculate differential investment from APR delta or single-pool metrics.
+
+    Enforces a maximum investment amount of $1000. When ``apr_base`` is zero,
+    uses a fixed 25% reduction of the current APR for the calculation.
 
     Args:
         apr_current: APR of the current pool
@@ -1190,11 +1216,12 @@ def calculate_differential_investment(
 def filter_valid_investment_pools(
     formatted_pools: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """
-    Filters pools to include only those where:
+    """Filter pools down to those eligible for investment.
+
+    Pools are kept only when:
     1. max_investment_usd > 0
     2. BOTH token0 and token1 have non-zero investment amounts
-    3. Excludes pools where either token0 or token1 is zero
+    3. Pools where either token0 or token1 amount is zero are excluded
 
     Args:
         formatted_pools: List of formatted pool data
@@ -1253,7 +1280,7 @@ def format_pool_data(
     )
 
     formatted_pools = []
-    max_apr = float(sorted_pools[0].get("apr", 0)) if sorted_pools else 0
+    float(sorted_pools[0].get("apr", 0)) if sorted_pools else 0
 
     # Pre-fetch all token prices
     all_token_symbols = []
@@ -1303,7 +1330,7 @@ def format_pool_data(
         # Get base APR for comparison (or 0 for single pool)
         next_best_apr = 0
         if not is_single_pool and i < len(sorted_pools) - 1:
-            next_best_apr = float(sorted_pools[i + 1].get("apr", 0))
+            next_best_apr = float(sorted_pools[i + 1].get("apr", 0))  # type: ignore[assignment]
 
         # Calculate investment amount
         diff_investment = calculate_differential_investment(
@@ -1313,7 +1340,7 @@ def format_pool_data(
         # Get token prices from pre-fetched prices
         token_prices = {}
         for token in pool["poolTokens"]:
-            token_prices[token["symbol"]] = all_prices.get(token["symbol"], 0)
+            token_prices[token["symbol"]] = all_prices.get(token["symbol"], 0)  # type: ignore[union-attr]
 
         if diff_investment > 0 and any(price > 0 for price in token_prices.values()):
             token_amounts = get_token_investments_multi(diff_investment, token_prices)
@@ -1329,18 +1356,18 @@ def format_pool_data(
 
 
 def get_opportunities_for_balancer(
-    chains,
-    graphql_endpoint,
-    current_positions,
-    coingecko_api_key,
-    whitelisted_assets,
-    coin_id_mapping,
-    x402_session,
-    x402_proxy,
+    chains: Any,
+    graphql_endpoint: Any,
+    current_positions: Any,
+    coingecko_api_key: Any,
+    whitelisted_assets: Any,
+    coin_id_mapping: Any,
+    x402_session: Any,
+    x402_proxy: Any,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """Get and format pool opportunities with investment calculations."""
     logger.info(f"Starting opportunity search for chains: {chains}")
     logger.info(f"Current positions to exclude: {len(current_positions)}")
@@ -1363,7 +1390,7 @@ def get_opportunities_for_balancer(
 
     # Process basic metrics for each pool
     for i, pool in enumerate(filtered_pools):
-        logger.info(f"Processing pool {i+1}/{len(filtered_pools)}: {pool['id']}")
+        logger.info(f"Processing pool {i + 1}/{len(filtered_pools)}: {pool['id']}")
         pool["chain"] = pool["chain"].lower()
         pool["trading_type"] = LP
 
@@ -1429,8 +1456,9 @@ def calculate_metrics(
     x402_proxy: Optional[str] = None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
-    **kwargs,
+    **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
+    """Calculate metrics."""
     # Dynamic handling of tokens
     token_ids = []
     token_count = position.get("token_count", 0)
@@ -1485,9 +1513,7 @@ def calculate_metrics(
 
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:
-    """
-    Check if the provided CoinGecko API key is a pro key.
-    """
+    """Check if the provided CoinGecko API key is a pro key."""
     # Try using the key as a pro API key
     cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
     try:
@@ -1502,7 +1528,8 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
     return False
 
 
-def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
+def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str, List[str]]]:
+    """Run."""
     logger.info("Starting Balancer pools search execution")
     logger.info(f"Input parameters: {list(kwargs.keys())}")
 
@@ -1539,7 +1566,7 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
             get_errors().append("Failed to calculate metrics.")
         else:
             logger.info("Metrics calculation completed successfully")
-        return {"error": get_errors()} if get_errors() else metrics
+        return {"error": get_errors()} if get_errors() else metrics  # type: ignore[return-value]
     else:
         logger.info("Searching for investment opportunities")
         result = get_opportunities_for_balancer(

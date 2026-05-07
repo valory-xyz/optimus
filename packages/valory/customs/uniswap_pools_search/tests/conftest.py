@@ -19,17 +19,21 @@
 
 """Fixtures for uniswap_pools_search tests."""
 
+from typing import Any, Generator
+
 import pytest
 
 import packages.valory.customs.uniswap_pools_search.uniswap_pools_search as uni
 
 
 @pytest.fixture(autouse=True)
-def _clear_coingecko_price_cache():
+def _clear_coingecko_price_cache() -> Generator[Any, Any, Any]:
     """Reset the module-level COINGECKO_PRICE_CACHE between tests.
 
     `run(price_cache=shared_dict)` can rebind the module attribute, so
     reset via setattr to keep isolation regardless of reassignment.
+
+    :yield: TODO
     """
     uni.COINGECKO_PRICE_CACHE = {}
     yield

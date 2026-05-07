@@ -23,11 +23,8 @@
 
 import json
 import sys
-import time
-from collections import defaultdict
 from decimal import Decimal
-from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Generator, List, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import numpy as np
@@ -35,18 +32,11 @@ import pytest
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
-    API_CACHE_SIZE,
     AllocationStatus,
-    DEFAULT_DAYS,
     INT_MAX,
     MAX_TICK,
-    MAX_WAIT_TIME,
     MIN_TICK,
-    PRICE_CHECK_INTERVAL,
-    PRICE_VOLATILITY_THRESHOLD,
-    TICK_TO_PERCENTAGE_FACTOR,
     VelodromePoolBehaviour,
-    WAITING_PERIOD,
     ZERO_ADDRESS,
 )
 
@@ -92,7 +82,7 @@ def exhaust_generator(gen: Generator, send_values=None):
                 send_val = next(send_iter)
             except StopIteration:
                 send_val = None
-            val = gen.send(send_val)
+            val = gen.send(send_val)  # noqa: F841
     except StopIteration as e:
         result = e.value
     return result
@@ -183,6 +173,7 @@ class TestCheckPriceMovement:
             tick_ranges = [[{"tick_lower": -100, "tick_upper": 100}]]
 
         def fake_get_price(addr, ch):
+            """Fake get price."""
             yield  # simulate one yield
             return current_price
 
@@ -196,6 +187,7 @@ class TestCheckPriceMovement:
         b = make_behaviour()
 
         def fake_get_price(addr, ch):
+            """Fake get price."""
             yield
             return None
 
@@ -289,6 +281,7 @@ class TestCheckPriceMovement:
         b = make_behaviour()
 
         def exploding_get_price(addr, ch):
+            """Exploding get price."""
             raise RuntimeError("boom")
             yield  # make it a generator  # noqa: unreachable
 
@@ -328,6 +321,7 @@ class TestWaitForFavorablePrice:
 
         # sleep is a generator that yields once
         def fake_sleep(seconds):
+            """Fake sleep."""
             yield
 
         b.sleep = fake_sleep
@@ -336,6 +330,7 @@ class TestWaitForFavorablePrice:
         call_count = 0
 
         def fake_check(pool_address, chain, price_at_selection, tick_ranges):
+            """Fake check."""
             nonlocal call_count
             call_count += 1
             yield
@@ -356,11 +351,13 @@ class TestWaitForFavorablePrice:
         b = make_behaviour()
 
         def fake_sleep(seconds):
+            """Fake sleep."""
             yield
 
         b.sleep = fake_sleep
 
         def fake_check(pool_address, chain, price_at_selection, tick_ranges):
+            """Fake check."""
             yield
             return True  # price always volatile
 
@@ -378,11 +375,13 @@ class TestWaitForFavorablePrice:
         b = make_behaviour()
 
         def fake_sleep(seconds):
+            """Fake sleep."""
             yield
 
         b.sleep = fake_sleep
 
         def fake_check(pool_address, chain, price_at_selection, tick_ranges):
+            """Fake check."""
             yield
             return None
 
@@ -400,6 +399,7 @@ class TestWaitForFavorablePrice:
         b.params.slippage_tolerance = 0.05
 
         def fake_sleep(seconds):
+            """Fake sleep."""
             yield
 
         b.sleep = fake_sleep
@@ -407,6 +407,7 @@ class TestWaitForFavorablePrice:
         check_results = iter([True, False])
 
         def fake_check(pool_address, chain, price_at_selection, tick_ranges):
+            """Fake check."""
             yield
             return next(check_results)
 
@@ -424,6 +425,7 @@ class TestWaitForFavorablePrice:
         b = make_behaviour()
 
         def fake_sleep(seconds):
+            """Fake sleep."""
             raise RuntimeError("sleep broke")
             yield  # noqa: unreachable
 
@@ -440,11 +442,13 @@ class TestWaitForFavorablePrice:
         b = make_behaviour()
 
         def fake_sleep(seconds):
+            """Fake sleep."""
             yield
 
         b.sleep = fake_sleep
 
         def fake_check(pool_address, chain, price_at_selection, tick_ranges):
+            """Fake check."""
             yield
             return True
 
@@ -561,6 +565,7 @@ class TestEnter:
         called_with = {}
 
         def fake_enter_sv(**kwargs):
+            """Fake enter sv."""
             called_with.update(kwargs)
             yield
             return ("tx_hash", "router_addr")
@@ -580,6 +585,7 @@ class TestEnter:
         called_with = {}
 
         def fake_enter_cl(**kwargs):
+            """Fake enter cl."""
             called_with.update(kwargs)
             yield
             return ("tx_hash", "nfpm_addr")
@@ -710,6 +716,7 @@ class TestExit:
         called_with = {}
 
         def fake_exit_sv(**kwargs):
+            """Fake exit sv."""
             called_with.update(kwargs)
             yield
             return (b"txdata", "multisend_addr", True)
@@ -729,6 +736,7 @@ class TestExit:
         called_with = {}
 
         def fake_exit_cl(**kwargs):
+            """Fake exit cl."""
             called_with.update(kwargs)
             yield
             return (b"txdata", "multisend_addr", True)
@@ -832,6 +840,7 @@ class TestEnterStableVolatilePool:
         b.params.velodrome_router_contract_addresses = {"optimism": "0xrouter"}
 
         def fake_query(*args, **kwargs):
+            """Fake query."""
             yield
             return None
 
@@ -855,12 +864,14 @@ class TestEnterStableVolatilePool:
         b.context.state = mock_state
 
         def fake_query(*args, **kwargs):
+            """Fake query."""
             yield
             return {"amount_a": 900, "amount_b": 1800}
 
         b._query_add_liquidity_velodrome = fake_query
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return "0xtxhash"
 
@@ -884,6 +895,7 @@ class TestEnterStableVolatilePool:
 
         # Expected amounts bigger than max_amounts_in: min should be capped
         def fake_query(*args, **kwargs):
+            """Fake query."""
             yield
             return {"amount_a": 2000, "amount_b": 4000}
 
@@ -892,6 +904,7 @@ class TestEnterStableVolatilePool:
         contract_calls = []
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             contract_calls.append(kwargs)
             yield
             return "0xtxhash"
@@ -936,6 +949,7 @@ class TestExitStableVolatilePool:
         b.params.velodrome_router_contract_addresses = {"optimism": "0xrouter"}
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return 0  # no balance
 
@@ -963,6 +977,7 @@ class TestExitStableVolatilePool:
         call_count = [0]
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             call_count[0] += 1
             yield
             if kwargs.get("contract_callable") == "get_balance":
@@ -978,6 +993,7 @@ class TestExitStableVolatilePool:
         b.contract_interact = fake_contract_interact
 
         def fake_query_remove(*args, **kwargs):
+            """Fake query remove."""
             yield
             return {"amount_a": 500, "amount_b": 1000}
 
@@ -1000,6 +1016,7 @@ class TestExitStableVolatilePool:
         b.params.velodrome_router_contract_addresses = {"optimism": "0xrouter"}
 
         def fake_query_remove(*args, **kwargs):
+            """Fake query remove."""
             yield
             return None
 
@@ -1022,12 +1039,14 @@ class TestExitStableVolatilePool:
         b.context.state = mock_state
 
         def fake_query_remove(*args, **kwargs):
+            """Fake query remove."""
             yield
             return {"amount_a": 500, "amount_b": 1000}
 
         b._query_remove_liquidity_velodrome = fake_query_remove
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             if kwargs.get("contract_callable") == "build_approval_tx":
                 return None  # approve fails
@@ -1052,12 +1071,14 @@ class TestExitStableVolatilePool:
         b.context.state = mock_state
 
         def fake_query_remove(*args, **kwargs):
+            """Fake query remove."""
             yield
             return {"amount_a": 500, "amount_b": 1000}
 
         b._query_remove_liquidity_velodrome = fake_query_remove
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             if kwargs.get("contract_callable") == "build_approval_tx":
                 return "0xapprove"
@@ -1085,12 +1106,14 @@ class TestExitStableVolatilePool:
         b.context.state = mock_state
 
         def fake_query_remove(*args, **kwargs):
+            """Fake query remove."""
             yield
             return {"amount_a": 500, "amount_b": 1000}
 
         b._query_remove_liquidity_velodrome = fake_query_remove
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return "0xsome_hash"
 
@@ -1114,12 +1137,14 @@ class TestExitStableVolatilePool:
         b.context.state = mock_state
 
         def fake_query_remove(*args, **kwargs):
+            """Fake query remove."""
             yield
             return {"amount_a": 500, "amount_b": 1000}
 
         b._query_remove_liquidity_velodrome = fake_query_remove
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             if kwargs.get("contract_callable") == "get_tx_data":
                 return None  # multisend fails
@@ -1145,12 +1170,14 @@ class TestExitStableVolatilePool:
         b.context.state = mock_state
 
         def fake_query_remove(*args, **kwargs):
+            """Fake query remove."""
             yield
             return {"amount_a": 500, "amount_b": 1000}
 
         b._query_remove_liquidity_velodrome = fake_query_remove
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             if kwargs.get("contract_callable") == "build_approval_tx":
                 return "0xapprove_data"
@@ -1180,6 +1207,7 @@ class TestGetCachedPriceAtSelection:
         cached = json.dumps({"current_price": 1.5, "invalidated": False})
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {kv_key: cached}
 
@@ -1196,6 +1224,7 @@ class TestGetCachedPriceAtSelection:
         cached = json.dumps({"current_price": 1.5, "invalidated": True})
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {kv_key: cached}
 
@@ -1210,6 +1239,7 @@ class TestGetCachedPriceAtSelection:
         b = make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {}
 
@@ -1224,6 +1254,7 @@ class TestGetCachedPriceAtSelection:
         b = make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return None
 
@@ -1239,6 +1270,7 @@ class TestGetCachedPriceAtSelection:
         kv_key = "velodrome_cl_pool_optimism"
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {kv_key: "not-json!!!"}
 
@@ -1253,6 +1285,7 @@ class TestGetCachedPriceAtSelection:
         b = make_behaviour()
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             raise RuntimeError("db failure")
             yield  # noqa: unreachable
 
@@ -1269,6 +1302,7 @@ class TestGetCachedPriceAtSelection:
         cached = json.dumps({"some_other_key": 42})
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {kv_key: cached}
 
@@ -1284,6 +1318,7 @@ class TestGetCachedPriceAtSelection:
         kv_key = "velodrome_cl_pool_optimism"
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             return {kv_key: ""}
 
@@ -1300,6 +1335,7 @@ class TestGetCachedPriceAtSelection:
         cached = json.dumps({"current_price": 2.5})
 
         def fake_read_kv(keys):
+            """Fake read kv."""
             yield
             assert keys == (kv_key,)
             return {kv_key: cached}
@@ -1359,6 +1395,7 @@ class TestCalculateTokenRatios:
     """Tests for _calculate_token_ratios."""
 
     def test_current_below_lower(self) -> None:
+        """Test current below lower."""
         b = make_behaviour()
         assert b._calculate_token_ratios(100.0, 200.0, 50.0) == {
             "token0": 1.0,
@@ -1366,6 +1403,7 @@ class TestCalculateTokenRatios:
         }
 
     def test_current_equals_lower(self) -> None:
+        """Test current equals lower."""
         b = make_behaviour()
         assert b._calculate_token_ratios(100.0, 200.0, 100.0) == {
             "token0": 1.0,
@@ -1373,6 +1411,7 @@ class TestCalculateTokenRatios:
         }
 
     def test_current_above_upper(self) -> None:
+        """Test current above upper."""
         b = make_behaviour()
         assert b._calculate_token_ratios(100.0, 200.0, 300.0) == {
             "token0": 0.0,
@@ -1380,6 +1419,7 @@ class TestCalculateTokenRatios:
         }
 
     def test_current_equals_upper(self) -> None:
+        """Test current equals upper."""
         b = make_behaviour()
         assert b._calculate_token_ratios(100.0, 200.0, 200.0) == {
             "token0": 0.0,
@@ -1387,11 +1427,13 @@ class TestCalculateTokenRatios:
         }
 
     def test_ratios_sum_to_one(self) -> None:
+        """Test ratios sum to one."""
         b = make_behaviour()
         result = b._calculate_token_ratios(100.0, 400.0, 225.0)
         assert abs(result["token0"] + result["token1"] - 1.0) < 1e-9
 
     def test_midpoint_values(self) -> None:
+        """Test midpoint values."""
         b = make_behaviour()
         lower, upper = 1.0, 9.0
         mid = 5.0
@@ -1403,11 +1445,13 @@ class TestCalculateTokenRatios:
         assert abs(result["token1"] - expected_t1) < 1e-9
 
     def test_just_above_lower(self) -> None:
+        """Test just above lower."""
         b = make_behaviour()
         result = b._calculate_token_ratios(100.0, 200.0, 100.01)
         assert result["token0"] > 0.9
 
     def test_just_below_upper(self) -> None:
+        """Test just below upper."""
         b = make_behaviour()
         result = b._calculate_token_ratios(100.0, 200.0, 199.99)
         assert result["token1"] > 0.5
@@ -1417,23 +1461,27 @@ class TestGetSqrtPriceX96:
     """Tests for _get_sqrt_price_x96."""
 
     def test_empty_pool_address(self) -> None:
+        """Test empty pool address."""
         b = make_behaviour()
         gen = b._get_sqrt_price_x96("optimism", "")
         assert exhaust(gen) is None
 
     def test_slot0_none(self) -> None:
+        """Test slot0 none."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return(None))
         result = exhaust(b._get_sqrt_price_x96("optimism", "0xPool"))
         assert result is None
 
     def test_slot0_missing_key(self) -> None:
+        """Test slot0 missing key."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return({"other": 1}))
         result = exhaust(b._get_sqrt_price_x96("optimism", "0xPool"))
         assert result is None
 
     def test_slot0_success(self) -> None:
+        """Test slot0 success."""
         b = make_behaviour()
         b.contract_interact = MagicMock(
             return_value=_gen_return({"sqrt_price_x96": 12345})
@@ -1446,12 +1494,14 @@ class TestGetLiquidityForTokenVelodrome:
     """Tests for get_liquidity_for_token_velodrome."""
 
     def test_no_position_manager(self) -> None:
+        """Test no position manager."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust(b.get_liquidity_for_token_velodrome(42, "optimism"))
         assert result is None
 
     def test_position_none(self) -> None:
+        """Test position none."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -1461,6 +1511,7 @@ class TestGetLiquidityForTokenVelodrome:
         assert result is None
 
     def test_position_empty(self) -> None:
+        """Test position empty."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -1470,7 +1521,7 @@ class TestGetLiquidityForTokenVelodrome:
         assert result is None
 
     def test_returns_liquidity_from_dict(self) -> None:
-        """The contract wrapper returns a dict keyed by field name; helper
+        """The contract wrapper returns a dict keyed by field name; helper # noqa: D205,D209
         must index into it by key, not by position."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
@@ -1498,6 +1549,7 @@ class TestDecreaseLiquidityVelodrome:
     """Tests for decrease_liquidity_velodrome."""
 
     def test_no_position_manager(self) -> None:
+        """Test no position manager."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust(
@@ -1506,6 +1558,7 @@ class TestDecreaseLiquidityVelodrome:
         assert result is None
 
     def test_returns_tx_hash(self) -> None:
+        """Test returns tx hash."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -1517,6 +1570,7 @@ class TestDecreaseLiquidityVelodrome:
         assert result == "0xTxHash"
 
     def test_returns_none(self) -> None:
+        """Test returns none."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -1532,12 +1586,14 @@ class TestCollectTokensVelodrome:
     """Tests for collect_tokens_velodrome."""
 
     def test_no_position_manager(self) -> None:
+        """Test no position manager."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust(b.collect_tokens_velodrome(1, "0xR", 100, 100, "optimism"))
         assert result is None
 
     def test_returns_tx_hash(self) -> None:
+        """Test returns tx hash."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -1547,6 +1603,7 @@ class TestCollectTokensVelodrome:
         assert result == "0xCollect"
 
     def test_returns_none(self) -> None:
+        """Test returns none."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -1560,18 +1617,21 @@ class TestGetTickSpacingVelodrome:
     """Tests for _get_tick_spacing_velodrome."""
 
     def test_returns_tick_spacing(self) -> None:
+        """Test returns tick spacing."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return(60))
         result = exhaust(b._get_tick_spacing_velodrome("0xPool", "optimism"))
         assert result == 60
 
     def test_returns_none_when_none(self) -> None:
+        """Test returns none when none."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return(None))
         result = exhaust(b._get_tick_spacing_velodrome("0xPool", "optimism"))
         assert result is None
 
     def test_returns_none_when_zero(self) -> None:
+        """Test returns none when zero."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return(0))
         result = exhaust(b._get_tick_spacing_velodrome("0xPool", "optimism"))
@@ -1582,18 +1642,21 @@ class TestGetPoolTokens:
     """Tests for _get_pool_tokens."""
 
     def test_returns_token_pair(self) -> None:
+        """Test returns token pair."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return(["0xT0", "0xT1"]))
         result = exhaust(b._get_pool_tokens("0xPool", "optimism"))
         assert result == ("0xT0", "0xT1")
 
     def test_tokens_none(self) -> None:
+        """Test tokens none."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return(None))
         result = exhaust(b._get_pool_tokens("0xPool", "optimism"))
         assert result == (None, None)
 
     def test_tokens_empty(self) -> None:
+        """Test tokens empty."""
         b = make_behaviour()
         b.contract_interact = MagicMock(return_value=_gen_return([]))
         result = exhaust(b._get_pool_tokens("0xPool", "optimism"))
@@ -1632,6 +1695,7 @@ class TestEnterClPool:
     # --- early returns --------------------------------------------------
 
     def test_no_position_manager(self) -> None:
+        """Test no position manager."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust(
@@ -1642,6 +1706,7 @@ class TestEnterClPool:
         assert result == (None, None)
 
     def test_empty_position_manager(self) -> None:
+        """Test empty position manager."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": ""
@@ -1692,6 +1757,7 @@ class TestEnterClPool:
         assert result == (None, None)
 
     def test_price_at_selection_none(self) -> None:
+        """Test price at selection none."""
         b = self._make_b()
         tr = [[{"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}]]
         b._get_cached_price_at_selection = MagicMock(return_value=_gen_return(None))
@@ -1730,6 +1796,7 @@ class TestEnterClPool:
         assert result == (None, None)
 
     def test_price_moved_wait_failed(self) -> None:
+        """Test price moved wait failed."""
         b = self._make_b()
         tr = [[{"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}]]
         b._get_cached_price_at_selection = MagicMock(return_value=_gen_return(1.0))
@@ -1752,6 +1819,7 @@ class TestEnterClPool:
         assert result == (None, None)
 
     def test_price_moved_wait_timeout(self) -> None:
+        """Test price moved wait timeout."""
         b = self._make_b()
         tr = [[{"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}]]
         b._get_cached_price_at_selection = MagicMock(return_value=_gen_return(1.0))
@@ -1811,7 +1879,7 @@ class TestEnterClPool:
         assert result == (None, None)
 
     def test_price_moved_wait_waiting_continues(self) -> None:
-        """Branch 746->759: when allocation_status is WAITING (not FAILED/TIMEOUT/READY),
+        """Branch 746->759: when allocation_status is WAITING (not FAILED/TIMEOUT/READY), # noqa: D205,D209
         execution falls through to line 759 without returning early."""
         b = self._make_b()
         tr = [
@@ -1852,7 +1920,7 @@ class TestEnterClPool:
         assert b._get_sqrt_price_x96.called
 
     def test_tick_spacing_none_then_fetched_success(self) -> None:
-        """Branch 702->708: tick_spacing is initially None, _get_tick_spacing_velodrome
+        """Branch 702->708: tick_spacing is initially None, _get_tick_spacing_velodrome # noqa: D205,D209
         returns a truthy value, execution continues to line 708."""
         b = self._make_b()
         tr = [
@@ -1925,6 +1993,7 @@ class TestEnterClPool:
     # --- band investment & token amount failures ------------------------
 
     def test_band_investment_none(self) -> None:
+        """Test band investment none."""
         b = self._make_b()
         tr = [
             [
@@ -1957,6 +2026,7 @@ class TestEnterClPool:
         assert result == (None, None)
 
     def test_individual_token_amounts_none(self) -> None:
+        """Test individual token amounts none."""
         b = self._make_b()
         tr = [
             [
@@ -1990,6 +2060,7 @@ class TestEnterClPool:
         assert result == (None, None)
 
     def test_slippage_protection_none(self) -> None:
+        """Test slippage protection none."""
         b = self._make_b()
         tr = [
             [
@@ -2026,6 +2097,7 @@ class TestEnterClPool:
     # --- no mint txs created -------------------------------------------
 
     def test_all_mints_fail(self) -> None:
+        """Test all mints fail."""
         b = self._make_b()
         tr = [
             [
@@ -2063,6 +2135,7 @@ class TestEnterClPool:
     # --- successful entry -----------------------------------------------
 
     def test_successful_single_position(self) -> None:
+        """Test successful single position."""
         b = self._make_b()
         tr = [
             [
@@ -2100,6 +2173,7 @@ class TestEnterClPool:
     # --- zero allocation skipped ----------------------------------------
 
     def test_zero_allocation_skipped(self) -> None:
+        """Test zero allocation skipped."""
         b = self._make_b()
         tr = [
             [
@@ -2186,6 +2260,7 @@ class TestEnterClPool:
         assert len(result[0]) == 2
 
     def test_multiple_positions_success(self) -> None:
+        """Test multiple positions success."""
         b = self._make_b()
         tr = [
             [
@@ -2251,12 +2326,14 @@ class TestExitClPool:
         return b
 
     def test_no_position_manager(self) -> None:
+        """Test no position manager."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [100], "0xPool"))
         assert result == (None, None, None)
 
     def test_no_multisend_address(self) -> None:
+        """Test no multisend address."""
         b = self._make_b()
         b.context.params.multisend_contract_addresses = {}
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
@@ -2280,11 +2357,13 @@ class TestExitClPool:
         b.get_liquidity_for_token_velodrome = _mock_gen(None)
         # No liquidity found => position skipped. Then multisend still called.
         b.contract_interact = _mock_gen("0xabcdef1234567890")
-        result = exhaust(b._exit_cl_pool("optimism", "0xSafe", [1], [0], "0xPool"))
+        result = exhaust(  # noqa: F841
+            b._exit_cl_pool("optimism", "0xSafe", [1], [0], "0xPool")
+        )
         b.get_liquidity_for_token_velodrome.assert_called_once()
 
     def test_zero_liquidity_fetched_successfully_continues(self) -> None:
-        """Branch 985->992: liquidity is 0 initially; after fetch it IS truthy,
+        """Branch 985->992: liquidity is 0 initially; after fetch it IS truthy, # noqa: D205,D209
         so processing continues to slippage calculation (line 992)."""
         b = self._make_b()
         # get_liquidity_for_token_velodrome returns a truthy value (500000)
@@ -2299,6 +2378,7 @@ class TestExitClPool:
         assert result is not None
 
     def test_decrease_fails_skips(self) -> None:
+        """Test decrease fails skips."""
         b = self._make_b()
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
         b.decrease_liquidity_velodrome = _mock_gen(None)
@@ -2308,6 +2388,7 @@ class TestExitClPool:
         assert result == (None, None, None)
 
     def test_collect_fails_skips(self) -> None:
+        """Test collect fails skips."""
         b = self._make_b()
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
         b.decrease_liquidity_velodrome = _mock_gen("0xDec")
@@ -2318,6 +2399,7 @@ class TestExitClPool:
         assert result is not None
 
     def test_multisend_hash_none(self) -> None:
+        """Test multisend hash none."""
         b = self._make_b()
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
         b.decrease_liquidity_velodrome = _mock_gen("0xDec")
@@ -2327,6 +2409,7 @@ class TestExitClPool:
         assert result == (None, None, None)
 
     def test_successful_exit(self) -> None:
+        """Test successful exit."""
         b = self._make_b()
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
         b.decrease_liquidity_velodrome = _mock_gen("0xDec")
@@ -2339,6 +2422,7 @@ class TestExitClPool:
         assert result[2] is True
 
     def test_multiple_positions(self) -> None:
+        """Test multiple positions."""
         b = self._make_b()
         b._calculate_slippage_protection_for_velodrome_decrease = _mock_gen((10, 10))
         b.decrease_liquidity_velodrome = _mock_gen("0xDec")
@@ -2358,6 +2442,7 @@ class TestExitClPool:
         owners = {1: "0xSafe", 2: "0xOther", 3: "0xSafe"}
 
         def owner_stub(token_id, chain):
+            """Owner stub."""
             yield
             return owners[token_id]
 
@@ -2394,6 +2479,7 @@ class TestExitClPool:
         captured = {}
 
         def decrease_stub(token_id, liquidity, *a, **k):
+            """Decrease stub."""
             captured["liquidity"] = liquidity
             yield
             return "0xDec"
@@ -2426,6 +2512,7 @@ class TestExitClPool:
         captured = {}
 
         def decrease_stub(token_id, liquidity, *a, **k):
+            """Decrease stub."""
             captured["liquidity"] = liquidity
             yield
             return "0xDec"
@@ -2450,6 +2537,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
     """Tests for _calculate_tick_lower_and_upper_velodrome."""
 
     def test_tick_spacing_fails(self) -> None:
+        """Test tick spacing fails."""
         b = make_behaviour()
         b._get_tick_spacing_velodrome = MagicMock(return_value=_gen_return(None))
         result = exhaust(
@@ -2458,6 +2546,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert result is None
 
     def test_get_pool_tokens_fails(self) -> None:
+        """Test get pool tokens fails."""
         b = make_behaviour()
         b._get_tick_spacing_velodrome = MagicMock(return_value=_gen_return(60))
         b._get_pool_tokens = MagicMock(return_value=_gen_return((None, None)))
@@ -2467,6 +2556,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert result is None
 
     def test_current_price_fails(self) -> None:
+        """Test current price fails."""
         b = make_behaviour()
         b._get_tick_spacing_velodrome = MagicMock(return_value=_gen_return(60))
         b._get_pool_tokens = MagicMock(return_value=_gen_return(("0xT0", "0xT1")))
@@ -2477,6 +2567,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert result is None
 
     def test_pool_data_none(self) -> None:
+        """Test pool data none."""
         b = make_behaviour()
         b._get_tick_spacing_velodrome = MagicMock(return_value=_gen_return(60))
         b._get_pool_tokens = MagicMock(return_value=_gen_return(("0xT0", "0xT1")))
@@ -2488,6 +2579,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert result is None
 
     def test_empty_ratio_prices(self) -> None:
+        """Test empty ratio prices."""
         b = make_behaviour()
         b._get_tick_spacing_velodrome = MagicMock(return_value=_gen_return(60))
         b._get_pool_tokens = MagicMock(return_value=_gen_return(("0xT0", "0xT1")))
@@ -2501,6 +2593,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert result is None
 
     def test_optimize_returns_none(self) -> None:
+        """Test optimize returns none."""
         b = make_behaviour()
         b._get_tick_spacing_velodrome = MagicMock(return_value=_gen_return(60))
         b._get_pool_tokens = MagicMock(return_value=_gen_return(("0xT0", "0xT1")))
@@ -2515,6 +2608,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert result is None
 
     def test_exception_returns_none(self) -> None:
+        """Test exception returns none."""
         b = make_behaviour()
         b._get_tick_spacing_velodrome = MagicMock(return_value=_gen_return(60))
         b._get_pool_tokens = MagicMock(return_value=_gen_return(("0xT0", "0xT1")))
@@ -2569,6 +2663,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         b.calculate_tick_range_from_bands_wrapper = MagicMock(return_value=tick_results)
 
     def test_successful_three_bands(self) -> None:
+        """Test successful three bands."""
         b = make_behaviour()
         self._setup_full(b)
         result = exhaust(
@@ -2590,6 +2685,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert "band_multipliers" in result[0]
 
     def test_equal_ticks_adjusted(self) -> None:
+        """Test equal ticks adjusted."""
         b = make_behaviour()
         self._setup_full(
             b,
@@ -2609,6 +2705,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert first[0]["tick_upper"] == 110
 
     def test_collapsed_duplicate_ticks(self) -> None:
+        """Test collapsed duplicate ticks."""
         b = make_behaviour()
         self._setup_full(
             b,
@@ -2627,6 +2724,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert abs(result[0]["allocation"] - 1.0) < 1e-9
 
     def test_is_stable_sets_min_width(self) -> None:
+        """Test is stable sets min width."""
         b = make_behaviour()
         self._setup_full(b, is_stable=True)
         exhaust(b._calculate_tick_lower_and_upper_velodrome("optimism", "0xPool", True))
@@ -2635,6 +2733,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert kw["min_width_pct"] == 0.0001
 
     def test_not_stable_no_min_width(self) -> None:
+        """Test not stable no min width."""
         b = make_behaviour()
         self._setup_full(b, is_stable=False)
         exhaust(
@@ -2644,6 +2743,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert "min_width_pct" not in kw
 
     def test_zero_allocations_no_normalization(self) -> None:
+        """Test zero allocations no normalization."""
         b = make_behaviour()
         self._setup_full(b, band_allocs=[0.0, 0.0, 0.0])
         result = exhaust(
@@ -2691,7 +2791,7 @@ class TestCalculateTickLowerAndUpperVelodrome:
         assert result is None
 
     def test_price_to_tick_inner_function_called(self) -> None:
-        """price_to_tick closure (lines 1311-1313) is invoked when
+        """price_to_tick closure (lines 1311-1313) is invoked when # noqa: D205,D209
         calculate_tick_range_from_bands_wrapper is NOT mocked."""
         import numpy as np
 
@@ -3154,6 +3254,7 @@ class TestGetPoolTokenHistory:
         b.context.params.use_x402 = False
 
         def fake_get_coin_id(chain, addr, platform, headers):
+            """Fake get coin id."""
             yield
             return None
 
@@ -3171,11 +3272,13 @@ class TestGetPoolTokenHistory:
         coin_call = [0]
 
         def fake_get_coin_id(chain, addr, platform, headers):
+            """Fake get coin id."""
             coin_call[0] += 1
             yield
             return f"coin-{coin_call[0]}"
 
         def fake_get_market_data(coin_id, days, headers):
+            """Fake get market data."""
             yield
             return None
 
@@ -3194,6 +3297,7 @@ class TestGetPoolTokenHistory:
         coin_call = [0]
 
         def fake_get_coin_id(chain, addr, platform, headers):
+            """Fake get coin id."""
             coin_call[0] += 1
             yield
             return f"coin-{coin_call[0]}"
@@ -3201,6 +3305,7 @@ class TestGetPoolTokenHistory:
         market_call = [0]
 
         def fake_get_market_data(coin_id, days, headers):
+            """Fake get market data."""
             market_call[0] += 1
             prices = [2.0, 2.1, 2.2] if market_call[0] == 1 else [1.0, 1.05, 1.1]
             yield
@@ -3226,6 +3331,7 @@ class TestGetPoolTokenHistory:
         coin_call = [0]
 
         def fake_get_coin_id(chain, addr, platform, headers):
+            """Fake get coin id."""
             coin_call[0] += 1
             yield
             return f"coin-{coin_call[0]}"
@@ -3233,6 +3339,7 @@ class TestGetPoolTokenHistory:
         market_call = [0]
 
         def fake_get_market_data(coin_id, days, headers):
+            """Fake get market data."""
             market_call[0] += 1
             yield
             if market_call[0] == 1:
@@ -3257,6 +3364,7 @@ class TestGetPoolTokenHistory:
         captured_headers = {}
 
         def fake_get_coin_id(chain, addr, platform, headers):
+            """Fake get coin id."""
             captured_headers.update(headers)
             yield
             return None
@@ -3274,6 +3382,7 @@ class TestGetPoolTokenHistory:
         b.context.params.use_x402 = False
 
         def fake_get_coin_id(chain, addr, platform, headers):
+            """Fake get coin id."""
             raise RuntimeError("API failure")
             yield  # pragma: no cover
 
@@ -3291,6 +3400,7 @@ class TestGetPoolTokenHistory:
         coin_call = [0]
 
         def fake_get_coin_id(chain, addr, platform, headers):
+            """Fake get coin id."""
             coin_call[0] += 1
             yield
             return f"coin-{coin_call[0]}"
@@ -3298,6 +3408,7 @@ class TestGetPoolTokenHistory:
         market_call = [0]
 
         def fake_get_market_data(coin_id, days, headers):
+            """Fake get market data."""
             market_call[0] += 1
             yield
             if market_call[0] == 1:
@@ -3544,6 +3655,7 @@ class TestGetCurrentPoolPrice:
         sqrt_price_x96 = 2**96  # This means price = 1.0
 
         def fake_get_sqrt(chain, pool_address):
+            """Fake get sqrt."""
             yield
             return sqrt_price_x96
 
@@ -3559,6 +3671,7 @@ class TestGetCurrentPoolPrice:
         b = make_behaviour()
 
         def fake_get_sqrt(chain, pool_address):
+            """Fake get sqrt."""
             yield
             return None
 
@@ -3574,6 +3687,7 @@ class TestGetCurrentPoolPrice:
         b = make_behaviour()
 
         def fake_get_sqrt(chain, pool_address):
+            """Fake get sqrt."""
             raise RuntimeError("contract error")
             yield  # pragma: no cover
 
@@ -3590,6 +3704,7 @@ class TestGetCurrentPoolPrice:
         sqrt_price_x96 = int(2**96 * 1.5)  # price = 2.25
 
         def fake_get_sqrt(chain, pool_address):
+            """Fake get sqrt."""
             yield
             return sqrt_price_x96
 
@@ -3674,6 +3789,7 @@ class TestCalculateTickRangeFromBandsWrapper:
         b = make_behaviour()
 
         def extreme_tick(price: float) -> float:
+            """Extreme tick."""
             return -1_000_000 if price < 1.0 else 1_000_000
 
         result = b.calculate_tick_range_from_bands_wrapper(
@@ -3735,6 +3851,7 @@ class TestGetPoolReserves:
         b = make_behaviour()
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return [1000, 2000]
 
@@ -3750,6 +3867,7 @@ class TestGetPoolReserves:
         b = make_behaviour()
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return None
 
@@ -3765,6 +3883,7 @@ class TestGetPoolReserves:
         b = make_behaviour()
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return [1000]
 
@@ -3780,6 +3899,7 @@ class TestGetPoolReserves:
         b = make_behaviour()
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             raise RuntimeError("contract error")
             yield  # pragma: no cover
 
@@ -3800,6 +3920,7 @@ class TestGetTokenDecimalsForAssets:
         call_count = [0]
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             call_count[0] += 1
             yield
             return 18 if call_count[0] == 1 else 6
@@ -3816,6 +3937,7 @@ class TestGetTokenDecimalsForAssets:
         b = make_behaviour()
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             yield
             return None
 
@@ -3838,6 +3960,7 @@ class TestGetTokenDecimalsForAssets:
         b = make_behaviour()
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             raise RuntimeError("error")
             yield  # pragma: no cover
 
@@ -4159,25 +4282,25 @@ class TestCalculateStablePoolAmounts:
 
     def test_both_feasible_option2_higher_value(self) -> None:
         """When both options are feasible and option2 has higher value, option2 chosen."""
-        b = make_behaviour()
+        b = make_behaviour()  # noqa: F841
         # Pool ratio 1:2 (2 token1 per token0)
         # amounts=[1M, 5M]
         # Option1: use 1M token0, need 2M token1 -> feasible (have 5M)
-        #   option1_value = normalized_amount0 = 1.0
+        #   option1_value = normalized_amount0 = 1.0 # noqa: E800
         # Option2: use 5M token1, need 2.5M token0 -> feasible (have 1M)? No!
         # Need both to be feasible and option2 value > option1:
         # Pool ratio: 0.5 token1 per token0
         # amounts=[2M, 2M], reserves=(10M, 5M)
         # Option1: use 2M token0, need 1M token1 -> feasible (have 2M)
-        #   option1_value = 2.0
+        #   option1_value = 2.0 # noqa: E800
         # Option2: use 2M token1, need 4M token0 -> not feasible (have 2M)
         # Still not both feasible. Let me try:
         # Pool ratio: 2 token1 per token0, amounts=[1M, 10M], reserves=(5M, 10M)
         # Option1: use 1M token0, need 2M token1 -> feasible (have 10M), option1_value=1.0
         # Option2: use 10M token1, need 5M token0 -> not feasible (have 1M)
         # Let me think differently. For option2_value > option1_value:
-        # option1_value = normalized_amount0 = amount0 / 10^dec0
-        # option2_value = required_normalized_amount0_for_max_amount1 = normalized_amount1 / pool_ratio
+        # option1_value = normalized_amount0 = amount0 / 10^dec0 # noqa: E800
+        # option2_value = required_normalized_amount0_for_max_amount1 = normalized_amount1 / pool_ratio # noqa: E800
         # Need option2_value > option1_value:
         # normalized_amount1 / pool_ratio > normalized_amount0
         # And option2 feasible: required_amount0_for_max_amount1 <= amount0_desired
@@ -4187,7 +4310,6 @@ class TestCalculateStablePoolAmounts:
         # required_amount0 <= amount0_desired, i.e., normalized_amount1/pool_ratio <= normalized_amount0
         # That means option2_value <= option1_value. So the "both feasible, option2 chosen" branch
         # is effectively unreachable. Skip this test.
-        pass
 
     def test_constraint_adjustment(self) -> None:
         """Constraint verification should adjust amounts for rounding."""
@@ -4698,7 +4820,7 @@ class TestStakeClLpTokens:
         assert "position manager" in result["error"].lower()
 
     def test_approval_needed_but_fails(self) -> None:
-        """setApprovalForAll tx fails returns error."""
+        """setApprovalForAll tx fails returns error."""  # noqa: D403
         b = make_behaviour()
         b.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPM"
@@ -4840,6 +4962,7 @@ class TestStakeClLpTokens:
         staked_map = {1: True, 2: False}
 
         def is_staked_stub(account, token_id, **kwargs):
+            """Is staked stub."""
             yield
             return staked_map[token_id]
 
@@ -4857,7 +4980,7 @@ class TestStakeClLpTokens:
         assert staked_ids == {2}
 
     def test_all_already_staked_returns_none_no_op(self) -> None:
-        """If every token is already in the gauge's stake set, no work is
+        """If every token is already in the gauge's stake set, no work is # noqa: D205
         required. The function returns None (no-op) without queueing an
         approval or any deposits, so the caller doesn't submit an orphan
         setApprovalForAll multisend.
@@ -4869,6 +4992,7 @@ class TestStakeClLpTokens:
         b.params.multisend_contract_addresses = {"optimism": "0xMulti"}
 
         def is_staked_stub(account, token_id, **kwargs):
+            """Is staked stub."""
             yield
             return True
 
@@ -4878,6 +5002,7 @@ class TestStakeClLpTokens:
         contract_calls = []
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             contract_calls.append(kwargs.get("contract_callable"))
             yield
             return None
@@ -4914,6 +5039,7 @@ class TestStakeClLpTokens:
         results = iter([None, True])
 
         def is_staked_stub(account, token_id, **kwargs):
+            """Is staked stub."""
             yield
             return next(results)
 
@@ -4921,6 +5047,7 @@ class TestStakeClLpTokens:
         contract_calls = []
 
         def fake_contract_interact(**kwargs):
+            """Fake contract interact."""
             contract_calls.append(kwargs.get("contract_callable"))
             yield
             return None
@@ -5285,12 +5412,14 @@ class TestGetClPositionOwner:
     """Tests for get_cl_position_owner generator."""
 
     def test_missing_position_manager(self) -> None:
+        """Test missing position manager."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {}
         result = exhaust_generator(b.get_cl_position_owner(1, "optimism"))
         assert result is None
 
     def test_owner_empty(self) -> None:
+        """Test owner empty."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -5300,6 +5429,7 @@ class TestGetClPositionOwner:
         assert result is None
 
     def test_success(self) -> None:
+        """Test success."""
         b = make_behaviour()
         b.context.params.velodrome_non_fungible_position_manager_contract_addresses = {
             "optimism": "0xPosMgr"
@@ -5319,6 +5449,7 @@ class TestIsClTokenStaked:
         assert result is None
 
     def test_missing_gauge_address(self) -> None:
+        """Test missing gauge address."""
         b = make_behaviour()
         result = exhaust_generator(
             b.is_cl_token_staked("0xAccount", 1, chain="optimism")
@@ -5326,6 +5457,7 @@ class TestIsClTokenStaked:
         assert result is None
 
     def test_missing_token_id(self) -> None:
+        """Test missing token id."""
         b = make_behaviour()
         result = exhaust_generator(
             b.is_cl_token_staked(
@@ -5346,6 +5478,7 @@ class TestIsClTokenStaked:
         assert result is None
 
     def test_true(self) -> None:
+        """Test true."""
         b = make_behaviour()
         b.contract_interact = make_contract_interact([True])
         result = exhaust_generator(
@@ -5356,6 +5489,7 @@ class TestIsClTokenStaked:
         assert result is True
 
     def test_false(self) -> None:
+        """Test false."""
         b = make_behaviour()
         b.contract_interact = make_contract_interact([False])
         result = exhaust_generator(
@@ -5644,6 +5778,7 @@ class TestCalculateSlippageProtectionForVelodromeDecrease:
         """Create a fake _read_kv generator."""
 
         def fake_read_kv(**kwargs):
+            """Fake read kv."""
             yield
             return return_value
 
@@ -5765,6 +5900,7 @@ class TestCalculateSlippageProtectionForVelodromeDecrease:
         slot0 = {"tick": 0, "sqrt_price_x96": 79228162514264337593543950336}
 
         def fake_decrease(pos, tick, sqrt_price, chain):
+            """Fake decrease."""
             yield
             return (1000, 2000)
 
@@ -5802,6 +5938,7 @@ class TestCalculateSlippageProtectionForVelodromeDecrease:
         slot0 = {"tick": 0, "sqrt_price_x96": 79228162514264337593543950336}
 
         def fake_decrease(pos, tick, sqrt_price, chain):
+            """Fake decrease."""
             yield
             return (1000, 2000)
 
@@ -5824,6 +5961,7 @@ class TestCalculateSlippageProtectionForVelodromeDecrease:
         }
 
         def bad_read_kv(**kwargs):
+            """Bad read kv."""
             raise Exception("boom")
             yield  # noqa: unreachable - makes it a generator
 
@@ -5857,6 +5995,7 @@ class TestCalculateSlippageProtectionForVelodromeDecrease:
         slot0 = {"tick": 0, "sqrt_price_x96": 79228162514264337593543950336}
 
         def fake_decrease(pos, tick, sqrt_price, chain):
+            """Fake decrease."""
             yield
             return (1000, 2000)
 
@@ -5880,6 +6019,7 @@ class TestCalculateVelodromeDecreaseAmounts:
         b = make_behaviour()
 
         def fake_sqrt(chain, tick):
+            """Fake sqrt."""
             yield
             return None
 
@@ -5900,6 +6040,7 @@ class TestCalculateVelodromeDecreaseAmounts:
         call_count = [0]
 
         def fake_sqrt(chain, tick):
+            """Fake sqrt."""
             call_count[0] += 1
             yield
             return 12345 if call_count[0] == 1 else None
@@ -5921,11 +6062,13 @@ class TestCalculateVelodromeDecreaseAmounts:
         call_count = [0]
 
         def fake_sqrt(chain, tick):
+            """Fake sqrt."""
             call_count[0] += 1
             yield
             return 10000 + call_count[0]
 
         def fake_amounts(**kwargs):
+            """Fake amounts."""
             yield
             return (500, 600)
 
@@ -6031,7 +6174,7 @@ class TestCoverageGaps:
     """Tests targeting remaining coverage gaps."""
 
     def test_historical_market_data_json_decode_error(self) -> None:
-        """JSONDecodeError when parsing prices should return None."""
+        """JSONDecodeError when parsing prices should return None."""  # noqa: D403
         b = make_behaviour()
         b.context.params.use_x402 = False
         b.context.coingecko = MagicMock()
@@ -6086,7 +6229,7 @@ class TestCoverageGaps:
         # pool_ratio = 0.5 (reserves=(10M, 5M) with dec=[6,6])
         # amounts=[3, 2]: option1: req_a1=int(3*0.5)=1, 1<=2 feasible
         #   option2: req_a0=int(2/0.5)=4, 4<=3? NO
-        # adjusted_amounts = [3, 1]
+        # adjusted_amounts = [3, 1] # noqa: E800
         # check0 = 3*10^12, check1 = 1*10^12 => check0 > check1
         # target_amount1 = 3*10^12 // 10^12 = 3, 3 <= 2? NO => skip adjustment
         result = b._calculate_stable_pool_amounts(
@@ -6156,9 +6299,10 @@ class TestCoverageGaps:
             },
         ]
         call_count = [0]
-        orig_run = b._run_monte_carlo_level
+        orig_run = b._run_monte_carlo_level  # noqa: F841
 
         def mock_run(*args, **kwargs):
+            """Mock run."""
             idx = call_count[0]
             call_count[0] += 1
             return level_results[idx]
@@ -6206,6 +6350,7 @@ class TestCoverageGaps:
         call_count = [0]
 
         def mock_run(*args, **kwargs):
+            """Mock run."""
             idx = call_count[0]
             call_count[0] += 1
             return level_results[idx]

@@ -47,7 +47,7 @@ class CallCheckpointBehaviour(
 
     matching_round = CallCheckpointRound
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             investing_paused = yield from self._read_investing_paused()

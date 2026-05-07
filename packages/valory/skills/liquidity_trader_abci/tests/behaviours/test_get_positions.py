@@ -22,10 +22,7 @@
 # pylint: skip-file
 
 import json
-from contextlib import contextmanager
-from unittest.mock import MagicMock, PropertyMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.get_positions import (
     GetPositionsBehaviour,
@@ -81,17 +78,21 @@ class TestGetPositionsBehaviour:
 
         # Stub generator methods
         def fake_get_positions():
+            """Fake get positions."""
             yield
             return positions_data
 
         def fake_adjust(*args, **kwargs):
+            """Fake adjust."""
             yield
             return None
 
         def fake_send(*args, **kwargs):
+            """Fake send."""
             yield
 
         def fake_wait(*args, **kwargs):
+            """Fake wait."""
             yield
 
         obj.get_positions = fake_get_positions
@@ -115,20 +116,24 @@ class TestGetPositionsBehaviour:
         obj.context.agent_address = "0xagent"
 
         def fake_get_positions():
+            """Fake get positions."""
             yield
             return None
 
         def fake_adjust(*args, **kwargs):
+            """Fake adjust."""
             yield
             return None
 
         captured_payloads = []
 
         def fake_send(payload):
+            """Fake send."""
             captured_payloads.append(payload)
             yield
 
         def fake_wait(*args, **kwargs):
+            """Fake wait."""
             yield
 
         obj.get_positions = fake_get_positions
@@ -162,14 +167,17 @@ class TestGetPositionsWithdrawalGate:
         captured = {}
 
         def fake_read_investing_paused():
+            """Fake read investing paused."""
             yield
             return True
 
         def fake_send(payload):
+            """Fake send."""
             captured["payload"] = payload
             yield
 
         def fake_wait():
+            """Fake wait."""
             yield
 
         obj.get_positions = MagicMock(
@@ -198,21 +206,26 @@ class TestGetPositionsWithdrawalGate:
         captured = {}
 
         def fake_read_investing_paused():
+            """Fake read investing paused."""
             yield
             return False
 
         def fake_get_positions():
+            """Fake get positions."""
             yield
             return None
 
         def fake_adjust(*args, **kwargs):
+            """Fake adjust."""
             yield
 
         def fake_send(payload):
+            """Fake send."""
             captured["payload"] = payload
             yield
 
         def fake_wait():
+            """Fake wait."""
             yield
 
         obj._read_investing_paused = fake_read_investing_paused

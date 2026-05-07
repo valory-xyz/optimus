@@ -84,10 +84,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     matching_round: Type[AbstractRound] = EvaluateStrategyRound
     selected_opportunities = None
     position_to_exit = None
-    trading_opportunities = []
-    positions_eligible_for_exit = []
+    trading_opportunities: List[Any] = []
+    positions_eligible_for_exit: List[Any] = []
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # type: ignore[override]
         """Execute the behaviour's async action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Check if investing is paused due to withdrawal (read from KV store)
@@ -185,8 +185,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.set_done()
 
     def validate_and_prepare_velodrome_inputs(
-        self, tick_bands, current_price, tick_spacing=1
-    ):
+        self, tick_bands: Any, current_price: Any, tick_spacing: Any = 1
+    ) -> Any:
         """Validates inputs and prepares data for Velodrome CL position analysis."""
 
         # Input validation
@@ -264,12 +264,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def calculate_velodrome_token_ratios(
-        self, validated_data, chain=None
+        self, validated_data: Any, chain: Any = None
     ) -> Generator[None, None, Dict[str, Any]]:
         """Calculates token ratios and requirements for Velodrome CL positions."""
 
         if not validated_data:
-            return None
+            return None  # type: ignore[return-value]
 
         validated_bands = validated_data["validated_bands"]
         current_price = validated_data["current_price"]
@@ -419,7 +419,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def calculate_velodrome_cl_token_requirements(
-        self, tick_bands, current_price, tick_spacing=1, sqrt_price_x96=None, chain=None
+        self,
+        tick_bands: Any,
+        current_price: Any,
+        tick_spacing: Any = 1,
+        sqrt_price_x96: Any = None,
+        chain: Any = None,
     ) -> Generator[None, None, Dict[str, Any]]:
         """Determines token requirements for Velodrome CL positions based on current price."""
         # Step 1: Validate and prepare inputs
@@ -428,7 +433,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if not validated_data:
-            return None
+            return None  # type: ignore[return-value]
 
         # Add sqrt_price_x96 to validated_data if provided
         if sqrt_price_x96 is not None:
@@ -446,7 +451,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Generator function to determine token requirements for Velodrome CL positions."""
         results = {}
         max_ration = 1.0
-        for opportunity in self.selected_opportunities:
+        for opportunity in self.selected_opportunities:  # type: ignore[attr-defined]
             if opportunity.get("dex_type") == "velodrome" and opportunity.get(
                 "is_cl_pool"
             ):
@@ -461,7 +466,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     pool = self.pools.get(opportunity["dex_type"])
 
                     # Get tick spacing for the pool
-                    tick_spacing = yield from pool._get_tick_spacing_velodrome(
+                    tick_spacing = yield from pool._get_tick_spacing_velodrome(  # type: ignore[union-attr]
                         self, pool_address, chain
                     )
                     if not tick_spacing:
@@ -487,7 +492,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
 
-                    current_price = yield from pool._get_current_pool_price(
+                    current_price = yield from pool._get_current_pool_price(  # type: ignore[union-attr]
                         self, pool_address, chain
                     )
                     if current_price is None:
@@ -497,7 +502,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Get sqrt_price_x96 for accurate Uniswap V3 math calculations
-                    sqrt_price_x96 = yield from pool._get_sqrt_price_x96(
+                    sqrt_price_x96 = yield from pool._get_sqrt_price_x96(  # type: ignore[union-attr]
                         self, chain, pool_address
                     )
                     if sqrt_price_x96 is None:
@@ -618,7 +623,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     token1 = opportunity["token1"]
 
                     token0_balance = (
-                        yield from self._get_token_balance(
+                        yield from self._get_token_balance(  # type: ignore[misc]
                             chain,
                             self.params.safe_contract_addresses.get(chain),
                             token0,
@@ -627,7 +632,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
 
                     token1_balance = (
-                        yield from self._get_token_balance(
+                        yield from self._get_token_balance(  # type: ignore[misc]
                             chain,
                             self.params.safe_contract_addresses.get(chain),
                             token1,
@@ -801,7 +806,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             min_req_value = self._calculate_min_req_position_value(position, S)
             if min_req_value is not None:
                 current_value_ratio = yield from self._calculate_current_value_ratio(
-                    position, position.get("chain")
+                    position, position.get("chain")  # type: ignore[arg-type]
                 )
                 if current_value_ratio is not None:
                     # Use epsilon for floating-point comparison to handle precision issues
@@ -1346,7 +1351,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def check_and_prepare_non_whitelisted_swaps(
         self,
-    ) -> Generator[None, None, Optional[List[Any]]]:
+    ) -> Any:
         """Check all funds in safe and swap non-whitelisted assets to USDC if value > $5."""
         try:
             actions = []
@@ -1363,9 +1368,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
                 whitelisted_tokens = [
-                    addr.lower() for addr in WHITELISTED_ASSETS.get(chain, {}).keys()
+                    addr.lower() for addr in WHITELISTED_ASSETS.get(chain, {}).keys()  # type: ignore[arg-type]
                 ]
-                olas_token_address = OLAS_ADDRESSES.get(chain, "").lower()
+                olas_token_address = OLAS_ADDRESSES.get(chain, "").lower()  # type: ignore[arg-type]
                 for asset in position.get("assets", []):
                     asset_address = asset.get("address", "").lower()
                     asset_symbol = asset.get("asset_symbol")
@@ -1383,7 +1388,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Use base class method to build swap action
                     swap_action = self._build_swap_to_usdc_action(
-                        chain=chain,
+                        chain=chain,  # type: ignore[arg-type]
                         from_token_address=asset_address,
                         from_token_symbol=asset_symbol,
                         funds_percentage=1.0,  # Use all available balance
@@ -1416,7 +1421,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return []
 
         yield from self.execute_hyper_strategy()
-        actions = yield from (
+        actions = yield from (  # type: ignore[func-returns-value]
             self.get_order_of_transactions()
             if self.selected_opportunities is not None
             else []
@@ -1444,7 +1449,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
         # Fall back to default thresholds if no composite score found
         if composite_score is None:
-            composite_score = THRESHOLDS.get(self.synchronized_data.trading_type, {})
+            composite_score = THRESHOLDS.get(self.synchronized_data.trading_type, {})  # type: ignore[call-overload]
             self.context.logger.info(
                 f"Using default threshold for {self.synchronized_data.trading_type}: {composite_score}"
             )
@@ -1466,15 +1471,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
-        self.selected_opportunities = result.get("optimal_strategies")
-        self.position_to_exit = result.get("position_to_exit")
+        self.selected_opportunities = result.get("optimal_strategies")  # type: ignore[union-attr]
+        self.position_to_exit = result.get("position_to_exit")  # type: ignore[union-attr]
 
-        logs = result.get("logs", [])
+        logs = result.get("logs", [])  # type: ignore[union-attr]
         if logs:
             for log in logs:
                 self.context.logger.info(log)
 
-        reasoning = result.get("reasoning")
+        reasoning = result.get("reasoning")  # type: ignore[union-attr]
         if reasoning:
             self.shared_state.agent_reasoning = reasoning
         self.context.logger.info(f"Agent Reasoning: {reasoning}")
@@ -1520,14 +1525,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
     async def _async_execute_strategy(
-        self, strategy_name: str, strategies_executables: Dict, **kwargs
+        self, strategy_name: str, strategies_executables: Dict, **kwargs: Any
     ) -> Dict:
         """Execute a single strategy asynchronously."""
         try:
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(
                 None,
-                lambda: execute_strategy(
+                lambda: execute_strategy(  # type: ignore[arg-type,return-value]
                     strategy_name, strategies_executables, **kwargs
                 ),
             )
@@ -1585,7 +1590,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             }
                         )
                     else:
-                        results.append(result)
+                        results.append(result)  # type: ignore[arg-type]
             except Exception as e:  # pragma: no cover
                 self.context.logger.error(
                     f"Error running strategies in parallel: {str(e)}"
@@ -1662,7 +1667,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             all_raw_opportunities = []
             for next_strategy, result in zip(strategies, results):
-                tried_strategies.add(next_strategy)
+                tried_strategies.add(next_strategy)  # type: ignore[arg-type]
                 if not result:
                     self.context.logger.warning(
                         f"No result returned from strategy {next_strategy}"
@@ -1906,7 +1911,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     tracking_data = {}
 
             # Get or create agent registry data (using base behavior helper)
-            agent_registry = yield from self._get_or_create_agent_registry()
+            agent_registry = yield from self._get_or_create_agent_registry()  # type: ignore[func-returns-value,misc]
             if not agent_registry:
                 self.context.logger.error("Failed to get or create agent registry")
                 return
@@ -2161,7 +2166,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Use an isolated namespace to prevent race conditions when strategies
         # run in parallel — each strategy gets its own dict so identically-named
         # functions (e.g. apply_composite_pre_filter) don't overwrite each other.
-        namespace = {}
+        namespace: Dict[Any, Any] = {}
         exec(strategy_exec, namespace)  # pylint: disable=W0122  # nosec
         method = namespace.get(callable_method, None)
         if method is None:
@@ -2182,7 +2187,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Send a message."""
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
-        self.shared_state.req_to_callback[nonce] = callback
+        self.shared_state.req_to_callback[nonce] = callback  # type: ignore[assignment]
         self.shared_state.in_flight_req = True
 
     def _handle_get_strategy(self, message: IpfsMessage, _: Dialogue) -> None:
@@ -2272,7 +2277,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return actions  # No duplicates possible with 0 or 1 bridge actions
 
             # Group bridge swap actions by their key attributes
-            action_groups = {}
+            action_groups: Dict[Any, Any] = {}
             for idx, action in bridge_swap_actions:
                 try:
                     # Create a key based on the attributes that define a duplicate
@@ -2351,7 +2356,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return actions
 
     def _handle_velodrome_token_allocation(
-        self, actions, enter_pool_action, available_tokens
+        self, actions: Any, enter_pool_action: Any, available_tokens: Any
     ) -> List[Dict[str, Any]]:
         """Handle Velodrome positions that require 100% allocation to one token."""
         # Only process if it's a Velodrome position with token requirements
@@ -2476,7 +2481,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return actions
 
     def _apply_investment_cap_to_actions(
-        self, actions
+        self, actions: Any
     ) -> Generator[None, None, List[Dict[str, Any]]]:
         """Apply investment caps to actions based on current positions."""
         if not self.current_positions:
@@ -2518,7 +2523,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.context.logger.info(f"V_initial amount: {V_initial}")
                 if V_initial:
-                    invested_amount += V_initial
+                    invested_amount += V_initial  # type: ignore[assignment]
                     self.context.logger.info(
                         f"Accumulated invested_amount: {invested_amount}"
                     )
@@ -2573,8 +2578,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Get the order of transactions to perform based on the current pool status and token balances."""
-        actions = []
-        tokens = []
+        actions: List[Any] = []
+        tokens: List[Any] = []
         # Process rewards
         # if self._can_claim_rewards():
         #     yield from self._process_rewards(actions)
@@ -2658,8 +2663,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Check for Velodrome positions with 100% allocation to one token
         if (
-            enter_pool_action.get("dex_type") == "velodrome"
-            and "token_requirements" in enter_pool_action
+            enter_pool_action.get("dex_type") == "velodrome"  # type: ignore[union-attr]
+            and "token_requirements" in enter_pool_action  # type: ignore[operator]
         ):
             # After building all enter_pool_action and bridge_swap_actions
             actions = self._handle_velodrome_token_allocation(
@@ -2702,12 +2707,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Prepare tokens for exit or investment, and append exit actions if needed."""
-        tokens = []
+        tokens: List[Dict[str, Any]] = []
 
         if self.position_to_exit:
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
-            tokens = self._build_tokens_from_position(
+            tokens = self._build_tokens_from_position(  # type: ignore[assignment]
                 self.position_to_exit, num_of_tokens_required
             )
             if not tokens or len(tokens) < num_of_tokens_required:
@@ -2805,7 +2810,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if token_address == ZERO_ADDRESS:
                 decimals = 18
             else:
-                decimals = yield from self._get_token_decimals(chain, token_address)
+                decimals = yield from self._get_token_decimals(chain, token_address)  # type: ignore[assignment]
             token_data["value"] = (token_data["balance"] / (10**decimals)) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
@@ -2856,7 +2861,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if (
             chain == "mode"
             and self.context.params.airdrop_started
-            and token_address.lower() == self._get_usdc_address(chain).lower()
+            and token_address.lower() == self._get_usdc_address(chain).lower()  # type: ignore[union-attr]
         ):
             airdrop_rewards = yield from self._get_total_airdrop_rewards(chain)
             self.context.logger.info(
@@ -2919,7 +2924,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, tokens: List[Dict[str, Any]]
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Group tokens by chain."""
-        tokens_by_chain = {}
+        tokens_by_chain: Dict[Any, Any] = {}
         for token in tokens:
             chain = token.get("chain")
             if chain not in tokens_by_chain:
@@ -2953,7 +2958,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
         """Handle the case where we have all required tokens on the destination chain with optimal allocation."""
-        bridge_swap_actions = []
+        bridge_swap_actions: List[Any] = []
 
         if not required_tokens:
             return bridge_swap_actions
@@ -3047,7 +3052,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             continue
 
                         # Find the target value for this token
-                        target_value = target_values.get(token_addr, 0)
+                        target_value = target_values.get(token_addr, 0)  # type: ignore[arg-type]
 
                         if token_value > target_value:
                             # This token has surplus, need to swap excess
@@ -3092,7 +3097,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
         """Handle the case where we have some but not all required tokens with optimal allocation."""
-        bridge_swap_actions = []
+        bridge_swap_actions: List[Any] = []
 
         # Filter tokens by chain
         dest_chain_tokens = [
@@ -3215,7 +3220,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Find the target value for this token
-                    target_value = target_values.get(token_addr, 0)
+                    target_value = target_values.get(token_addr, 0)  # type: ignore[arg-type]
 
                     if token_value > target_value:
                         # This token has surplus, need to swap excess
@@ -3252,7 +3257,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
         """Handle the case where we need all tokens with optimal capital allocation."""
-        bridge_swap_actions = []
+        bridge_swap_actions: List[Any] = []
 
         # Filter tokens on destination chain
         dest_chain_tokens = [
@@ -3353,7 +3358,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _build_bridge_swap_actions(
         self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    ) -> Optional[List[Dict[str, Any]]]:
         """Build bridge and swap actions for the given tokens."""
         # Validate input
         if not opportunity:
@@ -3401,7 +3406,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             token.get("token"): token for token in dest_chain_tokens
         }
         tokens_we_need = self._identify_missing_tokens(
-            required_tokens, available_tokens_on_dest, dest_chain
+            required_tokens, available_tokens_on_dest, dest_chain  # type: ignore[arg-type]
         )
 
         # Handle different scenarios based on what tokens we have/need
@@ -3411,8 +3416,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 tokens,
                 required_tokens,
                 dest_chain,
-                relative_funds_percentage,
-                target_ratios_by_token,
+                relative_funds_percentage,  # type: ignore[arg-type]
+                target_ratios_by_token,  # type: ignore[arg-type]
             )
         elif len(tokens_we_need) < len(required_tokens):
             # We have some tokens but not all
@@ -3421,8 +3426,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 required_tokens,
                 tokens_we_need,
                 dest_chain,
-                relative_funds_percentage,
-                target_ratios_by_token,
+                relative_funds_percentage,  # type: ignore[arg-type]
+                target_ratios_by_token,  # type: ignore[arg-type]
             )
         else:
             # We need all tokens
@@ -3430,8 +3435,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 tokens,
                 required_tokens,
                 dest_chain,
-                relative_funds_percentage,
-                target_ratios_by_token,
+                relative_funds_percentage,  # type: ignore[arg-type]
+                target_ratios_by_token,  # type: ignore[arg-type]
             )
 
     def _add_bridge_swap_action(
@@ -3504,7 +3509,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"as it's already the required token"
             )
 
-    def _build_enter_pool_action(self, opportunity) -> Dict[str, Any]:
+    def _build_enter_pool_action(self, opportunity: Any) -> Optional[Dict[str, Any]]:
         """Build action for entering the pool with the highest APR."""
         if not opportunity:
             self.context.logger.error("No pool present.")
@@ -3562,7 +3567,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code not in HTTP_OK:
             self.context.logger.error(
-                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"  # type: ignore[str-bytes-safe]
             )
             return None
 
@@ -4061,10 +4066,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Recalculate max_amounts_in based on current token balances
             # (tokens should already be on the right chain from previous swaps)
             token0_balance = (
-                yield from self._get_token_balance(chain, safe_address, token0) or 0
+                yield from self._get_token_balance(chain, safe_address, token0) or 0  # type: ignore[arg-type,misc]
             )
             token1_balance = (
-                yield from self._get_token_balance(chain, safe_address, token1) or 0
+                yield from self._get_token_balance(chain, safe_address, token1) or 0  # type: ignore[arg-type,misc]
             )
 
             self.context.logger.info(

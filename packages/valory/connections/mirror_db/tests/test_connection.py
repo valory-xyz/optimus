@@ -25,25 +25,23 @@ import json
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 from aea.configurations.base import ConnectionConfig
 from aea.connections.base import ConnectionStates
 from aea.mail.base import Envelope
 from aea.protocols.base import Message
 
-import aiohttp
-
 from packages.valory.connections.mirror_db.connection import (
-    PUBLIC_ID,
     GenericMirrorDBConnection,
     MirrorDBHTTPError,
+    PUBLIC_ID,
     SrrDialogues,
     _is_retryable,
     retry_with_exponential_backoff,
 )
 from packages.valory.protocols.srr.dialogues import SrrDialogue
 from packages.valory.protocols.srr.message import SrrMessage
-
 
 ANY_SKILL = "skill/any:0.1.0"
 BASE_URL = "https://test-mirror-db.example.com"
@@ -480,13 +478,14 @@ class TestHandleEnvelope:
             mock_envelope = MagicMock(spec=Envelope)
             mock_envelope.message = mock_message
 
-            with patch.object(
-                connection.dialogues, "update", return_value=MagicMock()
-            ), patch.object(
-                connection,
-                "_get_response",
-                new_callable=AsyncMock,
-                return_value=MagicMock(),
+            with (
+                patch.object(connection.dialogues, "update", return_value=MagicMock()),
+                patch.object(
+                    connection,
+                    "_get_response",
+                    new_callable=AsyncMock,
+                    return_value=MagicMock(),
+                ),
             ):
                 task = connection._handle_envelope(mock_envelope)
                 assert isinstance(task, asyncio.Task)
@@ -806,15 +805,18 @@ class TestGetResponse:
         mock_logger = MagicMock()
         mock_logger.info.side_effect = mock_log_info
 
-        with patch.object(
-            self.connection,
-            "read_",
-            new_callable=AsyncMock,
-            return_value=mock_result,
-        ), patch.object(
-            type(self.connection),
-            "logger",
-            new=mock_logger,
+        with (
+            patch.object(
+                self.connection,
+                "read_",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+            patch.object(
+                type(self.connection),
+                "logger",
+                new=mock_logger,
+            ),
         ):
             result = await self.connection._get_response(msg, dialogue)
 
@@ -1039,9 +1041,7 @@ class TestEndpointValidation:
 
     def test_endpoint_validator_directly(self) -> None:
         """The classmethod _is_valid_endpoint can be called without a connection."""
-        assert (
-            GenericMirrorDBConnection._is_valid_endpoint("api/users/123") is True
-        )
+        assert GenericMirrorDBConnection._is_valid_endpoint("api/users/123") is True
         assert GenericMirrorDBConnection._is_valid_endpoint("not-api") is False
 
 

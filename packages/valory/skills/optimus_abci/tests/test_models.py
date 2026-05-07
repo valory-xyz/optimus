@@ -51,7 +51,7 @@ class TestParams:
             patch.object(Params.__bases__[0], "__init__", return_value=None),
         ):
             params = Params.__new__(Params)
-            params.__init__(
+            params.__init__(  # type: ignore[misc]
                 skill_context=mock_context,
                 service_endpoint_base="http://localhost:8000",
             )

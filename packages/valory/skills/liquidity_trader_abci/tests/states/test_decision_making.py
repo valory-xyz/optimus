@@ -128,6 +128,39 @@ class TestDecisionMakingRound:
         result = round_obj.end_block()
         assert result is not None
 
+    def test_end_block_with_new_action_when_actions_holds_sentinel_dict(self) -> None:
+        """end_block tolerates a non-list actions field when inserting a new action.
+
+        When the FSM re-enters DecisionMaking with the withdrawal-initiation
+        sentinel still in `actions`, .insert on a dict would crash. The round
+        must start a fresh list rather than blow up.
+        """
+        round_obj = object.__new__(DecisionMakingRound)
+        new_action = {"action": "enter_pool"}
+        payload = json.dumps(
+            {
+                "event": "done",
+                "updates": {"new_action": new_action, "chain_id": "1"},
+            }
+        )
+
+        mock_synced = MagicMock(spec=SynchronizedData)
+        mock_synced.actions = {"event": "withdrawal_initiated", "updates": {}}
+        mock_synced.last_executed_action_index = None
+
+        type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
+        type(round_obj).most_voted_payload = PropertyMock(return_value=payload)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)  # type: ignore[method-assign]
+        mock_synced.update.return_value = mock_synced
+
+        result = round_obj.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.DONE
+        update_call = mock_synced.update.call_args
+        serialized_actions = update_call.kwargs["actions"]
+        assert json.loads(serialized_actions) == [new_action]
+
     def test_end_block_with_positions_serialization(self) -> None:
         """Test end_block serializes positions if they are not a string."""
         round_obj = object.__new__(DecisionMakingRound)

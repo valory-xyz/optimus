@@ -24,7 +24,11 @@ from typing import Optional, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
+    COLLECTION_KEY_ATTRIBUTE,
     CollectSameUntilThresholdRound,
+    DONE_EVENT_ATTRIBUTE,
+    NO_MAJORITY_EVENT_ATTRIBUTE,
+    SELECTION_KEY_ATTRIBUTE,
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import WithdrawFundsPayload
@@ -40,11 +44,16 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
     payload_class = WithdrawFundsPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
-    none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_withdraw_funds)
     # Required by extended_requirements; end_block overrides super() so this is unused.
     selection_key = (get_name(SynchronizedData.actions),)
+    extended_requirements: Tuple[str, ...] = (
+        DONE_EVENT_ATTRIBUTE,
+        NO_MAJORITY_EVENT_ATTRIBUTE,
+        COLLECTION_KEY_ATTRIBUTE,
+        SELECTION_KEY_ATTRIBUTE,
+    )
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""

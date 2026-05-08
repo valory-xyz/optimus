@@ -102,7 +102,6 @@ transition_func:
     (CollectSignatureRound, ROUND_TIMEOUT): CollectSignatureRound
     (DecisionMakingRound, DONE): ResetAndPauseRound
     (DecisionMakingRound, ERROR): ResetAndPauseRound
-    (DecisionMakingRound, NONE): DecisionMakingRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): RandomnessTransactionSubmissionRound
@@ -115,7 +114,6 @@ transition_func:
     (EvaluateStrategyRound, WAIT): ResetAndPauseRound
     (EvaluateStrategyRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (FetchStrategiesRound, DONE): CallCheckpointRound
-    (FetchStrategiesRound, NONE): FetchStrategiesRound
     (FetchStrategiesRound, NO_MAJORITY): FetchStrategiesRound
     (FetchStrategiesRound, ROUND_TIMEOUT): FetchStrategiesRound
     (FetchStrategiesRound, SETTLE): RandomnessTransactionSubmissionRound
@@ -134,8 +132,6 @@ transition_func:
     (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
-    (PostTxSettlementRound, DONE): PostTxSettlementRound
-    (PostTxSettlementRound, NONE): PostTxSettlementRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
@@ -179,6 +175,5 @@ transition_func:
     (ValidateTransactionRound, NO_MAJORITY): ValidateTransactionRound
     (ValidateTransactionRound, VALIDATE_TIMEOUT): CheckTransactionHistoryRound
     (WithdrawFundsRound, DONE): DecisionMakingRound
-    (WithdrawFundsRound, NONE): WithdrawFundsRound
     (WithdrawFundsRound, NO_MAJORITY): WithdrawFundsRound
     (WithdrawFundsRound, ROUND_TIMEOUT): WithdrawFundsRound

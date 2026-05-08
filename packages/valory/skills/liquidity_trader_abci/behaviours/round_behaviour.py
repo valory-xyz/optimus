@@ -58,7 +58,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderA
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
 
-    initial_behaviour_cls = CallCheckpointBehaviour
+    initial_behaviour_cls = FetchStrategiesBehaviour
     abci_app_cls = LiquidityTraderAbciApp  # type: ignore
     behaviours: Set[Type[BaseBehaviour]] = [  # type: ignore[assignment]
         CallCheckpointBehaviour,

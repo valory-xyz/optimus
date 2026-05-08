@@ -1308,7 +1308,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"Next retry in {next_backoff:.0f}s."
             )
 
-    def update_position_metrics(self) -> None:
+    def update_position_metrics(self) -> Generator[None, None, None]:
         """Update metrics for all open positions."""
         if not self.positions_eligible_for_exit:
             return
@@ -1336,9 +1336,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Recalculating metrics for position {position.get('pool_address')} - "
                     f"last update was {time_since_update / 3600:.2f} hours ago"
                 )
-                if metrics := self.get_returns_metrics_for_opportunity(
+                metrics = yield from self.get_returns_metrics_for_opportunity(
                     position, strategy
-                ):
+                )
+                if metrics:
                     metrics["last_metrics_update"] = current_timestamp
                     position.update(metrics)
             else:
@@ -2096,14 +2097,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_returns_metrics_for_opportunity(
         self, position: Dict[str, Any], strategy: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get and update metrics for the current pool ."""
 
         kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
 
         kwargs.update(
             {
-                "strategy": strategy,
                 "get_metrics": True,
                 "position": position,
                 "coingecko_api_key": self.coingecko.api_key,
@@ -2127,20 +2127,27 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             }
         )
 
-        # Execute the strategy to calculate metrics
-        metrics = self.execute_strategy(**kwargs)
+        # Run the strategy off the FSM thread; the customs perform
+        # rate-limit sleeps that would otherwise block past ROUND_TIMEOUT.
+        strategies_executables = self.shared_state.strategies_executables
+        future = asyncio.ensure_future(
+            self._async_execute_strategy(strategy, strategies_executables, **kwargs)
+        )
+        while not future.done():
+            yield
+        metrics = future.result()
+
         if not metrics:
             return None
-        elif "error" in metrics:
+        if "error" in metrics:
             self.context.logger.error(
                 f"Failed to calculate metrics for the current position {position.get('pool_address')} : {metrics.get('error')}"
             )
             return None
-        else:
-            self.context.logger.info(
-                f"Calculated position metrics for {position.get('pool_address')} : {metrics}"
-            )
-            return metrics
+        self.context.logger.info(
+            f"Calculated position metrics for {position.get('pool_address')} : {metrics}"
+        )
+        return metrics
 
     def download_strategies(self) -> Generator:
         """Download all the strategies, if not yet downloaded."""

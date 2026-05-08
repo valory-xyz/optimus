@@ -13,7 +13,7 @@ fingerprint:
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeieidx73vhcck7i3o2wkr435tarz5ikl4sogopgocg5quakgtf3csy
   behaviours/decision_making.py: bafybeigqyc73h4htlfeygvzcbcld6w2vrxlgdcna6dt3gexuqyy5n2zrai
-  behaviours/evaluate_strategy.py: bafybeihverppgs6f66fsdgmnz6jnjiy3pryaoxyqsw7dkpn4nz5rj4u3ey
+  behaviours/evaluate_strategy.py: bafybeigssle7xqc6yr3jwcvo44gxs2v6yz2fgeabangtydc77p34bo5ezq
   behaviours/fetch_strategies.py: bafybeifd5t4lucrogybj44tpemkgtdrccevkxkikrckobktcjhvc7vyksm
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeifubrt3bcjbwokx3kgkkoci2suzeicojgsxpdrjmpzagrmqrpqyme
@@ -53,7 +53,7 @@ fingerprint:
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidv7ckk3qqyovnynl5v7nuxwzbols7jkhkrtiwa3uv7lxi4nykqtm
   tests/behaviours/test_decision_making.py: bafybeiej4ww7k6vllzscrwaod6hcic3f33a24sdvk2a3ex5hjuw2bx6qwq
-  tests/behaviours/test_evaluate_strategy.py: bafybeih3yy2aqn6q3z24jq4w5xsbb3wazxirms2ttfkrmn2s5ijyeyw4va
+  tests/behaviours/test_evaluate_strategy.py: bafybeicltpp653sofpbxuparjc2qz3u7xay2ycu6i5yqxcs7imnq3rxtje
   tests/behaviours/test_fetch_strategies.py: bafybeigtbx5mfrihw4i5qftqpfnqwyxk4ezxrkwnd7ev4cebwipnwh72ae
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeifj3fxvrr6cq43ao24prvvfltl3lwtao2e5d3kujuyn7aznygsz3q
@@ -95,7 +95,7 @@ fingerprint:
   utils/tick_math.py: bafybeiehijphwni4zfu57rhhbgdyxn5evyokvvckiwzmldmrbzg3nd7cmy
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeibchw2crpnxmxl6puajge5gx6xcvkny3ls7apq7bbgbyauerlijom
+- valory/mirror_db:0.1.0:bafybeiasfxdd447vqut4uercswnn5pagy555oj2ws7deo2p7vnmq3mj64y
 - valory/kv_store:0.1.0:bafybeiepbu6pjw4cduj7tvz6gin7z5yebnpnp2csu75ooi7cvt3erlvsaq
 - valory/x402:0.1.0:bafybeihtnlwawysnuvlrsflivrn76gacrcubo7feh656lwcz3leswiywum
 contracts:

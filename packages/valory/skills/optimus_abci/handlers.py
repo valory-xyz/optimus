@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -331,13 +331,14 @@ class HttpHandler(BaseHttpHandler):
 
     def setup(self) -> None:
         """Implement the setup."""
-        # Custom hostname (set via params)
-        # Only check funds if using X402
+        if not hasattr(self, "_background_executor"):
+            self._background_executor = ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="handlers-bg"
+            )
+
         if self.context.params.use_x402:
             self.shared_state.sufficient_funds_for_x402_payments = False
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
-                executor.shutdown(wait=False)
+            self._submit_background(self._ensure_sufficient_funds_for_x402_payments)
 
         service_endpoint_base = urlparse(
             self.context.params.service_endpoint_base
@@ -415,6 +416,40 @@ class HttpHandler(BaseHttpHandler):
             if self.context.params.target_investment_chains[0] == "optimism"
             else MODIUS_AGENT_PROFILE_PATH
         )
+
+    def teardown(self) -> None:
+        """Tear down the handler and release the background executor."""
+        super().teardown()
+        executor = getattr(self, "_background_executor", None)
+        if executor is not None:
+            executor.shutdown(wait=False)
+            del self._background_executor
+
+    def _submit_background(
+        self, fn: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Future:
+        """Submit fn to the long-lived background executor.
+
+        Returns immediately; attaches a done-callback so a raised exception
+        in the background task is logged (otherwise it would be silently
+        held in the Future and never surfaced).
+        """
+        if not hasattr(self, "_background_executor"):
+            self._background_executor = ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="handlers-bg"
+            )
+        future = self._background_executor.submit(fn, *args, **kwargs)
+
+        def _log_if_failed(f: Future) -> None:
+            exc = f.exception()
+            if exc is not None:
+                self.context.logger.error(
+                    f"background-task-failed name={fn.__name__}: {exc}",
+                    exc_info=exc,
+                )
+
+        future.add_done_callback(_log_if_failed)
+        return future
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -514,6 +549,23 @@ class HttpHandler(BaseHttpHandler):
         breaker.on_success()
         return result
 
+    _LIFI_BREAKER_KEY = "lifi-quote"
+
+    def _call_lifi_with_breaker(self, func: Callable[[], Any]) -> Any:
+        """Call a LiFi HTTP function gated by a circuit breaker."""
+        breaker = self.shared_state.get_circuit_breaker(self._LIFI_BREAKER_KEY)
+        if not breaker.allow():
+            raise CircuitBreakerOpenError(
+                "Circuit breaker open for lifi-quote; skipping call"
+            )
+        try:
+            result = func()
+        except Exception:
+            breaker.on_failure()
+            raise
+        breaker.on_success()
+        return result
+
     def _get_web3_instance(self, chain: str) -> Optional[Web3]:
         """Get Web3 instance for the specified chain."""
         try:
@@ -602,17 +654,36 @@ class HttpHandler(BaseHttpHandler):
                 "integrator": "valory",
             }
 
-            response = requests.get(
-                self.context.params.lifi_quote_to_amount_url,
-                params=params,
-                timeout=self.context.params.request_timeout,
-            )
+            def _do_lifi_get() -> requests.Response:
+                resp = requests.get(
+                    self.context.params.lifi_quote_to_amount_url,
+                    params=params,
+                    timeout=self.context.params.request_timeout,
+                )
+                if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                    raise requests.exceptions.HTTPError(
+                        f"LiFi {resp.status_code}", response=resp
+                    )
+                return resp
+
+            response = self._call_lifi_with_breaker(_do_lifi_get)
 
             if response.status_code == 200:
                 return response.json()
 
             return None
-        except Exception as e:
+        except CircuitBreakerOpenError:
+            self.context.logger.error(
+                "lifi-quote-breaker-open; skipping quote until recovery"
+            )
+            return None
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.HTTPError,
+            ValueError,
+            KeyError,
+        ) as e:
             self.context.logger.error(f"Error getting LiFi quote: {str(e)}")
             return None
 
@@ -935,9 +1006,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # ensure sufficient funds for x402 payments
         if self.context.params.use_x402:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
-                executor.shutdown(wait=False)
+            self._submit_background(self._ensure_sufficient_funds_for_x402_payments)
 
         # Get standard deficit from funds_manager
         standard_deficit = self.funds_status.get_response_body()
@@ -1501,12 +1570,15 @@ class HttpHandler(BaseHttpHandler):
 
             is_healthy = is_transitioning_fast
 
-        if round_sequence._abci_app:
-            current_round = round_sequence._abci_app.current_round.round_id
-            rounds = [
-                r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
-            ]
-            rounds.append(current_round)
+        try:
+            if round_sequence._abci_app:
+                current_round = round_sequence._abci_app.current_round.round_id
+                rounds = [
+                    r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
+                ]
+                rounds.append(current_round)
+        except (AttributeError, KeyError):
+            pass
 
         # Update evaluate strategy round description with agent reasoning if available
         agent_reasoning = cast(SharedState, self.context.state).agent_reasoning
@@ -1983,9 +2055,7 @@ class HttpHandler(BaseHttpHandler):
         }
 
         # Offload KV store update to a separate thread
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self._delayed_write_kv_extended, storage_data)
-            executor.shutdown(wait=False)
+        self._submit_background(self._delayed_write_kv_extended, storage_data)
 
     def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
         """Fallback to previous strategy in case of parsing errors."""
@@ -2239,9 +2309,7 @@ class HttpHandler(BaseHttpHandler):
             }
 
             # Store withdrawal data in KV store
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                executor.submit(self._write_withdrawal_data, withdrawal_data)
-                executor.shutdown(wait=False)
+            self._submit_background(self._write_withdrawal_data, withdrawal_data)
 
             # Prepare response
             response = {

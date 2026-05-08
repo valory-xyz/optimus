@@ -70,13 +70,15 @@ def _is_retryable(exc: BaseException) -> bool:
 
 
 def retry_with_exponential_backoff(  # type: ignore
-    max_retries: int = 5, initial_delay: float = 1, backoff_factor: float = 2
+    max_retries: int = 3, initial_delay: float = 1, backoff_factor: float = 2
 ) -> Callable[..., Any]:
     """Retry a function with exponential backoff on transient failures.
 
     Retries 408, 429, 5xx, and transient network errors (ClientConnectorError,
     ServerTimeoutError, asyncio.TimeoutError). All other exceptions propagate
-    immediately.
+    immediately. Default max_retries is sized so the cumulative backoff plus
+    per-request session timeout (see ``connect()``) fits inside the FSM round
+    timeout (30s) — bumping either knob requires re-doing that arithmetic.
 
     :param max_retries: maximum retry attempts before giving up.
     :param initial_delay: seconds to sleep before the first retry.
@@ -207,9 +209,13 @@ class GenericMirrorDBConnection(Connection):
         Sets up the response queue and initializes the HTTP session.
         """
         self._response_envelopes = asyncio.Queue()
+        # 5s per-request timeout × max_retries=3 + (1+2)s backoff = 18s
+        # worst case under sustained outage, leaving headroom under the 30s
+        # FSM round timeout. Both knobs are sized together; do not raise one
+        # without re-checking the other.
         self.session = aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(ssl=self.ssl_context),
-            timeout=aiohttp.ClientTimeout(total=30),
+            timeout=aiohttp.ClientTimeout(total=5),
         )
         self.state = ConnectionStates.connected
 

@@ -245,6 +245,37 @@ class TestRetryWithExponentialBackoff:
         assert sleeps == [1, 2, 4]
 
     @pytest.mark.asyncio
+    async def test_default_retry_budget_fits_under_round_timeout(self) -> None:
+        """Default decorator config must fit cumulative-backoff under 30s.
+
+        The mirror_db connection's per-request session timeout is 5s. With
+        the default ``max_retries=3``, worst case is 3 attempts × 5s + the
+        backoff sum below. Bumping either knob without updating the other
+        risks the FSM round timing out before the connection finishes.
+        """
+        sleeps: list = []
+
+        async def fake_sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        # Use defaults: no args so the test pins the production configuration.
+        @retry_with_exponential_backoff()
+        async def always_429() -> str:
+            raise MirrorDBHTTPError(429, "Too Many Requests")
+
+        with patch.object(asyncio, "sleep", side_effect=fake_sleep):
+            with pytest.raises(MirrorDBHTTPError):
+                await always_429()
+
+        per_request_session_timeout = 5
+        max_attempts = 3
+        worst_case = max_attempts * per_request_session_timeout + sum(sleeps)
+        assert worst_case < 30, (
+            f"retry budget {worst_case}s would exceed 30s round timeout; "
+            f"sleeps={sleeps}"
+        )
+
+    @pytest.mark.asyncio
     async def test_logger_attribute_emits_retry_warnings(self) -> None:
         """When the wrapped object exposes a logger, retry warnings reach it."""
         mock_logger = MagicMock()
@@ -360,12 +391,12 @@ class TestConnect:
 
     @pytest.mark.asyncio
     async def test_connect_session_has_timeout(self) -> None:
-        """Test that connect sets a timeout on the aiohttp session."""
+        """Per-request timeout sized so retries fit under the 30s round timeout."""
         connection = _make_connection()
         await connection.connect()
         try:
             assert connection.session is not None
-            assert connection.session.timeout.total == 30
+            assert connection.session.timeout.total == 5
         finally:
             await connection.disconnect()
 

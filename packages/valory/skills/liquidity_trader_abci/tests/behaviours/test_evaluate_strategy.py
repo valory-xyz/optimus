@@ -432,7 +432,7 @@ class TestUpdatePositionMetrics:
         b = _mk()
         b.positions_eligible_for_exit = []
         b.store_current_positions = MagicMock()
-        b.update_position_metrics()
+        _drive(b.update_position_metrics())
         b.store_current_positions.assert_not_called()
 
     def test_skips_closed_positions(self):
@@ -444,7 +444,7 @@ class TestUpdatePositionMetrics:
             {"status": PositionStatus.CLOSED.value, "dex_type": "velodrome"}
         ]
         b.store_current_positions = MagicMock()
-        b.update_position_metrics()
+        _drive(b.update_position_metrics())
         b.store_current_positions.assert_called_once()
 
     def test_no_strategy_for_dex_type(self):
@@ -461,7 +461,7 @@ class TestUpdatePositionMetrics:
         ]
         b.params.dex_type_to_strategy = {}
         b.store_current_positions = MagicMock()
-        b.update_position_metrics()
+        _drive(b.update_position_metrics())
         b.store_current_positions.assert_called_once()
 
     def test_metrics_update_interval_not_reached(self):
@@ -479,27 +479,28 @@ class TestUpdatePositionMetrics:
         ]
         b.get_returns_metrics_for_opportunity = MagicMock()
         b.store_current_positions = MagicMock()
-        b.update_position_metrics()
+        _drive(b.update_position_metrics())
         b.get_returns_metrics_for_opportunity.assert_not_called()
 
     def test_metrics_update_interval_reached(self):
-        """Test metrics update interval reached."""
+        """Test metrics update interval reached: position gets new metrics + timestamp."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
-        b.positions_eligible_for_exit = [
-            {
-                "status": PositionStatus.OPEN.value,
-                "dex_type": "velodrome",
-                "last_metrics_update": now - METRICS_UPDATE_INTERVAL - 100,
-                "pool_address": "0xpool",
-            }
-        ]
-        b.get_returns_metrics_for_opportunity = MagicMock(return_value={"apr": 10.0})
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "last_metrics_update": now - METRICS_UPDATE_INTERVAL - 100,
+            "pool_address": "0xpool",
+        }
+        b.positions_eligible_for_exit = [position]
+        b.get_returns_metrics_for_opportunity = _gen_return({"apr": 10.0})
         b.store_current_positions = MagicMock()
-        b.update_position_metrics()
-        b.get_returns_metrics_for_opportunity.assert_called_once()
+        _drive(b.update_position_metrics())
         b.store_current_positions.assert_called_once()
+        # Production logic: returned metrics merged in and timestamp refreshed.
+        assert position["apr"] == 10.0
+        assert position["last_metrics_update"] == now
 
     def test_metrics_update_returns_none(self):
         """Test metrics update returns none."""
@@ -513,9 +514,9 @@ class TestUpdatePositionMetrics:
             "pool_address": "0xpool",
         }
         b.positions_eligible_for_exit = [pos]
-        b.get_returns_metrics_for_opportunity = MagicMock(return_value=None)
+        b.get_returns_metrics_for_opportunity = _gen_return(None)
         b.store_current_positions = MagicMock()
-        b.update_position_metrics()
+        _drive(b.update_position_metrics())
         # Position should not be updated
         assert "apr" not in pos
 
@@ -2353,39 +2354,76 @@ class TestDownloadNextStrategy:
 class TestGetReturnsMetricsForOpportunity:
     """Tests for get_returns_metrics_for_opportunity."""
 
+    @staticmethod
+    def _done_future(value):
+        """Return a future already completed with the given value."""
+        from concurrent.futures import Future
+
+        f = Future()
+        f.set_result(value)
+        return f
+
     def test_no_metrics(self):
-        """Test no metrics."""
+        """Strategy returns None: caller propagates None."""
         b = _mk()
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
-        b.execute_strategy = MagicMock(return_value=None)
-        result = b.get_returns_metrics_for_opportunity(
-            {"pool_address": "0x1"}, "strategy_a"
-        )
+        with patch("asyncio.ensure_future", return_value=self._done_future(None)):
+            result = _drive(
+                b.get_returns_metrics_for_opportunity(
+                    {"pool_address": "0x1"}, "strategy_a"
+                )
+            )
         assert result is None
 
     def test_error_in_metrics(self):
-        """Test error in metrics."""
+        """Strategy returns an error dict: caller treats as failure and returns None."""
         b = _mk()
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
-        b.execute_strategy = MagicMock(return_value={"error": "something failed"})
-        result = b.get_returns_metrics_for_opportunity(
-            {"pool_address": "0x1"}, "strategy_a"
-        )
+        with patch(
+            "asyncio.ensure_future",
+            return_value=self._done_future({"error": "something failed"}),
+        ):
+            result = _drive(
+                b.get_returns_metrics_for_opportunity(
+                    {"pool_address": "0x1"}, "strategy_a"
+                )
+            )
         assert result is None
 
     def test_valid_metrics(self):
-        """Test valid metrics."""
+        """Strategy returns metrics: caller forwards the dict."""
         b = _mk()
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
         metrics = {"apr": 20.0, "tvl": 5000}
-        b.execute_strategy = MagicMock(return_value=metrics)
-        result = b.get_returns_metrics_for_opportunity(
-            {"pool_address": "0x1"}, "strategy_a"
-        )
+        with patch("asyncio.ensure_future", return_value=self._done_future(metrics)):
+            result = _drive(
+                b.get_returns_metrics_for_opportunity(
+                    {"pool_address": "0x1"}, "strategy_a"
+                )
+            )
         assert result == metrics
+
+    def test_dispatches_off_fsm_thread(self):
+        """The strategy call goes via the async path, not self.execute_strategy."""
+        b = _mk()
+        b.context.coingecko = MagicMock()
+        b.context.coingecko.use_x402 = False
+        # If the new path called self.execute_strategy synchronously, this
+        # mock would record it. The async dispatch must not touch it.
+        b.execute_strategy = MagicMock()
+        with patch(
+            "asyncio.ensure_future", return_value=self._done_future({"apr": 1.0})
+        ):
+            result = _drive(
+                b.get_returns_metrics_for_opportunity(
+                    {"pool_address": "0x1"}, "strategy_a"
+                )
+            )
+        assert result == {"apr": 1.0}
+        b.execute_strategy.assert_not_called()
 
 
 class TestTrackOpportunities:

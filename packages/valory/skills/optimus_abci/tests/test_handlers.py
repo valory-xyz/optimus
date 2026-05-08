@@ -2063,9 +2063,7 @@ class TestHttpHandlerMethods:
 
                 # The next call must short-circuit without invoking requests.get.
                 assert (
-                    handler._get_lifi_quote_sync(
-                        "0xaddr", "optimism", "0xusdc", "1000"
-                    )
+                    handler._get_lifi_quote_sync("0xaddr", "optimism", "0xusdc", "1000")
                     is None
                 )
                 assert mock_get.call_count == calls_at_open

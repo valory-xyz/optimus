@@ -1406,6 +1406,46 @@ class TestHttpHandlerMethods:
             if acquired:
                 handlers_mod._WITHDRAWAL_WRITE_LOCK.release()
 
+    def test_submit_background_returns_before_task_completes(self) -> None:
+        """The caller of _submit_background must not block on the task."""
+        import threading
+
+        handler, _ = _make_http_handler()
+        release = threading.Event()
+        observed = {"started": False, "done": False}
+
+        def slow_task() -> None:
+            observed["started"] = True
+            release.wait(timeout=2.0)
+            observed["done"] = True
+
+        future = handler._submit_background(slow_task)
+        # The submission must return immediately; the task is still pending.
+        assert future.done() is False
+        # Now allow the task to complete and confirm the executor ran it.
+        release.set()
+        future.result(timeout=2.0)
+        assert observed["started"] is True
+        assert observed["done"] is True
+
+    def test_submit_background_logs_exception_via_done_callback(self) -> None:
+        """A background task that raises must surface via the done-callback log."""
+        handler, ctx = _make_http_handler()
+
+        def failing_task() -> None:
+            raise RuntimeError("background-boom")
+
+        future = handler._submit_background(failing_task)
+        # Drain the future. .exception() blocks until the task and the
+        # done-callback finish, so by the time it returns the logger must
+        # already have been called.
+        assert isinstance(future.exception(timeout=2.0), RuntimeError)
+        assert any(
+            "background-task-failed" in str(call.args)
+            and "background-boom" in str(call.args)
+            for call in ctx.logger.error.call_args_list
+        )
+
     def test_read_withdrawal_data(self) -> None:
         """Test _read_withdrawal_data reads from KV store."""
         handler, ctx = _make_http_handler()

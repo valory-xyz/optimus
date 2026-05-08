@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -331,13 +331,20 @@ class HttpHandler(BaseHttpHandler):
 
     def setup(self) -> None:
         """Implement the setup."""
+        # Long-lived executor for fire-and-forget background work. The
+        # `with ThreadPoolExecutor(...) as executor:` idiom is NOT
+        # fire-and-forget — __exit__ calls shutdown(wait=True) and the
+        # caller blocks until the submission completes.
+        if not hasattr(self, "_background_executor"):
+            self._background_executor = ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="handlers-bg"
+            )
+
         # Custom hostname (set via params)
         # Only check funds if using X402
         if self.context.params.use_x402:
             self.shared_state.sufficient_funds_for_x402_payments = False
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
-                executor.shutdown(wait=False)
+            self._submit_background(self._ensure_sufficient_funds_for_x402_payments)
 
         service_endpoint_base = urlparse(
             self.context.params.service_endpoint_base
@@ -415,6 +422,32 @@ class HttpHandler(BaseHttpHandler):
             if self.context.params.target_investment_chains[0] == "optimism"
             else MODIUS_AGENT_PROFILE_PATH
         )
+
+    def _submit_background(
+        self, fn: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Future:
+        """Submit fn to the long-lived background executor.
+
+        Returns immediately; attaches a done-callback so a raised exception
+        in the background task is logged (otherwise it would be silently
+        held in the Future and never surfaced).
+        """
+        if not hasattr(self, "_background_executor"):
+            self._background_executor = ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="handlers-bg"
+            )
+        future = self._background_executor.submit(fn, *args, **kwargs)
+
+        def _log_if_failed(f: Future) -> None:
+            exc = f.exception()
+            if exc is not None:
+                self.context.logger.error(
+                    f"background-task-failed name={fn.__name__}: {exc}",
+                    exc_info=exc,
+                )
+
+        future.add_done_callback(_log_if_failed)
+        return future
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -935,9 +968,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # ensure sufficient funds for x402 payments
         if self.context.params.use_x402:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
-                executor.shutdown(wait=False)
+            self._submit_background(self._ensure_sufficient_funds_for_x402_payments)
 
         # Get standard deficit from funds_manager
         standard_deficit = self.funds_status.get_response_body()
@@ -1983,9 +2014,7 @@ class HttpHandler(BaseHttpHandler):
         }
 
         # Offload KV store update to a separate thread
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self._delayed_write_kv_extended, storage_data)
-            executor.shutdown(wait=False)
+        self._submit_background(self._delayed_write_kv_extended, storage_data)
 
     def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
         """Fallback to previous strategy in case of parsing errors."""
@@ -2239,9 +2268,7 @@ class HttpHandler(BaseHttpHandler):
             }
 
             # Store withdrawal data in KV store
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                executor.submit(self._write_withdrawal_data, withdrawal_data)
-                executor.shutdown(wait=False)
+            self._submit_background(self._write_withdrawal_data, withdrawal_data)
 
             # Prepare response
             response = {

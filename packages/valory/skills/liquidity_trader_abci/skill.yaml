@@ -38,7 +38,7 @@ fingerprint:
   states/base.py: bafybeih7f23onskccwkh3a5o2rwp7r4uampb5ocyrvz5yrgajowoztdh5m
   states/call_checkpoint.py: bafybeiapxxksqtc646bvtvler7ck3zjcfij5keb5xsi3ebl5m7mrf6ohla
   states/check_staking_kpi_met.py: bafybeifdjadoad463zm7iu2d2i5iaucdkmltau74zh3q63pohgmgbxhtum
-  states/decision_making.py: bafybeia45dqeet5jlfylt5huz5oudoplr35imhjpewtbutcrxhk2bgyifu
+  states/decision_making.py: bafybeigbwyhxebjl7z2zcwgex3k65ffifw4hd4tdqmql4t3gm5vxaa2jhe
   states/evaluate_strategy.py: bafybeid56yh4ymoopp4rutwcuby73zoevycnmzntwywbfqryju4ryknn4i
   states/fetch_strategies.py: bafybeiekd4tfz2bhwpgkdbh64bhx7qgmpfh3s7dsh6ywdspjqbrf5lepo4
   states/final_rounds.py: bafybeibd74f6zchhxgv7lae5t7hfcyltxw57ropinpte4zmdtqcylvutpi
@@ -70,7 +70,7 @@ fingerprint:
   tests/states/test_base.py: bafybeidaj26ug5b2q5x576l46femszvvfgkdgueu3lfycwyiv4qb7qbguq
   tests/states/test_call_checkpoint.py: bafybeihsjabiftgu4hikk3igo2roewspk6cscyy6cukaao254ntc6osmkm
   tests/states/test_check_staking_kpi_met.py: bafybeifn4tqvcfqf3bjnr7r55d677yvowc4qfg6khwpelaug5wkpdeucjm
-  tests/states/test_decision_making.py: bafybeie2s2qa7oy4lc6lzyiyw3mxxjmozccafsphfnwlbigggqwtf6w4z4
+  tests/states/test_decision_making.py: bafybeieiec5lfahn6sar4tnpwj77cbhikif4zsu5m7jii5w4x6qiuzvcby
   tests/states/test_evaluate_strategy.py: bafybeibh6usboloxzg2zjo2jx2ciqgy2znzl5a2canjz4dd5t3z5dayw2u
   tests/states/test_fetch_strategies.py: bafybeieciu5qoegm6bfaizozk2fekjv5ng7jzyeyjqq25ehgrewf2xjpza
   tests/states/test_final_rounds.py: bafybeibsmzvrwa3ulgyu63tlbvxv3iswl5jxnw652ycxkbg4u2azb5ikx4

@@ -77,6 +77,8 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             new_action = payload.get("updates", {}).get("new_action", {})
             updated_actions = self.synchronized_data.actions  # type: ignore[attr-defined]
             if new_action:
+                if not isinstance(updated_actions, list):
+                    updated_actions = []
                 if self.synchronized_data.last_executed_action_index is None:  # type: ignore[attr-defined]
                     index = 0
                 else:

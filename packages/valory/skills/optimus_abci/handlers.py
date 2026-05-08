@@ -675,7 +675,12 @@ class HttpHandler(BaseHttpHandler):
                 "lifi-quote-breaker-open; skipping quote until recovery"
             )
             return None
-        except Exception as e:
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            ValueError,
+            KeyError,
+        ) as e:
             self.context.logger.error(f"Error getting LiFi quote: {str(e)}")
             return None
 

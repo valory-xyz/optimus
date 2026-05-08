@@ -1927,19 +1927,39 @@ class TestHttpHandlerMethods:
         assert result is None
 
     def test_get_lifi_quote_sync_exception(self) -> None:
-        """Test _get_lifi_quote_sync returns None on exception."""
+        """Test _get_lifi_quote_sync returns None on a typed transient error."""
         handler, ctx = _make_http_handler()
         ctx.params.chain_to_chain_id_mapping = {"optimism": 10}
         ctx.params.slippage_for_swap = 0.01
         ctx.params.lifi_quote_to_amount_url = "https://api.example.com/quote"
         with patch(
             "packages.valory.skills.optimus_abci.handlers.requests.get",
-            side_effect=Exception("Network error"),
+            side_effect=requests.exceptions.ConnectionError("Network error"),
         ):
             result = handler._get_lifi_quote_sync(
                 "0xaddr", "optimism", "0xusdc", "1000"
             )
         assert result is None
+
+    def test_get_lifi_quote_sync_propagates_unexpected_exception(self) -> None:
+        """An unexpected exception (e.g. AttributeError) must propagate.
+
+        The catch-all that previously turned every exception into a silent
+        None hid programmer errors from the global dispatch wrapper, which
+        is what surfaces them as HTTP 500.
+        """
+        handler, ctx = _make_http_handler()
+        ctx.params.chain_to_chain_id_mapping = {"optimism": 10}
+        ctx.params.slippage_for_swap = 0.01
+        ctx.params.lifi_quote_to_amount_url = "https://api.example.com/quote"
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.requests.get",
+            side_effect=AttributeError("programmer-bug"),
+        ):
+            with pytest.raises(AttributeError, match="programmer-bug"):
+                handler._get_lifi_quote_sync(
+                    "0xaddr", "optimism", "0xusdc", "1000"
+                )
 
     def test_get_lifi_quote_breaker_opens_after_consecutive_failures(self) -> None:
         """Sustained LiFi failures open the breaker; subsequent calls short-circuit."""

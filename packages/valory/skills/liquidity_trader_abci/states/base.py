@@ -22,7 +22,7 @@
 import json
 from dataclasses import fields
 from enum import Enum
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
@@ -175,8 +175,15 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_actions_round")
 
     @property
-    def actions(self) -> Optional[List[Dict[str, Any]]]:
-        """Get the actions"""
+    def actions(self) -> Optional[Union[List[Dict[str, Any]], Dict[str, Any]]]:
+        """Return the actions list, or the withdrawal-initiation sentinel dict.
+
+        Normal flow stores a list of action dicts. The withdrawal-initiation
+        flow writes a single dict ``{"event": "withdrawal_initiated", ...}`` -
+        consumers must isinstance-check before subscripting.
+
+        :return: list of action dicts, sentinel dict, or None if unset.
+        """
         serialized = self.db.get("actions", "[]")
         if serialized is None:
             serialized = "[]"

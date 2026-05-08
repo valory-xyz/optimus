@@ -122,7 +122,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - round timeout: 5.
             - settle: 10.
             - update: 5.
-            - none: 5.
             - withdrawal initiated: 8.
         6. PostTxSettlementRound
             - action executed: 5.
@@ -132,8 +131,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - withdrawal completed: 7.
             - round timeout: 6.
             - unrecognized: 14.
-            - done: 6.
-            - none: 6.
             - no majority: 6.
         7. FetchStrategiesRound
             - done: 1.
@@ -141,13 +138,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - no majority: 7.
             - round timeout: 7.
             - settle: 10.
-            - none: 7.
             - withdrawal initiated: 8.
         8. WithdrawFundsRound
             - done: 5.
             - no majority: 8.
             - round timeout: 8.
-            - none: 8.
         9. FinishedEvaluateStrategyRound
         10. FinishedTxPreparationRound
         11. FinishedDecisionMakingRound
@@ -223,7 +218,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.SETTLE: FinishedTxPreparationRound,
             Event.UPDATE: DecisionMakingRound,
-            Event.NONE: DecisionMakingRound,
             Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         PostTxSettlementRound: {
@@ -234,8 +228,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
             Event.UNRECOGNIZED: FailedMultiplexerRound,
-            Event.DONE: PostTxSettlementRound,
-            Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
         FetchStrategiesRound: {
@@ -244,14 +236,12 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: FetchStrategiesRound,
             Event.ROUND_TIMEOUT: FetchStrategiesRound,
             Event.SETTLE: FinishedTxPreparationRound,
-            Event.NONE: FetchStrategiesRound,
             Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         WithdrawFundsRound: {
             Event.DONE: DecisionMakingRound,
             Event.NO_MAJORITY: WithdrawFundsRound,
             Event.ROUND_TIMEOUT: WithdrawFundsRound,
-            Event.NONE: WithdrawFundsRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},

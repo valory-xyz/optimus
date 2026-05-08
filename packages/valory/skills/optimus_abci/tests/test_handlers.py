@@ -1957,9 +1957,7 @@ class TestHttpHandlerMethods:
             side_effect=AttributeError("programmer-bug"),
         ):
             with pytest.raises(AttributeError, match="programmer-bug"):
-                handler._get_lifi_quote_sync(
-                    "0xaddr", "optimism", "0xusdc", "1000"
-                )
+                handler._get_lifi_quote_sync("0xaddr", "optimism", "0xusdc", "1000")
 
     def test_get_lifi_quote_breaker_opens_after_consecutive_failures(self) -> None:
         """Sustained LiFi failures open the breaker; subsequent calls short-circuit."""
@@ -2028,9 +2026,7 @@ class TestHttpHandlerMethods:
                 side_effect=requests.exceptions.ConnectionError("upstream down"),
             ):
                 for _ in range(CIRCUIT_BREAKER_FAILURE_THRESHOLD):
-                    handler._get_lifi_quote_sync(
-                        "0xaddr", "optimism", "0xusdc", "1000"
-                    )
+                    handler._get_lifi_quote_sync("0xaddr", "optimism", "0xusdc", "1000")
 
             # Fast-forward past the recovery window so the next allow() flips
             # the breaker into HALF_OPEN.

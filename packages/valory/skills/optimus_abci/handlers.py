@@ -1532,12 +1532,19 @@ class HttpHandler(BaseHttpHandler):
 
             is_healthy = is_transitioning_fast
 
-        if round_sequence._abci_app:
-            current_round = round_sequence._abci_app.current_round.round_id
-            rounds = [
-                r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
-            ]
-            rounds.append(current_round)
+        # During the FSM startup window, _abci_app may be set before
+        # current_round / _previous_rounds are bound. Mirror the guard
+        # idiom used a few lines below for synchronized_data.period_count.
+        try:
+            if round_sequence._abci_app:
+                current_round = round_sequence._abci_app.current_round.round_id
+                rounds = [
+                    r.round_id
+                    for r in round_sequence._abci_app._previous_rounds[-25:]
+                ]
+                rounds.append(current_round)
+        except (AttributeError, KeyError):
+            pass
 
         # Update evaluate strategy round description with agent reasoning if available
         agent_reasoning = cast(SharedState, self.context.state).agent_reasoning

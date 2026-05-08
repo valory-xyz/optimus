@@ -2226,6 +2226,45 @@ class TestHttpHandlerMethods:
             == "New strategy reasoning"
         )
 
+    def test_handle_get_health_during_fsm_startup_window(self) -> None:
+        """During startup, _abci_app may be set before current_round is bound.
+
+        The handler must return 200 with current_round=None / rounds=None
+        instead of raising AttributeError, which the global dispatch wrapper
+        would translate to HTTP 500 and flap the probe.
+        """
+
+        class _StartingAbciApp:
+            """Mimics the partial-init state seen during FSM startup."""
+
+            @property
+            def current_round(self):  # type: ignore[no-untyped-def]
+                raise AttributeError("current_round not yet bound")
+
+            _previous_rounds: list = []
+
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        mock_round_seq = MagicMock()
+        mock_round_seq._last_round_transition_timestamp = None
+        mock_round_seq._abci_app = _StartingAbciApp()
+        ctx.state.round_sequence = mock_round_seq
+        ctx.state.agent_reasoning = None
+        ctx.params.reset_pause_duration = 10
+        mock_synced = MagicMock()
+        mock_synced.period_count = 0
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
+        ):
+            handler._handle_get_health(MagicMock(), MagicMock())
+        # Healthcheck completes successfully despite the AttributeError.
+        handler._send_ok_response.assert_called_once()
+        sent_payload = handler._send_ok_response.call_args.args[2]
+        assert sent_payload["rounds"] is None
+
     def test_handle_get_health_slow_transition(self) -> None:
         """Test _handle_get_health when transition is slow."""
         from datetime import datetime

@@ -117,7 +117,7 @@ ci-linter-checks:
 fix-abci-app-specs:
 	export PYTHONPATH=${PYTHONPATH}:${PWD}
 	autonomy analyse fsm-specs --update --app-class LiquidityTraderAbciApp --package packages/valory/skills/liquidity_trader_abci/ || (echo "Failed to check liquidity_trader_abci abci consistency" && exit 1)
-	autonomy analyse fsm-specs --update --app-class SuperAgentAbciApp --package packages/valory/skills/optimus_abci/ || (echo "Failed to check optimus_abci abci consistency" && exit 1)
+	autonomy analyse fsm-specs --update --app-class OptimusAbciApp --package packages/valory/skills/optimus_abci/ || (echo "Failed to check optimus_abci abci consistency" && exit 1)
 
 
 .PHONY: tm

@@ -2127,9 +2127,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             }
         )
 
-        # Run the strategy off the FSM thread; the customs perform
-        # rate-limit sleeps that would otherwise block past ROUND_TIMEOUT.
         strategies_executables = self.shared_state.strategies_executables
+        kwargs.pop("strategy", None)
         future = asyncio.ensure_future(
             self._async_execute_strategy(strategy, strategies_executables, **kwargs)
         )

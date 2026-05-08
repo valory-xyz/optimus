@@ -331,17 +331,11 @@ class HttpHandler(BaseHttpHandler):
 
     def setup(self) -> None:
         """Implement the setup."""
-        # Long-lived executor for fire-and-forget background work. The
-        # `with ThreadPoolExecutor(...) as executor:` idiom is NOT
-        # fire-and-forget — __exit__ calls shutdown(wait=True) and the
-        # caller blocks until the submission completes.
         if not hasattr(self, "_background_executor"):
             self._background_executor = ThreadPoolExecutor(
                 max_workers=2, thread_name_prefix="handlers-bg"
             )
 
-        # Custom hostname (set via params)
-        # Only check funds if using X402
         if self.context.params.use_x402:
             self.shared_state.sufficient_funds_for_x402_payments = False
             self._submit_background(self._ensure_sufficient_funds_for_x402_payments)
@@ -422,6 +416,14 @@ class HttpHandler(BaseHttpHandler):
             if self.context.params.target_investment_chains[0] == "optimism"
             else MODIUS_AGENT_PROFILE_PATH
         )
+
+    def teardown(self) -> None:
+        """Tear down the handler and release the background executor."""
+        super().teardown()
+        executor = getattr(self, "_background_executor", None)
+        if executor is not None:
+            executor.shutdown(wait=False)
+            del self._background_executor
 
     def _submit_background(
         self, fn: Callable[..., Any], *args: Any, **kwargs: Any
@@ -550,13 +552,7 @@ class HttpHandler(BaseHttpHandler):
     _LIFI_BREAKER_KEY = "lifi-quote"
 
     def _call_lifi_with_breaker(self, func: Callable[[], Any]) -> Any:
-        """Call a LiFi HTTP function gated by a circuit breaker.
-
-        Mirrors ``_call_web3_with_breaker`` but uses a stable string key
-        (not a chain id) so it cannot collide with the per-chain RPC
-        breakers. The caller should treat ``CircuitBreakerOpenError`` as
-        "endpoint is in cooldown — fail fast and retry next round".
-        """
+        """Call a LiFi HTTP function gated by a circuit breaker."""
         breaker = self.shared_state.get_circuit_breaker(self._LIFI_BREAKER_KEY)
         if not breaker.allow():
             raise CircuitBreakerOpenError(
@@ -658,13 +654,19 @@ class HttpHandler(BaseHttpHandler):
                 "integrator": "valory",
             }
 
-            response = self._call_lifi_with_breaker(
-                lambda: requests.get(
+            def _do_lifi_get() -> requests.Response:
+                resp = requests.get(
                     self.context.params.lifi_quote_to_amount_url,
                     params=params,
                     timeout=self.context.params.request_timeout,
                 )
-            )
+                if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                    raise requests.exceptions.HTTPError(
+                        f"LiFi {resp.status_code}", response=resp
+                    )
+                return resp
+
+            response = self._call_lifi_with_breaker(_do_lifi_get)
 
             if response.status_code == 200:
                 return response.json()
@@ -678,6 +680,7 @@ class HttpHandler(BaseHttpHandler):
         except (
             requests.exceptions.Timeout,
             requests.exceptions.ConnectionError,
+            requests.exceptions.HTTPError,
             ValueError,
             KeyError,
         ) as e:
@@ -1567,9 +1570,6 @@ class HttpHandler(BaseHttpHandler):
 
             is_healthy = is_transitioning_fast
 
-        # During the FSM startup window, _abci_app may be set before
-        # current_round / _previous_rounds are bound. Mirror the guard
-        # idiom used a few lines below for synchronized_data.period_count.
         try:
             if round_sequence._abci_app:
                 current_round = round_sequence._abci_app.current_round.round_id

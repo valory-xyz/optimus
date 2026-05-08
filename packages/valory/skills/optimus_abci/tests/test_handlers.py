@@ -1419,14 +1419,18 @@ class TestHttpHandlerMethods:
             release.wait(timeout=2.0)
             observed["done"] = True
 
-        future = handler._submit_background(slow_task)
-        # The submission must return immediately; the task is still pending.
-        assert future.done() is False
-        # Now allow the task to complete and confirm the executor ran it.
-        release.set()
-        future.result(timeout=2.0)
-        assert observed["started"] is True
-        assert observed["done"] is True
+        try:
+            future = handler._submit_background(slow_task)
+            # Submission must return immediately; the task is still pending.
+            assert future.done() is False
+            # Allow the task to complete and confirm the executor ran it.
+            release.set()
+            future.result(timeout=2.0)
+            assert observed["started"] is True
+            assert observed["done"] is True
+        finally:
+            release.set()
+            handler.teardown()
 
     def test_submit_background_logs_exception_via_done_callback(self) -> None:
         """A background task that raises must surface via the done-callback log."""
@@ -1435,16 +1439,34 @@ class TestHttpHandlerMethods:
         def failing_task() -> None:
             raise RuntimeError("background-boom")
 
-        future = handler._submit_background(failing_task)
-        # Drain the future. .exception() blocks until the task and the
-        # done-callback finish, so by the time it returns the logger must
-        # already have been called.
-        assert isinstance(future.exception(timeout=2.0), RuntimeError)
-        assert any(
-            "background-task-failed" in str(call.args)
-            and "background-boom" in str(call.args)
-            for call in ctx.logger.error.call_args_list
-        )
+        try:
+            future = handler._submit_background(failing_task)
+            # Drain the future. .exception() blocks until the task and the
+            # done-callback finish, so by the time it returns the logger must
+            # already have been called.
+            assert isinstance(future.exception(timeout=2.0), RuntimeError)
+            assert any(
+                "background-task-failed" in str(call.args)
+                and "background-boom" in str(call.args)
+                for call in ctx.logger.error.call_args_list
+            )
+        finally:
+            handler.teardown()
+
+    def test_teardown_shuts_down_background_executor(self) -> None:
+        """teardown() must release the long-lived executor's worker threads."""
+        handler, _ = _make_http_handler()
+        # Force lazy creation.
+        handler._submit_background(lambda: None).result(timeout=2.0)
+        executor = handler._background_executor
+        handler.teardown()
+        # Re-submission after teardown is rejected — proves the executor
+        # was actually shut down rather than left dangling.
+        with pytest.raises(RuntimeError):
+            executor.submit(lambda: None)
+        # And the handler attribute is cleared so a future setup() lazily
+        # creates a fresh executor instead of reusing the dead one.
+        assert not hasattr(handler, "_background_executor")
 
     def test_read_withdrawal_data(self) -> None:
         """Test _read_withdrawal_data reads from KV store."""
@@ -1997,6 +2019,55 @@ class TestHttpHandlerMethods:
                     "0xaddr", "optimism", "0xusdc", "1000"
                 )
                 assert short_circuited is None
+                assert mock_get.call_count == calls_at_open
+
+    def test_get_lifi_quote_breaker_opens_on_sustained_5xx(self) -> None:
+        """Sustained 5xx responses (no transport error) must open the breaker.
+
+        ``requests.get`` returns a Response object on 5xx — only transport
+        errors raise. The wrapper must promote retriable status codes to
+        breaker failures so the breaker is symmetric with the Web3 path.
+        """
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+            EndpointCircuitBreaker,
+        )
+
+        handler, ctx = _make_http_handler()
+        ctx.params.chain_to_chain_id_mapping = {"optimism": 10}
+        ctx.params.slippage_for_swap = 0.01
+        ctx.params.lifi_quote_to_amount_url = "https://api.example.com/quote"
+
+        real_breaker = EndpointCircuitBreaker()
+        bad_response = MagicMock()
+        bad_response.status_code = 503
+        bad_response.json.return_value = {"error": "service unavailable"}
+
+        with patch.object(
+            type(handler),
+            "shared_state",
+            new_callable=PropertyMock,
+        ) as mock_shared:
+            mock_shared.return_value.get_circuit_breaker.return_value = real_breaker
+
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.requests.get",
+                return_value=bad_response,
+            ) as mock_get:
+                for _ in range(CIRCUIT_BREAKER_FAILURE_THRESHOLD):
+                    result = handler._get_lifi_quote_sync(
+                        "0xaddr", "optimism", "0xusdc", "1000"
+                    )
+                    assert result is None
+                calls_at_open = mock_get.call_count
+
+                # The next call must short-circuit without invoking requests.get.
+                assert (
+                    handler._get_lifi_quote_sync(
+                        "0xaddr", "optimism", "0xusdc", "1000"
+                    )
+                    is None
+                )
                 assert mock_get.call_count == calls_at_open
 
     def test_get_lifi_quote_breaker_recovers_after_cooldown(self) -> None:

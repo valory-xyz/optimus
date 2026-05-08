@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeibwj43w5s4sd2eylkn75bmtzy3p5yfdekdzdkoabz6p3ietv5olpi
-  balancer_pools_search.py: bafybeibovvqhamcipyv4efj6focydkueffji3gihmcmtcajprlswxm47wu
+  balancer_pools_search.py: bafybeifmtngtnjhrzkbficw7qnkdajf346thmo2peofm3f32cliki5pjny
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/test_balancer_pools_search.py: bafybeiahk2sc76rdpbgnjnr6gtgocz2g6c3r2f5nfjbmzertvkieom5l5e
 fingerprint_ignore_patterns: []

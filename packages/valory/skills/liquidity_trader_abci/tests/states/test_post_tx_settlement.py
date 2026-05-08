@@ -117,12 +117,34 @@ class TestPostTxSettlementRound:
         _, event = result
         assert event == Event.UNRECOGNIZED
 
-    def test_end_block_not_threshold_reached(self) -> None:
-        """Test end_block returns None when threshold not reached."""
+    def test_end_block_returns_none_when_still_collecting(self) -> None:
+        """end_block returns None when threshold not reached and majority still possible."""
         round_obj = object.__new__(PostTxSettlementRound)
+        db = AbciAppDB(
+            setup_data={"tx_submitter": [DecisionMakingRound.auto_round_id()]}
+        )
+        synced = SynchronizedData(db=db)
         type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=synced)  # type: ignore[method-assign]
+        type(round_obj).collection = PropertyMock(return_value={})  # type: ignore[method-assign]
+        round_obj.is_majority_possible = lambda collection, n: True  # type: ignore[method-assign]
+        assert round_obj.end_block() is None
+
+    def test_end_block_returns_no_majority_when_majority_impossible(self) -> None:
+        """end_block returns NO_MAJORITY when majority is no longer possible."""
+        round_obj = object.__new__(PostTxSettlementRound)
+        db = AbciAppDB(
+            setup_data={"tx_submitter": [DecisionMakingRound.auto_round_id()]}
+        )
+        synced = SynchronizedData(db=db)
+        type(round_obj).threshold_reached = PropertyMock(return_value=False)  # type: ignore[method-assign]
+        type(round_obj).synchronized_data = PropertyMock(return_value=synced)  # type: ignore[method-assign]
+        type(round_obj).collection = PropertyMock(return_value={})  # type: ignore[method-assign]
+        round_obj.is_majority_possible = lambda collection, n: False  # type: ignore[method-assign]
         result = round_obj.end_block()
-        assert result is None
+        assert result is not None
+        _, event = result
+        assert event == Event.NO_MAJORITY
 
     def test_no_withdrawal_initiated_class_attribute(self) -> None:
         """PostTxSettlement does not expose a withdrawal_initiated transition anchor."""  # noqa: D403

@@ -132,8 +132,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - withdrawal completed: 7.
             - round timeout: 6.
             - unrecognized: 14.
-            - done: 6.
-            - none: 6.
             - no majority: 6.
         7. FetchStrategiesRound
             - done: 1.
@@ -234,8 +232,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
             Event.UNRECOGNIZED: FailedMultiplexerRound,
-            Event.DONE: PostTxSettlementRound,
-            Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
         FetchStrategiesRound: {

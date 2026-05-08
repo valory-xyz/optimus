@@ -23,7 +23,10 @@ from typing import Dict, Optional, Tuple
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
+    COLLECTION_KEY_ATTRIBUTE,
     CollectSameUntilThresholdRound,
+    NO_MAJORITY_EVENT_ATTRIBUTE,
+    SELECTION_KEY_ATTRIBUTE,
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
@@ -55,11 +58,14 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
     payload_class = PostTxSettlementPayload
     synchronized_data_class = SynchronizedData
-    done_event = Event.DONE
-    none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_post_tx_settlement)
     selection_key = (get_name(SynchronizedData.chain_id),)
+    extended_requirements: Tuple[str, ...] = (
+        NO_MAJORITY_EVENT_ATTRIBUTE,
+        COLLECTION_KEY_ATTRIBUTE,
+        SELECTION_KEY_ATTRIBUTE,
+    )
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
@@ -82,4 +88,9 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                 )
 
             return synced_data, event
+
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
         return None

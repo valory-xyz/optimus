@@ -24,7 +24,11 @@ from typing import Optional, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
+    COLLECTION_KEY_ATTRIBUTE,
     CollectSameUntilThresholdRound,
+    DONE_EVENT_ATTRIBUTE,
+    NO_MAJORITY_EVENT_ATTRIBUTE,
+    SELECTION_KEY_ATTRIBUTE,
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
@@ -43,12 +47,17 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
     settle_event = Event.SETTLE
     update_event = Event.UPDATE
     error_event = Event.ERROR
-    none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     # Static anchor for check-abciapp-specs; end_block dispatches via Event(payload["event"]).
     withdrawal_initiated: Event = Event.WITHDRAWAL_INITIATED
     collection_key = get_name(SynchronizedData.participant_to_decision_making)
     selection_key = (get_name(SynchronizedData.chain_id),)
+    extended_requirements: Tuple[str, ...] = (
+        DONE_EVENT_ATTRIBUTE,
+        NO_MAJORITY_EVENT_ATTRIBUTE,
+        COLLECTION_KEY_ATTRIBUTE,
+        SELECTION_KEY_ATTRIBUTE,
+    )
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""

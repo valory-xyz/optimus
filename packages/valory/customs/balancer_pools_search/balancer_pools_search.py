@@ -1288,7 +1288,6 @@ def format_pool_data(
         for token in pool["poolTokens"]:
             all_token_symbols.append(token["symbol"])
 
-    time.sleep(5)  # Rate limiting
     all_prices = get_pool_token_prices(
         list(set(all_token_symbols)), coingecko_api_key, x402_session, x402_proxy
     )

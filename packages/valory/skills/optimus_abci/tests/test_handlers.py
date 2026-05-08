@@ -1941,6 +1941,94 @@ class TestHttpHandlerMethods:
             )
         assert result is None
 
+    def test_get_lifi_quote_breaker_opens_after_consecutive_failures(self) -> None:
+        """Sustained LiFi failures open the breaker; subsequent calls short-circuit."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+            EndpointCircuitBreaker,
+        )
+
+        handler, ctx = _make_http_handler()
+        ctx.params.chain_to_chain_id_mapping = {"optimism": 10}
+        ctx.params.slippage_for_swap = 0.01
+        ctx.params.lifi_quote_to_amount_url = "https://api.example.com/quote"
+
+        # Use a real breaker; the default mock returns fresh MagicMocks
+        # each call which would not maintain state across attempts.
+        real_breaker = EndpointCircuitBreaker()
+        with patch.object(
+            type(handler),
+            "shared_state",
+            new_callable=PropertyMock,
+        ) as mock_shared:
+            mock_shared.return_value.get_circuit_breaker.return_value = real_breaker
+
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.requests.get",
+                side_effect=requests.exceptions.ConnectionError("upstream down"),
+            ) as mock_get:
+                for _ in range(CIRCUIT_BREAKER_FAILURE_THRESHOLD):
+                    result = handler._get_lifi_quote_sync(
+                        "0xaddr", "optimism", "0xusdc", "1000"
+                    )
+                    assert result is None
+                calls_at_open = mock_get.call_count
+
+                # The next call must short-circuit without invoking requests.get.
+                short_circuited = handler._get_lifi_quote_sync(
+                    "0xaddr", "optimism", "0xusdc", "1000"
+                )
+                assert short_circuited is None
+                assert mock_get.call_count == calls_at_open
+
+    def test_get_lifi_quote_breaker_recovers_after_cooldown(self) -> None:
+        """After the recovery window, a successful probe closes the breaker."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+            CIRCUIT_BREAKER_RECOVERY_SECONDS,
+            EndpointCircuitBreaker,
+        )
+
+        handler, ctx = _make_http_handler()
+        ctx.params.chain_to_chain_id_mapping = {"optimism": 10}
+        ctx.params.slippage_for_swap = 0.01
+        ctx.params.lifi_quote_to_amount_url = "https://api.example.com/quote"
+
+        real_breaker = EndpointCircuitBreaker()
+        with patch.object(
+            type(handler),
+            "shared_state",
+            new_callable=PropertyMock,
+        ) as mock_shared:
+            mock_shared.return_value.get_circuit_breaker.return_value = real_breaker
+
+            # Open the breaker.
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.requests.get",
+                side_effect=requests.exceptions.ConnectionError("upstream down"),
+            ):
+                for _ in range(CIRCUIT_BREAKER_FAILURE_THRESHOLD):
+                    handler._get_lifi_quote_sync(
+                        "0xaddr", "optimism", "0xusdc", "1000"
+                    )
+
+            # Fast-forward past the recovery window so the next allow() flips
+            # the breaker into HALF_OPEN.
+            real_breaker._opened_at -= CIRCUIT_BREAKER_RECOVERY_SECONDS + 1
+
+            # Probe succeeds: breaker closes, response is forwarded.
+            ok_response = MagicMock()
+            ok_response.status_code = 200
+            ok_response.json.return_value = {"transactionRequest": {}}
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.requests.get",
+                return_value=ok_response,
+            ):
+                result = handler._get_lifi_quote_sync(
+                    "0xaddr", "optimism", "0xusdc", "1000"
+                )
+            assert result == {"transactionRequest": {}}
+
     def test_check_usdc_balance_success(self) -> None:
         """Test _check_usdc_balance returns balance on success."""
         handler, ctx = _make_http_handler()

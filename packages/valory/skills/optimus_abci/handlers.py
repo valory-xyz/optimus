@@ -547,6 +547,29 @@ class HttpHandler(BaseHttpHandler):
         breaker.on_success()
         return result
 
+    _LIFI_BREAKER_KEY = "lifi-quote"
+
+    def _call_lifi_with_breaker(self, func: Callable[[], Any]) -> Any:
+        """Call a LiFi HTTP function gated by a circuit breaker.
+
+        Mirrors ``_call_web3_with_breaker`` but uses a stable string key
+        (not a chain id) so it cannot collide with the per-chain RPC
+        breakers. The caller should treat ``CircuitBreakerOpenError`` as
+        "endpoint is in cooldown — fail fast and retry next round".
+        """
+        breaker = self.shared_state.get_circuit_breaker(self._LIFI_BREAKER_KEY)
+        if not breaker.allow():
+            raise CircuitBreakerOpenError(
+                "Circuit breaker open for lifi-quote; skipping call"
+            )
+        try:
+            result = func()
+        except Exception:
+            breaker.on_failure()
+            raise
+        breaker.on_success()
+        return result
+
     def _get_web3_instance(self, chain: str) -> Optional[Web3]:
         """Get Web3 instance for the specified chain."""
         try:
@@ -635,15 +658,22 @@ class HttpHandler(BaseHttpHandler):
                 "integrator": "valory",
             }
 
-            response = requests.get(
-                self.context.params.lifi_quote_to_amount_url,
-                params=params,
-                timeout=self.context.params.request_timeout,
+            response = self._call_lifi_with_breaker(
+                lambda: requests.get(
+                    self.context.params.lifi_quote_to_amount_url,
+                    params=params,
+                    timeout=self.context.params.request_timeout,
+                )
             )
 
             if response.status_code == 200:
                 return response.json()
 
+            return None
+        except CircuitBreakerOpenError:
+            self.context.logger.error(
+                "lifi-quote-breaker-open; skipping quote until recovery"
+            )
             return None
         except Exception as e:
             self.context.logger.error(f"Error getting LiFi quote: {str(e)}")

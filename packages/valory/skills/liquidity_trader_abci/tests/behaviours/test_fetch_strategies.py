@@ -173,6 +173,83 @@ class TestFetchStrategiesWithdrawalGate:
         assert decoded["event"] == "withdrawal_initiated"
         obj.set_done.assert_called_once()
 
+    def test_withdrawal_payload_still_emits_when_refresh_raises(self) -> None:
+        """Refresh failure does not block the withdrawal payload."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = self._mk_benchmark()
+        obj.context.agent_address = "0xagent"
+        obj.current_positions = []
+
+        captured: Dict[str, Any] = {}
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        sd = MagicMock(period_count=1)
+        with patch.object(
+            type(obj), "synchronized_data", new_callable=PropertyMock, return_value=sd
+        ):
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                mock_ss.return_value = MagicMock()
+                self._wire_common_path(obj)
+                obj._get_native_balance = MagicMock(
+                    side_effect=RuntimeError("rpc-down")
+                )
+                obj._read_investing_paused = _gen_return(True)
+                obj.send_a2a_transaction = fake_send
+
+                _drive(obj.async_act())
+
+        decoded = json.loads(captured["payload"].content)
+        assert decoded["event"] == "withdrawal_initiated"
+        obj.set_done.assert_called_once()
+
+    def test_period_zero_routes_withdrawal_after_eth_revert_noop(self) -> None:
+        """On period 0, withdrawal still routes once the eth-revert path is a no-op."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = self._mk_benchmark()
+        obj.context.agent_address = "0xagent"
+        obj.current_positions = []
+
+        call_order: List[str] = []
+        captured: Dict[str, Any] = {}
+
+        def fake_send(payload):
+            call_order.append("send_a2a_transaction")
+            captured["payload"] = payload
+            yield
+
+        sd = MagicMock(period_count=0)
+        with patch.object(
+            type(obj), "synchronized_data", new_callable=PropertyMock, return_value=sd
+        ):
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                mock_ss.return_value = MagicMock()
+                self._wire_common_path(obj)
+                obj._validate_velodrome_v2_pool_addresses = _gen_none
+                obj.update_position_amounts = _gen_none
+                obj.check_and_update_zero_liquidity_positions = MagicMock()
+                obj._check_and_create_eth_revert_transactions = _gen_none
+                obj.store_portfolio_data = MagicMock(
+                    side_effect=lambda *a, **kw: call_order.append(
+                        "store_portfolio_data"
+                    )
+                )
+                obj._read_investing_paused = _gen_return(True)
+                obj.send_a2a_transaction = fake_send
+
+                _drive(obj.async_act())
+
+        assert call_order == ["store_portfolio_data", "send_a2a_transaction"]
+        decoded = json.loads(captured["payload"].content)
+        assert decoded["event"] == "withdrawal_initiated"
+        obj.set_done.assert_called_once()
+
     def test_no_withdrawal_payload_when_not_paused(self) -> None:
         """investing_paused=False sends the normal selected-protocols payload."""
         obj = _mk()

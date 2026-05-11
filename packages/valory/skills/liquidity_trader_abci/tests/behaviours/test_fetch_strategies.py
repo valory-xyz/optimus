@@ -159,7 +159,9 @@ class TestFetchStrategiesWithdrawalGate:
                 mock_ss.return_value = MagicMock()
                 self._wire_common_path(obj)
                 obj.store_portfolio_data = MagicMock(
-                    side_effect=lambda *a, **kw: call_order.append("store_portfolio_data")
+                    side_effect=lambda *a, **kw: call_order.append(
+                        "store_portfolio_data"
+                    )
                 )
                 obj._read_investing_paused = _gen_return(True)
                 obj.send_a2a_transaction = fake_send

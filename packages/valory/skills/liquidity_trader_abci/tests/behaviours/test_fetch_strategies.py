@@ -25,6 +25,7 @@ import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any, Dict, List
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -92,68 +93,116 @@ def _gen_none(*a, **kw):
 
 
 class TestFetchStrategiesWithdrawalGate:
-    """Verify the gate at the top of async_act emits a withdrawal payload."""
+    """Verify the post-portfolio-refresh gate emits a withdrawal payload."""
 
-    def test_gate_emits_withdrawal_payload_when_paused(self) -> None:
-        """investing_paused=True short-circuits to a WITHDRAWAL_INITIATED payload."""
+    @staticmethod
+    def _mk_benchmark() -> Any:
+        """Build a minimal benchmark-tool mock that supports the context manager."""
+        bm = MagicMock()
+        bm.local.return_value.__enter__ = MagicMock(return_value=None)
+        bm.local.return_value.__exit__ = MagicMock(return_value=False)
+        return bm
+
+    @staticmethod
+    def _wire_common_path(obj: Any) -> None:
+        """Stub the non-portfolio parts of async_act so the test reaches the gate."""
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.available_strategies = {"optimism": ["uniswapV3"]}
+        obj.params.initial_assets = {}
+        obj._get_native_balance = _gen_return(1.0)
+        obj._read_kv = _gen_return(
+            {
+                "selected_protocols": json.dumps(["uniswapV3"]),
+                "trading_type": "balanced",
+            }
+        )
+        obj._write_kv = _gen_none
+        obj.whitelisted_assets = {"optimism": {"0xT": "TKN"}}
+        obj.read_whitelisted_assets = MagicMock()
+        obj._get_current_timestamp = lambda: 100
+        obj._track_whitelisted_assets = _gen_none
+        obj.calculate_user_share_values = _gen_none
+        obj._update_agent_performance_metrics = MagicMock()
+        obj.wait_until_round_end = _gen_none
+        obj.set_done = MagicMock()
+
+    def test_portfolio_refreshed_before_withdrawal_routing(self) -> None:
+        """Pin the ordering: store_portfolio_data fires BEFORE the withdrawal payload.
+
+        Before this ordering was enforced, async_act short-circuited on
+        investing_paused at the top of the function. The portfolio file was
+        never refreshed after a completed withdrawal, so the UI kept
+        serving stale balances and follow-up withdrawals planned actions
+        against ghost funds.
+        """
         obj = _mk()
-        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.benchmark_tool.measure.return_value = self._mk_benchmark()
         obj.context.agent_address = "0xagent"
+        obj.current_positions = []
 
-        captured = {}
+        call_order: List[str] = []
+        captured: Dict[str, Any] = {}
 
-        def fake_send(payload):
-            """Fake send."""
+        def fake_send(payload):  # type: ignore[no-untyped-def]
+            call_order.append("send_a2a_transaction")
             captured["payload"] = payload
             yield
 
-        obj._read_investing_paused = _gen_return(True)
-        obj.send_a2a_transaction = fake_send
-        obj.wait_until_round_end = _gen_none
-        obj.set_done = MagicMock()
-        obj._validate_velodrome_v2_pool_addresses = MagicMock(
-            side_effect=AssertionError("no fetch work when investing is paused")
-        )
+        sd = MagicMock(period_count=1)
+        with patch.object(
+            type(obj), "synchronized_data", new_callable=PropertyMock, return_value=sd
+        ):
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                mock_ss.return_value = MagicMock()
+                self._wire_common_path(obj)
+                obj.store_portfolio_data = MagicMock(
+                    side_effect=lambda *a, **kw: call_order.append("store_portfolio_data")
+                )
+                obj._read_investing_paused = _gen_return(True)
+                obj.send_a2a_transaction = fake_send
 
-        _drive(obj.async_act())
+                _drive(obj.async_act())
 
+        assert call_order == ["store_portfolio_data", "send_a2a_transaction"]
         decoded = json.loads(captured["payload"].content)
         assert decoded["event"] == "withdrawal_initiated"
         obj.set_done.assert_called_once()
 
-    def test_gate_falls_through_when_not_paused(self) -> None:
-        """investing_paused=False lets the normal fetch flow run; no withdrawal payload sent."""
+    def test_no_withdrawal_payload_when_not_paused(self) -> None:
+        """investing_paused=False sends the normal selected-protocols payload."""
         obj = _mk()
-        obj.context.benchmark_tool.measure.return_value = MagicMock()
+        obj.context.benchmark_tool.measure.return_value = self._mk_benchmark()
         obj.context.agent_address = "0xagent"
+        obj.current_positions = []
 
-        captured = []
+        captured: Dict[str, Any] = {}
 
-        def fake_send(payload):
-            """Fake send."""
-            captured.append(payload)
+        def fake_send(payload):  # type: ignore[no-untyped-def]
+            captured["payload"] = payload
             yield
 
-        sd = MagicMock()
-        sd.period_count = 0
-        obj._read_investing_paused = _gen_return(False)
-        obj.send_a2a_transaction = fake_send
-        obj.wait_until_round_end = _gen_none
-        obj.set_done = MagicMock()
-        obj._validate_velodrome_v2_pool_addresses = MagicMock(
-            side_effect=RuntimeError("past_gate_sentinel")
-        )
-
+        sd = MagicMock(period_count=1)
         with patch.object(
-            type(obj),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=sd,
+            type(obj), "synchronized_data", new_callable=PropertyMock, return_value=sd
         ):
-            with pytest.raises(RuntimeError, match="past_gate_sentinel"):
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                mock_ss.return_value = MagicMock()
+                self._wire_common_path(obj)
+                obj.store_portfolio_data = MagicMock()
+                obj._read_investing_paused = _gen_return(False)
+                obj.send_a2a_transaction = fake_send
+
                 _drive(obj.async_act())
 
-        assert captured == []
+        decoded = json.loads(captured["payload"].content)
+        assert "event" not in decoded
+        assert decoded["selected_protocols"] == ["uniswapV3"]
+        obj.store_portfolio_data.assert_called_once()
 
 
 class TestIsTimeUpdateDue:

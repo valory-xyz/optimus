@@ -65,9 +65,9 @@ service_specific_packages_exclude = [
 ]
 upstream_pins = [
     "valory-xyz/mech-interact@v0.30.0",
-    "valory-xyz/genai@v7.0.0",
-    "valory-xyz/kv-store@v0.5.0",
-    "valory-xyz/funds-manager@v3.0.0",
+    "valory-xyz/genai@v7.1.1",
+    "valory-xyz/kv-store@v0.5.1",
+    "valory-xyz/funds-manager@v3.0.1",
 ]
 gitleaks_extra_paths = [
     "packages/valory/skills/.*_abci/.*-ui-build/.*",

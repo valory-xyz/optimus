@@ -3510,42 +3510,61 @@ class LiquidityTraderBaseBehaviour(
 
         zero_addr_lc = ZERO_ADDRESS.lower()
         if zero_addr_lc not in already_have:
-            native_balance = yield from self._get_native_balance(chain, safe_address)
-            if native_balance and native_balance > 0:
-                balances.append(
-                    {
-                        "asset_symbol": "ETH",
-                        "asset_type": "native",
-                        "address": to_checksum_address(ZERO_ADDRESS),
-                        "balance": int(native_balance),
-                    }
+            try:
+                native_balance = yield from self._get_native_balance(
+                    chain, safe_address
                 )
-                already_have.add(zero_addr_lc)
+                if native_balance is None:
+                    self.context.logger.warning(
+                        f"On-chain native balance read returned None on {chain}; "
+                        f"skipping. Positions data may be incomplete."
+                    )
+                elif native_balance > 0:
+                    balances.append(
+                        {
+                            "asset_symbol": "ETH",
+                            "asset_type": "native",
+                            "address": to_checksum_address(ZERO_ADDRESS),
+                            "balance": int(native_balance),
+                        }
+                    )
+                    already_have.add(zero_addr_lc)
+            except Exception as e:
+                self.context.logger.warning(
+                    f"Error reading native balance on {chain}: {str(e)}"
+                )
 
         for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
             key = whitelisted_addr.lower()
             if key in already_have:
                 continue
-            token_balance = yield from self._get_token_balance(
-                chain, safe_address, whitelisted_addr
-            )
-            if token_balance is None:
+            try:
+                token_balance = yield from self._get_token_balance(
+                    chain, safe_address, whitelisted_addr
+                )
+                if token_balance is None:
+                    self.context.logger.warning(
+                        f"On-chain balance read returned None for {symbol or whitelisted_addr} "
+                        f"on {chain}; skipping. Positions data may be incomplete."
+                    )
+                    continue
+                if token_balance <= 0:
+                    continue
+                balances.append(
+                    {
+                        "asset_symbol": symbol or "UNKNOWN",
+                        "asset_type": "erc_20",
+                        "address": to_checksum_address(whitelisted_addr),
+                        "balance": int(token_balance),
+                    }
+                )
+                already_have.add(key)
+            except Exception as e:
                 self.context.logger.warning(
-                    f"On-chain balance read returned None for {symbol or whitelisted_addr} "
-                    f"on {chain}; skipping. Positions data may be incomplete."
+                    f"Error reading on-chain balance for "
+                    f"{symbol or whitelisted_addr} on {chain}: {str(e)}"
                 )
                 continue
-            if token_balance <= 0:
-                continue
-            balances.append(
-                {
-                    "asset_symbol": symbol or "UNKNOWN",
-                    "asset_type": "erc_20",
-                    "address": to_checksum_address(whitelisted_addr),
-                    "balance": int(token_balance),
-                }
-            )
-            already_have.add(key)
 
     def _get_last_known_price(
         self, token_address: str

@@ -41,6 +41,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PRICE_CACHE_KEY_PREFIX,
     REWARD_UPDATE_INTERVAL,
     REWARD_UPDATE_KEY_PREFIX,
+    WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
 )
@@ -1232,18 +1233,40 @@ class TestSupplementWithOnchainWhitelistedBalances:
         assert eths[0]["balance"] == 100  # preserves SafeApi value
 
     def test_adds_whitelisted_erc20_when_missing(self) -> None:
-        """USDC absent from balances and non-zero on-chain is appended."""
+        """Every whitelisted ERC20 with a positive on-chain balance is appended."""
         b = _make_behaviour()
         b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
-        b._get_token_balance = _make_gen(5_000_000)  # type: ignore[assignment,method-assign]
+        # Per-address fake pins the symbol-to-address mapping: a mismatch in the
+        # loop (wrong key, short-circuit, swapped symbol) would surface as a
+        # missing/incorrect balance in the asserted dict.
+        expected = {
+            addr: i + 1 for i, addr in enumerate(WHITELISTED_ASSETS["optimism"])
+        }
+
+        def fake_token_balance(
+            chain: str, account: str, address: str
+        ) -> Generator[Any, Any, Any]:
+            """Per-address balance fake."""
+            yield
+            return expected[address]
+
+        b._get_token_balance = fake_token_balance  # type: ignore[method-assign]
         balances: list = []
         _exhaust(
             b._supplement_with_onchain_whitelisted_balances(
                 "optimism", "0xsafe", balances
             )
         )
-        symbols = {b["asset_symbol"] for b in balances}
-        assert "USDC" in symbols
+        # Pin: every whitelisted entry must be present with the exact balance
+        # produced by the per-address fake (catches loop short-circuit and
+        # symbol/address mapping swaps).
+        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
+        balance_by_address = {entry["address"].lower(): entry for entry in balances}
+        for address, symbol in WHITELISTED_ASSETS["optimism"].items():
+            entry = balance_by_address[address.lower()]
+            assert entry["asset_symbol"] == symbol
+            assert entry["asset_type"] == "erc_20"
+            assert entry["balance"] == expected[address]
 
     def test_skips_whitelisted_erc20_when_already_present(self) -> None:
         """Token already in balances (case-insensitive address match) is not re-added."""
@@ -1293,6 +1316,76 @@ class TestSupplementWithOnchainWhitelistedBalances:
             )
         )
         assert balances == []
+
+    def test_token_rpc_exception_continues_to_next_token(self) -> None:
+        """An RPC raise on one token must not abort the whole helper.
+
+        Guards against regression of the per-iteration try/except: if the
+        guard is removed, a single raise propagates out and kills the whole
+        positions round (the exact failure mode this helper exists to
+        mitigate).
+        """
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        addresses = list(WHITELISTED_ASSETS["optimism"].keys())
+        failing_address = addresses[0]
+
+        def flaky_token_balance(
+            chain: str, account: str, address: str
+        ) -> Generator[Any, Any, Any]:
+            """Raise for the first address; return 7 for the rest."""
+            if address == failing_address:
+                raise Exception("rpc timeout")
+                yield  # pragma: no cover - unreachable
+            yield
+            return 7
+
+        b._get_token_balance = flaky_token_balance  # type: ignore[method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        # Every address except the failing one is appended.
+        result_addresses = {entry["address"].lower() for entry in balances}
+        expected_addresses = {a.lower() for a in addresses if a != failing_address}
+        assert result_addresses == expected_addresses
+
+    def test_native_rpc_exception_does_not_block_erc20s(self) -> None:
+        """An RPC raise on the native fetch is logged and ERC20 reads still run."""
+        b = _make_behaviour()
+
+        def raising_native(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Raise on native fetch."""
+            raise Exception("native rpc failure")
+            yield  # pragma: no cover - unreachable
+
+        b._get_native_balance = raising_native  # type: ignore[method-assign]
+        b._get_token_balance = _make_gen(3)  # type: ignore[assignment,method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        # No ETH entry, but every whitelisted ERC20 made it.
+        assert not any(entry["asset_symbol"] == "ETH" for entry in balances)
+        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
+
+    def test_native_none_does_not_block_erc20s(self) -> None:
+        """A native None read is logged and skipped; ERC20 backstop still runs."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(11)  # type: ignore[assignment,method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        assert not any(entry["asset_symbol"] == "ETH" for entry in balances)
+        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
 
 
 class TestGetModeBalances:

@@ -41,6 +41,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PRICE_CACHE_KEY_PREFIX,
     REWARD_UPDATE_INTERVAL,
     REWARD_UPDATE_KEY_PREFIX,
+    WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
 )
@@ -985,6 +986,22 @@ class TestGetPositions:
         assert result == []
 
 
+def _make_optimism_b() -> Any:
+    """Behaviour with default no-op stubs for _get_optimism_balances_from_safe_api.
+
+    Stubs the reward fetch and the on-chain backstop to no-ops so tests can
+    isolate the SafeApi-parse and cache paths. Tests that need either side
+    to be live override the relevant stub.
+
+    :return: behaviour instance with the noop stubs installed.
+    """
+    b = _make_behaviour()
+    b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+    b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+    b._supplement_with_onchain_whitelisted_balances = _make_gen(None)  # type: ignore[assignment,method-assign]
+    return b
+
+
 class TestGetOptimismBalances:
     """Test _get_optimism_balances_from_safe_api."""
 
@@ -997,7 +1014,7 @@ class TestGetOptimismBalances:
 
     def test_with_balances(self) -> None:
         """Test with balances."""
-        b = _make_behaviour()
+        b = _make_optimism_b()
         token_addr = "0x" + "ab" * 20
         b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (
@@ -1012,9 +1029,6 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
         assert result[0]["asset_symbol"] == "ETH"
@@ -1022,7 +1036,7 @@ class TestGetOptimismBalances:
 
     def test_skips_filtered_token(self) -> None:
         """Test skips filtered token."""
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (
                 True,
@@ -1035,15 +1049,12 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
     def test_skips_token_without_info(self) -> None:
         """ERC-20 token with no token info is skipped."""
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (
                 True,
@@ -1056,31 +1067,24 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
     def test_api_success_empty_no_cache_fallback(self) -> None:
         """API succeeds but Safe is empty - must NOT fall back to cache."""
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((True, []))  # type: ignore[assignment,method-assign]
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
     def test_api_success_empty_with_rewards(self) -> None:
         """API succeeds, Safe empty, but reward tokens exist."""
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((True, []))  # type: ignore[assignment,method-assign]
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 100}])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen({"asset_symbol": "oUSDT", "balance": 50})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
-        assert len(result) == 2
+        assert len(result) == 1
+        assert result[0]["asset_symbol"] == "VELO"
 
     def test_api_failure_falls_back_to_cache(self) -> None:
         """API fails - fall back to KV-cached balances."""
@@ -1092,11 +1096,9 @@ class TestGetOptimismBalances:
                 "balance": "5000000",
             },
         ]
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
         b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})  # type: ignore[assignment,method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 2
         assert result[0]["asset_symbol"] == "ETH"
@@ -1104,11 +1106,9 @@ class TestGetOptimismBalances:
 
     def test_api_failure_no_cache(self) -> None:
         """API fails and cache has no data - return empty."""
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
         b._read_kv = _make_gen({"safe_balances_optimism": None})  # type: ignore[assignment,method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
 
@@ -1120,13 +1120,11 @@ class TestGetOptimismBalances:
                 yield  # noqa
             raise ConnectionError("KV write failed")
 
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
             (True, [{"tokenAddress": None, "balance": "1000"}])
         )
         b._write_kv = _failing_write  # type: ignore[method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 1
 
@@ -1138,13 +1136,256 @@ class TestGetOptimismBalances:
                 yield  # noqa
             raise ConnectionError("KV read failed")
 
-        b = _make_behaviour()
+        b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
         b._read_kv = _failing_read  # type: ignore[method-assign]
-        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
-        b._fetch_ousdt_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_optimism_balances_from_safe_api())
         assert len(result) == 0
+
+    def test_backstop_integrates_when_safeapi_partial(self) -> None:
+        """End-to-end backstop integration when SafeApi returns partial data.
+
+        SafeApi returns only ETH; the real backstop adds the whitelisted
+        ERC20s (including oUSDT) on top, without duplicating ETH.
+
+        This guards the ordering and dedup contract between
+        ``_get_optimism_balances_from_safe_api`` and the live
+        ``_supplement_with_onchain_whitelisted_balances``: if the backstop
+        is moved or its dedup loosened, this fails.
+        """
+        b = _make_behaviour()
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+        # SafeApi returns ETH only (partial response).
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (True, [{"tokenAddress": None, "balance": "1000000000000000"}])
+        )
+        # Backstop runs for real. Stub RPC reads so on-chain says:
+        # native ETH 999 (won't be added — ETH already came from SafeApi)
+        # oUSDT 5_000_000 (will be added by backstop)
+        # everything else: 0
+        OUSDT = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+        b._get_native_balance = _make_gen(999)  # type: ignore[assignment,method-assign]
+
+        def fake_token_balance(chain: Any, account: Any, address: Any) -> Any:
+            yield
+            return 5_000_000 if (address or "").lower() == OUSDT else 0
+
+        b._get_token_balance = fake_token_balance  # type: ignore[assignment,method-assign]
+
+        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        symbols = [r["asset_symbol"] for r in result]
+        eth_entries = [r for r in result if r["asset_symbol"] == "ETH"]
+        ousdt_entries = [r for r in result if r["asset_symbol"] == "oUSDT"]
+        # ETH from SafeApi is preserved; backstop did not duplicate it.
+        assert len(eth_entries) == 1
+        assert (
+            eth_entries[0]["balance"] == 1_000_000_000_000_000
+        )  # SafeApi value, not 999
+        # oUSDT picked up by the backstop.
+        assert len(ousdt_entries) == 1
+        assert ousdt_entries[0]["balance"] == 5_000_000
+        # No other whitelisted token was added (all returned 0 on-chain).
+        assert sorted(symbols) == ["ETH", "oUSDT"]
+
+
+class TestSupplementWithOnchainWhitelistedBalances:
+    """Test the on-chain backstop for whitelisted balances."""
+
+    USDC = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+
+    def test_adds_native_eth_when_missing(self) -> None:
+        """If SafeApi did not return ETH, the on-chain native balance is added."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(123456)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        native = [b for b in balances if b["asset_symbol"] == "ETH"]
+        assert len(native) == 1
+        assert native[0]["balance"] == 123456
+        assert native[0]["asset_type"] == "native"
+
+    def test_skips_native_eth_when_already_present(self) -> None:
+        """If SafeApi already returned ETH, the backstop must not duplicate it."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(999)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        balances = [
+            {
+                "asset_symbol": "ETH",
+                "asset_type": "native",
+                "address": ZERO_ADDRESS,
+                "balance": 100,
+            }
+        ]
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        eths = [b for b in balances if b["asset_symbol"] == "ETH"]
+        assert len(eths) == 1
+        assert eths[0]["balance"] == 100  # preserves SafeApi value
+
+    def test_adds_whitelisted_erc20_when_missing(self) -> None:
+        """Every whitelisted ERC20 with a positive on-chain balance is appended."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        # Per-address fake pins the symbol-to-address mapping: a mismatch in the
+        # loop (wrong key, short-circuit, swapped symbol) would surface as a
+        # missing/incorrect balance in the asserted dict.
+        expected = {
+            addr: i + 1 for i, addr in enumerate(WHITELISTED_ASSETS["optimism"])
+        }
+
+        def fake_token_balance(
+            chain: str, account: str, address: str
+        ) -> Generator[Any, Any, Any]:
+            """Per-address balance fake."""
+            yield
+            return expected[address]
+
+        b._get_token_balance = fake_token_balance  # type: ignore[method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        # Pin: every whitelisted entry must be present with the exact balance
+        # produced by the per-address fake (catches loop short-circuit and
+        # symbol/address mapping swaps).
+        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
+        balance_by_address = {entry["address"].lower(): entry for entry in balances}
+        for address, symbol in WHITELISTED_ASSETS["optimism"].items():
+            entry = balance_by_address[address.lower()]
+            assert entry["asset_symbol"] == symbol
+            assert entry["asset_type"] == "erc_20"
+            assert entry["balance"] == expected[address]
+
+    def test_skips_whitelisted_erc20_when_already_present(self) -> None:
+        """Token already in balances (case-insensitive address match) is not re-added."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(9_999_999)  # type: ignore[assignment,method-assign]
+        # SafeApi-reported USDC at value 42, with a mixed-case address.
+        balances = [
+            {
+                "asset_symbol": "USDC",
+                "asset_type": "erc_20",
+                "address": self.USDC.upper().replace("0X", "0x"),
+                "balance": 42,
+            }
+        ]
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        usdc_entries = [b for b in balances if b["asset_symbol"] == "USDC"]
+        assert len(usdc_entries) == 1
+        assert usdc_entries[0]["balance"] == 42
+
+    def test_skips_zero_onchain_balance(self) -> None:
+        """A whitelisted token with zero on-chain balance is not appended."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        assert balances == []
+
+    def test_skips_when_get_token_balance_returns_none(self) -> None:
+        """RPC failure (returns None) does not add a stub entry."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        assert balances == []
+
+    def test_token_rpc_exception_continues_to_next_token(self) -> None:
+        """An RPC raise on one token must not abort the whole helper.
+
+        Guards against regression of the per-iteration try/except: if the
+        guard is removed, a single raise propagates out and kills the whole
+        positions round (the exact failure mode this helper exists to
+        mitigate).
+        """
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        addresses = list(WHITELISTED_ASSETS["optimism"].keys())
+        failing_address = addresses[0]
+
+        def flaky_token_balance(
+            chain: str, account: str, address: str
+        ) -> Generator[Any, Any, Any]:
+            """Raise for the first address; return 7 for the rest."""
+            if address == failing_address:
+                raise Exception("rpc timeout")
+                yield  # pragma: no cover - unreachable
+            yield
+            return 7
+
+        b._get_token_balance = flaky_token_balance  # type: ignore[method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        # Every address except the failing one is appended.
+        result_addresses = {entry["address"].lower() for entry in balances}
+        expected_addresses = {a.lower() for a in addresses if a != failing_address}
+        assert result_addresses == expected_addresses
+
+    def test_native_rpc_exception_does_not_block_erc20s(self) -> None:
+        """An RPC raise on the native fetch is logged and ERC20 reads still run."""
+        b = _make_behaviour()
+
+        def raising_native(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
+            """Raise on native fetch."""
+            raise Exception("native rpc failure")
+            yield  # pragma: no cover - unreachable
+
+        b._get_native_balance = raising_native  # type: ignore[method-assign]
+        b._get_token_balance = _make_gen(3)  # type: ignore[assignment,method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        # No ETH entry, but every whitelisted ERC20 made it.
+        assert not any(entry["asset_symbol"] == "ETH" for entry in balances)
+        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
+
+    def test_native_none_does_not_block_erc20s(self) -> None:
+        """A native None read is logged and skipped; ERC20 backstop still runs."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(11)  # type: ignore[assignment,method-assign]
+        balances: list = []
+        _exhaust(
+            b._supplement_with_onchain_whitelisted_balances(
+                "optimism", "0xsafe", balances
+            )
+        )
+        assert not any(entry["asset_symbol"] == "ETH" for entry in balances)
+        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
 
 
 class TestGetModeBalances:
@@ -1899,46 +2140,6 @@ class TestFetchRewardBalances:
         b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._fetch_reward_balances("optimism"))
         assert result == []
-
-
-class TestFetchOusdtBalance:
-    """Test _fetch_ousdt_balance generator."""
-
-    def test_no_safe_address(self) -> None:
-        """Test no safe address."""
-        b = _make_behaviour()
-        b.params.safe_contract_addresses = {}
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is None
-
-    def test_positive_balance(self) -> None:
-        """Test positive balance."""
-        b = _make_behaviour()
-        b._get_token_balance = _make_gen(5000)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is not None
-        assert result["asset_symbol"] == "oUSDT"
-        assert result["balance"] == 5000
-
-    def test_zero_balance(self) -> None:
-        """Test zero balance."""
-        b = _make_behaviour()
-        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is None
-
-    def test_exception(self) -> None:
-        """Test exception."""
-        b = _make_behaviour()
-
-        def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
-            """Bad gen."""
-            raise Exception("fail")
-            yield  # noqa: unreachable
-
-        b._get_token_balance = bad_gen  # type: ignore[method-assign]
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is None
 
 
 class TestAdjustPositions:
@@ -4134,45 +4335,6 @@ class TestGetLastKnownPrice:
         assert result is None
 
 
-class TestFetchOusdtBalanceNoSafe:
-    """Test _fetch_ousdt_balance."""
-
-    def test_no_safe_address(self) -> None:
-        """Test no safe address."""
-        b = _make_behaviour()
-        b.params.safe_contract_addresses = {}
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is None
-
-    def test_with_balance(self) -> None:
-        """Test with balance."""
-        b = _make_behaviour()
-        b._get_token_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result["asset_symbol"] == "oUSDT"
-        assert result["balance"] == 1000
-
-    def test_zero_balance(self) -> None:
-        """Test zero balance."""
-        b = _make_behaviour()
-        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is None
-
-    def test_exception(self) -> None:
-        """Test exception."""
-        b = _make_behaviour()
-
-        def bad_balance(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
-            """Bad balance."""
-            raise Exception("fail")
-            yield  # noqa: unreachable
-
-        b._get_token_balance = bad_balance  # type: ignore[method-assign]
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is None
-
-
 class TestGetServiceStakingState:
     """Test _get_service_staking_state."""
 
@@ -4796,23 +4958,6 @@ class TestExecuteStrategyIsolatedNamespace:
 
         # Verify the function was NOT injected into module globals
         assert method_name not in base_mod.__dict__
-
-
-class TestFetchOusdtBalanceExceptionInner:
-    """Test _fetch_ousdt_balance with exception during balance fetch."""
-
-    def test_exception_during_get_balance(self) -> None:
-        """Test exception during get balance."""
-        b = _make_behaviour()
-
-        def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
-            """Bad gen."""
-            raise Exception("contract error")
-            yield  # noqa: unreachable
-
-        b._get_token_balance = bad_gen  # type: ignore[method-assign]
-        result = _exhaust(b._fetch_ousdt_balance("optimism"))
-        assert result is None
 
 
 class TestAdjustCurrentPositionsFalseBranches:

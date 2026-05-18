@@ -524,15 +524,20 @@ class LiquidityTraderBaseBehaviour(
                         }
                     )
 
+        # On-chain backstop for whitelisted ERC20s and native ETH. Catches the
+        # case where SafeApi is unavailable (e.g. monthly quota exceeded) or
+        # returns an incomplete trusted-token list. Covers every entry in
+        # WHITELISTED_ASSETS[chain] including oUSDT, which used to be fetched
+        # separately. Reward tokens (OLAS, VELO) are disjoint from the
+        # whitelist and handled by _fetch_reward_balances below.
+        yield from self._supplement_with_onchain_whitelisted_balances(
+            "optimism", safe_address, balances
+        )
+
         # Add separate reward token balance fetch for Optimism
         reward_balances = yield from self._fetch_reward_balances("optimism")
         if reward_balances:
             balances.extend(reward_balances)
-
-        # Add separate OUSDT balance fetch for Optimism (not included in trusted API)
-        ousdt_balance = yield from self._fetch_ousdt_balance("optimism")
-        if ousdt_balance:
-            balances.append(ousdt_balance)
 
         self.context.logger.info(
             f"Retrieved {len(balances)} token balances from SafeApi"
@@ -3477,6 +3482,90 @@ class LiquidityTraderBaseBehaviour(
             )
             return reward_balances
 
+    def _supplement_with_onchain_whitelisted_balances(
+        self,
+        chain: str,
+        safe_address: str,
+        balances: List[Dict[str, Any]],
+    ) -> Generator[None, None, None]:
+        """Add on-chain balances for whitelisted assets not present in ``balances``.
+
+        Mutates ``balances`` in place. For each entry in ``WHITELISTED_ASSETS[chain]``
+        plus native ETH, appends an entry sourced from on-chain reads when:
+        - the address is not already in ``balances`` (case-insensitive match), and
+        - the on-chain balance is strictly positive.
+
+        Zero-balance tokens and tokens whose RPC read returns ``None`` are
+        skipped. The latter is logged as a warning so missing-data incidents
+        remain diagnosable.
+
+        :param chain: the chain to read on-chain balances from.
+        :param safe_address: the Safe contract address to read balances for.
+        :param balances: existing balances list to supplement in place.
+        :yield: None, for async-style generator progression.
+        """
+        already_have = {
+            (b.get("address") or "").lower() for b in balances if b.get("address")
+        }
+
+        zero_addr_lc = ZERO_ADDRESS.lower()
+        if zero_addr_lc not in already_have:
+            try:
+                native_balance = yield from self._get_native_balance(
+                    chain, safe_address
+                )
+                if native_balance is None:
+                    self.context.logger.warning(
+                        f"On-chain native balance read returned None on {chain}; "
+                        f"skipping. Positions data may be incomplete."
+                    )
+                elif native_balance > 0:
+                    balances.append(
+                        {
+                            "asset_symbol": "ETH",
+                            "asset_type": "native",
+                            "address": to_checksum_address(ZERO_ADDRESS),
+                            "balance": int(native_balance),
+                        }
+                    )
+                    already_have.add(zero_addr_lc)
+            except Exception as e:
+                self.context.logger.warning(
+                    f"Error reading native balance on {chain}: {str(e)}"
+                )
+
+        for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+            key = whitelisted_addr.lower()
+            if key in already_have:
+                continue
+            try:
+                token_balance = yield from self._get_token_balance(
+                    chain, safe_address, whitelisted_addr
+                )
+                if token_balance is None:
+                    self.context.logger.warning(
+                        f"On-chain balance read returned None for {symbol or whitelisted_addr} "
+                        f"on {chain}; skipping. Positions data may be incomplete."
+                    )
+                    continue
+                if token_balance <= 0:
+                    continue
+                balances.append(
+                    {
+                        "asset_symbol": symbol or "UNKNOWN",
+                        "asset_type": "erc_20",
+                        "address": to_checksum_address(whitelisted_addr),
+                        "balance": int(token_balance),
+                    }
+                )
+                already_have.add(key)
+            except Exception as e:
+                self.context.logger.warning(
+                    f"Error reading on-chain balance for "
+                    f"{symbol or whitelisted_addr} on {chain}: {str(e)}"
+                )
+                continue
+
     def _get_last_known_price(
         self, token_address: str
     ) -> Generator[None, None, Optional[float]]:
@@ -3533,50 +3622,6 @@ class LiquidityTraderBaseBehaviour(
         except Exception as e:
             self.context.logger.error(
                 f"Error getting last known price for token {token_address}: {str(e)}"
-            )
-            return None
-
-    def _fetch_ousdt_balance(
-        self, chain: str
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Fetch OUSDT token balance separately using direct contract call."""
-        try:
-            safe_address = self.params.safe_contract_addresses.get(chain)
-            if not safe_address:
-                self.context.logger.error(f"No safe address found for chain {chain}")
-                return None
-
-            # OUSDT token address (same on both chains)
-            ousdt_token_address = (
-                "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189"  # nosec B105
-            )
-
-            self.context.logger.info(
-                f"Fetching OUSDT balance separately for {chain} at address {ousdt_token_address}"
-            )
-
-            # Get OUSDT balance using direct contract call
-            ousdt_balance = yield from self._get_token_balance(
-                chain, safe_address, ousdt_token_address
-            )
-
-            if ousdt_balance and ousdt_balance > 0:
-                self.context.logger.info(
-                    f"Found OUSDT balance: {ousdt_balance} for {chain}"
-                )
-                return {
-                    "asset_symbol": "oUSDT",
-                    "asset_type": "erc_20",
-                    "address": to_checksum_address(ousdt_token_address),
-                    "balance": ousdt_balance,
-                }
-            else:
-                self.context.logger.info(f"No OUSDT balance found for {chain}")
-                return None
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error fetching OUSDT balance separately for {chain}: {str(e)}"
             )
             return None
 

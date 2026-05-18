@@ -524,6 +524,14 @@ class LiquidityTraderBaseBehaviour(
                         }
                     )
 
+        # On-chain backstop for whitelisted ERC20s and native ETH. Catches the
+        # case where SafeApi is unavailable (e.g. monthly quota exceeded) or
+        # returns an incomplete trusted-token list. Reward tokens are handled
+        # by _fetch_reward_balances below, so no overlap here.
+        yield from self._supplement_with_onchain_whitelisted_balances(
+            "optimism", safe_address, balances
+        )
+
         # Add separate reward token balance fetch for Optimism
         reward_balances = yield from self._fetch_reward_balances("optimism")
         if reward_balances:
@@ -532,7 +540,9 @@ class LiquidityTraderBaseBehaviour(
         # Add separate OUSDT balance fetch for Optimism (not included in trusted API)
         ousdt_balance = yield from self._fetch_ousdt_balance("optimism")
         if ousdt_balance:
-            balances.append(ousdt_balance)
+            already_have = {b.get("address", "").lower() for b in balances}
+            if ousdt_balance.get("address", "").lower() not in already_have:
+                balances.append(ousdt_balance)
 
         self.context.logger.info(
             f"Retrieved {len(balances)} token balances from SafeApi"
@@ -3476,6 +3486,54 @@ class LiquidityTraderBaseBehaviour(
                 f"Error fetching reward balances for {chain}: {str(e)}"
             )
             return reward_balances
+
+    def _supplement_with_onchain_whitelisted_balances(
+        self,
+        chain: str,
+        safe_address: str,
+        balances: List[Dict[str, Any]],
+    ) -> Generator[None, None, None]:
+        """Add on-chain balances for whitelisted assets not present in ``balances``.
+
+        Mutates ``balances`` in place. Skips any token whose address is already
+        in ``balances`` (case-insensitive). Also adds native ETH if missing.
+        """
+        already_have = {
+            (b.get("address") or "").lower() for b in balances if b.get("address")
+        }
+
+        zero_addr_lc = ZERO_ADDRESS.lower()
+        if zero_addr_lc not in already_have:
+            native_balance = yield from self._get_native_balance(chain, safe_address)
+            if native_balance and native_balance > 0:
+                balances.append(
+                    {
+                        "asset_symbol": "ETH",
+                        "asset_type": "native",
+                        "address": to_checksum_address(ZERO_ADDRESS),
+                        "balance": int(native_balance),
+                    }
+                )
+                already_have.add(zero_addr_lc)
+
+        for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+            key = whitelisted_addr.lower()
+            if key in already_have:
+                continue
+            token_balance = yield from self._get_token_balance(
+                chain, safe_address, whitelisted_addr
+            )
+            if not token_balance or token_balance <= 0:
+                continue
+            balances.append(
+                {
+                    "asset_symbol": symbol or "UNKNOWN",
+                    "asset_type": "erc_20",
+                    "address": to_checksum_address(whitelisted_addr),
+                    "balance": int(token_balance),
+                }
+            )
+            already_have.add(key)
 
     def _get_last_known_price(
         self, token_address: str

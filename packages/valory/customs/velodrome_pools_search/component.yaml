@@ -28,4 +28,4 @@ dependencies:
   web3:
     version: ==6.20.4
   pandas:
-    version: ==2.2.3
+    version: ==2.2.6

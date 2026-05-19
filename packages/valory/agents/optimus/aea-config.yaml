@@ -64,7 +64,7 @@ customs:
 - valory/balancer_pools_search:0.1.0:bafybeiaktss4rvsyiqg43yauc3aj5mq3ztysgqopc2dvxkslswj25kdtcm
 - valory/uniswap_pools_search:0.1.0:bafybeiglbwfrhxbgqyyg6oniwur2x6sswmi5ed55crzvrhr3o7p5x3kmne
 - valory/asset_lending:0.1.0:bafybeifiotxje5ndkdj673oo2uxfpj76fd32qjp7tpxbbdmidbzcqna23a
-- valory/velodrome_pools_search:0.1.0:bafybeidkenb7i4ta4o6u3kygtagvelowmv3oc5eydiissp6flfe3gbg3nu
+- valory/velodrome_pools_search:0.1.0:bafybeiflvtw66daavgwsnagehibax5ddhdb7qkh2f6w2atce6j53wyaroq
 default_ledger: ethereum
 required_ledgers:
 - ethereum

@@ -25,8 +25,8 @@
         "connection/valory/mirror_db/0.1.0": "bafybeiasfxdd447vqut4uercswnn5pagy555oj2ws7deo2p7vnmq3mj64y",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiett4gnks5olb4zzgsyumcd5ytatqfrwec5a76uph7z3zok2ghjr4",
         "skill/valory/optimus_abci/0.1.0": "bafybeibxcsqg5r6bo2v6wmekepmw6gda75cvqohfrdjyyvasjrdx67wqgq",
-        "agent/valory/optimus/0.1.0": "bafybeievffp7fft2upenrkcfjevmwehi3nl4n3vurnwxovnryucvwkerti",
-        "service/valory/optimus/0.1.0": "bafybeidutvl4k3zg2obptloa2lp3d2ro4xh7kun64eai5d2niwib5lmjmu"
+        "agent/valory/optimus/0.1.0": "bafybeiavtoxghlfz5li4hw76wyl57g42bk7pvfjjfk3pbqoeu3qtqvmwae",
+        "service/valory/optimus/0.1.0": "bafybeic4yof22rkygd4qpsbbjsc44ixkrhxo2omefbujvc4ecbmoae5akq"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

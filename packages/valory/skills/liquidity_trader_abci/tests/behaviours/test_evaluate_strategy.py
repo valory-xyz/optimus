@@ -1675,35 +1675,6 @@ class TestHasOpenPositions:
         assert b._has_open_positions() is False
 
 
-class TestFormatOpportunityForTracking:
-    """Tests for _format_opportunity_for_tracking."""
-
-    def test_basic_formatting(self):
-        """Test basic formatting."""
-        b = _mk()
-        b._get_current_timestamp = lambda: 12345
-        opp = {
-            "pool_address": "0xpool",
-            "dex_type": "velodrome",
-            "chain": "optimism",
-            "apr": 20.0,
-            "tvl": 1000,
-            "strategy_source": "test",
-        }
-        result = b._format_opportunity_for_tracking(opp, "raw_with_metrics")
-        assert result["pool_address"] == "0xpool"
-        assert result["stage"] == "raw_with_metrics"
-        assert result["timestamp"] == 12345
-
-    def test_missing_keys_default_to_none(self):
-        """Test missing keys default to none."""
-        b = _mk()
-        b._get_current_timestamp = lambda: 0
-        result = b._format_opportunity_for_tracking({}, "test")
-        assert result["pool_address"] is None
-        assert result["apr"] is None
-
-
 class TestCanClaimRewards:
     """Tests for _can_claim_rewards."""
 
@@ -2426,75 +2397,6 @@ class TestGetReturnsMetricsForOpportunity:
         b.execute_strategy.assert_not_called()
 
 
-class TestTrackOpportunities:
-    """Tests for _track_opportunities."""
-
-    def test_no_existing_data(self):
-        """Test no existing data."""
-        b = _mk()
-        b._get_current_timestamp = lambda: 12345
-        b._read_kv = _gen_return(None)
-        b._write_kv = _gen_none
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        opps = [{"pool_address": "0x1", "strategy_source": "test"}]
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._track_opportunities(opps, "raw_with_metrics"), sends=[None] * 5)
-
-    def test_with_existing_tracking_data(self):
-        """Test with existing tracking data."""
-        b = _mk()
-        b._get_current_timestamp = lambda: 12345
-        existing = {"round_1": {"old_stage": {}}}
-        b._read_kv = _gen_return({"opportunity_tracking": json.dumps(existing)})
-        b._write_kv = _gen_none
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        opps = [{"pool_address": "0x1", "strategy_source": "test"}]
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._track_opportunities(opps, "basic_filtered"), sends=[None] * 5)
-
-    def test_exception_handled(self):
-        """Test exception handled."""
-        b = _mk()
-
-        def _bad(*a, **kw):
-            raise Exception("boom")
-            yield  # noqa: unreachable
-
-        b._read_kv = _bad
-        _drive(b._track_opportunities([], "test"))
-        b.context.logger.error.assert_called()
-
-    def test_invalid_json_in_tracking_data(self):
-        """Test invalid json in tracking data."""
-        b = _mk()
-        b._get_current_timestamp = lambda: 12345
-        b._read_kv = _gen_return({"opportunity_tracking": "not valid json{{{"})
-        b._write_kv = _gen_none
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        opps = [{"pool_address": "0x1", "strategy_source": "test"}]
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._track_opportunities(opps, "test"), sends=[None] * 5)
-        # Should handle JSON error and start with empty dict
-
-
 class TestPrepareStrategyActions:
     """Tests for prepare_strategy_actions."""
 
@@ -2513,46 +2415,6 @@ class TestPrepareStrategyActions:
         b.selected_opportunities = None
         result = _drive(b.prepare_strategy_actions(), sends=[None] * 5)
         # When selected_opportunities is None, yield from [] returns None, so actions=None
-        assert result is None
-
-
-class TestCreateOpportunityAttrDef:
-    """Tests for _create_opportunity_attr_def."""
-
-    def test_empty_agent_type(self):
-        """Test empty agent type."""
-        b = _mk()
-        result = _drive(b._create_opportunity_attr_def("agent_id", {}))
-        assert result is None
-
-    def test_missing_type_id(self):
-        """Test missing type id."""
-        b = _mk()
-        result = _drive(b._create_opportunity_attr_def("agent_id", {"name": "test"}))
-        assert result is None
-
-    def test_valid_creation(self):
-        """Test valid creation."""
-        b = _mk()
-        b.create_attribute_definition = _gen_return({"attr_def_id": "123"})
-        result = _drive(
-            b._create_opportunity_attr_def("agent_id", {"type_id": "type_123"}),
-            sends=[None],
-        )
-        assert result == {"attr_def_id": "123"}
-
-    def test_exception(self):
-        """Test exception."""
-        b = _mk()
-
-        def _bad(*a, **kw):
-            raise Exception("boom")
-            yield  # noqa: unreachable
-
-        b.create_attribute_definition = _bad
-        result = _drive(
-            b._create_opportunity_attr_def("agent_id", {"type_id": "type_123"})
-        )
         assert result is None
 
 
@@ -2761,7 +2623,6 @@ class TestAsyncAct:
         b._check_and_use_cached_cl_opportunity = _gen_return(None)
         b.fetch_all_trading_opportunities = _gen_none
         b.prepare_strategy_actions = _gen_return([{"action": "enter"}])
-        b._push_opportunity_metrics_to_mirrordb = _gen_none
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
         _drive(b.async_act(), sends=[None] * 20)
@@ -3022,7 +2883,6 @@ class TestExecuteHyperStrategy:
                 "reasoning": "test reasoning",
             }
         )
-        b._track_opportunities = _gen_none
         synced_mock = MagicMock()
         synced_mock.trading_type = "default"
         with patch.object(
@@ -4182,240 +4042,6 @@ class TestExecuteStrategyExecPath:
         assert "my_func" not in globals()
 
 
-class TestPushOpportunityMetricsToMirrordb:
-    """Tests for _push_opportunity_metrics_to_mirrordb."""
-
-    def test_no_tracking_data(self):
-        """Test no tracking data."""
-        b = _mk()
-        b._read_kv = _gen_return(None)
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None])
-
-    def test_no_agent_registry(self):
-        """Test no agent registry."""
-        b = _mk()
-        b._read_kv = _gen_return({"opportunity_tracking": json.dumps({"data": "test"})})
-        b._get_or_create_agent_registry = _gen_return(None)
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 5)
-
-    def test_no_agent_type(self):
-        """Test no agent type."""
-        b = _mk()
-        b._read_kv = _gen_return({"opportunity_tracking": json.dumps({"data": "test"})})
-        b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
-        b._get_or_create_agent_type = _gen_return(None)
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 5)
-
-    def test_no_attr_def_creates_new(self):
-        """Test no attr def creates new."""
-        b = _mk()
-        tracking_data = json.dumps({"r1": {"raw": {}}})
-        call_count = [0]
-
-        def _read_kv_mock(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": tracking_data}
-            else:
-                yield
-                return None  # no attr def
-
-        b._read_kv = _read_kv_mock
-        b._get_or_create_agent_registry = _gen_return(
-            {"agent_id": "123", "agent_name": "test", "agent_address": "0x"}
-        )
-        b._get_or_create_agent_type = _gen_return(
-            {"type_id": "t1", "type_name": "test_type"}
-        )
-        b._create_opportunity_attr_def = _gen_return({"attr_def_id": "ad1"})
-        b._write_kv = _gen_none
-        b.create_agent_attribute = _gen_return({"id": "attr1"})
-        b._get_current_timestamp = lambda: 12345
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
-
-    def test_attr_def_exists(self):
-        """Test attr def exists."""
-        b = _mk()
-        tracking_data = json.dumps({"r1": {"raw": {}}})
-        call_count = [0]
-
-        def _read_kv_mock(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": tracking_data}
-            else:
-                yield
-                return {"opportunity_attr_def": json.dumps({"attr_def_id": "ad1"})}
-
-        b._read_kv = _read_kv_mock
-        b._get_or_create_agent_registry = _gen_return(
-            {"agent_id": "123", "agent_name": "test", "agent_address": "0x"}
-        )
-        b._get_or_create_agent_type = _gen_return(
-            {"type_id": "t1", "type_name": "test_type"}
-        )
-        b._write_kv = _gen_none
-        b.create_agent_attribute = _gen_return({"id": "attr1"})
-        b._get_current_timestamp = lambda: 12345
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
-
-    def test_attr_def_value_none_creates_new(self):
-        """Test attr def value none creates new."""
-        b = _mk()
-        tracking_data = json.dumps({"r1": {"raw": {}}})
-        call_count = [0]
-
-        def _read_kv_mock(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": tracking_data}
-            else:
-                yield
-                return {"opportunity_attr_def": None}
-
-        b._read_kv = _read_kv_mock
-        b._get_or_create_agent_registry = _gen_return(
-            {"agent_id": "123", "agent_name": "test", "agent_address": "0x"}
-        )
-        b._get_or_create_agent_type = _gen_return(
-            {"type_id": "t1", "type_name": "test_type"}
-        )
-        b._create_opportunity_attr_def = _gen_return({"attr_def_id": "ad1"})
-        b._write_kv = _gen_none
-        b.create_agent_attribute = _gen_return({"id": "attr1"})
-        b._get_current_timestamp = lambda: 12345
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
-
-    def test_attr_def_bad_json_creates_new(self):
-        """Test attr def bad json creates new."""
-        b = _mk()
-        tracking_data = json.dumps({"r1": {"raw": {}}})
-        call_count = [0]
-
-        def _read_kv_mock(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": tracking_data}
-            else:
-                yield
-                return {"opportunity_attr_def": "bad json{{"}
-
-        b._read_kv = _read_kv_mock
-        b._get_or_create_agent_registry = _gen_return(
-            {"agent_id": "123", "agent_name": "test", "agent_address": "0x"}
-        )
-        b._get_or_create_agent_type = _gen_return(
-            {"type_id": "t1", "type_name": "test_type"}
-        )
-        b._create_opportunity_attr_def = _gen_return({"attr_def_id": "ad1"})
-        b._write_kv = _gen_none
-        b.create_agent_attribute = _gen_return({"id": "attr1"})
-        b._get_current_timestamp = lambda: 12345
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
-
-    def test_create_attr_def_fails(self):
-        """Test create attr def fails."""
-        b = _mk()
-        tracking_data = json.dumps({"r1": {"raw": {}}})
-        call_count = [0]
-
-        def _read_kv_mock(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": tracking_data}
-            else:
-                yield
-                return None
-
-        b._read_kv = _read_kv_mock
-        b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
-        b._get_or_create_agent_type = _gen_return({"type_id": "t1"})
-        b._create_opportunity_attr_def = _gen_return(None)
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 15)
-
-    def test_push_fails(self):
-        """Test push fails."""
-        b = _mk()
-        tracking_data = json.dumps({"r1": {"raw": {}}})
-        call_count = [0]
-
-        def _read_kv_mock(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": tracking_data}
-            else:
-                yield
-                return {"opportunity_attr_def": json.dumps({"attr_def_id": "ad1"})}
-
-        b._read_kv = _read_kv_mock
-        b._get_or_create_agent_registry = _gen_return(
-            {"agent_id": "123", "agent_name": "test", "agent_address": "0x"}
-        )
-        b._get_or_create_agent_type = _gen_return(
-            {"type_id": "t1", "type_name": "test_type"}
-        )
-        b.create_agent_attribute = _gen_return(None)  # push fails
-        b._get_current_timestamp = lambda: 12345
-        synced_mock = MagicMock()
-        synced_mock.period_count = 1
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=synced_mock,
-        ):
-            _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 20)
-
-    def test_exception_handled(self):
-        """Test exception handled."""
-        b = _mk()
-
-        def _bad(*a, **kw):
-            raise Exception("boom")
-            yield  # noqa: unreachable
-
-        b._read_kv = _bad
-        _drive(b._push_opportunity_metrics_to_mirrordb())
-
-
 class TestFetchAllTradingOpportunities:
     """Tests for fetch_all_trading_opportunities."""
 
@@ -4474,7 +4100,6 @@ class TestFetchAllTradingOpportunities:
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
         b.shared_state.strategies_executables = {}
-        b._track_opportunities = _gen_none
         # Return a valid result with opportunities
         f = Future()
         f.set_result(
@@ -4561,7 +4186,6 @@ class TestFetchAllTradingOpportunities:
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
         b.shared_state.strategies_executables = {}
-        b._track_opportunities = _gen_none
         f = Future()
         f.set_result(
             [
@@ -5445,7 +5069,6 @@ class TestFetchAllTradingOpportunitiesInnerBranches:
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
         b.shared_state.strategies_executables = {}
-        b._track_opportunities = _gen_none
         f = ConcFuture()
         f.set_result(results)
         return b, synced_mock, f
@@ -5516,7 +5139,6 @@ class TestFetchAllTradingOpportunitiesInnerBranches:
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
         b.shared_state.strategies_executables = {}
-        b._track_opportunities = _gen_none
 
         call_count = [0]
         f = ConcFuture()
@@ -5563,7 +5185,6 @@ class TestCurrentPositionsWithInvalidAddress:
         b.context.coingecko = MagicMock()
         b.context.coingecko.use_x402 = False
         b.shared_state.strategies_executables = {}
-        b._track_opportunities = _gen_none
         f = ConcFuture()
         f.set_result([{"result": []}])
         with patch.object(
@@ -5574,123 +5195,6 @@ class TestCurrentPositionsWithInvalidAddress:
         ):
             with patch("asyncio.ensure_future", return_value=f):
                 _drive(b.fetch_all_trading_opportunities(), sends=[None] * 10)
-
-
-class TestPushOpportunityMetricsBranches:
-    """Tests for _push_opportunity_metrics_to_mirrordb branches."""
-
-    def test_opportunity_tracking_invalid_json(self):
-        """Cover lines 1854-1855: JSONDecodeError in opportunity_tracking."""
-        b = _mk()
-        # Truthy but invalid JSON - passes line 1844 check, fails json.loads on 1853
-        call_count = [0]
-
-        def _read_kv_side_effect(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": "not valid json{{{"}
-            yield
-            return {}
-
-        b._read_kv = _read_kv_side_effect
-        b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
-        b._get_or_create_agent_type = _gen_return({"type_id": "456"})
-        b._create_opportunity_attr_def = _gen_return({"attr_def": "test"})
-        b._write_kv = _gen_none
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 30)
-
-    def test_json_decode_error_attr_def(self):
-        """Cover lines 1854-1855, 1921-1924: JSONDecodeError in attr_def parsing."""
-        b = _mk()
-        call_count = [0]
-
-        def _read_kv_side_effect(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": '{"round_1": {}}'}
-            elif call_count[0] == 2:
-                yield
-                return {"opportunity_attr_def": "not valid json{{{"}
-            yield
-            return {}
-
-        b._read_kv = _read_kv_side_effect
-        b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
-        b._get_or_create_agent_type = _gen_return({"type_id": "456"})
-        b._create_opportunity_attr_def = _gen_return({"attr_def": "test"})
-        b._write_kv = _gen_none
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 30)
-
-    def test_attr_def_value_none(self):
-        """Cover lines 1902-1905: attr_def value None in KV store."""
-        b = _mk()
-        call_count = [0]
-
-        def _read_kv_side_effect(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": '{"round_1": {}}'}
-            elif call_count[0] == 2:
-                yield
-                return {"opportunity_attr_def": None}
-            yield
-            return {}
-
-        b._read_kv = _read_kv_side_effect
-        b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
-        b._get_or_create_agent_type = _gen_return({"type_id": "456"})
-        b._create_opportunity_attr_def = _gen_return({"attr_def": "test"})
-        b._write_kv = _gen_none
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 30)
-
-    def test_attr_def_creation_fails_on_none_value(self):
-        """Cover lines 1902-1905: create_opportunity_attr_def returns None when attr_def_value is None."""
-        b = _mk()
-        call_count = [0]
-
-        def _read_kv_side_effect(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": '{"round_1": {}}'}
-            elif call_count[0] == 2:
-                yield
-                return {"opportunity_attr_def": None}
-            yield
-            return {}
-
-        b._read_kv = _read_kv_side_effect
-        b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
-        b._get_or_create_agent_type = _gen_return({"type_id": "456"})
-        b._create_opportunity_attr_def = _gen_return(None)
-        b._write_kv = _gen_none
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 30)
-
-    def test_attr_def_creation_fails_on_json_decode(self):
-        """Cover lines 1921-1924: create_opportunity_attr_def returns None after json decode failure."""
-        b = _mk()
-        call_count = [0]
-
-        def _read_kv_side_effect(*a, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                yield
-                return {"opportunity_tracking": '{"round_1": {}}'}
-            elif call_count[0] == 2:
-                yield
-                return {"opportunity_attr_def": "invalid_json"}
-            yield
-            return {}
-
-        b._read_kv = _read_kv_side_effect
-        b._get_or_create_agent_registry = _gen_return({"agent_id": "123"})
-        b._get_or_create_agent_type = _gen_return({"type_id": "456"})
-        b._create_opportunity_attr_def = _gen_return(None)
-        b._write_kv = _gen_none
-        _drive(b._push_opportunity_metrics_to_mirrordb(), sends=[None] * 30)
 
 
 class TestMergeDuplicateBranchesExtra:
@@ -6976,42 +6480,6 @@ class TestHandleAllTokensNeededMultiple:
         )
         assert isinstance(result, list)
         assert b._add_bridge_swap_action.call_count == 0
-
-
-class TestTrackOpportunitiesStages:
-    """Tests for different tracking stages."""
-
-    def test_composite_filtered_stage(self):
-        """Cover line 1786: composite_filtered stage metadata."""
-        b = _mk()
-        b._read_kv = _gen_return({"opportunity_tracking": "{}"})
-        b._write_kv = _gen_none
-        b._get_current_timestamp = MagicMock(return_value=1000)
-        synced = MagicMock()
-        synced.period_count = 1
-        with patch.object(
-            type(b), "synchronized_data", new_callable=PropertyMock, return_value=synced
-        ):
-            _drive(
-                b._track_opportunities([{"pool_address": "0x1"}], "composite_filtered"),
-                sends=[None] * 10,
-            )
-
-    def test_final_selection_stage(self):
-        """Cover line 1790: final_selection stage metadata."""
-        b = _mk()
-        b._read_kv = _gen_return({"opportunity_tracking": "{}"})
-        b._write_kv = _gen_none
-        b._get_current_timestamp = MagicMock(return_value=1000)
-        synced = MagicMock()
-        synced.period_count = 1
-        with patch.object(
-            type(b), "synchronized_data", new_callable=PropertyMock, return_value=synced
-        ):
-            _drive(
-                b._track_opportunities([{"pool_address": "0x1"}], "final_selection"),
-                sends=[None] * 10,
-            )
 
 
 class TestIsInStrategyBackoff:

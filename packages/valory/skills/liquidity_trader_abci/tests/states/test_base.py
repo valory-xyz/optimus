@@ -78,22 +78,6 @@ class TestSynchronizedData:
         data.db._data[0]["positions"] = [None]
         assert data.positions == []
 
-    def test_context_default(self) -> None:
-        """Test context returns empty list by default."""
-        data = _make_synced_data()
-        assert data.context == []
-
-    def test_context_set(self) -> None:
-        """Test context returns parsed JSON."""
-        data = _make_synced_data(context=json.dumps([{"key": "value"}]))
-        assert data.context == [{"key": "value"}]
-
-    def test_context_none_value(self) -> None:
-        """Test context returns empty list when value is None."""
-        data = _make_synced_data()
-        data.db._data[0]["context"] = [None]
-        assert data.context == []
-
     def test_selected_protocols_default(self) -> None:
         """Test selected_protocols returns empty list by default."""
         data = _make_synced_data()
@@ -314,12 +298,6 @@ class TestSynchronizedData:
         """Test participant_to_strategies_round property."""
         data = self._make_collection_data("participant_to_strategies_round")
         result = data.participant_to_strategies_round
-        assert isinstance(result, dict)
-
-    def test_participant_to_context_round(self) -> None:
-        """Test participant_to_context_round property."""
-        data = self._make_collection_data("participant_to_context_round")
-        result = data.participant_to_context_round
         assert isinstance(result, dict)
 
     def test_participant_to_actions_round(self) -> None:

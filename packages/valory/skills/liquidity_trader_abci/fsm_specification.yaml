@@ -37,7 +37,6 @@ start_states:
 - PostTxSettlementRound
 - WithdrawFundsRound
 states:
-- APRPopulationRound
 - CallCheckpointRound
 - CheckStakingKPIMetRound
 - DecisionMakingRound
@@ -53,11 +52,6 @@ states:
 - PostTxSettlementRound
 - WithdrawFundsRound
 transition_func:
-    (APRPopulationRound, DONE): EvaluateStrategyRound
-    (APRPopulationRound, NONE): APRPopulationRound
-    (APRPopulationRound, NO_MAJORITY): APRPopulationRound
-    (APRPopulationRound, ROUND_TIMEOUT): APRPopulationRound
-    (APRPopulationRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NONE): CallCheckpointRound
@@ -95,7 +89,7 @@ transition_func:
     (FetchStrategiesRound, SETTLE): FinishedTxPreparationRound
     (FetchStrategiesRound, WAIT): FetchStrategiesRound
     (FetchStrategiesRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
-    (GetPositionsRound, DONE): APRPopulationRound
+    (GetPositionsRound, DONE): EvaluateStrategyRound
     (GetPositionsRound, NONE): GetPositionsRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound

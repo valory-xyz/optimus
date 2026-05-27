@@ -22,7 +22,6 @@
 # pylint: skip-file
 
 from packages.valory.skills.liquidity_trader_abci.rounds import (
-    APRPopulationRound,
     CallCheckpointRound,
     CheckStakingKPIMetRound,
     DecisionMakingRound,
@@ -44,14 +43,13 @@ def test_import() -> None:
 class TestWithdrawalTransitionMap:
     """Verify which rounds expose a WITHDRAWAL_INITIATED transition."""
 
-    def test_withdrawal_initiated_wired_from_seven_rounds(self) -> None:
+    def test_withdrawal_initiated_wired_from_cycle_rounds(self) -> None:
         """Every cycle round except PostTxSettlement routes WITHDRAWAL_INITIATED to WithdrawFunds."""
         expected = {
             FetchStrategiesRound,
             CallCheckpointRound,
             CheckStakingKPIMetRound,
             GetPositionsRound,
-            APRPopulationRound,
             EvaluateStrategyRound,
             DecisionMakingRound,
         }

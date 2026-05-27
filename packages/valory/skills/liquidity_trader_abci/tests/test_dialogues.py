@@ -26,33 +26,14 @@ from unittest.mock import MagicMock
 from packages.valory.protocols.kv_store.dialogues import (
     KvStoreDialogues as BaseKvStoreDialogues,
 )
-from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
 from packages.valory.skills.liquidity_trader_abci.dialogues import (
     KvStoreDialogues,
-    SrrDialogues,
 )
 
 
 def test_import() -> None:
     """Test that the dialogues module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.dialogues  # noqa
-
-
-class TestSrrDialogues:
-    """Test SrrDialogues class."""
-
-    def test_role_from_first_message(self) -> None:
-        """Test SrrDialogues role_from_first_message returns SKILL."""
-        mock_context = MagicMock()
-        mock_context.skill_id = "test_skill/test:0.1.0"
-        dialogues = SrrDialogues(name="srr_dialogues", skill_context=mock_context)
-        assert isinstance(dialogues, SrrDialogues)
-        assert isinstance(dialogues, BaseSrrDialogues)
-        # Call the role_from_first_message to cover the inner function
-        from packages.valory.protocols.srr.dialogues import SrrDialogue as _SrrDialogue
-
-        role = dialogues._role_from_first_message(MagicMock(), MagicMock())
-        assert role == _SrrDialogue.Role.SKILL
 
 
 class TestKvStoreDialogues:

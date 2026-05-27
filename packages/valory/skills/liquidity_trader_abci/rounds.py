@@ -27,9 +27,6 @@ from packages.valory.skills.abstract_round_abci.base import (
     AppState,
     get_name,
 )
-from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
-    APRPopulationRound,
-)
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
@@ -76,79 +73,73 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     Initial states: {CallCheckpointRound, CheckStakingKPIMetRound, DecisionMakingRound, FetchStrategiesRound, GetPositionsRound, PostTxSettlementRound, WithdrawFundsRound}
 
     Transition states:
-        0. APRPopulationRound
-            - done: 4.
-            - no majority: 0.
+        0. CallCheckpointRound
+            - done: 1.
+            - next checkpoint not reached yet: 1.
+            - settle: 11.
+            - service not staked: 2.
+            - service evicted: 2.
             - round timeout: 0.
+            - no majority: 0.
             - none: 0.
-            - withdrawal initiated: 8.
-        1. CallCheckpointRound
+            - withdrawal initiated: 7.
+        1. CheckStakingKPIMetRound
             - done: 2.
-            - next checkpoint not reached yet: 2.
+            - staking kpi met: 2.
             - settle: 12.
-            - service not staked: 3.
-            - service evicted: 3.
             - round timeout: 1.
             - no majority: 1.
+            - staking kpi not met: 2.
+            - error: 2.
             - none: 1.
-            - withdrawal initiated: 8.
-        2. CheckStakingKPIMetRound
+            - withdrawal initiated: 7.
+        2. GetPositionsRound
             - done: 3.
-            - staking kpi met: 3.
-            - settle: 13.
-            - round timeout: 2.
             - no majority: 2.
-            - staking kpi not met: 3.
-            - error: 3.
+            - round timeout: 2.
             - none: 2.
-            - withdrawal initiated: 8.
-        3. GetPositionsRound
-            - done: 0.
+            - withdrawal initiated: 7.
+        3. EvaluateStrategyRound
+            - done: 4.
             - no majority: 3.
             - round timeout: 3.
+            - wait: 8.
             - none: 3.
-            - withdrawal initiated: 8.
-        4. EvaluateStrategyRound
-            - done: 5.
+            - withdrawal initiated: 7.
+        4. DecisionMakingRound
+            - done: 10.
+            - error: 10.
             - no majority: 4.
             - round timeout: 4.
-            - wait: 9.
-            - none: 4.
-            - withdrawal initiated: 8.
-        5. DecisionMakingRound
-            - done: 11.
-            - error: 11.
-            - no majority: 5.
+            - settle: 9.
+            - update: 4.
+            - withdrawal initiated: 7.
+        5. PostTxSettlementRound
+            - action executed: 4.
+            - checkpoint tx executed: 0.
+            - vanity tx executed: 1.
+            - transfer completed: 6.
+            - withdrawal completed: 6.
             - round timeout: 5.
-            - settle: 10.
-            - update: 5.
-            - withdrawal initiated: 8.
-        6. PostTxSettlementRound
-            - action executed: 5.
-            - checkpoint tx executed: 1.
-            - vanity tx executed: 2.
-            - transfer completed: 7.
-            - withdrawal completed: 7.
-            - round timeout: 6.
-            - unrecognized: 14.
+            - unrecognized: 13.
+            - no majority: 5.
+        6. FetchStrategiesRound
+            - done: 0.
+            - wait: 6.
             - no majority: 6.
-        7. FetchStrategiesRound
-            - done: 1.
-            - wait: 7.
+            - round timeout: 6.
+            - settle: 9.
+            - withdrawal initiated: 7.
+        7. WithdrawFundsRound
+            - done: 4.
             - no majority: 7.
             - round timeout: 7.
-            - settle: 10.
-            - withdrawal initiated: 8.
-        8. WithdrawFundsRound
-            - done: 5.
-            - no majority: 8.
-            - round timeout: 8.
-        9. FinishedEvaluateStrategyRound
-        10. FinishedTxPreparationRound
-        11. FinishedDecisionMakingRound
-        12. FinishedCallCheckpointRound
-        13. FinishedCheckStakingKPIMetRound
-        14. FailedMultiplexerRound
+        8. FinishedEvaluateStrategyRound
+        9. FinishedTxPreparationRound
+        10. FinishedDecisionMakingRound
+        11. FinishedCallCheckpointRound
+        12. FinishedCheckStakingKPIMetRound
+        13. FailedMultiplexerRound
 
     Final states: {FailedMultiplexerRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedTxPreparationRound}
 
@@ -167,13 +158,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         WithdrawFundsRound,
     }
     transition_function: AbciAppTransitionFunction = {
-        APRPopulationRound: {
-            Event.DONE: EvaluateStrategyRound,
-            Event.NO_MAJORITY: APRPopulationRound,
-            Event.ROUND_TIMEOUT: APRPopulationRound,
-            Event.NONE: APRPopulationRound,
-            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
-        },
         CallCheckpointRound: {
             Event.DONE: CheckStakingKPIMetRound,
             Event.NEXT_CHECKPOINT_NOT_REACHED_YET: CheckStakingKPIMetRound,
@@ -197,7 +181,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         GetPositionsRound: {
-            Event.DONE: APRPopulationRound,
+            Event.DONE: EvaluateStrategyRound,
             Event.NO_MAJORITY: GetPositionsRound,
             Event.ROUND_TIMEOUT: GetPositionsRound,
             Event.NONE: GetPositionsRound,

@@ -21,9 +21,6 @@
 
 # pylint: skip-file
 
-from packages.valory.skills.liquidity_trader_abci.behaviours.apr_population import (
-    APRPopulationBehaviour,
-)
 from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import (
     CallCheckpointBehaviour,
 )
@@ -67,7 +64,6 @@ class TestLiquidityTraderRoundBehaviour:
             CallCheckpointBehaviour,
             CheckStakingKPIMetBehaviour,
             GetPositionsBehaviour,
-            APRPopulationBehaviour,
             EvaluateStrategyBehaviour,
             DecisionMakingBehaviour,
             PostTxSettlementBehaviour,

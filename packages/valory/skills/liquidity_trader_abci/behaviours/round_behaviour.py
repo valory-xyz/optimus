@@ -25,9 +25,6 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.behaviours.apr_population import (
-    APRPopulationBehaviour,
-)
 from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import (
     CallCheckpointBehaviour,
 )
@@ -64,7 +61,6 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         CallCheckpointBehaviour,
         CheckStakingKPIMetBehaviour,
         GetPositionsBehaviour,
-        APRPopulationBehaviour,
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,

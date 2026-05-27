@@ -37,9 +37,6 @@ from eth_utils import to_checksum_address
 from packages.valory.connections.kv_store.connection import (
     PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
 )
-from packages.valory.connections.mirror_db.connection import (
-    PUBLIC_ID as MIRRORDB_CONNECTION_PUBLIC_ID,
-)
 from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
 from packages.valory.contracts.staking_activity_checker.contract import (
     StakingActivityCheckerContract,
@@ -55,8 +52,6 @@ from packages.valory.protocols.kv_store.dialogues import (
 )
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
-from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
-from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.liquidity_trader_abci.models import Params, SharedState
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
@@ -96,11 +91,7 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
-AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
-METRICS_NAME = "APR"
-METRICS_TYPE = "json"
 PORTFOLIO_UPDATE_INTERVAL = 3600 * 1  # 2hr
-APR_UPDATE_INTERVAL = 3600 * 24  # 24hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
 # Initial available amount for ETH (0.005 ETH)
 ETH_INITIAL_AMOUNT = int(0.005 * 10**18)
@@ -1568,32 +1559,6 @@ class LiquidityTraderBaseBehaviour(
         response = yield from self.wait_for_message(timeout=timeout)
         return response
 
-    def _call_mirrordb(self, method: str, **kwargs: Any) -> Generator[None, None, Any]:
-        """Send a request message to the MirrorDB connection."""
-        try:
-            srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
-            srr_message, srr_dialogue = srr_dialogues.create(
-                counterparty=str(MIRRORDB_CONNECTION_PUBLIC_ID),
-                performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps(
-                    {"method": method, "kwargs": kwargs}, ensure_ascii=True
-                ),
-            )
-            srr_message = cast(SrrMessage, srr_message)
-            srr_dialogue = cast(SrrDialogue, srr_dialogue)
-            response = yield from self._do_connection_request(srr_message, srr_dialogue)  # type: ignore
-
-            response_json = json.loads(response.payload)  # type: ignore
-
-            if "error" in response_json:
-                self.context.logger.error(response_json["error"])
-                return None
-
-            return response_json.get("response")  # type: ignore
-        except Exception as e:  # pylint: disable=broad-except
-            self.context.logger.error(f"Exception while calling MirrorDB: {e}")
-            return None
-
     def _read_kv(
         self,
         keys: Tuple[str, ...],
@@ -2873,244 +2838,6 @@ class LiquidityTraderBaseBehaviour(
             filtered_position.pop("token_id", None)
         filtered_position["gauge_address"] = gauge_address
         return self._build_unstake_lp_tokens_action(filtered_position)
-
-    def get_agent_type_by_name(
-        self, type_name: Any
-    ) -> Generator[None, None, Optional[Dict]]:
-        """Get agent type by name."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_type_by_name",
-            endpoint=f"api/agent-types/name/{type_name}",
-        )
-        return response
-
-    def create_agent_type(
-        self, type_name: Any, description: Any
-    ) -> Generator[None, None, Dict]:
-        """Create a new agent type."""
-        # Prepare agent type data
-        agent_type_data = {"type_name": type_name, "description": description}
-
-        endpoint = "api/agent-types/"
-
-        # Call API
-        response = yield from self._call_mirrordb(
-            method="create_",
-            method_name="create_agent_type",
-            endpoint=endpoint,
-            data=agent_type_data,
-        )
-
-        return response
-
-    def get_attr_def_by_name(
-        self, attr_name: Any
-    ) -> Generator[None, None, Optional[Dict]]:
-        """Get agent type by name."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_attr_def_by_name",
-            endpoint=f"api/attributes/name/{attr_name}",
-        )
-        return response
-
-    def create_attribute_definition(
-        self,
-        type_id: Any,
-        attr_name: Any,
-        data_type: Any,
-        is_required: Any,
-        default_value: Any,
-        agent_id: Any,
-    ) -> Generator[None, None, Dict]:
-        """Create a new attribute definition for a specific agent type."""
-        # Prepare attribute definition data
-        attr_def_data = {
-            "type_id": type_id,
-            "attr_name": attr_name,
-            "data_type": data_type,
-            "is_required": is_required,
-            "default_value": default_value,
-        }
-
-        # Generate timestamp and prepare signature
-        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
-        endpoint = f"api/agent-types/{type_id}/attributes/"
-        message = f"timestamp:{timestamp},endpoint:{endpoint}"
-        signature = yield from self.sign_message(message)
-        if not signature:
-            return None  # type: ignore[return-value]
-
-        # Prepare authentication data
-        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
-
-        # Call API
-        response = yield from self._call_mirrordb(
-            method="create_",
-            method_name="create_attribute_definition",
-            endpoint=endpoint,
-            data={"attr_def": attr_def_data, "auth": auth_data},
-        )
-
-        return response
-
-    def get_agent_registry_by_address(
-        self, eth_address: Any
-    ) -> Generator[None, None, Optional[Dict]]:
-        """Get agent registry by Ethereum address."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_registry_by_address",
-            endpoint=f"api/agent-registry/address/{eth_address}",
-        )
-        return response
-
-    def create_agent_registry(
-        self, agent_name: Any, type_id: Any, eth_address: Any
-    ) -> Generator[None, None, Dict]:
-        """Create a new agent registry."""
-        # Prepare agent registry data
-        agent_registry_data = {
-            "agent_name": agent_name,
-            "type_id": type_id,
-            "eth_address": eth_address,
-        }
-
-        # Call API
-        response = yield from self._call_mirrordb(
-            method="create_",
-            method_name="create_agent_registry",
-            endpoint="api/agent-registry/",
-            data=agent_registry_data,
-        )
-
-        return response
-
-    def create_agent_attribute(
-        self,
-        agent_id: Any,
-        attr_def_id: Any,
-        json_value: Any = None,
-    ) -> Generator[None, None, Dict]:
-        """Create a new attribute value for a specific agent."""
-        # Prepare the agent attribute data with all values set to None initially
-        agent_attr_data = {
-            "agent_id": agent_id,
-            "attr_def_id": attr_def_id,
-            "string_value": None,
-            "integer_value": None,
-            "float_value": None,
-            "boolean_value": None,
-            "date_value": None,
-            "json_value": json_value,
-        }
-
-        # Generate timestamp and prepare signature
-        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
-        endpoint = f"api/agents/{agent_id}/attributes/"
-        message = f"timestamp:{timestamp},endpoint:{endpoint}"
-        signature = yield from self.sign_message(message)
-        if not signature:
-            return None  # type: ignore[return-value]
-
-        # Prepare authentication data
-        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
-
-        # Call API
-        response = yield from self._call_mirrordb(
-            method="create_",
-            method_name="create_agent_attribute",
-            endpoint=endpoint,
-            data={"agent_attr": agent_attr_data, "auth": auth_data},
-        )
-
-        return response
-
-    def _get_or_create_agent_type(
-        self, eth_address: str
-    ) -> Generator[Dict[str, Any], None, None]:
-        """Get or create agent type."""
-        data = yield from self._read_kv(keys=("agent_type",))  # type: ignore[misc]
-        if not data or not data.get("agent_type"):
-            type_name = AGENT_TYPE.get(self.params.target_investment_chains[0])
-            agent_type = yield from self.get_agent_type_by_name(type_name)  # type: ignore[misc]
-            if not agent_type:
-                agent_type = yield from self.create_agent_type(  # type: ignore[misc]
-                    type_name,
-                    "An agent for DeFi liquidity management and APR tracking",
-                )
-                if not agent_type:
-                    raise Exception("Failed to create agent type.")
-                yield from self._write_kv({"agent_type": json.dumps(agent_type)})  # type: ignore[misc]
-            return agent_type  # type: ignore[return-value]
-
-        return json.loads(data["agent_type"])
-
-    def _get_or_create_attr_def(
-        self, type_id: str, agent_id: str
-    ) -> Generator[Dict[str, Any], None, None]:
-        """Get or create APR attribute definition."""
-        data = yield from self._read_kv(keys=("attr_def",))  # type: ignore[misc]
-        if not data or not data.get("attr_def"):
-            attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)  # type: ignore[misc]
-            if not attr_def:
-                attr_def = yield from self.create_attribute_definition(  # type: ignore[misc]
-                    type_id,
-                    METRICS_NAME,
-                    METRICS_TYPE,
-                    True,
-                    "{}",
-                    agent_id,
-                )
-                if not attr_def:
-                    raise Exception("Failed to create attribute definition.")
-                yield from self._write_kv({"attr_def": json.dumps(attr_def)})  # type: ignore[misc]
-            return attr_def  # type: ignore[return-value]
-
-        return json.loads(data["attr_def"])
-
-    def _get_or_create_agent_registry(
-        self,
-    ) -> Generator[Optional[Dict[str, Any]], None, None]:
-        """Get or create agent registry entry (copied from APRPopulationBehaviour)."""
-        try:
-            data = yield from self._read_kv(keys=("agent_registry",))
-            if not data or not data.get("agent_registry"):
-                # Get or create agent type first
-                eth_address = self.context.agent_address
-                agent_type = yield from self._get_or_create_agent_type(eth_address)  # type: ignore[func-returns-value]
-                if not agent_type:
-                    self.context.logger.error("Failed to get or create agent type")
-                    return None
-
-                type_id = agent_type["type_id"]
-
-                agent_registry = yield from self.get_agent_registry_by_address(
-                    eth_address
-                )
-                if not agent_registry:
-                    agent_name = self.generate_name(eth_address)
-                    self.context.logger.info(
-                        f"Creating agent registry with name: {agent_name}"
-                    )
-                    agent_registry = yield from self.create_agent_registry(
-                        agent_name, type_id, eth_address
-                    )
-                    if not agent_registry:
-                        self.context.logger.error("Failed to create agent registry")
-                        return None
-                    yield from self._write_kv(
-                        {"agent_registry": json.dumps(agent_registry)}
-                    )
-                return agent_registry
-
-            return json.loads(data["agent_registry"])
-        except Exception as e:
-            self.context.logger.error(
-                f"Error in _get_or_create_agent_registry: {str(e)}"
-            )
-            return None
 
     def generate_phonetic_syllable(self, seed: Any) -> Any:
         """Generates phonetic syllable"""

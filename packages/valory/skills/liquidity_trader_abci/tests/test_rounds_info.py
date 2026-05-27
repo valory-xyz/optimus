@@ -50,7 +50,6 @@ def test_rounds_info_entries_have_required_keys() -> None:
 def test_rounds_info_contains_key_rounds() -> None:
     """Test ROUNDS_INFO contains important round names."""
     expected_rounds = [
-        "APRPopulationRound",
         "CallCheckpointRound",
         "CheckStakingKPIMetRound",
         "DecisionMakingRound",

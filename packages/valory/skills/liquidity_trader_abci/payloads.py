@@ -61,15 +61,6 @@ class GetPositionsPayload(BaseTxPayload):
 
 
 @dataclass(frozen=True)
-class APRPopulationPayload(BaseTxPayload):
-    """Represent a transaction payload for the APRPopulationPayload."""
-
-    context: str
-    content: Optional[str] = None
-    event: Optional[str] = None
-
-
-@dataclass(frozen=True)
 class EvaluateStrategyPayload(BaseTxPayload):
     """Represent a transaction payload for the EvaluateStrategyRound."""
 

@@ -198,8 +198,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Convert current price to tick
         try:
-            import math
-
             current_tick = int(math.log(current_price) / math.log(1.0001))
         except (ValueError, TypeError) as e:
             self.context.logger.error(
@@ -1680,7 +1678,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"
                     )
-                    valid_opportunities = []
                     for opportunity in opportunities:
                         try:
                             if isinstance(opportunity, dict):
@@ -1692,7 +1689,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                     f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
                                     f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
                                 )
-                                valid_opportunities.append(opportunity)
+                                self.trading_opportunities.append(opportunity)
                             else:
                                 self.context.logger.error(
                                     f"Invalid opportunity format from {next_strategy} strategy. "
@@ -1702,9 +1699,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             self.context.logger.error(
                                 f"Error processing opportunity from {next_strategy}: {str(e)}"
                             )
-
-                    if valid_opportunities:  # pragma: no branch
-                        self.trading_opportunities.extend(valid_opportunities)
                 else:
                     self.context.logger.warning(
                         f"No opportunity found using {next_strategy} strategy"

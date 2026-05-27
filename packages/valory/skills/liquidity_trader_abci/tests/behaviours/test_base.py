@@ -617,50 +617,6 @@ class TestGetCurrentTimestamp:
         assert ts > 0
 
 
-class TestNameGeneration:
-    """Test name generation methods."""
-
-    def test_generate_phonetic_syllable(self) -> None:
-        """Test generate phonetic syllable."""
-        b = _make_behaviour()
-        result = b.generate_phonetic_syllable(0)
-        assert isinstance(result, str)
-        assert len(result) >= 2
-
-    def test_generate_phonetic_syllable_wraps(self) -> None:
-        """Test generate phonetic syllable wraps."""
-        b = _make_behaviour()
-        b.generate_phonetic_syllable(0)
-        r2 = b.generate_phonetic_syllable(1000)
-        # Wrapping via modulo
-        assert isinstance(r2, str)
-
-    def test_generate_phonetic_name(self) -> None:
-        """Test generate phonetic name."""
-        b = _make_behaviour()
-        # Needs hex address string of sufficient length
-        address = "0x" + "a1b2c3d4" * 10
-        result = b.generate_phonetic_name(address, 2, 2)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_generate_name(self) -> None:
-        """Test generate name."""
-        b = _make_behaviour()
-        address = "0x" + "a1b2c3d4" * 10
-        result = b.generate_name(address)
-        assert isinstance(result, str)
-        assert "-" in result  # first_name-last_name_prefixNN format
-
-    def test_generate_name_deterministic(self) -> None:
-        """Test generate name deterministic."""
-        b = _make_behaviour()
-        address = "0x1234567890abcdef1234567890abcdef12345678"
-        r1 = b.generate_name(address)
-        r2 = b.generate_name(address)
-        assert r1 == r2
-
-
 class TestStoreReadData:
     """Test _store_data and _read_data."""
 
@@ -2020,24 +1976,6 @@ class TestAirdropRewards:
         b._read_kv = _make_gen({processed_key: "true"})  # type: ignore[assignment,method-assign]
         _exhaust(b._update_airdrop_rewards(100, "mode", tx_hash="0xabc"))
         # Should return early without updating
-
-
-class TestSignMessage:
-    """Test sign_message generator."""
-
-    def test_success(self) -> None:
-        """Test success."""
-        b = _make_behaviour()
-        b.get_signature = _make_gen("0xdeadbeef")  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.sign_message("hello"))
-        assert result == "deadbeef"
-
-    def test_no_signature(self) -> None:
-        """Test no signature."""
-        b = _make_behaviour()
-        b.get_signature = _make_gen(None)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.sign_message("hello"))
-        assert result is None
 
 
 class TestCalculateInitialInvestment:

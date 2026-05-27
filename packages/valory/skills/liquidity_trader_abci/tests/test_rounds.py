@@ -75,3 +75,23 @@ class TestWithdrawalTransitionMap:
             if Event.WITHDRAWAL_INITIATED in transitions
         }
         assert targets == {WithdrawFundsRound}
+
+
+class TestCoreCycleTransitions:
+    """Pin the load-bearing transitions in the GetPositions -> EvaluateStrategy -> DecisionMaking cycle."""
+
+    def test_get_positions_done_targets_evaluate_strategy(self) -> None:
+        """Test that GetPositionsRound DONE goes directly to EvaluateStrategyRound."""
+        assert (
+            LiquidityTraderAbciApp.transition_function[GetPositionsRound][Event.DONE]
+            is EvaluateStrategyRound
+        )
+
+    def test_evaluate_strategy_done_targets_decision_making(self) -> None:
+        """Test that EvaluateStrategyRound DONE continues into DecisionMakingRound."""
+        assert (
+            LiquidityTraderAbciApp.transition_function[EvaluateStrategyRound][
+                Event.DONE
+            ]
+            is DecisionMakingRound
+        )

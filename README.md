@@ -96,11 +96,6 @@ Retrieves and updates comprehensive information about the system's current portf
 - Calculates current token balances and USD values for all holdings
 - Queries token contracts for precise balance information and applies current market prices
 
-#### APRPopulationRound
-Calculates accurate APRs for the agent's performance. This round:
-- Calculates the APR and ETH-adjusted APR of the agent
-- Creates a portfolio snapshot stored in the centralized database
-
 #### EvaluateStrategyRound
 Performs comprehensive analysis of all available strategies to determine which opportunities merit execution. This round:
 - Fetches trading opportunities from multiple DEXs/protocols (Balancer, Uniswap, Velodrome)

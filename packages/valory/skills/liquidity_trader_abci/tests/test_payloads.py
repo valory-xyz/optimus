@@ -22,7 +22,6 @@
 # pylint: skip-file
 
 from packages.valory.skills.liquidity_trader_abci.payloads import (
-    APRPopulationPayload,
     CallCheckpointPayload,
     CheckStakingKPIMetPayload,
     DecisionMakingPayload,
@@ -147,28 +146,6 @@ class TestGetPositionsPayload:
         """Test GetPositionsPayload with None."""
         payload = GetPositionsPayload(sender=SENDER, positions=None)
         assert payload.positions is None
-
-
-class TestAPRPopulationPayload:
-    """Test APRPopulationPayload."""
-
-    def test_creation(self) -> None:
-        """Test APRPopulationPayload creation."""
-        payload = APRPopulationPayload(
-            sender=SENDER,
-            context="context_data",
-            content="content_data",
-        )
-        assert payload.context == "context_data"
-        assert payload.content == "content_data"
-
-    def test_creation_default_content(self) -> None:
-        """Test APRPopulationPayload with default content."""
-        payload = APRPopulationPayload(
-            sender=SENDER,
-            context="context_data",
-        )
-        assert payload.content is None
 
 
 class TestEvaluateStrategyPayload:

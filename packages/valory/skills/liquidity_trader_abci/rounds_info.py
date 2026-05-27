@@ -20,11 +20,6 @@
 """This module contains the information about the rounds that is used by the Http handler."""
 
 ROUNDS_INFO = {
-    "APRPopulationRound": {
-        "name": "Updating performance",
-        "description": "Calculates the agent’s APR and overall trading performance, then saves it to your dashboard.",
-        "transitions": {},
-    },
     "CallCheckpointRound": {
         "name": "Checking staking reward status",
         "description": "Determines whether the staking contract needs to update the agent’s reward status.",

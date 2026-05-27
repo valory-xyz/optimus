@@ -22,7 +22,6 @@
 # pylint: skip-file
 
 from packages.valory.skills.liquidity_trader_abci.rounds import (
-    APRPopulationRound,
     CallCheckpointRound,
     CheckStakingKPIMetRound,
     DecisionMakingRound,
@@ -44,14 +43,13 @@ def test_import() -> None:
 class TestWithdrawalTransitionMap:
     """Verify which rounds expose a WITHDRAWAL_INITIATED transition."""
 
-    def test_withdrawal_initiated_wired_from_seven_rounds(self) -> None:
+    def test_withdrawal_initiated_wired_from_cycle_rounds(self) -> None:
         """Every cycle round except PostTxSettlement routes WITHDRAWAL_INITIATED to WithdrawFunds."""
         expected = {
             FetchStrategiesRound,
             CallCheckpointRound,
             CheckStakingKPIMetRound,
             GetPositionsRound,
-            APRPopulationRound,
             EvaluateStrategyRound,
             DecisionMakingRound,
         }
@@ -77,3 +75,23 @@ class TestWithdrawalTransitionMap:
             if Event.WITHDRAWAL_INITIATED in transitions
         }
         assert targets == {WithdrawFundsRound}
+
+
+class TestCoreCycleTransitions:
+    """Pin the load-bearing transitions in the GetPositions -> EvaluateStrategy -> DecisionMaking cycle."""
+
+    def test_get_positions_done_targets_evaluate_strategy(self) -> None:
+        """Test that GetPositionsRound DONE goes directly to EvaluateStrategyRound."""
+        assert (
+            LiquidityTraderAbciApp.transition_function[GetPositionsRound][Event.DONE]
+            is EvaluateStrategyRound
+        )
+
+    def test_evaluate_strategy_done_targets_decision_making(self) -> None:
+        """Test that EvaluateStrategyRound DONE continues into DecisionMakingRound."""
+        assert (
+            LiquidityTraderAbciApp.transition_function[EvaluateStrategyRound][
+                Event.DONE
+            ]
+            is DecisionMakingRound
+        )

@@ -141,20 +141,6 @@ class SynchronizedData(BaseSynchronizedData):
         return positions
 
     @property
-    def participant_to_context_round(self) -> DeserializedCollection:
-        """Get the participants to actions rounds"""
-        return self._get_deserialized("participant_to_context_round")
-
-    @property
-    def context(self) -> Optional[List[Dict[str, Any]]]:
-        """Get the actions"""
-        serialized = self.db.get("context", "[]")
-        if serialized is None:
-            serialized = "[]"
-        context = json.loads(serialized)
-        return context
-
-    @property
     def selected_protocols(self) -> List[Dict[str, Any]]:
         """Get the selected protocols."""
         serialized = self.db.get("selected_protocols", "[]")

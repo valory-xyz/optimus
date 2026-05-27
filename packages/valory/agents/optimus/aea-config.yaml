@@ -16,7 +16,6 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 - valory/genai:0.1.0:bafybeighrq424xlroekehgk2oaqxkvziq22gffqzodm4ynhjgzhch4pcq4
 - valory/kv_store:0.1.0:bafybeiallj66uerng45tk3y75qdkfakzmudmzl7y737ekwzsehisvuinaq
-- valory/mirror_db:0.1.0:bafybeiasfxdd447vqut4uercswnn5pagy555oj2ws7deo2p7vnmq3mj64y
 - valory/x402:0.1.0:bafybeicqjg3d6pnlcsu4442qt5tmsjqkqdtc3ulvbjgoh53jyr7z3lbqqi
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeieaxcd3wrjxgw7yzmlbxr6tcwj3u7kiixb6fzu2shwy5hthzzyxuq
@@ -52,8 +51,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeib5qjkpfsxjcur4asube6kctmy2xsrg2hzcele2tmvsstula4lt54
 - valory/abstract_round_abci:0.1.0:bafybeibvbfkmkqjidukhkzzz7nd33gna64hjhcn3blon5xcleilbt63zn4
 - valory/funds_manager:0.1.0:bafybeibazva7pwzra4joxeburpvw6snk2dsjakyfhefe4jwuvs6f7juxaq
-- valory/liquidity_trader_abci:0.1.0:bafybeiett4gnks5olb4zzgsyumcd5ytatqfrwec5a76uph7z3zok2ghjr4
-- valory/optimus_abci:0.1.0:bafybeibxcsqg5r6bo2v6wmekepmw6gda75cvqohfrdjyyvasjrdx67wqgq
+- valory/liquidity_trader_abci:0.1.0:bafybeieaekapulmj2h6prbhgrxatzfks7qncx4otsebmexo5enuvbpvnva
+- valory/optimus_abci:0.1.0:bafybeiclsqphvr7v4j7x7bohnkg6nqx5t5fgs4fqwb2rvunadgqzgjfaoi
 - valory/registration_abci:0.1.0:bafybeihkfla7hppssqk2dojuxjuy233jrilablud4avtazagt2javcihya
 - valory/reset_pause_abci:0.1.0:bafybeiakhczviqep47o5txatkdbzui6bk5o554cnspdkauapvmdykk2tkm
 - valory/termination_abci:0.1.0:bafybeibduc7hdi3xu7ahpumgew6es33jcadbrbipboyc7sbuyzds45fmve
@@ -105,11 +104,6 @@ public_id: valory/kv_store:0.1.0
 type: connection
 config:
   store_path: ${STORE_PATH:str:/data}
----
-public_id: valory/mirror_db:0.1.0
-type: connection
-config:
-  mirror_db_base_url: ${str:https://afmdb.autonolas.tech}
 ---
 public_id: valory/abci:0.1.0
 type: connection

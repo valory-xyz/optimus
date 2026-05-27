@@ -28,8 +28,6 @@ import time
 from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
 
-import pytest
-
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     AIRDROP_TOTAL_KEY,
     Action,
@@ -617,50 +615,6 @@ class TestGetCurrentTimestamp:
         ts = b._get_current_timestamp()
         assert isinstance(ts, int)
         assert ts > 0
-
-
-class TestNameGeneration:
-    """Test name generation methods."""
-
-    def test_generate_phonetic_syllable(self) -> None:
-        """Test generate phonetic syllable."""
-        b = _make_behaviour()
-        result = b.generate_phonetic_syllable(0)
-        assert isinstance(result, str)
-        assert len(result) >= 2
-
-    def test_generate_phonetic_syllable_wraps(self) -> None:
-        """Test generate phonetic syllable wraps."""
-        b = _make_behaviour()
-        b.generate_phonetic_syllable(0)
-        r2 = b.generate_phonetic_syllable(1000)
-        # Wrapping via modulo
-        assert isinstance(r2, str)
-
-    def test_generate_phonetic_name(self) -> None:
-        """Test generate phonetic name."""
-        b = _make_behaviour()
-        # Needs hex address string of sufficient length
-        address = "0x" + "a1b2c3d4" * 10
-        result = b.generate_phonetic_name(address, 2, 2)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_generate_name(self) -> None:
-        """Test generate name."""
-        b = _make_behaviour()
-        address = "0x" + "a1b2c3d4" * 10
-        result = b.generate_name(address)
-        assert isinstance(result, str)
-        assert "-" in result  # first_name-last_name_prefixNN format
-
-    def test_generate_name_deterministic(self) -> None:
-        """Test generate name deterministic."""
-        b = _make_behaviour()
-        address = "0x1234567890abcdef1234567890abcdef12345678"
-        r1 = b.generate_name(address)
-        r2 = b.generate_name(address)
-        assert r1 == r2
 
 
 class TestStoreReadData:
@@ -2024,24 +1978,6 @@ class TestAirdropRewards:
         # Should return early without updating
 
 
-class TestSignMessage:
-    """Test sign_message generator."""
-
-    def test_success(self) -> None:
-        """Test success."""
-        b = _make_behaviour()
-        b.get_signature = _make_gen("0xdeadbeef")  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.sign_message("hello"))
-        assert result == "deadbeef"
-
-    def test_no_signature(self) -> None:
-        """Test no signature."""
-        b = _make_behaviour()
-        b.get_signature = _make_gen(None)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.sign_message("hello"))
-        assert result is None
-
-
 class TestCalculateInitialInvestment:
     """Test calculate_initial_investment generator."""
 
@@ -2835,43 +2771,6 @@ class TestDoConnectionRequest:
         b.wait_for_message = _make_gen(expected)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._do_connection_request(MagicMock(), MagicMock()))
         assert result == expected
-
-
-class TestCallMirrordb:
-    """Test _call_mirrordb."""
-
-    def test_success(self) -> None:
-        """Test success."""
-        b = _make_behaviour()
-        response_mock = MagicMock()
-        response_mock.payload = json.dumps({"response": {"id": 1}})
-        b._do_connection_request = _make_gen(response_mock)  # type: ignore[assignment,method-assign]
-        srr_dialogues = MagicMock()
-        srr_dialogues.create.return_value = (MagicMock(), MagicMock())
-        b.context.srr_dialogues = srr_dialogues
-        result = _exhaust(b._call_mirrordb("read_", endpoint="test"))
-        assert result == {"id": 1}
-
-    def test_error_response(self) -> None:
-        """Test error response."""
-        b = _make_behaviour()
-        response_mock = MagicMock()
-        response_mock.payload = json.dumps({"error": "not found"})
-        b._do_connection_request = _make_gen(response_mock)  # type: ignore[assignment,method-assign]
-        srr_dialogues = MagicMock()
-        srr_dialogues.create.return_value = (MagicMock(), MagicMock())
-        b.context.srr_dialogues = srr_dialogues
-        result = _exhaust(b._call_mirrordb("read_", endpoint="test"))
-        assert result is None
-
-    def test_exception(self) -> None:
-        """Test exception."""
-        b = _make_behaviour()
-        srr_dialogues = MagicMock()
-        srr_dialogues.create.side_effect = Exception("connection error")
-        b.context.srr_dialogues = srr_dialogues
-        result = _exhaust(b._call_mirrordb("read_", endpoint="test"))
-        assert result is None
 
 
 class TestReadWriteKV:
@@ -4003,191 +3902,6 @@ class TestBuildUnstakeActionVerified:
         assert "gauge_address" not in result
 
 
-class TestAgentRegistryMethods:
-    """Test MirrorDB agent registry generator methods."""
-
-    def test_get_agent_type_by_name(self) -> None:
-        """Test get agent type by name."""
-        b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"type_id": "t1", "type_name": "optimus"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.get_agent_type_by_name("optimus"))
-        assert result["type_id"] == "t1"
-
-    def test_create_agent_type(self) -> None:
-        """Test create agent type."""
-        b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"type_id": "t2"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.create_agent_type("optimus", "desc"))
-        assert result["type_id"] == "t2"
-
-    def test_get_attr_def_by_name(self) -> None:
-        """Test get attr def by name."""
-        b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"attr_id": "a1"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.get_attr_def_by_name("metrics"))
-        assert result["attr_id"] == "a1"
-
-    def test_create_attribute_definition(self) -> None:
-        """Test create attribute definition."""
-        b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"attr_id": "a2"})  # type: ignore[assignment,method-assign]
-        b.sign_message = _make_gen("sig_hex")  # type: ignore[assignment,method-assign]
-        result = _exhaust(
-            b.create_attribute_definition("t1", "metrics", "json", True, "{}", "agent1")
-        )
-        assert result["attr_id"] == "a2"
-
-    def test_create_attribute_definition_no_signature(self) -> None:
-        """Test create attribute definition no signature."""
-        b = _make_behaviour()
-        b.sign_message = _make_gen(None)  # type: ignore[assignment,method-assign]
-        result = _exhaust(
-            b.create_attribute_definition("t1", "metrics", "json", True, "{}", "agent1")
-        )
-        assert result is None
-
-    def test_get_agent_registry_by_address(self) -> None:
-        """Test get agent registry by address."""
-        b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"agent_id": "ag1"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.get_agent_registry_by_address("0xAgent"))
-        assert result["agent_id"] == "ag1"
-
-    def test_create_agent_registry(self) -> None:
-        """Test create agent registry."""
-        b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"agent_id": "ag2"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.create_agent_registry("agent_name", "t1", "0xAgent"))
-        assert result["agent_id"] == "ag2"
-
-    def test_create_agent_attribute(self) -> None:
-        """Test create agent attribute."""
-        b = _make_behaviour()
-        b._call_mirrordb = _make_gen({"attr_val_id": "av1"})  # type: ignore[assignment,method-assign]
-        b.sign_message = _make_gen("sig_hex")  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.create_agent_attribute("ag1", "a1", json_value='{"k":"v"}'))
-        assert result["attr_val_id"] == "av1"
-
-    def test_create_agent_attribute_no_signature(self) -> None:
-        """Test create agent attribute no signature."""
-        b = _make_behaviour()
-        b.sign_message = _make_gen(None)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b.create_agent_attribute("ag1", "a1"))
-        assert result is None
-
-
-class TestGetOrCreateAgentType:
-    """Test _get_or_create_agent_type."""
-
-    def test_cached(self) -> None:
-        """Test cached."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen({"agent_type": json.dumps({"type_id": "t1"})})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_agent_type("0xAddr"))
-        assert result["type_id"] == "t1"
-
-    def test_fetch_existing(self) -> None:
-        """Test fetch existing."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.get_agent_type_by_name = _make_gen({"type_id": "t2"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_agent_type("0xAddr"))
-        assert result["type_id"] == "t2"
-
-    def test_create_new(self) -> None:
-        """Test create new."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.get_agent_type_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.create_agent_type = _make_gen({"type_id": "t3"})  # type: ignore[assignment,method-assign]
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_agent_type("0xAddr"))
-        assert result["type_id"] == "t3"
-
-
-class TestGetOrCreateAttrDef:
-    """Test _get_or_create_attr_def."""
-
-    def test_cached(self) -> None:
-        """Test cached."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen({"attr_def": json.dumps({"attr_id": "a1"})})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_attr_def("t1", "ag1"))
-        assert result["attr_id"] == "a1"
-
-    def test_fetch_existing(self) -> None:
-        """Test fetch existing."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.get_attr_def_by_name = _make_gen({"attr_id": "a2"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_attr_def("t1", "ag1"))
-        assert result["attr_id"] == "a2"
-
-    def test_create_new(self) -> None:
-        """Test create new."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.get_attr_def_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.create_attribute_definition = _make_gen({"attr_id": "a3"})  # type: ignore[assignment,method-assign]
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_attr_def("t1", "ag1"))
-        assert result["attr_id"] == "a3"
-
-
-class TestGetOrCreateAgentRegistry:
-    """Test _get_or_create_agent_registry."""
-
-    def test_cached(self) -> None:
-        """Test cached."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen({"agent_registry": json.dumps({"agent_id": "ag1"})})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_agent_registry())
-        assert result["agent_id"] == "ag1"
-
-    def test_fetch_existing(self) -> None:
-        """Test fetch existing."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})  # type: ignore[assignment,method-assign]
-        b.get_agent_registry_by_address = _make_gen({"agent_id": "ag2"})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_agent_registry())
-        assert result["agent_id"] == "ag2"
-
-    def test_create_new(self) -> None:
-        """Test create new."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})  # type: ignore[assignment,method-assign]
-        b.get_agent_registry_by_address = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.create_agent_registry = _make_gen({"agent_id": "ag3"})  # type: ignore[assignment,method-assign]
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        with patch.object(b, "generate_name", return_value="test-name01"):
-            result = _exhaust(b._get_or_create_agent_registry())
-            assert result["agent_id"] == "ag3"
-
-    def test_no_agent_type(self) -> None:
-        """Test no agent type."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b._get_or_create_agent_type = _make_gen(None)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_or_create_agent_registry())
-        assert result is None
-
-    def test_exception(self) -> None:
-        """Test exception."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-
-        def bad_gen(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
-            """Bad gen."""
-            raise Exception("fail")
-            yield  # noqa: unreachable
-
-        b._get_or_create_agent_type = bad_gen  # type: ignore[method-assign]
-        result = _exhaust(b._get_or_create_agent_registry())
-        assert result is None
-
-
 class TestUpdateAirdropRewardsException:
     """Test _update_airdrop_rewards exception path."""
 
@@ -4690,53 +4404,6 @@ class TestFetchTokenPricesSmaEdge:
             )
             # Last 2 prices: 128 and 129
             assert result == (128.0 + 129.0) / 2
-
-
-class TestGetOrCreateAgentTypeFailure:
-    """Test _get_or_create_agent_type when creation fails."""
-
-    def test_create_failure_raises(self) -> None:
-        """Test create failure raises."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.get_agent_type_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.create_agent_type = _make_gen(  # type: ignore[method-assign]
-            None
-        )  # creation fails  # type: ignore[method-assign]
-        with pytest.raises(Exception, match="Failed to create agent type"):
-            _exhaust(b._get_or_create_agent_type("0xAddr"))
-
-
-class TestGetOrCreateAttrDefFailure:
-    """Test _get_or_create_attr_def when creation fails."""
-
-    def test_create_failure_raises(self) -> None:
-        """Test create failure raises."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.get_attr_def_by_name = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.create_attribute_definition = _make_gen(  # type: ignore[method-assign]
-            None
-        )  # creation fails  # type: ignore[method-assign]
-        with pytest.raises(Exception, match="Failed to create attribute definition"):
-            _exhaust(b._get_or_create_attr_def("t1", "ag1"))
-
-
-class TestGetOrCreateAgentRegistryCreateFails:
-    """Test _get_or_create_agent_registry when create_agent_registry returns None."""
-
-    def test_create_fails(self) -> None:
-        """Test create fails."""
-        b = _make_behaviour()
-        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b._get_or_create_agent_type = _make_gen({"type_id": "t1"})  # type: ignore[assignment,method-assign]
-        b.get_agent_registry_by_address = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b.create_agent_registry = _make_gen(  # type: ignore[method-assign]
-            None
-        )  # creation fails  # type: ignore[method-assign]
-        with patch.object(b, "generate_name", return_value="test-name01"):
-            result = _exhaust(b._get_or_create_agent_registry())
-            assert result is None
 
 
 class TestGetLastKnownPriceHistorical:

@@ -18,7 +18,7 @@ contract_interface_paths:
   ethereum: build/BalancerQueries.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.2.6
+    version: ==2.2.7
   web3:
     version: <8,>=7.0.0
   eth_abi:

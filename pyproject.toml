@@ -10,12 +10,12 @@ requires-python = "<3.15,>=3.10"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    "open-autonomy[cli]==0.21.22",
-    "open-aea-test-autonomy==0.21.22",
-    "open-aea-helpers==0.21.22",
-    "open-aea==2.2.6",
-    "open-aea-ledger-ethereum==2.2.6",
-    "open-aea-ledger-cosmos==2.2.6",
+    "open-autonomy[cli]==0.21.23",
+    "open-aea-test-autonomy==0.21.23",
+    "open-aea-helpers==0.21.23",
+    "open-aea==2.2.7",
+    "open-aea-ledger-ethereum==2.2.7",
+    "open-aea-ledger-cosmos==2.2.7",
     "typing_extensions==4.15.0",
     "gql[requests]==3.5.0",
     "grpcio==1.78.0",
@@ -64,10 +64,10 @@ service_specific_packages_exclude = [
     "packages/valory/contracts/uniswap_v3_pool",
 ]
 upstream_pins = [
-    "valory-xyz/mech-interact@v0.32.0",
-    "valory-xyz/genai@v7.2.0",
-    "valory-xyz/kv-store@v0.6.0",
-    "valory-xyz/funds-manager@v3.1.0",
+    "valory-xyz/mech-interact@v0.32.2",
+    "valory-xyz/genai@v7.2.1",
+    "valory-xyz/kv-store@v0.6.1",
+    "valory-xyz/funds-manager@v3.1.1",
 ]
 gitleaks_extra_paths = [
     "packages/valory/skills/.*_abci/.*-ui-build/.*",

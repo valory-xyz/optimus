@@ -212,9 +212,11 @@ build-agent-runner-mac: uv-install  agent
 
 .PHONY: check-agent-runner
 check-agent-runner:
-	# aea-config.yaml uses anonymous templates ($${str:/data}) so Pearl's
-	# path-based env-var injection wins at runtime; a named template would
-	# suppress the fallback. See valory-xyz/olas-operate-middleware#424.
+	# aea-config.yaml uses named env-var templates ($${STORE_PATH:str:/data})
+	# for both the kv_store connection and the optimus_abci skill params,
+	# so a single STORE_PATH override drives both. Path-based env vars
+	# (CONNECTION_..._STORE_PATH / SKILL_..._STORE_PATH) are silently
+	# ignored when the template carries an explicit name — open-aea's
+	# apply_env_variables only consults the named key.
 	uv run aea-helpers check-binary ./dist/agent_runner_bin$(EXE_SUFFIX) ./agent \
-	--env-var CONNECTION_KV_STORE_CONFIG_STORE_PATH=$(STORE_PATH_VALUE) \
-	--env-var SKILL_OPTIMUS_ABCI_MODELS_PARAMS_ARGS_STORE_PATH=$(STORE_PATH_VALUE)
+	--env-var STORE_PATH=$(STORE_PATH_VALUE)

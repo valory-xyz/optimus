@@ -24,8 +24,8 @@
         "contract/valory/balancer_queries/0.1.0": "bafybeieopocjnprwfazmacrgr4n6up2p2warpq7seiwhocb5f2uy4mrmrq",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeieadtlwtfbwb7hjvoedvavddwufstbvbdke2nvbvhh62wzwwkctdi",
         "skill/valory/optimus_abci/0.1.0": "bafybeihxbgpptcmy4qnnkszlm3cuosnu3lkt6oiv4txxibqsgyg2hbn5be",
-        "agent/valory/optimus/0.1.0": "bafybeicjvtoey5whei5gqo3qtvh37rx2fddmxmk22x52cghz53gkw5mv7y",
-        "service/valory/optimus/0.1.0": "bafybeigvakzwtp2lbn4nqne6tsjfszlzowr6ebilurmf7ylbceayxr2j5a"
+        "agent/valory/optimus/0.1.0": "bafybeia4dmcsbnkax4ppprrn3nzqsucp4bygvk5qiiul6fqgdm36q4atwe",
+        "service/valory/optimus/0.1.0": "bafybeih5vovfkjrh7iajg25gkxcgrdl3ai2c4qg7ewvwu2kmvjiuipnjfm"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

@@ -2403,7 +2403,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     cached = yield from self._read_kv(
                         keys=("optimism_total_withdrawals",)
                     )
-                    cached_val = cached.get("optimism_total_withdrawals") if cached else None
+                    cached_val = (
+                        cached.get("optimism_total_withdrawals") if cached else None
+                    )
                     if cached_val is not None:
                         try:
                             self.context.logger.info(

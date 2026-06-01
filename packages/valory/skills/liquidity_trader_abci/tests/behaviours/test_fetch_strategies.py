@@ -8511,10 +8511,7 @@ class TestIncrementalOptimismFetching:
     """Tests for early-stop pagination and caching in Optimism transfer fetching."""
 
     def test_safeglobal_stops_on_existing_transfer_ids(self):
-        """Pagination stops when every transfer on a page has an already-seen
-        unique id. Persisted entries carry ``transfer_id`` so the seen-set is
-        rebuilt from disk on warm start.
-        """
+        """Pagination stops once every transfer on a page has a seen uid."""
         o = _mk()
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
@@ -9185,9 +9182,7 @@ class TestTransferUniqueIdHelper:
             _transfer_unique_id,
         )
 
-        uid = _transfer_unique_id(
-            {"tx_hash": "0xH", "type": "token", "amount": "16.0"}
-        )
+        uid = _transfer_unique_id({"tx_hash": "0xH", "type": "token", "amount": "16.0"})
         assert uid == "0xH:token:16.0"
 
     def test_empty_when_no_identifier(self):
@@ -9209,9 +9204,7 @@ class TestTransferUniqueIdHelper:
             _transfer_unique_id,
         )
 
-        assert (
-            _transfer_unique_id({"transactionHash": "0xH", "logIndex": 0}) == "0xH:0"
-        )
+        assert _transfer_unique_id({"transactionHash": "0xH", "logIndex": 0}) == "0xH:0"
 
 
 class TestCollectSeenTransferIdsHelper:
@@ -9227,8 +9220,7 @@ class TestCollectSeenTransferIdsHelper:
         assert _collect_seen_transfer_ids(None) == set()
 
     def test_collects_from_mixed_shapes(self):
-        """Mix of new transfers (transfer_id field) and legacy persisted
-        entries (only tx_hash + type + amount) both contribute IDs."""
+        """Collect IDs from new and legacy persisted transfer dicts."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
             _collect_seen_transfer_ids,
         )
@@ -9276,8 +9268,7 @@ class TestErc20OptimismWithdrawalCache:
         }
 
     def test_cold_start_persists_withdrawals_under_new_key(self):
-        """First run with empty cache: fetch, persist under
-        ``optimism_withdrawals`` with ``transfer_id`` on each entry."""
+        """First run with empty cache persists under optimism_withdrawals."""
         obj = _mk()
         obj.read_funding_events = lambda: {}
         store = MagicMock()
@@ -9302,8 +9293,7 @@ class TestErc20OptimismWithdrawalCache:
         store.assert_called_once()
 
     def test_warm_start_early_stops_after_one_page(self):
-        """Persisted transferIds match what the API returns, so the loop
-        breaks after page 1 even when the API advertises a ``next`` cursor."""
+        """Loop breaks after page 1 when persisted transferIds match API."""
         obj = _mk()
         obj.read_funding_events = lambda: {
             "optimism_withdrawals": {
@@ -9331,9 +9321,7 @@ class TestErc20OptimismWithdrawalCache:
             return (
                 True,
                 {
-                    "results": [
-                        TestErc20OptimismWithdrawalCache._transfer("tid-1")
-                    ],
+                    "results": [TestErc20OptimismWithdrawalCache._transfer("tid-1")],
                     "next": "would-paginate-without-early-stop",
                 },
             )
@@ -9347,8 +9335,7 @@ class TestErc20OptimismWithdrawalCache:
         assert call_count[0] == 1
 
     def test_same_day_topup_with_new_transfer_id_lands(self):
-        """A 4pm top-up on the same day as a 10am persisted transfer is
-        merged into storage, not silently dropped. The 1.2 dedup fix."""
+        """Same-day top-up with a new transferId is merged, not dropped."""
         obj = _mk()
         obj.read_funding_events = lambda: {
             "optimism_withdrawals": {
@@ -9392,8 +9379,7 @@ class TestCalculateWithdrawalsValueSameDayCache:
     """Same-day kv cache for the optimism withdrawal path (PR 1.1)."""
 
     def test_cache_hit_skips_fetcher(self):
-        """Last calc on the same calendar day → return cached kv value
-        and never call the fetcher."""
+        """Same-day kv hit returns cached value without calling the fetcher."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xS"}
@@ -9431,8 +9417,7 @@ class TestCalculateWithdrawalsValueSameDayCache:
         assert called[0] == 0
 
     def test_cache_miss_recalculates_and_writes_kv(self):
-        """Stale cache (different calendar day) → recompute, then write
-        both kv keys so the next cycle hits."""
+        """Stale cache (different calendar day) recomputes and writes kv."""
         from datetime import timedelta
 
         obj = _mk()
@@ -9471,9 +9456,7 @@ class TestCalculateWithdrawalsValueSameDayCache:
                 }
             }
         )
-        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(
-            Decimal("3.0")
-        )
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("3.0"))
         obj._get_current_timestamp = lambda: 1704067200
 
         result = _drive(obj.calculate_withdrawals_value())
@@ -9500,9 +9483,7 @@ class TestCalculateWithdrawalsValueSameDayCache:
         obj._read_kv = fake_read_kv
         obj._write_kv = fake_write_kv
         obj._track_erc20_transfers_optimism = _gen_return({"outgoing": {}})
-        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(
-            Decimal("0")
-        )
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
         obj._get_current_timestamp = lambda: 1704067200
 
         result = _drive(obj.calculate_withdrawals_value())

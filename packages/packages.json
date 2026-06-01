@@ -5,7 +5,7 @@
         "custom/valory/max_apr_selection/0.1.0": "bafybeib2szveecjhwlu5aeww5umtso5sm4btogsrjuqg4tk5uormjmsppi",
         "custom/valory/balancer_pools_search/0.1.0": "bafybeiaktss4rvsyiqg43yauc3aj5mq3ztysgqopc2dvxkslswj25kdtcm",
         "custom/valory/uniswap_pools_search/0.1.0": "bafybeiglbwfrhxbgqyyg6oniwur2x6sswmi5ed55crzvrhr3o7p5x3kmne",
-        "custom/valory/velodrome_pools_search/0.1.0": "bafybeiflvtw66daavgwsnagehibax5ddhdb7qkh2f6w2atce6j53wyaroq",
+        "custom/valory/velodrome_pools_search/0.1.0": "bafybeiaep6zeity5l2pu7okde6qnmgiawd4adksp2mhr67vcdicyt4x5ui",
         "contract/valory/velodrome_router/0.1.0": "bafybeifuulfzd7ixxsluqz6hd6cavbtj6z35zc34ho3zgqgaem4txuvxta",
         "contract/valory/velodrome_cl_pool/0.1.0": "bafybeihlkgpjycu26ncolkeqp3tatkvecimsj3ikmvjimpwc7rbwmm7oru",
         "contract/valory/velodrome_pool/0.1.0": "bafybeid6wlv6sgm3y7f63j7ehvoajr6bjn37s4cck4xonuuwbzwypzfxki",
@@ -22,10 +22,10 @@
         "contract/valory/velodrome_voter/0.1.0": "bafybeieawpdivhzrbjk6ivsrncxah5y5gbb32qxmrcb2dxmw55ev7gowda",
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeicqjs5styv3qubfd7askc6nnd2hrwqlawd6b7rvzyvp2ycbenensm",
         "contract/valory/balancer_queries/0.1.0": "bafybeieopocjnprwfazmacrgr4n6up2p2warpq7seiwhocb5f2uy4mrmrq",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeieadtlwtfbwb7hjvoedvavddwufstbvbdke2nvbvhh62wzwwkctdi",
-        "skill/valory/optimus_abci/0.1.0": "bafybeihxbgpptcmy4qnnkszlm3cuosnu3lkt6oiv4txxibqsgyg2hbn5be",
-        "agent/valory/optimus/0.1.0": "bafybeia4dmcsbnkax4ppprrn3nzqsucp4bygvk5qiiul6fqgdm36q4atwe",
-        "service/valory/optimus/0.1.0": "bafybeih5vovfkjrh7iajg25gkxcgrdl3ai2c4qg7ewvwu2kmvjiuipnjfm"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidpj4unz6zfgbysh5zcdithcqrekdrxjqct23u4wxmf33m6oft6zm",
+        "skill/valory/optimus_abci/0.1.0": "bafybeiabc45xbyd2qvv3jiwgyce7b4huxihnchnrni2wc2rqkoev5vpcge",
+        "agent/valory/optimus/0.1.0": "bafybeia4prmlntcrl5xwj63s2htlohvt65hj6xkesz6fasgqrow6tgfxnm",
+        "service/valory/optimus/0.1.0": "bafybeiavacp2tok7wtj5aaqugcww4vt36gv66mlzb2k5l6wxprnpiwsvwy"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

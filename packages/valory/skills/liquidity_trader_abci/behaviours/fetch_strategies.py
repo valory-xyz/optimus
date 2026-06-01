@@ -23,7 +23,7 @@ import json
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from decimal import Context, Decimal, getcontext
+from decimal import Context, Decimal, InvalidOperation, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
 import requests
@@ -95,6 +95,49 @@ ZERO_ADDRESS_PADDED = (
 # the primary protection; this is a backstop against an API that returns a
 # non-empty next-page cursor indefinitely.
 MAX_PAGINATION_PAGES = 100
+
+
+def _transfer_unique_id(transfer: Dict[str, Any]) -> str:
+    """Stable unique ID for a Safe transfer.
+
+    Safe's transferId is preferred. Falls back to (tx_hash, log_index) for
+    API responses, then to (tx_hash, value/amount, type) for persisted
+    entries that pre-date this dedup scheme. Returns "" when nothing
+    identifying is present.
+    """
+    tid = transfer.get("transferId") or transfer.get("transfer_id")
+    if tid:
+        return str(tid)
+    tx_hash = transfer.get("transactionHash") or transfer.get("tx_hash") or ""
+    log_idx = transfer.get("logIndex")
+    if log_idx is None:
+        log_idx = transfer.get("log_index")
+    if tx_hash and log_idx is not None:
+        return f"{tx_hash}:{log_idx}"
+    if not tx_hash:
+        return ""
+    transfer_type = transfer.get("type", "")
+    raw_value = transfer.get("value")
+    if raw_value is None:
+        raw_value = transfer.get("amount", "")
+    return f"{tx_hash}:{transfer_type}:{raw_value}"
+
+
+def _collect_seen_transfer_ids(date_keyed_data: Dict[str, Any]) -> set:
+    """Build a set of unique IDs from a persisted date-keyed transfer dict."""
+    seen: set = set()
+    if not date_keyed_data:
+        return seen
+    for date_transfers in date_keyed_data.values():
+        if not isinstance(date_transfers, list):
+            continue
+        for t in date_transfers:
+            if not isinstance(t, dict):
+                continue
+            uid = _transfer_unique_id(t)
+            if uid:
+                seen.add(uid)
+    return seen
 
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
@@ -2343,6 +2386,35 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
             return withdrawal_value
         elif chain == "optimism":
+            # Same-day cache: skip Safe API + revaluation on subsequent cycles
+            # of the same day. Mirrors calculate_initial_investment_value_from_funding_events.
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            last_calc = yield from self._read_kv(
+                keys=("last_withdrawals_calculated_timestamp",)
+            )
+            if last_calc and (
+                ts := last_calc.get("last_withdrawals_calculated_timestamp")
+            ):
+                try:
+                    last_date = datetime.utcfromtimestamp(int(ts)).strftime("%Y-%m-%d")
+                except (ValueError, TypeError):
+                    last_date = "1970-01-01"
+                if last_date == current_date:
+                    cached = yield from self._read_kv(
+                        keys=("optimism_total_withdrawals",)
+                    )
+                    cached_val = cached.get("optimism_total_withdrawals") if cached else None
+                    if cached_val is not None:
+                        try:
+                            self.context.logger.info(
+                                "Last withdrawal calculation was today, using cached value"
+                            )
+                            return Decimal(str(cached_val))
+                        except (InvalidOperation, ValueError, TypeError):
+                            self.context.logger.warning(
+                                "Failed to parse cached withdrawal value; recomputing"
+                            )
+
             all_erc20_transfers_optimism = (
                 yield from self._track_erc20_transfers_optimism(
                     self.params.safe_contract_addresses.get(chain),
@@ -2366,6 +2438,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
             )
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+
+            yield from self._write_kv(
+                {
+                    "optimism_total_withdrawals": str(withdrawal_value),
+                    "last_withdrawals_calculated_timestamp": str(
+                        int(self._get_current_timestamp())
+                    ),
+                }
+            )
             return withdrawal_value
         else:
             return Decimal(0)
@@ -3355,12 +3436,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 address, end_date, all_transfers_by_date, existing_optimism_data
             )
 
-            # Merge with existing data and save
+            # Merge new transfers into persisted data: append per-date so that
+            # a same-day transfer added after an earlier one already stored
+            # under the same date does not overwrite the earlier entries.
             for date, transfers in all_transfers_by_date.items():
-                if (
-                    date not in existing_optimism_data
-                ):  # Only store new dates  # pragma: no branch
-                    existing_optimism_data[date] = transfers
+                existing_optimism_data.setdefault(date, []).extend(transfers)
 
             # Update unified data structure
             if not self.funding_events:
@@ -3850,7 +3930,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
 
             processed_count = 0
-            seen_transfer_ids = set()
+            # Seed in-cycle dedup from already-persisted transfers so a new
+            # transfer on an already-stored date is not silently dropped.
+            seen_transfer_ids = _collect_seen_transfer_ids(existing_data)
             while True:
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
@@ -3869,7 +3951,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if not transfers:
                     break
 
-                # Track how many transfers in this page are on already-stored dates.
+                # Track how many transfers in this page have already-seen IDs.
                 # The API returns newest-first, so once an entire page is old we can stop.
                 consecutive_existing = 0
                 stop_pagination = False
@@ -3886,26 +3968,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if not tx_date:
                         continue
 
-                    # Skip if date already exists in stored data
-                    if tx_date in existing_data:
+                    # Per-transfer dedup against persisted + in-cycle seen IDs.
+                    unique_id = _transfer_unique_id(transfer)
+                    if unique_id and unique_id in seen_transfer_ids:
                         consecutive_existing += 1
                         if consecutive_existing >= len(transfers):
                             stop_pagination = True
                         continue
-                    else:
-                        consecutive_existing = 0
+                    consecutive_existing = 0
 
                     # Only process transfers until end_date
                     if tx_date > end_date:
                         continue
 
-                    # Deduplicate by transferId if present, otherwise transactionHash
-                    unique_id = transfer.get("transferId") or transfer.get(
-                        "transactionHash", ""
-                    )
-                    if unique_id in seen_transfer_ids:
-                        continue
-                    seen_transfer_ids.add(unique_id)
+                    if unique_id:
+                        seen_transfer_ids.add(unique_id)
 
                     # Process the transfer
                     from_address = transfer.get("from", address)
@@ -3954,6 +4031,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "timestamp": timestamp,
                             "tx_hash": transfer.get("transactionHash", ""),
                             "type": "token",
+                            "transfer_id": unique_id,
                         }
 
                     elif transfer_type == "ETHER_TRANSFER":
@@ -3979,6 +4057,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "timestamp": timestamp,
                             "tx_hash": transfer.get("transactionHash", ""),
                             "type": "eth",
+                            "transfer_id": unique_id,
                         }
 
                     elif transfer_type == "ERC721_TRANSFER":
@@ -4489,7 +4568,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers_url = f"{base_url}/safes/{address}/transfers/"
 
             processed_count = 0
-            seen_tx_ids = set()
+            # Seed in-cycle dedup from already-persisted transfers so a new
+            # transfer on an already-stored date is not silently dropped.
+            seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
             while True:
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
@@ -4533,24 +4614,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if tx_date > current_date:
                         continue
 
-                    # Skip dates already persisted
-                    if tx_date in existing_outgoing:
+                    # Per-transfer dedup against persisted + in-cycle seen IDs.
+                    unique_id = _transfer_unique_id(transfer)
+                    if unique_id and unique_id in seen_tx_ids:
                         consecutive_existing += 1
                         if consecutive_existing >= len(transfers):
                             stop_pagination = True
                         continue
-                    else:
-                        consecutive_existing = 0
+                    consecutive_existing = 0
 
                     # Only process outgoing transfers (where from address is equal to our safe address)
                     if transfer.get("from", "").lower() == address.lower():
                         transfer_type = transfer.get("type", "")
 
-                        # Deduplicate per tx hash + type
-                        unique_id = f"{transfer.get('transactionHash', '')}:{transfer_type}:{transfer.get('value', '')}"
-                        if unique_id in seen_tx_ids:
-                            continue
-                        seen_tx_ids.add(unique_id)
+                        if unique_id:
+                            seen_tx_ids.add(unique_id)
 
                         if transfer_type == "ETHER_TRANSFER":  # pragma: no branch
                             try:
@@ -4571,6 +4649,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                                 "timestamp": timestamp,
                                 "tx_hash": transfer.get("transactionHash", ""),
                                 "type": "eth",
+                                "transfer_id": unique_id,
                             }
 
                             if tx_date not in all_transfers:  # pragma: no branch
@@ -4597,10 +4676,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     break
                 transfers_url = cursor
 
-            # Merge new dates into persisted data and save
-            # (all_transfers only contains dates not already in existing_outgoing,
-            # because the fetch loop skips existing dates)
-            existing_outgoing.update(all_transfers)
+            # Merge new transfers into persisted data: append per-date so that
+            # a same-day transfer added after an earlier one already stored
+            # under the same date does not overwrite the earlier entries.
+            for date, transfers in all_transfers.items():
+                existing_outgoing.setdefault(date, []).extend(transfers)
 
             self.funding_events["optimism_outgoing"] = existing_outgoing
             self.store_funding_events()
@@ -4618,22 +4698,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         safe_address: str,
         final_timestamp: int,
     ) -> Generator[None, None, Dict[str, Dict[str, List[Dict]]]]:
-        """Fetch and organize ERC20 token transfers for Optimism chain using Safe API."""
+        """Fetch and organize ERC20 token transfers for Optimism chain using Safe API.
+
+        Persists outgoing USDC transfers to funding_events.json under the
+        ``optimism_withdrawals`` key so subsequent cycles early-stop after one
+        page when no new outgoing activity has occurred. Dedup is per-transfer
+        (transferId, falling back to txHash + log_index) so a same-day
+        withdrawal added after one already stored on the same date is not
+        silently dropped.
+        """
         try:
-            all_transfers = {"outgoing": {}}
+            if not self.funding_events:
+                self.funding_events = self.read_funding_events() or {}
+            existing_outgoing = self.funding_events.get("optimism_withdrawals", {})
 
             if not safe_address:
                 self.context.logger.warning(
                     "No address provided for fetching Optimism ERC20 transfers"
                 )
-                return all_transfers
+                return {"outgoing": existing_outgoing}
 
-            # Use SafeGlobal API for Optimism transfers
             base_url = self.params.safe_api_v1_url
             transfers_url = f"{base_url}/safes/{safe_address}/transfers/"
 
             processed_count = 0
-            seen_tx_ids = set()
+            # Seed in-cycle dedup from already-persisted withdrawals so a new
+            # transfer on an already-stored date is not silently dropped.
+            seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
+            new_by_date: Dict[str, List[Dict]] = {}
             current_date = datetime.fromtimestamp(final_timestamp).strftime("%Y-%m-%d")
 
             while True:
@@ -4655,13 +4747,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if not transfers:
                     break
 
+                # Track how many transfers in this page have already-seen IDs.
+                # Safe returns newest-first, so once an entire page is old we
+                # can stop paginating.
+                consecutive_existing = 0
+                stop_pagination = False
+
                 for transfer in transfers:
-                    # Parse timestamp
                     timestamp = transfer.get("executionDate")
                     if not timestamp:
                         continue
 
-                    # Handle ISO format timestamp
                     try:
                         tx_datetime = datetime.fromisoformat(
                             timestamp.replace("Z", "+00:00")
@@ -4676,23 +4772,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if tx_date > current_date:
                         continue
 
+                    # Per-transfer dedup against persisted + in-cycle seen IDs.
+                    unique_id = _transfer_unique_id(transfer)
+                    if unique_id and unique_id in seen_tx_ids:
+                        consecutive_existing += 1
+                        if consecutive_existing >= len(transfers):
+                            stop_pagination = True
+                        continue
+                    consecutive_existing = 0
+
                     # Only process outgoing transfers (where from address is equal to our safe address)
                     if transfer.get("from", "").lower() != safe_address.lower():
                         continue
 
                     transfer_type = transfer.get("type", "")
-
-                    # Only process ERC20 transfers
                     if transfer_type != "ERC20_TRANSFER":
                         continue
 
-                    # Deduplicate per tx hash + type
-                    unique_id = f"{transfer.get('transactionHash', '')}:{transfer_type}:{transfer.get('value', '')}"
-                    if unique_id in seen_tx_ids:
-                        continue
-                    seen_tx_ids.add(unique_id)
-
-                    # Token transfer
                     token_info = transfer.get("tokenInfo", {})
                     token_address = transfer.get("tokenAddress", "")
                     if not token_info:
@@ -4709,15 +4805,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         symbol = token_info.get("symbol", "Unknown")
                         decimals = int(token_info.get("decimals", 18) or 18)
 
-                    # Only process USDC transfers
                     if symbol.upper() != "USDC":
                         continue
 
                     value_raw = int(transfer.get("value", "0") or "0")
                     amount = value_raw / (10**decimals)
-
                     if amount <= 0:
                         continue
+
+                    if unique_id:
+                        seen_tx_ids.add(unique_id)
 
                     transfer_data = {
                         "from_address": safe_address,
@@ -4728,24 +4825,35 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         "timestamp": timestamp,
                         "tx_hash": transfer.get("transactionHash", ""),
                         "type": "token",
+                        "transfer_id": unique_id,
                     }
 
-                    if tx_date not in all_transfers["outgoing"]:  # pragma: no branch
-                        all_transfers["outgoing"][tx_date] = []
-                    all_transfers["outgoing"][tx_date].append(transfer_data)
+                    new_by_date.setdefault(tx_date, []).append(transfer_data)
                     processed_count += 1
 
                 self.context.logger.info(
                     f"Completed Optimism ERC20 transfers: {processed_count} outgoing transfers found"
                 )
 
-                # Advance pagination if available
+                if stop_pagination:
+                    self.context.logger.info(
+                        "Withdrawals: entire page already stored — stopping pagination"
+                    )
+                    break
+
                 cursor = response_json.get("next")
                 if not cursor:
                     break
                 transfers_url = cursor
 
-            return all_transfers
+            # Merge new transfers into persisted data and save
+            for date, transfers_list in new_by_date.items():
+                existing_outgoing.setdefault(date, []).extend(transfers_list)
+
+            self.funding_events["optimism_withdrawals"] = existing_outgoing
+            self.store_funding_events()
+
+            return {"outgoing": existing_outgoing}
 
         except Exception as e:
             self.context.logger.error(f"Error tracking Optimism ERC20 transfers: {e}")

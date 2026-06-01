@@ -1853,6 +1853,9 @@ class TestCalculateWithdrawalsValue:
 
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        # No prior cache; fetcher returns None so the function short-circuits
+        # before reaching the kv write.
+        obj._read_kv = _gen_return({})
         obj._track_erc20_transfers_optimism = _gen_return(None)
         gen = obj.calculate_withdrawals_value()
         assert _drive(gen) == Decimal(0)
@@ -1863,8 +1866,13 @@ class TestCalculateWithdrawalsValue:
 
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        # No prior cache; fetcher returns data so the function recomputes and
+        # writes the kv cache on the way out.
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
         obj._track_erc20_transfers_optimism = _gen_return({"outgoing": {"d": []}})
         obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("25"))
+        obj._get_current_timestamp = lambda: 1704067200
         gen = obj.calculate_withdrawals_value()
         assert _drive(gen) == Decimal("25")
 
@@ -8502,19 +8510,27 @@ class TestReversionDateIso:
 class TestIncrementalOptimismFetching:
     """Tests for early-stop pagination and caching in Optimism transfer fetching."""
 
-    def test_safeglobal_stops_on_existing_dates(self):
-        """Pagination stops when entire page is on already-stored dates."""
+    def test_safeglobal_stops_on_existing_transfer_ids(self):
+        """Pagination stops when every transfer on a page has an already-seen
+        unique id. Persisted entries carry ``transfer_id`` so the seen-set is
+        rebuilt from disk on warm start.
+        """
         o = _mk()
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
 
+        # Persisted on a prior cycle with explicit transfer_id fields so the
+        # uid-based dedup recognises them on the new page.
         existing_data = {
-            "2024-12-15": [{"symbol": "ETH", "amount": 1.0}],
+            "2024-12-15": [
+                {"transfer_id": "tid-1", "symbol": "ETH", "amount": 1.0},
+                {"transfer_id": "tid-2", "symbol": "ETH", "amount": 1.0},
+            ],
         }
-        # All transfers in page are on already-stored date
         page_data = {
             "results": [
                 {
+                    "transferId": "tid-1",
                     "executionDate": "2024-12-15T10:00:00Z",
                     "from": "0xSender",
                     "type": "ETHER_TRANSFER",
@@ -8522,6 +8538,7 @@ class TestIncrementalOptimismFetching:
                     "transactionHash": "0xH1",
                 },
                 {
+                    "transferId": "tid-2",
                     "executionDate": "2024-12-15T11:00:00Z",
                     "from": "0xSender",
                     "type": "ETHER_TRANSFER",
@@ -8540,14 +8557,8 @@ class TestIncrementalOptimismFetching:
                 "0xAddr", "2025-01-01", all_transfers, existing_data
             )
         )
-        # No new transfers should be added (all skipped as existing)
+        # No new transfers should be added (every uid in the page was seen)
         assert len(all_transfers) == 0
-        # API was called only once (early-stop prevented following "next" cursor)
-        assert (
-            o._request_with_retries.call_count
-            if hasattr(o._request_with_retries, "call_count")
-            else True
-        )
 
     def test_outgoing_persists_new_transfers(self):
         """New outgoing transfers are persisted to funding_events."""
@@ -9139,3 +9150,363 @@ class TestTransferMissingFromKey:
         result = _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
         # Transfer without "from" should be silently skipped, no crash
         assert isinstance(result, dict)
+
+
+class TestTransferUniqueIdHelper:
+    """_transfer_unique_id picks the best stable identifier."""
+
+    def test_safe_transferid_preferred(self):
+        """Safe's transferId wins over transactionHash + log_index."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        uid = _transfer_unique_id(
+            {"transferId": "tid-1", "transactionHash": "0xH", "logIndex": 4}
+        )
+        assert uid == "tid-1"
+
+    def test_falls_back_to_txhash_and_log_index(self):
+        """API responses without transferId still produce a stable id."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        assert _transfer_unique_id({"transactionHash": "0xH", "logIndex": 3}) == "0xH:3"
+
+    def test_falls_back_to_persisted_dict_shape(self):
+        """Legacy persisted dicts (tx_hash, type, amount) still get a stable id.
+
+        Without this fallback, restoring funding_events.json from a previous
+        deployment would mean every transfer looks 'new' on the first warm
+        cycle after upgrade.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        uid = _transfer_unique_id(
+            {"tx_hash": "0xH", "type": "token", "amount": "16.0"}
+        )
+        assert uid == "0xH:token:16.0"
+
+    def test_empty_when_no_identifier(self):
+        """A transfer with no identifying fields returns the empty string.
+
+        Callers must check the return for truthiness before adding to
+        ``seen_ids`` — otherwise an empty id would collide across unrelated
+        malformed transfers.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        assert _transfer_unique_id({}) == ""
+
+    def test_log_index_zero_is_kept(self):
+        """logIndex=0 is a valid index (first log in tx), not falsy."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        assert (
+            _transfer_unique_id({"transactionHash": "0xH", "logIndex": 0}) == "0xH:0"
+        )
+
+
+class TestCollectSeenTransferIdsHelper:
+    """_collect_seen_transfer_ids walks date-keyed dicts and gathers IDs."""
+
+    def test_empty(self):
+        """None and empty dict produce an empty set without errors."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _collect_seen_transfer_ids,
+        )
+
+        assert _collect_seen_transfer_ids({}) == set()
+        assert _collect_seen_transfer_ids(None) == set()
+
+    def test_collects_from_mixed_shapes(self):
+        """Mix of new transfers (transfer_id field) and legacy persisted
+        entries (only tx_hash + type + amount) both contribute IDs."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _collect_seen_transfer_ids,
+        )
+
+        data = {
+            "2025-06-23": [
+                {"transfer_id": "tid-1"},
+                {"tx_hash": "0xABC", "type": "token", "amount": "16.0"},
+            ],
+            "2026-03-12": [
+                {"transferId": "tid-2"},
+            ],
+        }
+        seen = _collect_seen_transfer_ids(data)
+        assert "tid-1" in seen
+        assert "tid-2" in seen
+        assert "0xABC:token:16.0" in seen
+
+    def test_ignores_malformed_entries(self):
+        """Defensive: non-dict entries in the value list don't crash."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _collect_seen_transfer_ids,
+        )
+
+        data = {"2025-01-01": [None, "not a dict", {"transfer_id": "ok"}]}
+        assert _collect_seen_transfer_ids(data) == {"ok"}
+
+
+class TestErc20OptimismWithdrawalCache:
+    """Withdrawal fetcher persistence and early-stop (PR 1.1 + 1.2)."""
+
+    @staticmethod
+    def _transfer(tid: str, date: str = "2024-01-01", amount: str = "1000000"):
+        """Build a minimal Safe API ERC20 transfer dict."""
+        return {
+            "transferId": tid,
+            "executionDate": f"{date}T10:00:00Z",
+            "from": "0xaddr",
+            "to": "0xR",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xT",
+            "value": amount,
+            "transactionHash": f"0xH-{tid}",
+        }
+
+    def test_cold_start_persists_withdrawals_under_new_key(self):
+        """First run with empty cache: fetch, persist under
+        ``optimism_withdrawals`` with ``transfer_id`` on each entry."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        store = MagicMock()
+        obj.store_funding_events = store
+        obj.funding_events = {}
+
+        obj._request_with_retries = _gen_return(
+            (True, {"results": [self._transfer("tid-1")], "next": None})
+        )
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        result = _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+        assert "2024-01-01" in result["outgoing"]
+        # New schema key persisted
+        assert "optimism_withdrawals" in obj.funding_events
+        assert "2024-01-01" in obj.funding_events["optimism_withdrawals"]
+        stored = obj.funding_events["optimism_withdrawals"]["2024-01-01"][0]
+        # transfer_id round-trips so future cycles can rebuild the seen-set
+        assert stored["transfer_id"] == "tid-1"
+        store.assert_called_once()
+
+    def test_warm_start_early_stops_after_one_page(self):
+        """Persisted transferIds match what the API returns, so the loop
+        breaks after page 1 even when the API advertises a ``next`` cursor."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_withdrawals": {
+                "2024-01-01": [
+                    {
+                        "transfer_id": "tid-1",
+                        "from_address": "0xAddr",
+                        "to_address": "0xR",
+                        "amount": 1.0,
+                        "tx_hash": "0xH-tid-1",
+                        "type": "token",
+                    }
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            """Fake _request_with_retries that always advertises a next URL."""
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [
+                        TestErc20OptimismWithdrawalCache._transfer("tid-1")
+                    ],
+                    "next": "would-paginate-without-early-stop",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # Exactly one HTTP call: the early-stop fires after page 1.
+        assert call_count[0] == 1
+
+    def test_same_day_topup_with_new_transfer_id_lands(self):
+        """A 4pm top-up on the same day as a 10am persisted transfer is
+        merged into storage, not silently dropped. The 1.2 dedup fix."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_withdrawals": {
+                "2024-01-01": [
+                    {
+                        "transfer_id": "tid-morning",
+                        "from_address": "0xAddr",
+                        "amount": 5.0,
+                        "type": "token",
+                    }
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        # Safe returns newest-first: the afternoon top-up, then the morning one
+        obj._request_with_retries = _gen_return(
+            (
+                True,
+                {
+                    "results": [
+                        self._transfer("tid-afternoon", date="2024-01-01"),
+                        self._transfer("tid-morning", date="2024-01-01"),
+                    ],
+                    "next": None,
+                },
+            )
+        )
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+        stored = obj.funding_events["optimism_withdrawals"]["2024-01-01"]
+        ids = {t.get("transfer_id") for t in stored}
+        assert {"tid-morning", "tid-afternoon"}.issubset(ids)
+
+
+class TestCalculateWithdrawalsValueSameDayCache:
+    """Same-day kv cache for the optimism withdrawal path (PR 1.1)."""
+
+    def test_cache_hit_skips_fetcher(self):
+        """Last calc on the same calendar day → return cached kv value
+        and never call the fetcher."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        # Set the cache to "computed at the start of today (UTC)" so the
+        # production code's local-date check agrees with the stored UTC-derived
+        # date for any timezone that doesn't wrap day boundaries mid-second.
+        today_midnight_ts = int(
+            datetime.now()
+            .replace(hour=12, minute=0, second=0, microsecond=0)
+            .timestamp()
+        )
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(today_midnight_ts),
+            "optimism_total_withdrawals": "12.5",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        obj._read_kv = fake_read_kv
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("12.5")
+        assert called[0] == 0
+
+    def test_cache_miss_recalculates_and_writes_kv(self):
+        """Stale cache (different calendar day) → recompute, then write
+        both kv keys so the next cycle hits."""
+        from datetime import timedelta
+
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        # last calc was two days ago → cache miss
+        yesterday_ts = int((datetime.now() - timedelta(days=2)).timestamp())
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(yesterday_ts),
+            "optimism_total_withdrawals": "8.0",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._track_erc20_transfers_optimism = _gen_return(
+            {
+                "outgoing": {
+                    "2024-01-01": [
+                        {
+                            "amount": 3.0,
+                            "symbol": "USDC",
+                            "timestamp": "2024-01-01T00:00:00Z",
+                        }
+                    ]
+                }
+            }
+        )
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(
+            Decimal("3.0")
+        )
+        obj._get_current_timestamp = lambda: 1704067200
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("3.0")
+        assert writes["optimism_total_withdrawals"] == "3.0"
+        assert writes["last_withdrawals_calculated_timestamp"] == "1704067200"
+
+    def test_cache_with_no_prior_timestamp_falls_through(self):
+        """No prior kv entry → fetcher runs and cache is freshly written."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return {}
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._track_erc20_transfers_optimism = _gen_return({"outgoing": {}})
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(
+            Decimal("0")
+        )
+        obj._get_current_timestamp = lambda: 1704067200
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("0")
+        # First-time write seeds the cache
+        assert "optimism_total_withdrawals" in writes
+        assert "last_withdrawals_calculated_timestamp" in writes

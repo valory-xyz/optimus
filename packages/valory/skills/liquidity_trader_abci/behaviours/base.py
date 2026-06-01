@@ -108,6 +108,7 @@ LAST_EPOCH_KEY_PREFIX = "last_processed_epoch_"
 OLAS_ADDRESSES = {
     "mode": "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9",
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
+    "base": "0x54330d28ca3357F294334BDC454a032e7f353416",
 }
 
 # Airdrop reward tracking constants
@@ -198,6 +199,7 @@ class Chain(Enum):
 
     OPTIMISM = "optimism"
     MODE = "mode"
+    BASE = "base"
 
 
 THRESHOLDS = {TradingType.BALANCED.value: 0.3374, TradingType.RISKY.value: 0.2892}
@@ -234,6 +236,14 @@ WHITELISTED_ASSETS = {
         "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+    },
+    "base": {
+        # Base tokens - stablecoins
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
+        "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
+        "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
     },
 }
 
@@ -277,6 +287,12 @@ COIN_ID_MAPPING = {
         "iusdc": "ironclad-usd",
         "velo": "velodrome-finance",
     },
+    "base": {
+        "usdc": "usd-coin",
+        "aero": "aerodrome-finance",
+        "usdt": "bridged-usdt",
+        "ousdt": "openusdt",
+    },
 }
 
 # Reward tokens that should be excluded from investment consideration
@@ -289,6 +305,10 @@ REWARD_TOKEN_ADDRESSES = {
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
         "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "VELO",  # VELO on Optimism
+    },
+    "base": {
+        "0x54330d28ca3357F294334BDC454a032e7f353416": "OLAS",  # OLAS on Base
+        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # AERO on Base
     },
 }
 

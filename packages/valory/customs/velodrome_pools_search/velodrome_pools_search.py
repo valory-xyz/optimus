@@ -56,31 +56,37 @@ REQUIRED_FIELDS = (
     "whitelisted_assets",
 )
 VELODROME = "velodrome"
+AERODROME = "aerodrome"
 
 # Chain-specific constants
 OPTIMISM_CHAIN_ID = 10
 MODE_CHAIN_ID = 34443
+BASE_CHAIN_ID = 8453
 CHAIN_NAMES = {
     OPTIMISM_CHAIN_ID: "optimism",
     MODE_CHAIN_ID: "mode",
+    BASE_CHAIN_ID: "base",
 }
 
 # Sugar contract addresses
 SUGAR_CONTRACT_ADDRESSES = {
-    MODE_CHAIN_ID: "0x280AC155a06e2aDB0718179C2f916BA90C32FEAB",  # Mode Sugar contract address
-    OPTIMISM_CHAIN_ID: "0x1d5E1893fCfb62CAaCE48eB2BAF7a6E134a8a27c",  # Optimism Sugar contract address
+    MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
+    OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
+    BASE_CHAIN_ID: "0x27fc745390d1f4BaF8D184FBd97748340f786634",  # Base Sugar contract address
 }
 
 # RewardsSugar contract addresses
 REWARDS_SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0xD5d3ABAcB8CF075636792658EE0be8B03AF517B8",  # Mode RewardsSugar contract address (placeholder)
     OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address (same as LpSugar for now)
+    BASE_CHAIN_ID: "0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E",  # Base RewardsSugar contract address (same as LpSugar for now)
 }
 
 # RPC endpoints
 RPC_ENDPOINTS = {
     MODE_CHAIN_ID: "https://mainnet.mode.network",
     OPTIMISM_CHAIN_ID: "https://mainnet.optimism.io",
+    BASE_CHAIN_ID: "https://mainnet.base.org",
 }
 
 # Configurable filter thresholds
@@ -2737,8 +2743,10 @@ def format_velodrome_pool_data(
         is_cl_pool = pool_type not in [0, -1]
 
         # Prepare base data including all required fields
+        # Use "aerodrome" for Base chain, "velodrome" for others
+        dex_type = AERODROME if chain_name == "base" else VELODROME
         formatted_pool = {
-            "dex_type": VELODROME,
+            "dex_type": dex_type,
             "pool_address": pool["id"],
             "pool_id": pool["id"],
             "tvl": float(pool.get("totalValueLockedUSD", 0)),

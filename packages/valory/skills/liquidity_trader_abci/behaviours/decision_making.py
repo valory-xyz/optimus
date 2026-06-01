@@ -2239,12 +2239,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"Details: total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
         )
 
-        if (
-            fee_percentage > allowed_fee_percentage
-            or gas_percentage > allowed_gas_percentage
-        ):
-            self.context.logger.error("Route is not profitable!")
-            return False, None, None
+        # TEMP (Basius MVP): profitability gate disabled, re-enable per workstream 2 PR 2.6
+        # if (
+        #     fee_percentage > allowed_fee_percentage
+        #     or gas_percentage > allowed_gas_percentage
+        # ):
+        #     self.context.logger.error("Route is not profitable!")
+        #     return False, None, None
 
         self.context.logger.info("Route is profitable!")
         return True, total_fee, total_gas_cost

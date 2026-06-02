@@ -141,8 +141,7 @@ def _collect_seen_transfer_ids(date_keyed_data: Dict[str, Any]) -> set:
 
 
 def _drop_legacy_transfer_entries(date_keyed_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Drop persisted transfer dicts lacking ``transfer_id`` and rebuild the
-    date-keyed dict in place.
+    """Drop persisted transfer dicts that lack a ``transfer_id`` field.
 
     Legacy entries (persisted before this PR) lack the explicit ``transfer_id``
     field, so their derived uid uses the ``tx_hash:type:amount`` fallback while

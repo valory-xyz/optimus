@@ -8836,12 +8836,7 @@ class TestCoverageGaps:
         o.store_funding_events.assert_called()
 
     def test_outgoing_merge_preserves_existing_when_dates_overlap(self):
-        """A page entry on an already-stored date is appended (not replacing
-        the existing list).
-
-        Persisted entry carries ``transfer_id`` so the legacy migration
-        does not drop it before the merge.
-        """
+        """Page entries on a stored date are appended, not replacing the list."""
         o = _mk()
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
@@ -9515,10 +9510,7 @@ class TestCalculateWithdrawalsValueSameDayCache:
         assert "last_withdrawals_calculated_timestamp" in writes
 
     def test_fetcher_failure_skips_kv_write(self):
-        """When the fetcher returns None, the kv same-day cache is NOT
-        written, so a transient Safe API blip doesn't pin withdrawal=0
-        for the remainder of the day.
-        """
+        """Fetcher returning None must skip the kv same-day cache write."""
         from datetime import timedelta
 
         obj = _mk()
@@ -9609,11 +9601,7 @@ class TestErc20OptimismFailureModes:
         obj.store_funding_events.assert_not_called()
 
     def test_eligible_only_early_stop_with_mixed_page(self):
-        """A page containing one already-seen outgoing USDC plus an
-        unrelated incoming entry still trips the early-stop. Before this
-        fix, the unrelated incoming would reset consecutive_existing and
-        the loop would paginate the full history every cache-miss.
-        """
+        """Mixed-traffic page still trips early-stop when every eligible is seen."""
         obj = _mk()
         obj.read_funding_events = lambda: {
             "optimism_withdrawals": {
@@ -9694,10 +9682,7 @@ class TestDropLegacyTransferEntries:
         assert _drop_legacy_transfer_entries(None) is None
 
     def test_applied_when_loading_optimism_outgoing(self):
-        """Reading optimism_outgoing strips legacy entries on the fly so
-        the seen-set built from disk doesn't include unmappable uids that
-        would let API responses double-append.
-        """
+        """Loading optimism_outgoing strips legacy entries lacking transfer_id."""
         obj = _mk()
         obj.read_funding_events = lambda: {
             "optimism_outgoing": {

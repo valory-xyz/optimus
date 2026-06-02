@@ -83,7 +83,6 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
 
-# Add these constants to the class or base file
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
 TRANSFER_EVENT_SIGNATURE = (
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -103,7 +102,9 @@ SAFE_TRANSFERS_PAGE_LIMIT = 100
 # Time-to-live for the kv-side caches around the expensive ROI math. Set to
 # 30 minutes so a same-day top-up shows up on the next half-hour boundary
 # rather than waiting for the day to roll over. Bigger means fewer Safe API
-# calls per hour, smaller means fresher ROI numbers. Single-knob tuning.
+# calls per hour, smaller means fresher ROI numbers. The two values are
+# kept as separate constants so the two caches can be tuned independently
+# if one path turns out to need a different cadence.
 INITIAL_INVESTMENT_CACHE_TTL_SECONDS = 30 * 60
 WITHDRAWAL_CACHE_TTL_SECONDS = 30 * 60
 
@@ -2456,6 +2457,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 try:
                     age_seconds = now_ts - int(ts)
                 except (ValueError, TypeError):
+                    self.context.logger.warning(
+                        f"Unparseable last_withdrawals_calculated_timestamp "
+                        f"{ts!r}; treating cache as expired"
+                    )
                     age_seconds = WITHDRAWAL_CACHE_TTL_SECONDS  # treat as expired
                 if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
                     cached = yield from self._read_kv(
@@ -2483,8 +2488,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
             )
             # ``None`` signals fetcher failure (exception or mid-pagination
-            # error). Skip the kv same-day cache write so a transient blip
-            # doesn't pin ``withdrawal=0`` for the rest of the day.
+            # error). Skip the kv cache write so a transient blip doesn't
+            # pin ``withdrawal=0`` until the next TTL boundary.
             if all_erc20_transfers_optimism is None:
                 self.context.logger.warning(
                     "Failed to fetch ERC20 transfers, returning zero withdrawal "
@@ -3160,7 +3165,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     except (ValueError, TypeError):
                         self.context.logger.warning(
-                            "Invalid timestamp format, treating cache as expired"
+                            f"Unparseable last_initial_value_calculated_timestamp "
+                            f"{timestamp!r}; treating cache as expired"
                         )
                         age_seconds = INITIAL_INVESTMENT_CACHE_TTL_SECONDS
 
@@ -3175,15 +3181,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         investment = yield from self._load_chain_total_investment(chain)
                         if investment:
                             return investment
-                        else:
-                            fetch_till_date = True
-
-                    # Cache expired: recompute incrementally (not full history)
-                    self.context.logger.info(
-                        f"Initial-investment cache expired ({age_seconds}s old); "
-                        "recomputing without full history"
-                    )
-                    fetch_till_date = False
+                        # In-window hit but stored value is falsy (0 or
+                        # missing) — load full history to repopulate rather
+                        # than the incremental path the expired branch uses.
+                        fetch_till_date = True
+                    else:
+                        # Cache expired: recompute incrementally (not full history)
+                        self.context.logger.info(
+                            f"Initial-investment cache expired ({age_seconds}s old); "
+                            "recomputing without full history"
+                        )
+                        fetch_till_date = False
 
                 # No previous calculation, need to fetch full history
                 else:
@@ -4051,8 +4059,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if pages_processed >= MAX_PAGINATION_PAGES:
                     self.context.logger.warning(
                         f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
-                        "Optimism incoming-transfers; stopping pagination"
+                        "Optimism incoming-transfers; treating as a failed fetch "
+                        "so partial data is not persisted with a falsely "
+                        "complete seen-set"
                     )
+                    fetch_failed = True
                     break
 
                 transfers_url = (
@@ -4211,13 +4222,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Advance pagination: stop when the API signals no more pages
-                # (next is null) or returns a short page (more pages would
-                # need a full page first).
-                if (
-                    response_json.get("next") is None
-                    or len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT
-                ):
+                # Advance pagination by offset. Safe's DRF pagination signals
+                # "no more pages" via ``next: null``. Empty ``results`` is
+                # handled earlier in the loop. We deliberately don't gate on
+                # ``len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT`` because Safe
+                # is free to return short non-final pages.
+                if response_json.get("next") is None:
                     break
                 offset += SAFE_TRANSFERS_PAGE_LIMIT
 
@@ -4728,8 +4738,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if pages_processed >= MAX_PAGINATION_PAGES:
                     self.context.logger.warning(
                         f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
-                        "Optimism outgoing-transfers; stopping pagination"
+                        "Optimism outgoing-transfers; treating as a failed fetch "
+                        "so partial data is not persisted with a falsely "
+                        "complete seen-set"
                     )
+                    fetch_failed = True
                     break
 
                 transfers_url = (
@@ -4947,8 +4960,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if pages_processed >= MAX_PAGINATION_PAGES:
                     self.context.logger.warning(
                         f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
-                        "Optimism withdrawals; stopping pagination"
+                        "Optimism withdrawals; treating as a failed fetch so "
+                        "partial data is not persisted with a falsely complete "
+                        "seen-set"
                     )
+                    fetch_failed = True
                     break
 
                 transfers_url = (

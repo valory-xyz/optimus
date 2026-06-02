@@ -9888,9 +9888,202 @@ class TestProxySafePagination:
         obj.context.coingecko = MagicMock()
         obj.params.sleep_time = 1
 
-        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        result = _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
         # Stops at the cap, not infinity.
         assert call_count[0] == MAX_PAGINATION_PAGES
+        # Cap-hit treated as failure: returns None and skips persistence,
+        # so partial pages don't seed next cycle's seen-set with a falsely
+        # complete view of history.
+        assert result is None
+        obj.store_funding_events.assert_not_called()
+
+    def test_incoming_fetcher_paginates_via_proxy_base_url(self):
+        """Same proxy-URL guarantee for the incoming-transfers fetcher.
+
+        Mocks a paginated response whose ``next`` is an absolute Safe host
+        URL; asserts the second request stays on ``safe_api_v1_url``.
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        captured: List[str] = []
+        call_count = [0]
+
+        def req(*a, **kw):
+            captured.append(kw.get("endpoint", a[0] if a else ""))
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return (
+                    True,
+                    {
+                        "results": [self._outgoing_usdc(f"tid-{call_count[0]}")],
+                        "next": "https://safe-transaction-optimism.safe.global/api/v1/safes/0xS/incoming-transfers/?offset=100",
+                    },
+                )
+            return (True, {"results": [], "next": None})
+
+        obj._request_with_retries = req
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        existing: Dict[str, Any] = {}
+        all_transfers_by_date: Dict[str, List[Dict]] = defaultdict(list)
+        _drive(
+            obj._fetch_optimism_transfers_safeglobal(
+                "0xAddr", "2099-01-01", all_transfers_by_date, existing
+            )
+        )
+
+        assert call_count[0] == 2
+        assert all(
+            url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
+        ), captured
+        assert all("safe.global" not in url for url in captured), captured
+
+    def test_outgoing_eth_fetcher_paginates_via_proxy_base_url(self):
+        """Same proxy-URL guarantee for the outgoing-ETH fetcher."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        captured: List[str] = []
+        call_count = [0]
+
+        def eth_transfer(tid: str) -> Dict[str, Any]:
+            return {
+                "transferId": tid,
+                "executionDate": "2024-01-01T10:00:00Z",
+                "from": "0xaddr",
+                "to": "0xR",
+                "type": "ETHER_TRANSFER",
+                "value": "1000000000000000000",
+                "transactionHash": f"0xH-{tid}",
+            }
+
+        def req(*a, **kw):
+            captured.append(kw.get("endpoint", a[0] if a else ""))
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return (
+                    True,
+                    {
+                        "results": [eth_transfer(f"tid-{call_count[0]}")],
+                        "next": "https://safe-transaction-optimism.safe.global/api/v1/safes/0xaddr/transfers/?offset=100",
+                    },
+                )
+            return (True, {"results": [], "next": None})
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(
+            obj._fetch_outgoing_transfers_until_date_optimism("0xaddr", "2099-01-01")
+        )
+
+        assert call_count[0] == 2
+        assert all(
+            url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
+        ), captured
+        assert all("safe.global" not in url for url in captured), captured
+
+    def test_incoming_fetcher_max_pagination_cap(self):
+        """MAX_PAGINATION_PAGES cap on incoming fetcher signals fetch failure."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            MAX_PAGINATION_PAGES,
+        )
+
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [self._outgoing_usdc(f"tid-{call_count[0]}")],
+                    "next": "x",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        existing: Dict[str, Any] = {}
+        all_transfers_by_date: Dict[str, List[Dict]] = defaultdict(list)
+        success = _drive(
+            obj._fetch_optimism_transfers_safeglobal(
+                "0xAddr", "2099-01-01", all_transfers_by_date, existing
+            )
+        )
+        assert call_count[0] == MAX_PAGINATION_PAGES
+        # Cap-hit signals failure so the caller skips persistence.
+        assert success is False
+
+    def test_outgoing_eth_fetcher_max_pagination_cap(self):
+        """MAX_PAGINATION_PAGES cap on outgoing-ETH fetcher skips persistence."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            MAX_PAGINATION_PAGES,
+        )
+
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [
+                        {
+                            "transferId": f"tid-{call_count[0]}",
+                            "executionDate": "2024-01-01T10:00:00Z",
+                            "from": "0xaddr",
+                            "to": "0xR",
+                            "type": "ETHER_TRANSFER",
+                            "value": "1000000000000000000",
+                            "transactionHash": f"0xH-{call_count[0]}",
+                        }
+                    ],
+                    "next": "x",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        result = _drive(
+            obj._fetch_outgoing_transfers_until_date_optimism("0xaddr", "2099-01-01")
+        )
+        assert call_count[0] == MAX_PAGINATION_PAGES
+        # Cap-hit treated as failure: returns the raw pre-migration shape
+        # ({}) and store is not called, so the partial pages aren't
+        # persisted.
+        assert result == {}
+        obj.store_funding_events.assert_not_called()
 
 
 class TestKvCacheTtlBoundaries:
@@ -9940,7 +10133,7 @@ class TestKvCacheTtlBoundaries:
         assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
 
     def test_initial_investment_cache_just_inside_ttl_is_hit(self):
-        """Age = TTL - 1 second is a cache hit; age = TTL is a miss."""
+        """Age = TTL - 1 second is a cache hit for the initial-investment path."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
             INITIAL_INVESTMENT_CACHE_TTL_SECONDS,
         )
@@ -9962,3 +10155,154 @@ class TestKvCacheTtlBoundaries:
             _drive(obj.calculate_initial_investment_value_from_funding_events())
             == 777.0
         )
+
+    def test_withdrawal_cache_just_inside_ttl_is_hit(self):
+        """Age = TTL - 1 second is a cache hit for the withdrawal path."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            WITHDRAWAL_CACHE_TTL_SECONDS,
+        )
+
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        now_ts = 1704067200
+        just_inside_ttl_ts = now_ts - (WITHDRAWAL_CACHE_TTL_SECONDS - 1)
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(just_inside_ttl_ts),
+            "optimism_total_withdrawals": "42.0",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        obj._read_kv = fake_read_kv
+        obj._get_current_timestamp = lambda: now_ts
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal("42.0")
+        assert called[0] == 0
+
+    def test_withdrawal_cache_just_outside_ttl_is_miss(self):
+        """Age = TTL exactly is a cache miss for the withdrawal path."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            WITHDRAWAL_CACHE_TTL_SECONDS,
+        )
+
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        now_ts = 1704067200
+        at_ttl_ts = now_ts - WITHDRAWAL_CACHE_TTL_SECONDS
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(at_ttl_ts),
+            "optimism_total_withdrawals": "42.0",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._get_current_timestamp = lambda: now_ts
+        obj._track_erc20_transfers_optimism = _gen_return({"outgoing": {}})
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
+
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
+        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+
+    def test_initial_investment_cache_negative_age_treated_as_expired(self):
+        """Future-dated last_initial_value_calculated_timestamp recomputes."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+
+        now_ts = 1704067200
+        future_ts = str(now_ts + 3600)
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp": future_ts}
+        )
+        obj._get_current_timestamp = lambda: now_ts
+
+        load_called = [0]
+
+        def load_chain(*a, **kw):
+            """Confirm the cache-hit branch did not fire."""
+            load_called[0] += 1
+            yield
+            return 1.0
+
+        obj._load_chain_total_investment = load_chain
+        obj._fetch_all_transfers_until_date_optimism = _gen_return(
+            {"d": [{"symbol": "USDC", "delta": 1}]}
+        )
+        obj._calculate_chain_investment_value = _gen_return(123.0)
+        obj._save_chain_total_investment = _gen_none
+        obj._write_kv = _gen_none
+
+        result = _drive(obj.calculate_initial_investment_value_from_funding_events())
+        # Cache treated as expired (negative age) → cache-hit branch is
+        # skipped, _load_chain_total_investment is never called, and the
+        # recompute path runs.
+        assert result == 123.0
+        assert load_called[0] == 0
+
+    def test_initial_investment_ttl_hit_falsy_passes_full_history_flag_to_mode(self):
+        """In-window cache hit with falsy stored value loads full history.
+
+        Previously a falsy cached value still fell through to the
+        ``fetch_till_date = False`` branch (incremental fetch), which
+        contradicted the ``fetch_till_date = True`` set on the falsy-hit
+        path. The fix moves the expired branch into an explicit ``else``.
+        The Mode fetcher is the one that consumes ``fetch_till_date``, so
+        we exercise the Mode chain to actually observe the flag value.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["mode"]
+        obj.params.safe_contract_addresses = {"mode": "0xSafe"}
+        obj.params.airdrop_started = False
+
+        now_ts = 1704067200
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp": str(now_ts - 60)}
+        )
+        obj._get_current_timestamp = lambda: now_ts
+        # Stored cache value is falsy — triggers the "load full history" branch.
+        obj._load_chain_total_investment = _gen_return(0.0)
+
+        captured: Dict[str, Any] = {}
+
+        def fetch_mode(address, end_date, fetch_till_date):
+            captured["fetch_till_date"] = fetch_till_date
+            yield
+            return {"d": [{"symbol": "USDC", "delta": 1}]}
+
+        obj._fetch_all_transfers_until_date_mode = fetch_mode
+        obj._calculate_chain_investment_value = _gen_return(500.0)
+        obj._save_chain_total_investment = _gen_none
+        obj._write_kv = _gen_none
+
+        result = _drive(obj.calculate_initial_investment_value_from_funding_events())
+        assert result == 500.0
+        # The falsy in-window branch must request full history. Before the
+        # else-wrap fix, fetch_till_date was overwritten back to False by
+        # the (now-explicit) expired branch.
+        assert captured["fetch_till_date"] is True

@@ -1853,6 +1853,9 @@ class TestCalculateWithdrawalsValue:
 
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        # No prior cache; fetcher returns None so the function short-circuits
+        # before reaching the kv write.
+        obj._read_kv = _gen_return({})
         obj._track_erc20_transfers_optimism = _gen_return(None)
         gen = obj.calculate_withdrawals_value()
         assert _drive(gen) == Decimal(0)
@@ -1863,8 +1866,13 @@ class TestCalculateWithdrawalsValue:
 
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        # No prior cache; fetcher returns data so the function recomputes and
+        # writes the kv cache on the way out.
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
         obj._track_erc20_transfers_optimism = _gen_return({"outgoing": {"d": []}})
         obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("25"))
+        obj._get_current_timestamp = lambda: 1704067200
         gen = obj.calculate_withdrawals_value()
         assert _drive(gen) == Decimal("25")
 
@@ -7375,15 +7383,24 @@ class TestOutgoingOptimism:
         )
 
     def test_fail(self):
-        """Test fail."""
+        """Failed fetch returns previously-persisted data and does not store."""
         o = _mk()
+        # Disk has a legacy entry the migration would strip — assert it
+        # survives a failed fetch because we don't persist the stripped shape.
+        o.read_funding_events = lambda: {
+            "optimism_outgoing": {"2024-01-01": [{"y": 1}]}
+        }
+        o.store_funding_events = MagicMock()
         o._request_with_retries = _gen_return((False, {}))
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
-        assert (
-            _drive(o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01"))
-            == {}
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01")
         )
+        # Returns the previously-persisted raw shape (legacy entry kept).
+        assert result == {"2024-01-01": [{"y": 1}]}
+        # store must NOT fire on fetch failure.
+        o.store_funding_events.assert_not_called()
 
     def test_eth(self):
         """Test eth."""
@@ -7481,14 +7498,14 @@ class TestErc20Optimism:
         }
 
     def test_fail(self):
-        """Test fail."""
+        """Fetch failure now returns None so the kv same-day cache is skipped."""
         o = _mk()
         o._request_with_retries = _gen_return((False, {}))
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
-        assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) == {
-            "outgoing": {}
-        }
+        assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) is None
+        # No persistence on failure: store_funding_events should not be called.
+        o.store_funding_events.assert_not_called()
 
     def test_usdc(self):
         """Test usdc."""
@@ -7514,7 +7531,7 @@ class TestErc20Optimism:
         )
 
     def test_exception(self):
-        """Test exception."""
+        """Exception inside the fetcher now returns None so the kv cache is skipped."""
         o = _mk()
 
         def boom(*a, **kw):
@@ -7525,9 +7542,7 @@ class TestErc20Optimism:
         o._request_with_retries = boom
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
-        assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) == {
-            "outgoing": {}
-        }
+        assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) is None
 
 
 class TestTrackEthMode:
@@ -8502,19 +8517,24 @@ class TestReversionDateIso:
 class TestIncrementalOptimismFetching:
     """Tests for early-stop pagination and caching in Optimism transfer fetching."""
 
-    def test_safeglobal_stops_on_existing_dates(self):
-        """Pagination stops when entire page is on already-stored dates."""
+    def test_safeglobal_stops_on_existing_transfer_ids(self):
+        """Pagination stops once every transfer on a page has a seen uid."""
         o = _mk()
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
 
+        # Persisted on a prior cycle with explicit transfer_id fields so the
+        # uid-based dedup recognises them on the new page.
         existing_data = {
-            "2024-12-15": [{"symbol": "ETH", "amount": 1.0}],
+            "2024-12-15": [
+                {"transfer_id": "tid-1", "symbol": "ETH", "amount": 1.0},
+                {"transfer_id": "tid-2", "symbol": "ETH", "amount": 1.0},
+            ],
         }
-        # All transfers in page are on already-stored date
         page_data = {
             "results": [
                 {
+                    "transferId": "tid-1",
                     "executionDate": "2024-12-15T10:00:00Z",
                     "from": "0xSender",
                     "type": "ETHER_TRANSFER",
@@ -8522,6 +8542,7 @@ class TestIncrementalOptimismFetching:
                     "transactionHash": "0xH1",
                 },
                 {
+                    "transferId": "tid-2",
                     "executionDate": "2024-12-15T11:00:00Z",
                     "from": "0xSender",
                     "type": "ETHER_TRANSFER",
@@ -8540,14 +8561,8 @@ class TestIncrementalOptimismFetching:
                 "0xAddr", "2025-01-01", all_transfers, existing_data
             )
         )
-        # No new transfers should be added (all skipped as existing)
+        # No new transfers should be added (every uid in the page was seen)
         assert len(all_transfers) == 0
-        # API was called only once (early-stop prevented following "next" cursor)
-        assert (
-            o._request_with_retries.call_count
-            if hasattr(o._request_with_retries, "call_count")
-            else True
-        )
 
     def test_outgoing_persists_new_transfers(self):
         """New outgoing transfers are persisted to funding_events."""
@@ -8577,9 +8592,17 @@ class TestIncrementalOptimismFetching:
         o.store_funding_events.assert_called()
 
     def test_outgoing_returns_existing_on_no_address(self):
-        """When no address is provided, returns existing persisted data."""
+        """When no address is provided, returns existing persisted data.
+
+        The persisted entry carries ``transfer_id`` so the on-load legacy
+        migration does not drop it.
+        """
         o = _mk()
-        o.funding_events = {"optimism_outgoing": {"2024-01-01": [{"symbol": "ETH"}]}}
+        o.funding_events = {
+            "optimism_outgoing": {
+                "2024-01-01": [{"symbol": "ETH", "transfer_id": "tid-1"}]
+            }
+        }
         result = _drive(
             o._fetch_outgoing_transfers_until_date_optimism("", "2025-01-01")
         )
@@ -8821,20 +8844,28 @@ class TestCoverageGaps:
         assert "2024-12-15" in result
         o.store_funding_events.assert_called()
 
-    def test_outgoing_merge_skips_existing_dates(self):
-        """New transfers on already-stored dates are not overwritten during merge."""
+    def test_outgoing_merge_preserves_existing_when_dates_overlap(self):
+        """Page entries on a stored date are appended, not replacing the list."""
         o = _mk()
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
         o.funding_events = {
             "optimism_outgoing": {
-                "2024-12-15": [{"symbol": "ETH", "amount": 0.5, "tx_hash": "0xOLD"}],
+                "2024-12-15": [
+                    {
+                        "transfer_id": "tid-old",
+                        "symbol": "ETH",
+                        "amount": 0.5,
+                        "tx_hash": "0xOLD",
+                    }
+                ],
             }
         }
         # Page has one transfer on an existing date and one on a new date
         page_data = {
             "results": [
                 {
+                    "transferId": "tid-new",
                     "executionDate": "2024-12-20T10:00:00Z",
                     "from": "0xsafe",
                     "to": "0xR",
@@ -8843,6 +8874,7 @@ class TestCoverageGaps:
                     "transactionHash": "0xNEW",
                 },
                 {
+                    "transferId": "tid-dup",
                     "executionDate": "2024-12-15T12:00:00Z",
                     "from": "0xsafe",
                     "to": "0xR",
@@ -8858,10 +8890,12 @@ class TestCoverageGaps:
         result = _drive(
             o._fetch_outgoing_transfers_until_date_optimism("0xSafe", "2025-01-01")
         )
-        # New date added
+        # New date added.
         assert "2024-12-20" in result
-        # Existing date kept original data (not overwritten)
-        assert result["2024-12-15"][0]["tx_hash"] == "0xOLD"
+        # Existing entry on 2024-12-15 is preserved alongside the new entry.
+        tx_hashes_on_dec_15 = {t.get("tx_hash") for t in result["2024-12-15"]}
+        assert "0xOLD" in tx_hashes_on_dec_15
+        assert "0xDUP" in tx_hashes_on_dec_15
 
 
 class TestClosedPositionsBranch:
@@ -8912,29 +8946,62 @@ class TestFetchAllTransfersDateMerge:
         assert "2024-02-01" in r
 
     def test_optimism_existing_funding_events(self):
-        """Lines 3225, 3243-3244: existing funding_events truthy, merge new dates."""
+        """Persisted dates are migrated and new dates appended after a successful fetch."""
         obj = _mk()
-        obj.read_funding_events = lambda: {"optimism": {"2024-01-01": [{"y": 1}]}}
+        # Persisted entry carries transfer_id so it survives the legacy
+        # migration on load.
+        obj.read_funding_events = lambda: {
+            "optimism": {"2024-01-01": [{"transfer_id": "tid-old", "y": 1}]}
+        }
         obj.store_funding_events = MagicMock()
 
-        # _fetch_optimism_transfers_safeglobal adds a new date
+        # _fetch_optimism_transfers_safeglobal adds a new date and signals success
         def sfg(*a, **kw):
-            """Sfg."""
+            """Stub fetcher that records a new date and returns True."""
             a[2]["2024-02-01"] = [{"y": 2}]  # all_transfers_by_date
             yield
+            return True
 
         obj._fetch_optimism_transfers_safeglobal = sfg
         r = _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
         assert "2024-02-01" in r
+        # store fires only after a successful fetch.
+        obj.store_funding_events.assert_called_once()
 
     def test_optimism_empty_funding_events(self):
-        """Line 3247->3249: funding_events falsy after fetch."""
+        """Empty disk state returns an empty dict without crashing."""
         obj = _mk()
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
-        obj._fetch_optimism_transfers_safeglobal = _gen_none
+
+        def sfg(*a, **kw):
+            """Stub fetcher: no new transfers, fully successful."""
+            yield
+            return True
+
+        obj._fetch_optimism_transfers_safeglobal = sfg
         r = _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
         assert isinstance(r, dict)
+
+    def test_optimism_fetch_failure_does_not_persist_partial(self):
+        """Fetch failure must not persist the stripped migration shape."""
+        obj = _mk()
+        # Disk has a legacy entry without transfer_id — exactly the shape
+        # the migration would strip.
+        obj.read_funding_events = lambda: {"optimism": {"2024-01-01": [{"y": 1}]}}
+        obj.store_funding_events = MagicMock()
+
+        def sfg(*a, **kw):
+            """Stub fetcher: simulates a partial-page success then failure."""
+            a[2]["2024-02-01"] = [{"y": 99}]  # partial new data
+            yield
+            return False
+
+        obj._fetch_optimism_transfers_safeglobal = sfg
+        _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
+        # store must NOT fire on failure — disk keeps the original legacy
+        # entries intact for next cycle to retry against.
+        obj.store_funding_events.assert_not_called()
 
 
 class TestTokenTransfersModeAmountZero:
@@ -9139,3 +9206,606 @@ class TestTransferMissingFromKey:
         result = _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
         # Transfer without "from" should be silently skipped, no crash
         assert isinstance(result, dict)
+
+
+class TestTransferUniqueIdHelper:
+    """_transfer_unique_id picks the best stable identifier."""
+
+    def test_safe_transferid_preferred(self):
+        """Safe's transferId wins over transactionHash + log_index."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        uid = _transfer_unique_id(
+            {"transferId": "tid-1", "transactionHash": "0xH", "logIndex": 4}
+        )
+        assert uid == "tid-1"
+
+    def test_falls_back_to_txhash_and_log_index(self):
+        """API responses without transferId still produce a stable id."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        assert _transfer_unique_id({"transactionHash": "0xH", "logIndex": 3}) == "0xH:3"
+
+    def test_falls_back_to_persisted_dict_shape(self):
+        """Legacy persisted dicts (tx_hash, type, amount) still get a stable id.
+
+        Without this fallback, restoring funding_events.json from a previous
+        deployment would mean every transfer looks 'new' on the first warm
+        cycle after upgrade.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        uid = _transfer_unique_id({"tx_hash": "0xH", "type": "token", "amount": "16.0"})
+        assert uid == "0xH:token:16.0"
+
+    def test_empty_when_no_identifier(self):
+        """A transfer with no identifying fields returns the empty string.
+
+        Callers must check the return for truthiness before adding to
+        ``seen_ids`` — otherwise an empty id would collide across unrelated
+        malformed transfers.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        assert _transfer_unique_id({}) == ""
+
+    def test_log_index_zero_is_kept(self):
+        """logIndex=0 is a valid index (first log in tx), not falsy."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _transfer_unique_id,
+        )
+
+        assert _transfer_unique_id({"transactionHash": "0xH", "logIndex": 0}) == "0xH:0"
+
+
+class TestCollectSeenTransferIdsHelper:
+    """_collect_seen_transfer_ids walks date-keyed dicts and gathers IDs."""
+
+    def test_empty(self):
+        """None and empty dict produce an empty set without errors."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _collect_seen_transfer_ids,
+        )
+
+        assert _collect_seen_transfer_ids({}) == set()
+        assert _collect_seen_transfer_ids(None) == set()
+
+    def test_collects_from_mixed_shapes(self):
+        """Collect IDs from new and legacy persisted transfer dicts."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _collect_seen_transfer_ids,
+        )
+
+        data = {
+            "2025-06-23": [
+                {"transfer_id": "tid-1"},
+                {"tx_hash": "0xABC", "type": "token", "amount": "16.0"},
+            ],
+            "2026-03-12": [
+                {"transferId": "tid-2"},
+            ],
+        }
+        seen = _collect_seen_transfer_ids(data)
+        assert "tid-1" in seen
+        assert "tid-2" in seen
+        assert "0xABC:token:16.0" in seen
+
+    def test_ignores_malformed_entries(self):
+        """Defensive: non-dict entries in the value list don't crash."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _collect_seen_transfer_ids,
+        )
+
+        data = {"2025-01-01": [None, "not a dict", {"transfer_id": "ok"}]}
+        assert _collect_seen_transfer_ids(data) == {"ok"}
+
+
+class TestErc20OptimismWithdrawalCache:
+    """Withdrawal fetcher persistence and early-stop (PR 1.1 + 1.2)."""
+
+    @staticmethod
+    def _transfer(tid: str, date: str = "2024-01-01", amount: str = "1000000"):
+        """Build a minimal Safe API ERC20 transfer dict."""
+        return {
+            "transferId": tid,
+            "executionDate": f"{date}T10:00:00Z",
+            "from": "0xaddr",
+            "to": "0xR",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xT",
+            "value": amount,
+            "transactionHash": f"0xH-{tid}",
+        }
+
+    def test_cold_start_persists_withdrawals_under_new_key(self):
+        """First run with empty cache persists under optimism_withdrawals."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        store = MagicMock()
+        obj.store_funding_events = store
+        obj.funding_events = {}
+
+        obj._request_with_retries = _gen_return(
+            (True, {"results": [self._transfer("tid-1")], "next": None})
+        )
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        result = _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+        assert "2024-01-01" in result["outgoing"]
+        # New schema key persisted
+        assert "optimism_withdrawals" in obj.funding_events
+        assert "2024-01-01" in obj.funding_events["optimism_withdrawals"]
+        stored = obj.funding_events["optimism_withdrawals"]["2024-01-01"][0]
+        # transfer_id round-trips so future cycles can rebuild the seen-set
+        assert stored["transfer_id"] == "tid-1"
+        store.assert_called_once()
+
+    def test_warm_start_early_stops_after_one_page(self):
+        """Loop breaks after page 1 when persisted transferIds match API."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_withdrawals": {
+                "2024-01-01": [
+                    {
+                        "transfer_id": "tid-1",
+                        "from_address": "0xAddr",
+                        "to_address": "0xR",
+                        "amount": 1.0,
+                        "tx_hash": "0xH-tid-1",
+                        "type": "token",
+                    }
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            """Fake _request_with_retries that always advertises a next URL."""
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [TestErc20OptimismWithdrawalCache._transfer("tid-1")],
+                    "next": "would-paginate-without-early-stop",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # Exactly one HTTP call: the early-stop fires after page 1.
+        assert call_count[0] == 1
+
+    def test_same_day_topup_with_new_transfer_id_lands(self):
+        """Same-day top-up with a new transferId is merged, not dropped."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_withdrawals": {
+                "2024-01-01": [
+                    {
+                        "transfer_id": "tid-morning",
+                        "from_address": "0xAddr",
+                        "amount": 5.0,
+                        "type": "token",
+                    }
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        # Safe returns newest-first: the afternoon top-up, then the morning one
+        obj._request_with_retries = _gen_return(
+            (
+                True,
+                {
+                    "results": [
+                        self._transfer("tid-afternoon", date="2024-01-01"),
+                        self._transfer("tid-morning", date="2024-01-01"),
+                    ],
+                    "next": None,
+                },
+            )
+        )
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+        stored = obj.funding_events["optimism_withdrawals"]["2024-01-01"]
+        ids = {t.get("transfer_id") for t in stored}
+        assert {"tid-morning", "tid-afternoon"}.issubset(ids)
+
+
+class TestCalculateWithdrawalsValueSameDayCache:
+    """Same-day kv cache for the optimism withdrawal path (PR 1.1)."""
+
+    def test_cache_hit_skips_fetcher(self):
+        """Same-day kv hit returns cached value without calling the fetcher."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        # Set the cache to "computed at the start of today (UTC)" so the
+        # production code's local-date check agrees with the stored UTC-derived
+        # date for any timezone that doesn't wrap day boundaries mid-second.
+        today_midnight_ts = int(
+            datetime.now()
+            .replace(hour=12, minute=0, second=0, microsecond=0)
+            .timestamp()
+        )
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(today_midnight_ts),
+            "optimism_total_withdrawals": "12.5",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        obj._read_kv = fake_read_kv
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("12.5")
+        assert called[0] == 0
+
+    def test_cache_miss_recalculates_and_writes_kv(self):
+        """Stale cache (different calendar day) recomputes and writes kv."""
+        from datetime import timedelta
+
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        # last calc was two days ago → cache miss
+        yesterday_ts = int((datetime.now() - timedelta(days=2)).timestamp())
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(yesterday_ts),
+            "optimism_total_withdrawals": "8.0",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._track_erc20_transfers_optimism = _gen_return(
+            {
+                "outgoing": {
+                    "2024-01-01": [
+                        {
+                            "amount": 3.0,
+                            "symbol": "USDC",
+                            "timestamp": "2024-01-01T00:00:00Z",
+                        }
+                    ]
+                }
+            }
+        )
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("3.0"))
+        obj._get_current_timestamp = lambda: 1704067200
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("3.0")
+        assert writes["optimism_total_withdrawals"] == "3.0"
+        assert writes["last_withdrawals_calculated_timestamp"] == "1704067200"
+
+    def test_cache_with_no_prior_timestamp_falls_through(self):
+        """No prior kv entry → fetcher runs and cache is freshly written."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return {}
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._track_erc20_transfers_optimism = _gen_return({"outgoing": {}})
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
+        obj._get_current_timestamp = lambda: 1704067200
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("0")
+        # First-time write seeds the cache
+        assert "optimism_total_withdrawals" in writes
+        assert "last_withdrawals_calculated_timestamp" in writes
+
+    def test_fetcher_failure_skips_kv_write(self):
+        """Fetcher returning None must skip the kv same-day cache write."""
+        from datetime import timedelta
+
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        yesterday_ts = int((datetime.now() - timedelta(days=2)).timestamp())
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(yesterday_ts),
+            "optimism_total_withdrawals": "5.0",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._track_erc20_transfers_optimism = _gen_return(None)
+        obj._get_current_timestamp = lambda: 1704067200
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal(0)
+        # Critical: no kv write on failure so the next cycle retries.
+        assert writes == {}
+
+
+class TestErc20OptimismFailureModes:
+    """Failure handling for _track_erc20_transfers_optimism (PR review fixes)."""
+
+    @staticmethod
+    def _transfer(tid: str, date: str = "2024-01-01") -> Dict[str, Any]:
+        """Build a minimal Safe API outgoing USDC transfer dict."""
+        return {
+            "transferId": tid,
+            "executionDate": f"{date}T10:00:00Z",
+            "from": "0xaddr",
+            "to": "0xR",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xT",
+            "value": "1000000",
+            "transactionHash": f"0xH-{tid}",
+        }
+
+    def test_mid_pagination_failure_discards_partial_and_returns_none(self):
+        """Page 1 succeeds and is followed by a page 2 fetch failure.
+
+        Returning a partial dict here, plus seeding next cycle's seen-set
+        with the page-1 ids, would let the early-stop fire on a fully-seen
+        page 1 next time and permanently drop page-2 and older data.
+        Instead the function must return None and skip persistence.
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            """First call returns one transfer + a next cursor; second fails."""
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return (
+                    True,
+                    {
+                        "results": [self._transfer("tid-1")],
+                        "next": "next-page-url",
+                    },
+                )
+            return (False, {})
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        result = _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        assert result is None
+        # Partial data must NOT be persisted on mid-pagination failure.
+        obj.store_funding_events.assert_not_called()
+
+    def test_eligible_only_early_stop_with_mixed_page(self):
+        """Mixed-traffic page still trips early-stop when every eligible is seen."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_withdrawals": {
+                "2024-01-01": [
+                    {"transfer_id": "tid-seen"},
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        outgoing = self._transfer("tid-seen")
+        incoming_eth_unseen = {
+            "transferId": "tid-incoming",
+            "executionDate": "2024-01-01T09:00:00Z",
+            "from": "0xSomeoneElse",
+            "to": "0xaddr",
+            "type": "ETHER_TRANSFER",
+            "value": "1000000000000000000",
+            "transactionHash": "0xHE",
+        }
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            """Returns a mixed page advertising another page; should stop after page 1."""
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [outgoing, incoming_eth_unseen],
+                    "next": "would-paginate-without-eligible-only-stop",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # One call: stop fires because all eligible (outgoing-ERC20)
+        # entries on the page are already seen, even though an unrelated
+        # incoming entry is also present.
+        assert call_count[0] == 1
+
+    def test_eligible_only_early_stop_with_non_usdc_outgoing_erc20(self):
+        """Non-USDC outgoing ERC20 must not block the early-stop.
+
+        The seen-set only ever receives outgoing-USDC uids, so any
+        non-USDC outgoing ERC20 (fee tokens, LP tokens, anything else
+        the safe might transfer out) must NOT be counted in
+        ``eligible_in_page``. Without this, a single non-USDC outgoing
+        entry on the page would make ``seen_eligible_in_page ==
+        eligible_in_page`` unreachable and the loop would paginate the
+        full history on every cache-miss for any safe with mixed
+        outgoing tokens.
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_withdrawals": {
+                "2024-01-01": [
+                    {"transfer_id": "tid-usdc-seen"},
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        usdc_outgoing_seen = self._transfer("tid-usdc-seen")
+        non_usdc_outgoing = {
+            "transferId": "tid-aero-unseen",
+            "executionDate": "2024-01-01T11:00:00Z",
+            "from": "0xaddr",
+            "to": "0xR",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "AERO", "decimals": 18},
+            "tokenAddress": "0xAERO",
+            "value": str(10**18),
+            "transactionHash": "0xH-aero",
+        }
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            """Returns a page with one USDC (seen) and one non-USDC outgoing."""
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [usdc_outgoing_seen, non_usdc_outgoing],
+                    "next": "would-paginate-if-non-usdc-blocked-stop",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # One call: AERO is filtered out of eligible_in_page, so the
+        # single eligible (USDC) entry being already-seen trips the stop.
+        assert call_count[0] == 1
+
+
+class TestDropLegacyTransferEntries:
+    """Migration that removes pre-PR persisted entries lacking transfer_id."""
+
+    def test_drops_entries_without_transfer_id(self):
+        """Legacy entries without transfer_id are removed."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _drop_legacy_transfer_entries,
+        )
+
+        data = {
+            "2024-01-01": [
+                {"tx_hash": "0xA", "type": "token", "amount": "1.0"},
+                {"transfer_id": "tid-1", "tx_hash": "0xB"},
+            ],
+            "2024-01-02": [
+                {"tx_hash": "0xC", "amount": "2.0"},
+            ],
+        }
+        migrated, dropped = _drop_legacy_transfer_entries(data)
+        # Only the entry with transfer_id survives on 2024-01-01;
+        # 2024-01-02 has no surviving entries so the key is dropped.
+        assert migrated == {"2024-01-01": [{"transfer_id": "tid-1", "tx_hash": "0xB"}]}
+        # Two legacy entries were dropped (the 2024-01-01 first entry and
+        # the only 2024-01-02 entry).
+        assert dropped == 2
+
+    def test_empty_input_returns_empty(self):
+        """Empty/None input passes through untouched."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _drop_legacy_transfer_entries,
+        )
+
+        assert _drop_legacy_transfer_entries({}) == ({}, 0)
+        assert _drop_legacy_transfer_entries(None) == (None, 0)
+
+    def test_applied_when_loading_optimism_outgoing(self):
+        """Loading optimism_outgoing strips legacy entries lacking transfer_id."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_outgoing": {
+                "2024-01-01": [
+                    {"tx_hash": "0xA", "type": "eth", "amount": "1.0"},  # legacy
+                    {"transfer_id": "tid-1", "tx_hash": "0xB"},  # new
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj._request_with_retries = _gen_return((True, {"results": [], "next": None}))
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(
+            obj._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2024-12-31")
+        )
+        # Legacy entry dropped, only the transfer_id-carrying entry remains.
+        kept = obj.funding_events["optimism_outgoing"]["2024-01-01"]
+        assert len(kept) == 1
+        assert kept[0]["transfer_id"] == "tid-1"

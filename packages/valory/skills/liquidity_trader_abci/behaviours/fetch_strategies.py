@@ -104,6 +104,9 @@ def _transfer_unique_id(transfer: Dict[str, Any]) -> str:
     API responses, then to (tx_hash, value/amount, type) for persisted
     entries that pre-date this dedup scheme. Returns "" when nothing
     identifying is present.
+
+    :param transfer: API or persisted transfer dict.
+    :return: a stable unique ID, or "" if nothing identifying is present.
     """
     tid = transfer.get("transferId") or transfer.get("transfer_id")
     if tid:
@@ -150,6 +153,10 @@ def _drop_legacy_transfer_entries(date_keyed_data: Dict[str, Any]) -> Dict[str, 
     a second time on the first warm cycle after upgrade. Dropping them forces
     one re-fetch that repopulates the date with proper ``transfer_id`` entries;
     the fetcher's early-stop keeps the cost bounded.
+
+    :param date_keyed_data: a ``{date: [transfer_dict, ...]}`` mapping.
+    :return: the same shape with any legacy entries removed (dates that end up
+        empty are dropped).
     """
     if not date_keyed_data:
         return date_keyed_data
@@ -4750,6 +4757,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         transient API blip from caching ``withdrawal=0`` for the rest of the
         day, and prevents partial-pagination data from being persisted with a
         falsely complete seen-set seeded into the next cycle.
+
+        :param safe_address: the Safe contract address.
+        :param final_timestamp: unix timestamp used as the upper bound for
+            ``executionDate`` filtering.
+        :yield: None.
+        :return: ``{"outgoing": <date-keyed transfers dict>}`` on success, or
+            ``None`` when the fetch failed.
         """
         try:
             if not self.funding_events:

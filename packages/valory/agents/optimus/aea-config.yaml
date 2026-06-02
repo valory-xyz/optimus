@@ -248,7 +248,7 @@ models:
       service_id: optimus
       service_registry_address: ${str:null}
       setup:
-        all_participants: ${ALL_PARTICIPANTS:list:["0x0000000000000000000000000000000000000000"]}
+        all_participants: ${list:["0x0000000000000000000000000000000000000000"]}
         consensus_threshold: ${int:null}
         safe_contract_address: ${str:0x0000000000000000000000000000000000000000}
       share_tm_config_on_startup: ${bool:false}

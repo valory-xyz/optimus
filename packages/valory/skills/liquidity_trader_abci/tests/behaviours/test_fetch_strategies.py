@@ -7489,7 +7489,7 @@ class TestErc20Optimism:
         }
 
     def test_fail(self):
-        """Fetch failure now returns None so the kv same-day cache is skipped."""
+        """Fetch failure now returns None so the kv TTL cache is skipped."""
         o = _mk()
         o._request_with_retries = _gen_return((False, {}))
         o.context.coingecko = MagicMock()
@@ -9425,7 +9425,7 @@ class TestErc20OptimismWithdrawalCache:
         assert {"tid-morning", "tid-afternoon"}.issubset(ids)
 
 
-class TestCalculateWithdrawalsValueSameDayCache:
+class TestCalculateWithdrawalsValueTtlCache:
     """TTL-based kv cache for the optimism withdrawal path (PRs 1.1 + 1.3)."""
 
     def test_cache_hit_skips_fetcher(self):
@@ -9536,7 +9536,7 @@ class TestCalculateWithdrawalsValueSameDayCache:
         assert "last_withdrawals_calculated_timestamp" in writes
 
     def test_fetcher_failure_skips_kv_write(self):
-        """Fetcher returning None must skip the kv same-day cache write."""
+        """Fetcher returning None must skip the kv TTL cache write."""
         from datetime import timedelta
 
         obj = _mk()
@@ -9812,6 +9812,18 @@ class TestProxySafePagination:
             "transactionHash": f"0xH-{tid}",
         }
 
+    @staticmethod
+    def _outgoing_eth(tid: str, date: str = "2024-01-01") -> Dict[str, Any]:
+        return {
+            "transferId": tid,
+            "executionDate": f"{date}T10:00:00Z",
+            "from": "0xaddr",
+            "to": "0xR",
+            "type": "ETHER_TRANSFER",
+            "value": "1000000000000000000",
+            "transactionHash": f"0xH-{tid}",
+        }
+
     def test_withdrawal_fetcher_paginates_via_proxy_base_url(self):
         """Subsequent page requests use safe_api_v1_url, not Safe's absolute next URL.
 
@@ -9956,17 +9968,6 @@ class TestProxySafePagination:
         captured: List[str] = []
         call_count = [0]
 
-        def eth_transfer(tid: str) -> Dict[str, Any]:
-            return {
-                "transferId": tid,
-                "executionDate": "2024-01-01T10:00:00Z",
-                "from": "0xaddr",
-                "to": "0xR",
-                "type": "ETHER_TRANSFER",
-                "value": "1000000000000000000",
-                "transactionHash": f"0xH-{tid}",
-            }
-
         def req(*a, **kw):
             captured.append(kw.get("endpoint", a[0] if a else ""))
             call_count[0] += 1
@@ -9975,7 +9976,7 @@ class TestProxySafePagination:
                 return (
                     True,
                     {
-                        "results": [eth_transfer(f"tid-{call_count[0]}")],
+                        "results": [self._outgoing_eth(f"tid-{call_count[0]}")],
                         "next": "https://safe-transaction-optimism.safe.global/api/v1/safes/0xaddr/transfers/?offset=100",
                     },
                 )
@@ -10056,17 +10057,7 @@ class TestProxySafePagination:
             return (
                 True,
                 {
-                    "results": [
-                        {
-                            "transferId": f"tid-{call_count[0]}",
-                            "executionDate": "2024-01-01T10:00:00Z",
-                            "from": "0xaddr",
-                            "to": "0xR",
-                            "type": "ETHER_TRANSFER",
-                            "value": "1000000000000000000",
-                            "transactionHash": f"0xH-{call_count[0]}",
-                        }
-                    ],
+                    "results": [self._outgoing_eth(f"tid-{call_count[0]}")],
                     "next": "x",
                 },
             )
@@ -10079,11 +10070,11 @@ class TestProxySafePagination:
             obj._fetch_outgoing_transfers_until_date_optimism("0xaddr", "2099-01-01")
         )
         assert call_count[0] == MAX_PAGINATION_PAGES
-        # Cap-hit treated as failure: returns the raw pre-migration shape
-        # ({}) and store is not called, so the partial pages aren't
-        # persisted.
-        assert result == {}
+        # Real invariant: cap-hit skips persistence. The ``{}`` return is
+        # incidental — it's the previously persisted shape, which is empty
+        # here because ``funding_events`` was seeded empty.
         obj.store_funding_events.assert_not_called()
+        assert result == {}
 
 
 class TestKvCacheTtlBoundaries:
@@ -10131,6 +10122,56 @@ class TestKvCacheTtlBoundaries:
         assert result == Decimal("0")
         assert called[0] == 1
         assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+
+    def test_initial_investment_cache_age_zero_is_hit(self):
+        """Age = 0 (same-second read/write) is a cache hit, pinning the ``<=`` lower bound."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._load_chain_total_investment = _gen_return(777.0)
+
+        now_ts = 1704067200
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp": str(now_ts)}
+        )
+        obj._get_current_timestamp = lambda: now_ts
+
+        assert (
+            _drive(obj.calculate_initial_investment_value_from_funding_events())
+            == 777.0
+        )
+
+    def test_withdrawal_cache_age_zero_is_hit(self):
+        """Age = 0 (same-second read/write) is a cache hit, pinning the ``<=`` lower bound."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        now_ts = 1704067200
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(now_ts),
+            "optimism_total_withdrawals": "12.5",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        obj._read_kv = fake_read_kv
+        obj._get_current_timestamp = lambda: now_ts
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal("12.5")
+        assert called[0] == 0
 
     def test_initial_investment_cache_just_inside_ttl_is_hit(self):
         """Age = TTL - 1 second is a cache hit for the initial-investment path."""

@@ -101,7 +101,7 @@ SAFE_TRANSFERS_PAGE_LIMIT = 100
 
 # Time-to-live for the kv-side caches around the expensive ROI math. Set to
 # 30 minutes so a same-day top-up shows up on the next half-hour boundary
-# rather than waiting for the day to roll over. Bigger means fewer Safe API
+# rather than waiting for the full TTL to expire. Bigger means fewer Safe API
 # calls per hour, smaller means fresher ROI numbers. The two values are
 # kept as separate constants so the two caches can be tuned independently
 # if one path turns out to need a different cadence.
@@ -4692,7 +4692,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         address: str,
         current_date: str,
     ) -> Generator[None, None, Dict]:
-        """Fetch outgoing ETH transfers from the safe address on Optimism, with persistence."""
+        """Fetch outgoing ETH transfers from the safe address on Optimism, with persistence.
+
+        On failure (mid-pagination fetch error, exception, or
+        ``MAX_PAGINATION_PAGES`` cap-hit) the function returns the previously
+        persisted outgoing data ``raw_existing_outgoing`` instead of a sentinel
+        ``None``. This is intentional and asymmetric with
+        ``_track_erc20_transfers_optimism``: the caller uses this data to
+        compute a transfer count for the reversion-info cache, and serving the
+        stale-but-known count keeps the cached reversion-info valid across
+        transient blips. Returning ``None`` (collapsed to ``{}`` by the
+        caller's ``or {}`` guard) would force a count of zero and invalidate
+        the cache on every blip. The trade-off: callers cannot distinguish
+        "fetch failed, returned stale data" from "Safe legitimately has no
+        outgoing transfers" — both produce ``{}`` on a fresh Safe. New
+        callers that need this distinction should add an explicit success
+        flag rather than reading the return shape.
+
+        :param address: the Safe contract address.
+        :param current_date: ISO date string used as the upper bound for
+            ``executionDate`` filtering.
+        :yield: None.
+        :return: outgoing-transfers dict keyed by date. On failure, the
+            previously persisted shape (possibly ``{}``).
+        """
         # Load persisted outgoing data. Migrate legacy entries into a local
         # variable but do NOT commit the stripped shape to self.funding_events
         # yet — on a mid-pagination fetch failure we want the previously
@@ -4917,11 +4940,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         silently dropped.
 
         Returns ``None`` on exception or on a mid-pagination fetch failure so
-        the caller can skip the kv same-day cache write and retry on the next
+        the caller can skip the kv TTL cache write and retry on the next
         cycle. Returning ``None`` (rather than an empty dict) prevents a single
-        transient API blip from caching ``withdrawal=0`` for the rest of the
-        day, and prevents partial-pagination data from being persisted with a
-        falsely complete seen-set seeded into the next cycle.
+        transient API blip from caching ``withdrawal=0`` until the next TTL
+        boundary, and prevents partial-pagination data from being persisted
+        with a falsely complete seen-set seeded into the next cycle.
 
         :param safe_address: the Safe contract address.
         :param final_timestamp: unix timestamp used as the upper bound for

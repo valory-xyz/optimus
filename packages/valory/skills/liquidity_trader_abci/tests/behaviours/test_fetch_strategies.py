@@ -9870,10 +9870,13 @@ class TestProxySafePagination:
         # No call leaked to Safe's host even though page 1 advertised it.
         assert all("safe.global" not in url for url in captured), captured
         # Offset is advanced by ``len(transfers)`` (1 here), not by the
-        # requested ``limit`` (100). A short non-final page must not cause
-        # the next request to skip records.
-        assert "offset=0" in captured[0], captured[0]
-        assert "offset=1" in captured[1], captured[1]
+        # requested ``limit`` (100). Anchored with ``endswith`` because
+        # ``"offset=1"`` is a substring of ``"offset=100"``, so the loose
+        # ``in`` check would still pass under a regression to
+        # ``offset += SAFE_TRANSFERS_PAGE_LIMIT``. A short non-final page
+        # must not cause the next request to skip records.
+        assert captured[0].endswith("&offset=0"), captured[0]
+        assert captured[1].endswith("&offset=1"), captured[1]
         # Page limit also pinned so a constant change would be caught.
         assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
 
@@ -9964,8 +9967,10 @@ class TestProxySafePagination:
         ), captured
         assert all("safe.global" not in url for url in captured), captured
         # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
-        assert "offset=0" in captured[0], captured[0]
-        assert "offset=1" in captured[1], captured[1]
+        # Anchored with ``endswith`` because ``"offset=1"`` is a substring of
+        # ``"offset=100"``.
+        assert captured[0].endswith("&offset=0"), captured[0]
+        assert captured[1].endswith("&offset=1"), captured[1]
         # Page limit also pinned so a constant change would be caught.
         assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
 
@@ -10008,8 +10013,10 @@ class TestProxySafePagination:
         ), captured
         assert all("safe.global" not in url for url in captured), captured
         # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
-        assert "offset=0" in captured[0], captured[0]
-        assert "offset=1" in captured[1], captured[1]
+        # Anchored with ``endswith`` because ``"offset=1"`` is a substring of
+        # ``"offset=100"``.
+        assert captured[0].endswith("&offset=0"), captured[0]
+        assert captured[1].endswith("&offset=1"), captured[1]
         # Page limit also pinned so a constant change would be caught.
         assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
 
@@ -10139,11 +10146,116 @@ class TestProxySafePagination:
         _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
 
         assert call_count[0] == 2
-        assert "offset=0" in captured[0], captured[0]
+        assert captured[0].endswith("&offset=0"), captured[0]
         # Page 2 must request offset=50 (the count consumed), not
         # offset=100 (the requested ``limit``). offset=100 would silently
-        # drop records 50-99.
-        assert "offset=50" in captured[1], captured[1]
+        # drop records 50-99. ``offset=50`` is not a substring of
+        # ``offset=100``, so the ``in`` form would already catch the bug,
+        # but ``endswith`` keeps the assertion consistent with the
+        # sibling tests above and is robust if a query-param is ever
+        # appended after ``offset``.
+        assert captured[1].endswith("&offset=50"), captured[1]
+
+    def test_short_non_final_page_incoming_fetcher_does_not_skip_records(self):
+        """Same short-page regression test, for the incoming-transfers fetcher.
+
+        Symmetric with ``test_short_non_final_page_does_not_skip_records``
+        which only covers ``_track_erc20_transfers_optimism``. A revert to
+        ``offset += SAFE_TRANSFERS_PAGE_LIMIT`` inside
+        ``_fetch_optimism_transfers_safeglobal`` would not be caught by the
+        ``test_*_paginates_via_proxy_base_url`` test alone (page-2 ``offset=1``
+        is too small to differentiate ``len(transfers)`` from a literal 1).
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        captured: List[str] = []
+        call_count = [0]
+        page_one = [self._outgoing_usdc(f"tid-inc-{i}") for i in range(50)]
+
+        def req(*a, **kw):
+            captured.append(kw.get("endpoint", a[0] if a else ""))
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return (
+                    True,
+                    {
+                        "results": page_one,
+                        "next": (
+                            "https://safe-transaction-optimism.safe.global/api/v1/"
+                            "safes/0xS/incoming-transfers/?offset=100"
+                        ),
+                    },
+                )
+            return (True, {"results": [], "next": None})
+
+        obj._request_with_retries = req
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        existing: Dict[str, Any] = {}
+        all_transfers_by_date: Dict[str, List[Dict]] = defaultdict(list)
+        _drive(
+            obj._fetch_optimism_transfers_safeglobal(
+                "0xAddr", "2099-01-01", all_transfers_by_date, existing
+            )
+        )
+
+        assert call_count[0] == 2
+        assert captured[0].endswith("&offset=0"), captured[0]
+        assert captured[1].endswith("&offset=50"), captured[1]
+
+    def test_short_non_final_page_outgoing_eth_fetcher_does_not_skip_records(self):
+        """Same short-page regression test, for the outgoing-ETH fetcher.
+
+        Symmetric with the withdrawal and incoming versions; pins
+        ``offset += len(transfers)`` in
+        ``_fetch_outgoing_transfers_until_date_optimism`` against a
+        revert to ``offset += SAFE_TRANSFERS_PAGE_LIMIT``.
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        captured: List[str] = []
+        call_count = [0]
+        page_one = [self._outgoing_eth(f"tid-eth-{i}") for i in range(50)]
+
+        def req(*a, **kw):
+            captured.append(kw.get("endpoint", a[0] if a else ""))
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return (
+                    True,
+                    {
+                        "results": page_one,
+                        "next": (
+                            "https://safe-transaction-optimism.safe.global/api/v1/"
+                            "safes/0xS/transfers/?offset=100"
+                        ),
+                    },
+                )
+            return (True, {"results": [], "next": None})
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(
+            obj._fetch_outgoing_transfers_until_date_optimism("0xaddr", "2099-01-01")
+        )
+
+        assert call_count[0] == 2
+        assert captured[0].endswith("&offset=0"), captured[0]
+        assert captured[1].endswith("&offset=50"), captured[1]
 
 
 class TestKvCacheTtlBoundaries:

@@ -5822,16 +5822,12 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
             == 200.0
         )
 
-    def test_cached_value_today(self):
-        """Test cached value today."""
-        import calendar
-        from datetime import datetime
-
+    def test_cached_value_within_ttl(self):
+        """Last calc within INITIAL_INVESTMENT_CACHE_TTL_SECONDS returns the cached value."""
         obj = _mk()
-        # Build a UTC timestamp whose utcfromtimestamp date matches datetime.now() date
-        now = datetime.now()
-        noon = datetime(now.year, now.month, now.day, 12, 0, 0)
-        ts = str(calendar.timegm(noon.timetuple()))
+        # Last calc was 60 seconds ago; default TTL is 30 minutes → hit.
+        now_ts = 1704067200
+        ts = str(now_ts - 60)
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
@@ -5839,22 +5835,17 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj._load_chain_total_investment = _gen_return(999.0)
         obj._write_kv = _gen_none
         obj._save_chain_total_investment = _gen_none
-        obj._get_current_timestamp = lambda: 100
+        obj._get_current_timestamp = lambda: now_ts
         assert (
             _drive(obj.calculate_initial_investment_value_from_funding_events())
             == 999.0
         )
 
-    def test_cached_value_today_zero(self):
-        """Test cached value today zero."""
-        import calendar
-        from datetime import datetime
-
+    def test_cached_value_within_ttl_zero_falls_through(self):
+        """Within-TTL hit with a 0 cached value falls through to a fresh fetch."""
         obj = _mk()
-        # Build a UTC timestamp whose utcfromtimestamp date matches datetime.now() date
-        now = datetime.now()
-        noon = datetime(now.year, now.month, now.day, 12, 0, 0)
-        ts = str(calendar.timegm(noon.timetuple()))
+        now_ts = 1704067200
+        ts = str(now_ts - 60)
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
@@ -5866,7 +5857,7 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj._calculate_chain_investment_value = _gen_return(50.0)
         obj._write_kv = _gen_none
         obj._save_chain_total_investment = _gen_none
-        obj._get_current_timestamp = lambda: 100
+        obj._get_current_timestamp = lambda: now_ts
         assert (
             _drive(obj.calculate_initial_investment_value_from_funding_events()) == 50.0
         )
@@ -9435,24 +9426,18 @@ class TestErc20OptimismWithdrawalCache:
 
 
 class TestCalculateWithdrawalsValueSameDayCache:
-    """Same-day kv cache for the optimism withdrawal path (PR 1.1)."""
+    """TTL-based kv cache for the optimism withdrawal path (PRs 1.1 + 1.3)."""
 
     def test_cache_hit_skips_fetcher(self):
-        """Same-day kv hit returns cached value without calling the fetcher."""
+        """Cache hit within the TTL returns cached value without calling the fetcher."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xS"}
 
-        # Set the cache to "computed at the start of today (UTC)" so the
-        # production code's local-date check agrees with the stored UTC-derived
-        # date for any timezone that doesn't wrap day boundaries mid-second.
-        today_midnight_ts = int(
-            datetime.now()
-            .replace(hour=12, minute=0, second=0, microsecond=0)
-            .timestamp()
-        )
+        # Last calc was 60 seconds ago; TTL is 30 minutes, so it's a hit.
+        now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(today_midnight_ts),
+            "last_withdrawals_calculated_timestamp": str(now_ts - 60),
             "optimism_total_withdrawals": "12.5",
         }
 
@@ -9461,6 +9446,7 @@ class TestCalculateWithdrawalsValueSameDayCache:
             return dict(kv_state)
 
         obj._read_kv = fake_read_kv
+        obj._get_current_timestamp = lambda: now_ts
 
         called = [0]
 
@@ -9475,18 +9461,16 @@ class TestCalculateWithdrawalsValueSameDayCache:
         assert result == Decimal("12.5")
         assert called[0] == 0
 
-    def test_cache_miss_recalculates_and_writes_kv(self):
-        """Stale cache (different calendar day) recomputes and writes kv."""
-        from datetime import timedelta
-
+    def test_cache_miss_outside_ttl_recalculates_and_writes_kv(self):
+        """Cache age >= TTL → recompute and rewrite both kv keys."""
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xS"}
 
-        # last calc was two days ago → cache miss
-        yesterday_ts = int((datetime.now() - timedelta(days=2)).timestamp())
+        # 31 minutes ago → just outside the 30-minute TTL.
+        now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(yesterday_ts),
+            "last_withdrawals_calculated_timestamp": str(now_ts - 31 * 60),
             "optimism_total_withdrawals": "8.0",
         }
 
@@ -9809,3 +9793,172 @@ class TestDropLegacyTransferEntries:
         kept = obj.funding_events["optimism_outgoing"]["2024-01-01"]
         assert len(kept) == 1
         assert kept[0]["transfer_id"] == "tid-1"
+
+
+class TestProxySafePagination:
+    """Pagination uses safe_api_v1_url for every page, not the absolute next URL (PR 1.4)."""
+
+    @staticmethod
+    def _outgoing_usdc(tid: str, date: str = "2024-01-01") -> Dict[str, Any]:
+        return {
+            "transferId": tid,
+            "executionDate": f"{date}T10:00:00Z",
+            "from": "0xaddr",
+            "to": "0xR",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xT",
+            "value": "1000000",
+            "transactionHash": f"0xH-{tid}",
+        }
+
+    def test_withdrawal_fetcher_paginates_via_proxy_base_url(self):
+        """Subsequent page requests use safe_api_v1_url, not Safe's absolute next URL.
+
+        Mocks two pages where the first page advertises an absolute
+        ``next`` URL pointing at the real Safe host. Asserts that the
+        second request still goes to ``self.params.safe_api_v1_url``
+        (with an offset query string), so the agent stays inside the
+        configured proxy URL end-to-end.
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        captured: List[str] = []
+        call_count = [0]
+
+        def req(*a, **kw):
+            captured.append(kw.get("endpoint", a[0] if a else ""))
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return (
+                    True,
+                    {
+                        "results": [self._outgoing_usdc(f"tid-{call_count[0]}-1")],
+                        "next": "https://safe-transaction-optimism.safe.global/api/v1/safes/0xS/transfers/?offset=100",
+                    },
+                )
+            return (True, {"results": [], "next": None})
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+        # Two API calls (page 1 + page 2); both go to the proxy base URL.
+        assert call_count[0] == 2
+        assert all(
+            url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
+        ), captured
+        # No call leaked to Safe's host even though page 1 advertised it.
+        assert all("safe.global" not in url for url in captured), captured
+
+    def test_pagination_respects_max_pagination_pages_cap(self):
+        """The MAX_PAGINATION_PAGES backstop fires for a misbehaving API."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            MAX_PAGINATION_PAGES,
+        )
+
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            """Always return one transfer and a non-null next — would loop forever."""
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [self._outgoing_usdc(f"tid-page-{call_count[0]}")],
+                    "next": "x",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # Stops at the cap, not infinity.
+        assert call_count[0] == MAX_PAGINATION_PAGES
+
+
+class TestKvCacheTtlBoundaries:
+    """Cache TTL boundary conditions for both withdrawal and initial-investment caches (PR 1.3)."""
+
+    def test_withdrawal_cache_negative_age_treated_as_expired(self):
+        """A future-dated last_ts (clock skew) is treated as expired, not as a hit."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        now_ts = 1704067200
+        # Stored ts is in the future relative to "now" → age is negative.
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(now_ts + 3600),
+            "optimism_total_withdrawals": "12.5",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._get_current_timestamp = lambda: now_ts
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
+
+        result = _drive(obj.calculate_withdrawals_value())
+        # Cache treated as expired → fetcher ran, kv rewritten.
+        assert result == Decimal("0")
+        assert called[0] == 1
+        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+
+    def test_initial_investment_cache_just_inside_ttl_is_hit(self):
+        """Age = TTL - 1 second is a cache hit; age = TTL is a miss."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            INITIAL_INVESTMENT_CACHE_TTL_SECONDS,
+        )
+
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._load_chain_total_investment = _gen_return(777.0)
+
+        now_ts = 1704067200
+        just_inside_ttl_ts = now_ts - (INITIAL_INVESTMENT_CACHE_TTL_SECONDS - 1)
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp": str(just_inside_ttl_ts)}
+        )
+        obj._get_current_timestamp = lambda: now_ts
+
+        assert (
+            _drive(obj.calculate_initial_investment_value_from_funding_events())
+            == 777.0
+        )

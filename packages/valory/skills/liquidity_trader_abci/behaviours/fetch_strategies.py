@@ -96,6 +96,17 @@ ZERO_ADDRESS_PADDED = (
 # non-empty next-page cursor indefinitely.
 MAX_PAGINATION_PAGES = 100
 
+# Page size for offset-based pagination against Safe Transaction Service.
+# Matches Safe's default limit; the API caps at 100 anyway.
+SAFE_TRANSFERS_PAGE_LIMIT = 100
+
+# Time-to-live for the kv-side caches around the expensive ROI math. Set to
+# 30 minutes so a same-day top-up shows up on the next half-hour boundary
+# rather than waiting for the day to roll over. Bigger means fewer Safe API
+# calls per hour, smaller means fresher ROI numbers. Single-knob tuning.
+INITIAL_INVESTMENT_CACHE_TTL_SECONDS = 30 * 60
+WITHDRAWAL_CACHE_TTL_SECONDS = 30 * 60
+
 
 def _transfer_unique_id(transfer: Dict[str, Any]) -> str:
     """Stable unique ID for a Safe transfer.
@@ -2431,9 +2442,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
             return withdrawal_value
         elif chain == "optimism":
-            # Same-day cache: skip Safe API + revaluation on subsequent cycles
-            # of the same day. Mirrors calculate_initial_investment_value_from_funding_events.
-            current_date = datetime.now().strftime("%Y-%m-%d")
+            # TTL-based cache: skip Safe API + revaluation if the last
+            # calculation was within WITHDRAWAL_CACHE_TTL_SECONDS. Negative
+            # ages (clock skew, malformed timestamp) are treated as expired
+            # so we recompute rather than serve a possibly-stale value.
+            now_ts = int(self._get_current_timestamp())
             last_calc = yield from self._read_kv(
                 keys=("last_withdrawals_calculated_timestamp",)
             )
@@ -2441,10 +2454,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 ts := last_calc.get("last_withdrawals_calculated_timestamp")
             ):
                 try:
-                    last_date = datetime.utcfromtimestamp(int(ts)).strftime("%Y-%m-%d")
+                    age_seconds = now_ts - int(ts)
                 except (ValueError, TypeError):
-                    last_date = "1970-01-01"
-                if last_date == current_date:
+                    age_seconds = WITHDRAWAL_CACHE_TTL_SECONDS  # treat as expired
+                if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
                     cached = yield from self._read_kv(
                         keys=("optimism_total_withdrawals",)
                     )
@@ -2454,7 +2467,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if cached_val is not None:
                         try:
                             self.context.logger.info(
-                                "Last withdrawal calculation was today, using cached value"
+                                f"Withdrawal cache hit ({age_seconds}s old, "
+                                f"ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
                             )
                             return Decimal(str(cached_val))
                         except (InvalidOperation, ValueError, TypeError):
@@ -3141,20 +3155,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Found last calculation timestamp: {timestamp}"
                     )
                     try:
-                        last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
-                            "%Y-%m-%d"
+                        age_seconds = int(self._get_current_timestamp()) - int(
+                            timestamp
                         )
-                        self.context.logger.info(f"Last calculation date: {last_date}")
                     except (ValueError, TypeError):
                         self.context.logger.warning(
-                            "Invalid timestamp format, defaulting to 1970-01-01"
+                            "Invalid timestamp format, treating cache as expired"
                         )
-                        last_date = "1970-01-01"
+                        age_seconds = INITIAL_INVESTMENT_CACHE_TTL_SECONDS
 
-                    # If last calculation was today, return cached value
-                    if last_date == current_date:
+                    # TTL-based cache: return cached value if the last
+                    # calculation was within INITIAL_INVESTMENT_CACHE_TTL_SECONDS.
+                    # Negative ages (clock skew) treated as expired.
+                    if 0 <= age_seconds < INITIAL_INVESTMENT_CACHE_TTL_SECONDS:
                         self.context.logger.info(
-                            "Last calculation was today, using cached value"
+                            f"Initial-investment cache hit ({age_seconds}s old, "
+                            f"ttl {INITIAL_INVESTMENT_CACHE_TTL_SECONDS}s)"
                         )
                         investment = yield from self._load_chain_total_investment(chain)
                         if investment:
@@ -3162,9 +3178,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         else:
                             fetch_till_date = True
 
-                    # Otherwise need to calculate new value but not full history
+                    # Cache expired: recompute incrementally (not full history)
                     self.context.logger.info(
-                        "Last calculation was not today, calculating new value without full history"
+                        f"Initial-investment cache expired ({age_seconds}s old); "
+                        "recomputing without full history"
                     )
                     fetch_till_date = False
 
@@ -4016,14 +4033,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "Fetching Optimism transfers using SafeGlobal API..."
             )
 
-            # Fetch incoming transfers
-            transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
+            # Fetch incoming transfers. We paginate by offset rather than
+            # following Safe's response ``next`` URL: that URL is absolute
+            # and points at safe-transaction-*.safe.global, so under a proxy
+            # only page 1 would go through our infra — page 2 onwards would
+            # bypass it. Building the URL ourselves from safe_api_v1_url
+            # keeps every page going through the configured endpoint.
+            transfers_base_url = f"{base_url}/safes/{address}/incoming-transfers/"
 
             processed_count = 0
+            offset = 0
+            pages_processed = 0
             # Seed in-cycle dedup from already-persisted transfers so a new
             # transfer on an already-stored date is not silently dropped.
             seen_transfer_ids = _collect_seen_transfer_ids(existing_data)
             while True:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
+                        "Optimism incoming-transfers; stopping pagination"
+                    )
+                    break
+
+                transfers_url = (
+                    f"{transfers_base_url}?limit={SAFE_TRANSFERS_PAGE_LIMIT}"
+                    f"&offset={offset}"
+                )
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
@@ -4041,6 +4076,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 transfers = response_json.get("results", [])
                 if not transfers:
                     break
+                pages_processed += 1
 
                 # Track how many transfers in this page have already-seen IDs.
                 # The API returns newest-first, so once an entire page is old we can stop.
@@ -4175,11 +4211,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Check for next page and advance the URL
-                cursor = response_json.get("next")
-                if not cursor:
+                # Advance pagination: stop when the API signals no more pages
+                # (next is null) or returns a short page (more pages would
+                # need a full page first).
+                if (
+                    response_json.get("next") is None
+                    or len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT
+                ):
                     break
-                transfers_url = cursor
+                offset += SAFE_TRANSFERS_PAGE_LIMIT
 
             self.context.logger.info(
                 f"Completed Optimism transfers: {processed_count} found"
@@ -4672,15 +4712,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return raw_existing_outgoing
 
         try:
-            # Use SafeGlobal API for Optimism transfers
+            # Use SafeGlobal API for Optimism transfers. Paginate by offset
+            # (see _fetch_optimism_transfers_safeglobal for why we don't
+            # follow Safe's absolute ``next`` URL).
             base_url = self.params.safe_api_v1_url
-            transfers_url = f"{base_url}/safes/{address}/transfers/"
+            transfers_base_url = f"{base_url}/safes/{address}/transfers/"
 
             processed_count = 0
+            offset = 0
+            pages_processed = 0
             # Seed in-cycle dedup from already-persisted transfers so a new
             # transfer on an already-stored date is not silently dropped.
             seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
             while True:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
+                        "Optimism outgoing-transfers; stopping pagination"
+                    )
+                    break
+
+                transfers_url = (
+                    f"{transfers_base_url}?limit={SAFE_TRANSFERS_PAGE_LIMIT}"
+                    f"&offset={offset}"
+                )
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
@@ -4699,6 +4754,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if not transfers:
                     break
+                pages_processed += 1
 
                 # Pre-pass: count the eligible (outgoing ETHER_TRANSFER) entries
                 # on this page so the early-stop is counted against the subset
@@ -4800,11 +4856,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Advance pagination if available
-                cursor = response_json.get("next")
-                if not cursor:
+                # Advance pagination by offset. Safe's DRF pagination signals
+                # "no more pages" via ``next: null``. Empty ``results`` is
+                # handled earlier in the loop. We deliberately don't gate on
+                # ``len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT`` because Safe
+                # is free to return short non-final pages.
+                if response_json.get("next") is None:
                     break
-                transfers_url = cursor
+                offset += SAFE_TRANSFERS_PAGE_LIMIT
 
             if fetch_failed:
                 self.context.logger.warning(
@@ -4870,9 +4929,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 return {"outgoing": existing_outgoing}
 
             base_url = self.params.safe_api_v1_url
-            transfers_url = f"{base_url}/safes/{safe_address}/transfers/"
+            # Paginate by offset rather than following Safe's absolute ``next``
+            # URL — see _fetch_optimism_transfers_safeglobal for why.
+            transfers_base_url = f"{base_url}/safes/{safe_address}/transfers/"
 
             processed_count = 0
+            offset = 0
+            pages_processed = 0
             # Seed in-cycle dedup from already-persisted withdrawals so a new
             # transfer on an already-stored date is not silently dropped.
             seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
@@ -4881,6 +4944,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             fetch_failed = False
 
             while True:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
+                        "Optimism withdrawals; stopping pagination"
+                    )
+                    break
+
+                transfers_url = (
+                    f"{transfers_base_url}?limit={SAFE_TRANSFERS_PAGE_LIMIT}"
+                    f"&offset={offset}"
+                )
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
@@ -4899,6 +4973,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if not transfers:
                     break
+                pages_processed += 1
 
                 # Pre-pass: identify the eligible transfers on this page so the
                 # consecutive-existing early-stop is counted against the
@@ -5018,10 +5093,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                cursor = response_json.get("next")
-                if not cursor:
+                # Advance pagination by offset. Safe's DRF pagination signals
+                # "no more pages" via ``next: null``. Empty ``results`` is
+                # handled earlier in the loop. We deliberately don't gate on
+                # ``len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT`` because Safe
+                # is free to return short non-final pages.
+                if response_json.get("next") is None:
                     break
-                transfers_url = cursor
+                offset += SAFE_TRANSFERS_PAGE_LIMIT
 
             if fetch_failed:
                 # Discard partial data so a single-page failure doesn't

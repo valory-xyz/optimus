@@ -101,6 +101,16 @@ MAX_PAGINATION_PAGES = 100
 # Page size for offset-based pagination against Safe Transaction Service.
 # Matches Safe's default limit. The pagination loop terminates on
 # ``next == null``, so the loop is robust to Safe changing this cap.
+#
+# Pagination contract for all three Safe transfer fetchers: advance
+# ``offset`` by ``len(transfers)`` (the records actually returned), not
+# by ``SAFE_TRANSFERS_PAGE_LIMIT``. Safe's DRF can return a short
+# non-final page (server-side clamp or partial filter) with
+# ``next != null``; advancing by ``limit`` would silently skip the
+# un-returned records. Dedup via the per-fetcher ``seen_*`` set
+# absorbs any overlap when Safe in fact returns a full page.
+# Termination still consults ``next is None``; empty results are
+# handled earlier in each loop.
 SAFE_TRANSFERS_PAGE_LIMIT = 100
 
 # Time-to-live for the kv-side caches around the expensive ROI math. Set
@@ -4234,14 +4244,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Advance pagination by the number of records actually
-                # returned, not by the requested ``limit``. Safe's DRF can
-                # return a short non-final page (server-side clamp or partial
-                # filter) with ``next != null``; advancing by ``limit`` would
-                # skip the un-returned records. Dedup via ``seen_transfer_ids``
-                # absorbs any overlap when Safe in fact returned a full page.
-                # Termination still consults ``next is None``; empty results
-                # are handled earlier in the loop.
+                # Advance by len(transfers); see SAFE_TRANSFERS_PAGE_LIMIT note.
                 if response_json.get("next") is None:
                     break
                 offset += len(transfers)
@@ -4904,27 +4907,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     else:
                         continue
 
-                self.context.logger.info(
-                    f"Completed Optimism outgoing transfers: {processed_count} found"
-                )
-
                 if stop_pagination:
                     self.context.logger.info(
                         "Outgoing transfers: entire page already stored — stopping pagination"
                     )
                     break
 
-                # Advance pagination by the number of records actually
-                # returned, not by the requested ``limit``. Safe's DRF can
-                # return a short non-final page (server-side clamp or partial
-                # filter) with ``next != null``; advancing by ``limit`` would
-                # skip the un-returned records. Dedup via ``seen_tx_ids``
-                # absorbs any overlap when Safe in fact returned a full page.
-                # Termination still consults ``next is None``; empty results
-                # are handled earlier in the loop.
+                # Advance by len(transfers); see SAFE_TRANSFERS_PAGE_LIMIT note.
                 if response_json.get("next") is None:
                     break
                 offset += len(transfers)
+
+            self.context.logger.info(
+                f"Completed Optimism outgoing transfers: {processed_count} found"
+            )
 
             if fetch_failed:
                 self.context.logger.warning(
@@ -5147,27 +5143,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     new_by_date.setdefault(tx_date, []).append(transfer_data)
                     processed_count += 1
 
-                self.context.logger.info(
-                    f"Completed Optimism ERC20 transfers: {processed_count} outgoing transfers found"
-                )
-
                 if stop_pagination:
                     self.context.logger.info(
                         "Withdrawals: every outgoing ERC20 on this page is already stored — stopping pagination"
                     )
                     break
 
-                # Advance pagination by the number of records actually
-                # returned, not by the requested ``limit``. Safe's DRF can
-                # return a short non-final page (server-side clamp or partial
-                # filter) with ``next != null``; advancing by ``limit`` would
-                # skip the un-returned records. Dedup via ``seen_tx_ids``
-                # absorbs any overlap when Safe in fact returned a full page.
-                # Termination still consults ``next is None``; empty results
-                # are handled earlier in the loop.
+                # Advance by len(transfers); see SAFE_TRANSFERS_PAGE_LIMIT note.
                 if response_json.get("next") is None:
                     break
                 offset += len(transfers)
+
+            self.context.logger.info(
+                f"Completed Optimism ERC20 transfers: {processed_count} outgoing transfers found"
+            )
 
             if fetch_failed:
                 # Discard partial data so a single-page failure doesn't

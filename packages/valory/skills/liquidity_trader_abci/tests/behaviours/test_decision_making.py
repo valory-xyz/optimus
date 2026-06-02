@@ -2680,6 +2680,12 @@ class TestCheckIfRouteIsProfitable:
         result = _exhaust(b.check_if_route_is_profitable(route))
         assert result[0] is True
 
+    @pytest.mark.skip(
+        reason=(
+            "Profitability gate is bypassed for the Basius MVP — re-enable per "
+            "workstream 2 PR 2.6 and un-skip this test alongside that change."
+        )
+    )
     def test_not_profitable_fees(self):
         """Test not profitable fees."""
         b = _make_behaviour()

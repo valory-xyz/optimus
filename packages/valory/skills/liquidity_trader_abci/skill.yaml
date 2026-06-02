@@ -49,7 +49,7 @@ fingerprint:
   tests/behaviours/test_base.py: bafybeiewybyn3gqjxr54jvjxrq2vbqhovxjicvvjeagr572w6labgonehq
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidv7ckk3qqyovnynl5v7nuxwzbols7jkhkrtiwa3uv7lxi4nykqtm
-  tests/behaviours/test_decision_making.py: bafybeiej4ww7k6vllzscrwaod6hcic3f33a24sdvk2a3ex5hjuw2bx6qwq
+  tests/behaviours/test_decision_making.py: bafybeidmi7d6qxdhqvl6alcknlvw3g4bx2gcjiqb45ddemdnckabdbbila
   tests/behaviours/test_evaluate_strategy.py: bafybeidnbd6depueufcmq57ndoxghekv3lpnpthbopfcje5zfq3jpben7e
   tests/behaviours/test_fetch_strategies.py: bafybeibhu5ymmwywhfsc4k3kbxomkr5y2uldmrsymwxfx7zfvtm4byo3pe
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
@@ -61,7 +61,7 @@ fingerprint:
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/pools/test_balancer.py: bafybeidj3dmmzkjc32dznwdqnuvdsvlwa27jsoazvjvvikbu57bhlze3qq
   tests/pools/test_uniswap.py: bafybeib5rnfzaya4an2t4odvca23ee5id7ejwbsjrfjnuy22jytg76b5qi
-  tests/pools/test_velodrome.py: bafybeichhavhhtmvk6ay5gpeuci7k562vgjgchkgqfkczlctc4gabdyug4
+  tests/pools/test_velodrome.py: bafybeifcmnvgj4i5mlbiecclrqzays54pkiguwfryvusouw6xmhquvur4e
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/states/test_base.py: bafybeiecccniqny55e2cbkstd5fcwkd2zru2zra7qf6al2knjhx2tv27ry
   tests/states/test_call_checkpoint.py: bafybeihsjabiftgu4hikk3igo2roewspk6cscyy6cukaao254ntc6osmkm

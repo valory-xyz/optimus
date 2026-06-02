@@ -7383,15 +7383,24 @@ class TestOutgoingOptimism:
         )
 
     def test_fail(self):
-        """Test fail."""
+        """Failed fetch returns previously-persisted data and does not store."""
         o = _mk()
+        # Disk has a legacy entry the migration would strip — assert it
+        # survives a failed fetch because we don't persist the stripped shape.
+        o.read_funding_events = lambda: {
+            "optimism_outgoing": {"2024-01-01": [{"y": 1}]}
+        }
+        o.store_funding_events = MagicMock()
         o._request_with_retries = _gen_return((False, {}))
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
-        assert (
-            _drive(o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01"))
-            == {}
+        result = _drive(
+            o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01")
         )
+        # Returns the previously-persisted raw shape (legacy entry kept).
+        assert result == {"2024-01-01": [{"y": 1}]}
+        # store must NOT fire on fetch failure.
+        o.store_funding_events.assert_not_called()
 
     def test_eth(self):
         """Test eth."""
@@ -8937,29 +8946,62 @@ class TestFetchAllTransfersDateMerge:
         assert "2024-02-01" in r
 
     def test_optimism_existing_funding_events(self):
-        """Lines 3225, 3243-3244: existing funding_events truthy, merge new dates."""
+        """Persisted dates are migrated and new dates appended after a successful fetch."""
         obj = _mk()
-        obj.read_funding_events = lambda: {"optimism": {"2024-01-01": [{"y": 1}]}}
+        # Persisted entry carries transfer_id so it survives the legacy
+        # migration on load.
+        obj.read_funding_events = lambda: {
+            "optimism": {"2024-01-01": [{"transfer_id": "tid-old", "y": 1}]}
+        }
         obj.store_funding_events = MagicMock()
 
-        # _fetch_optimism_transfers_safeglobal adds a new date
+        # _fetch_optimism_transfers_safeglobal adds a new date and signals success
         def sfg(*a, **kw):
-            """Sfg."""
+            """Stub fetcher that records a new date and returns True."""
             a[2]["2024-02-01"] = [{"y": 2}]  # all_transfers_by_date
             yield
+            return True
 
         obj._fetch_optimism_transfers_safeglobal = sfg
         r = _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
         assert "2024-02-01" in r
+        # store fires only after a successful fetch.
+        obj.store_funding_events.assert_called_once()
 
     def test_optimism_empty_funding_events(self):
-        """Line 3247->3249: funding_events falsy after fetch."""
+        """Empty disk state returns an empty dict without crashing."""
         obj = _mk()
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
-        obj._fetch_optimism_transfers_safeglobal = _gen_none
+
+        def sfg(*a, **kw):
+            """Stub fetcher: no new transfers, fully successful."""
+            yield
+            return True
+
+        obj._fetch_optimism_transfers_safeglobal = sfg
         r = _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
         assert isinstance(r, dict)
+
+    def test_optimism_fetch_failure_does_not_persist_partial(self):
+        """Fetch failure must not persist the stripped migration shape."""
+        obj = _mk()
+        # Disk has a legacy entry without transfer_id — exactly the shape
+        # the migration would strip.
+        obj.read_funding_events = lambda: {"optimism": {"2024-01-01": [{"y": 1}]}}
+        obj.store_funding_events = MagicMock()
+
+        def sfg(*a, **kw):
+            """Stub fetcher: simulates a partial-page success then failure."""
+            a[2]["2024-02-01"] = [{"y": 99}]  # partial new data
+            yield
+            return False
+
+        obj._fetch_optimism_transfers_safeglobal = sfg
+        _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
+        # store must NOT fire on failure — disk keeps the original legacy
+        # entries intact for next cycle to retry against.
+        obj.store_funding_events.assert_not_called()
 
 
 class TestTokenTransfersModeAmountZero:

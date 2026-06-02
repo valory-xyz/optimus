@@ -3456,13 +3456,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
         if self.funding_events:
-            existing_optimism_data = _drop_legacy_transfer_entries(
-                self.funding_events.get("optimism", {})
-            )
-            # Persist the migrated shape so subsequent loads don't need to
-            # re-filter and so the on-disk file stops carrying duplicates.
-            self.funding_events["optimism"] = existing_optimism_data
+            raw_optimism_data = self.funding_events.get("optimism", {})
+            existing_optimism_data = _drop_legacy_transfer_entries(raw_optimism_data)
         else:
+            raw_optimism_data = {}
             existing_optimism_data = {}
 
         all_transfers_by_date = defaultdict(list)
@@ -3472,10 +3469,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Fetching all Optimism transfers until {end_date}..."
             )
 
-            # Use SafeGlobal API for Optimism
-            yield from self._fetch_optimism_transfers_safeglobal(
+            # Use SafeGlobal API for Optimism. Capture the success flag so we
+            # don't persist a stripped-then-partial dataset on mid-pagination
+            # failure: doing so would silently drop the still-missing older
+            # pages because the early-stop next cycle would fire on the
+            # already-seen page-1 ids.
+            fetch_succeeded = yield from self._fetch_optimism_transfers_safeglobal(
                 address, end_date, all_transfers_by_date, existing_optimism_data
             )
+
+            if not fetch_succeeded:
+                self.context.logger.warning(
+                    "Optimism incoming-transfers fetch failed mid-stream; "
+                    "skipping persist and returning previously-persisted data"
+                )
+                return dict(raw_optimism_data)
 
             # Merge new transfers into persisted data: append per-date so that
             # a same-day transfer added after an earlier one already stored
@@ -3483,7 +3491,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             for date, transfers in all_transfers_by_date.items():
                 existing_optimism_data.setdefault(date, []).extend(transfers)
 
-            # Update unified data structure
+            # Update unified data structure (only after a successful fetch so
+            # the on-disk migration commits atomically with the refetched
+            # transfers it depends on).
             if not self.funding_events:
                 self.funding_events = {}
             self.funding_events["optimism"] = existing_optimism_data
@@ -3958,9 +3968,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         end_date: str,
         all_transfers_by_date: dict,
         existing_data: dict,
-    ) -> Generator[None, None, None]:
-        """Fetch Optimism transfers using SafeGlobal API."""
+    ) -> Generator[None, None, bool]:
+        """Fetch Optimism transfers using SafeGlobal API.
+
+        :param address: the Safe contract address.
+        :param end_date: ISO date string used as the upper bound for transfer
+            filtering.
+        :param all_transfers_by_date: mutated in place with newly fetched
+            transfers, keyed by date.
+        :param existing_data: persisted date-keyed transfers, used to seed
+            the in-cycle dedup set.
+        :yield: None.
+        :return: ``True`` on a fully-successful pagination, ``False`` on any
+            mid-stream page fetch failure or exception. The caller must skip
+            persistence on ``False`` because the partial data, combined with
+            the early-stop seeded from it next cycle, would permanently drop
+            the still-missing older pages.
+        """
         base_url = self.params.safe_api_v1_url
+        fetch_failed = False
 
         try:
             self.context.logger.info(
@@ -3986,6 +4012,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if not success:
                     self.context.logger.error("Failed to fetch Optimism transfers")
+                    fetch_failed = True
                     break
 
                 transfers = response_json.get("results", [])
@@ -4137,6 +4164,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            fetch_failed = True
+
+        return not fetch_failed
 
     def _should_include_transfer_optimism(
         self, from_address: str
@@ -4590,21 +4620,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         current_date: str,
     ) -> Generator[None, None, Dict]:
         """Fetch outgoing ETH transfers from the safe address on Optimism, with persistence."""
-        # Load persisted outgoing data
+        # Load persisted outgoing data. Migrate legacy entries into a local
+        # variable but do NOT commit the stripped shape to self.funding_events
+        # yet — on a mid-pagination fetch failure we want the previously
+        # persisted state preserved so the still-missing older pages are not
+        # silently dropped after the early-stop fires on the page-1 ids next
+        # cycle.
         if not self.funding_events:
             self.funding_events = self.read_funding_events() or {}
-        existing_outgoing = _drop_legacy_transfer_entries(
-            self.funding_events.get("optimism_outgoing", {})
-        )
-        self.funding_events["optimism_outgoing"] = existing_outgoing
+        raw_existing_outgoing = self.funding_events.get("optimism_outgoing", {})
+        existing_outgoing = _drop_legacy_transfer_entries(raw_existing_outgoing)
 
-        all_transfers = {}
+        all_transfers: Dict[str, List[Dict]] = {}
+        fetch_failed = False
 
         if not address:
             self.context.logger.warning(
                 "No address provided for fetching Optimism outgoing transfers"
             )
-            return existing_outgoing
+            return raw_existing_outgoing
 
         try:
             # Use SafeGlobal API for Optimism transfers
@@ -4627,6 +4661,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if not success:
                     self.context.logger.error("Failed to fetch Optimism transfers")
+                    fetch_failed = True
                     break
 
                 transfers = response_json.get("results", [])
@@ -4720,6 +4755,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     break
                 transfers_url = cursor
 
+            if fetch_failed:
+                self.context.logger.warning(
+                    "Optimism outgoing-transfers fetch failed mid-stream; "
+                    "skipping persist and returning previously-persisted data"
+                )
+                return raw_existing_outgoing
+
             # Merge new transfers into persisted data: append per-date so that
             # a same-day transfer added after an earlier one already stored
             # under the same date does not overwrite the earlier entries.
@@ -4735,7 +4777,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Error fetching Optimism outgoing transfers: {e}"
             )
-            return existing_outgoing
+            return raw_existing_outgoing
 
     def _track_erc20_transfers_optimism(
         self,
@@ -4809,18 +4851,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 # Pre-pass: identify the eligible transfers on this page so the
                 # consecutive-existing early-stop is counted against the
-                # outgoing-ERC20 subset only. Without this, unrelated entries
-                # (incoming, ETH, non-ERC20) reset the counter on every page
-                # and the early-stop almost never trips against realistic
-                # mixed Safe traffic.
-                eligible_indices = []
-                for idx, t in enumerate(transfers):
-                    if (
-                        t.get("from", "").lower() == safe_address.lower()
-                        and t.get("type", "") == "ERC20_TRANSFER"
-                    ):
-                        eligible_indices.append(idx)
-                eligible_in_page = len(eligible_indices)
+                # outgoing-USDC subset only. The seen-set inside the main loop
+                # only ever receives outgoing-USDC uids (the .add fires after
+                # the symbol == USDC and amount > 0 checks), so the eligibility
+                # count here must match: any outgoing-ERC20 whose token is not
+                # USDC would otherwise be counted as eligible but never seen,
+                # preventing the early-stop from tripping.
+                #
+                # When tokenInfo is absent on the API response we cannot tell
+                # the symbol cheaply, so we count the entry as eligible — that
+                # errs on the side of "don't stop early" and is safe because
+                # the seen-set will also include it once it's been processed
+                # downstream.
+                eligible_in_page = 0
+                for t in transfers:
+                    if t.get("from", "").lower() != safe_address.lower():
+                        continue
+                    if t.get("type", "") != "ERC20_TRANSFER":
+                        continue
+                    token_info = t.get("tokenInfo") or {}
+                    symbol = token_info.get("symbol", "") if token_info else ""
+                    if symbol and symbol.upper() != "USDC":
+                        continue
+                    eligible_in_page += 1
                 seen_eligible_in_page = 0
                 stop_pagination = False
 

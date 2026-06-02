@@ -3636,6 +3636,29 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if not cached_data:
                     continue
 
+                # Invalidate a stale opportunity left over from a previous period. A cache
+                # that survives a period rollover was never successfully entered (a
+                # successful entry invalidates it), so the agent failed to invest it — drop
+                # it and re-evaluate fresh instead of blindly retrying stale data. A legacy
+                # cache written before this change has no `period` key; ``get`` returns None,
+                # which never equals an int ``current_period``, so it is treated as stale too
+                # (the bug is fixed immediately rather than waiting for the 24h time-expiry).
+                #
+                # This collapses "invalidate on failure + on rollover" into "on rollover" and
+                # relies on synchronized_data.period_count advancing between EvaluateStrategy
+                # invocations; revisit if a future FSM change lets a failed transition reuse
+                # the same period (a stale cache could then survive). Note: `!=` (not a
+                # truthiness check) keeps ``period == 0`` valid within its own period.
+                cached_period = cached_data.get("period")
+                current_period = self.synchronized_data.period_count
+                if cached_period != current_period:
+                    self.context.logger.info(
+                        f"CL pool cache for chain {chain} is from period {cached_period} "
+                        f"(current {current_period}); invalidating stale opportunity"
+                    )
+                    yield from self._invalidate_cl_pool_cache(chain)
+                    continue
+
                 # Validate cache
                 should_use_cache = self._should_use_cached_cl_data(cached_data)
 
@@ -3892,6 +3915,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "pool_finalization_timestamp": current_timestamp,
             "last_round_timestamp": current_timestamp,
             "round_count": 1,  # First round
+            "period": self.synchronized_data.period_count,
         }
 
         # Add optional data if provided

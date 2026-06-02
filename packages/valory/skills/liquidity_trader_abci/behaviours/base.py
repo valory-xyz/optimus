@@ -1738,7 +1738,8 @@ class LiquidityTraderBaseBehaviour(
     def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, None]:
         """Invalidate (delete) the cached CL pool data for a chain.
 
-        Called when enter pool succeeds so we don't keep retrying the same pool.
+        Called both after a successful pool entry (so we don't retry the same pool) and
+        when a stale cross-period cache is dropped (so a failed invest isn't retried).
 
         :param chain: the chain to invalidate the cache for
         :yield: None: Generator yield for async operations
@@ -1751,9 +1752,7 @@ class LiquidityTraderBaseBehaviour(
                 {kv_key: json.dumps({"invalidated": True}, ensure_ascii=True)}
             )
 
-            self.context.logger.info(
-                f"Invalidated CL pool cache for chain {chain} after successful pool entry"
-            )
+            self.context.logger.info(f"Invalidated CL pool cache for chain {chain}")
 
         except Exception as e:
             self.context.logger.error(f"Error invalidating CL pool cache: {str(e)}")

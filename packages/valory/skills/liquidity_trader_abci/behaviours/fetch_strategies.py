@@ -90,21 +90,25 @@ TRANSFER_EVENT_SIGNATURE = (
 ZERO_ADDRESS_PADDED = (
     "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
-# Hard cap on pagination loops against external APIs. The round timeout is
-# the primary protection; this is a backstop against an API that returns a
-# non-empty next-page cursor indefinitely.
+# Hard cap on pagination loops against external APIs. Plays two roles:
+# in the three Safe transfer fetchers the cap-hit is treated as a fetch
+# failure (sets ``fetch_failed``, persistence is skipped) so a misbehaving
+# API can't seed next cycle's seen-set with partial data; in the Mode
+# fetchers it's a soft backstop only. The round timeout is the primary
+# protection in both cases.
 MAX_PAGINATION_PAGES = 100
 
 # Page size for offset-based pagination against Safe Transaction Service.
-# Matches Safe's default limit; the API caps at 100 anyway.
+# Matches Safe's default limit. The pagination loop terminates on
+# ``next == null``, so the loop is robust to Safe changing this cap.
 SAFE_TRANSFERS_PAGE_LIMIT = 100
 
-# Time-to-live for the kv-side caches around the expensive ROI math. Set to
-# 30 minutes so a same-day top-up shows up on the next half-hour boundary
-# rather than waiting for the full TTL to expire. Bigger means fewer Safe API
-# calls per hour, smaller means fresher ROI numbers. The two values are
-# kept as separate constants so the two caches can be tuned independently
-# if one path turns out to need a different cadence.
+# Time-to-live for the kv-side caches around the expensive ROI math. Set
+# to 30 minutes so each computation stays valid for up to 30 minutes after
+# it ran. Bigger means fewer Safe API calls per hour, smaller means
+# fresher ROI numbers. The two values are kept as separate constants so
+# the two caches can be tuned independently if one path turns out to need
+# a different cadence.
 INITIAL_INVESTMENT_CACHE_TTL_SECONDS = 30 * 60
 WITHDRAWAL_CACHE_TTL_SECONDS = 30 * 60
 
@@ -2461,7 +2465,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Unparseable last_withdrawals_calculated_timestamp "
                         f"{ts!r}; treating cache as expired"
                     )
-                    age_seconds = WITHDRAWAL_CACHE_TTL_SECONDS  # treat as expired
+                    # Negative age is documented as "expired" in the guard
+                    # below and is independent of the strict < TTL boundary,
+                    # so a future <→<= regression on the bound can't flip
+                    # this fallback into a spurious cache hit.
+                    age_seconds = -1
                 if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
                     cached = yield from self._read_kv(
                         keys=("optimism_total_withdrawals",)
@@ -3168,7 +3176,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             f"Unparseable last_initial_value_calculated_timestamp "
                             f"{timestamp!r}; treating cache as expired"
                         )
-                        age_seconds = INITIAL_INVESTMENT_CACHE_TTL_SECONDS
+                        # Negative age is documented as "expired" in the
+                        # guard below and is independent of the strict <
+                        # TTL boundary, so a future <→<= regression on the
+                        # bound can't flip this into a spurious cache hit.
+                        age_seconds = -1
 
                     # TTL-based cache: return cached value if the last
                     # calculation was within INITIAL_INVESTMENT_CACHE_TTL_SECONDS.
@@ -4762,7 +4774,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
             while True:
                 if pages_processed >= MAX_PAGINATION_PAGES:
-                    self.context.logger.warning(
+                    # Error rather than warning: this fetcher returns stale
+                    # ``raw_existing_outgoing`` on failure (see docstring),
+                    # and the caller derives the reversion-cache key from
+                    # the transfer count. On a Safe that exceeds the cap,
+                    # the count is permanently pinned to the stale value
+                    # and the cached reversion serves indefinitely, so the
+                    # stuck state must be alarm-visible.
+                    self.context.logger.error(
                         f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
                         "Optimism outgoing-transfers; treating as a failed fetch "
                         "so partial data is not persisted with a falsely "

@@ -9874,6 +9874,8 @@ class TestProxySafePagination:
         # the next request to skip records.
         assert "offset=0" in captured[0], captured[0]
         assert "offset=1" in captured[1], captured[1]
+        # Page limit also pinned so a constant change would be caught.
+        assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
 
     def test_pagination_respects_max_pagination_pages_cap(self):
         """The MAX_PAGINATION_PAGES backstop fires for a misbehaving API."""
@@ -9964,6 +9966,8 @@ class TestProxySafePagination:
         # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
         assert "offset=0" in captured[0], captured[0]
         assert "offset=1" in captured[1], captured[1]
+        # Page limit also pinned so a constant change would be caught.
+        assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
 
     def test_outgoing_eth_fetcher_paginates_via_proxy_base_url(self):
         """Same proxy-URL guarantee for the outgoing-ETH fetcher."""
@@ -10006,6 +10010,8 @@ class TestProxySafePagination:
         # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
         assert "offset=0" in captured[0], captured[0]
         assert "offset=1" in captured[1], captured[1]
+        # Page limit also pinned so a constant change would be caught.
+        assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
 
     def test_incoming_fetcher_max_pagination_cap(self):
         """MAX_PAGINATION_PAGES cap on incoming fetcher signals fetch failure."""
@@ -10331,6 +10337,187 @@ class TestKvCacheTtlBoundaries:
 
         assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
         assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+
+    def test_initial_investment_cache_exactly_at_ttl_is_miss(self):
+        """Age = TTL exactly is a cache miss for the initial-investment path.
+
+        Pins the strict ``< TTL`` boundary symmetric with
+        ``test_withdrawal_cache_just_outside_ttl_is_miss``. A
+        ``<``→``<=`` regression on the guard would otherwise turn the
+        exact-TTL case into a spurious hit and go undetected.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            INITIAL_INVESTMENT_CACHE_TTL_SECONDS,
+        )
+
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+
+        now_ts = 1704067200
+        at_ttl_ts = now_ts - INITIAL_INVESTMENT_CACHE_TTL_SECONDS
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp": str(at_ttl_ts)}
+        )
+        obj._get_current_timestamp = lambda: now_ts
+
+        load_called = [0]
+
+        def load_chain(*a, **kw):
+            """The cache-hit branch should never fire at exactly-TTL."""
+            load_called[0] += 1
+            yield
+            return 999.0
+
+        obj._load_chain_total_investment = load_chain
+        obj._fetch_all_transfers_until_date_optimism = _gen_return(
+            {"d": [{"symbol": "USDC", "delta": 1}]}
+        )
+        obj._calculate_chain_investment_value = _gen_return(50.0)
+        obj._save_chain_total_investment = _gen_none
+        obj._write_kv = _gen_none
+
+        result = _drive(obj.calculate_initial_investment_value_from_funding_events())
+        # Cache-miss path: recompute runs, cached loader is never invoked.
+        assert result == 50.0
+        assert load_called[0] == 0
+
+    def test_withdrawal_cache_invalid_timestamp_format(self):
+        """Unparseable ``last_withdrawals_calculated_timestamp`` recomputes.
+
+        Symmetric with ``test_invalid_timestamp_format`` on the
+        initial-investment path. A regression flipping the parse-error
+        fallback to a spurious cache hit (e.g. ``age_seconds = 0``)
+        would otherwise be invisible on the withdrawal path.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        now_ts = 1704067200
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": "not-a-number",
+            "optimism_total_withdrawals": "42.0",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(d):
+            writes.update(d)
+            yield
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        obj._get_current_timestamp = lambda: now_ts
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
+
+        # Cache treated as expired → fetcher runs, kv timestamp is rewritten
+        # with a parseable value so the next cycle is clean.
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
+        assert called[0] == 1
+        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+
+    def test_withdrawal_cache_within_ttl_missing_cached_val_falls_through(self):
+        """Within-TTL hit with no ``optimism_total_withdrawals`` recomputes.
+
+        The cache-hit branch reads the value via a second ``_read_kv``;
+        if that key is missing the code must fall through to the
+        fetcher rather than serve ``None`` or ``Decimal("0")``.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        now_ts = 1704067200
+        # Two reads: the first returns just the timestamp (within TTL),
+        # the second (for the cached value) returns no value.
+        reads = [
+            {"last_withdrawals_calculated_timestamp": str(now_ts - 60)},
+            {},
+        ]
+        read_idx = [0]
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            data = reads[read_idx[0]]
+            read_idx[0] += 1
+            return dict(data)
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = _gen_none
+        obj._get_current_timestamp = lambda: now_ts
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("0")
+        # Fell through to the fetcher rather than returning a stale/empty value.
+        assert called[0] == 1
+
+    def test_withdrawal_cache_within_ttl_unparseable_cached_val_falls_through(
+        self,
+    ):
+        """Within-TTL hit with a garbage ``optimism_total_withdrawals`` recomputes.
+
+        ``Decimal(str(cached_val))`` raises ``InvalidOperation`` on a
+        non-numeric value; the code catches that and must fall through
+        to the fetcher rather than propagate the exception or return
+        ``Decimal("0")``.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xS"}
+
+        now_ts = 1704067200
+        kv_state = {
+            "last_withdrawals_calculated_timestamp": str(now_ts - 60),
+            "optimism_total_withdrawals": "garbage",
+        }
+
+        def fake_read_kv(*args, **kwargs):
+            yield
+            return dict(kv_state)
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = _gen_none
+        obj._get_current_timestamp = lambda: now_ts
+
+        called = [0]
+
+        def fetcher(*a, **kw):
+            called[0] += 1
+            yield
+            return {"outgoing": {}}
+
+        obj._track_erc20_transfers_optimism = fetcher
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("0")
+        # Fell through to the fetcher rather than raising or returning 0.
+        assert called[0] == 1
 
     def test_initial_investment_cache_negative_age_treated_as_expired(self):
         """Future-dated last_initial_value_calculated_timestamp recomputes."""

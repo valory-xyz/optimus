@@ -140,6 +140,30 @@ def _collect_seen_transfer_ids(date_keyed_data: Dict[str, Any]) -> set:
     return seen
 
 
+def _drop_legacy_transfer_entries(date_keyed_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop persisted transfer dicts lacking ``transfer_id`` and rebuild the
+    date-keyed dict in place.
+
+    Legacy entries (persisted before this PR) lack the explicit ``transfer_id``
+    field, so their derived uid uses the ``tx_hash:type:amount`` fallback while
+    the same Safe API response uses Safe's ``transferId``. The two never match,
+    which would cause every historical transfer to be re-processed and appended
+    a second time on the first warm cycle after upgrade. Dropping them forces
+    one re-fetch that repopulates the date with proper ``transfer_id`` entries;
+    the fetcher's early-stop keeps the cost bounded.
+    """
+    if not date_keyed_data:
+        return date_keyed_data
+    migrated: Dict[str, Any] = {}
+    for date, transfers in date_keyed_data.items():
+        if not isinstance(transfers, list):
+            continue
+        kept = [t for t in transfers if isinstance(t, dict) and t.get("transfer_id")]
+        if kept:
+            migrated[date] = kept
+    return migrated
+
+
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
 
@@ -2423,9 +2447,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     int(datetime.now().timestamp()),
                 )
             )
-            if not all_erc20_transfers_optimism:
+            # ``None`` signals fetcher failure (exception or mid-pagination
+            # error). Skip the kv same-day cache write so a transient blip
+            # doesn't pin ``withdrawal=0`` for the rest of the day.
+            if all_erc20_transfers_optimism is None:
                 self.context.logger.warning(
-                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                    "Failed to fetch ERC20 transfers, returning zero withdrawal "
+                    "value without caching"
                 )
                 return Decimal(0)
             outgoing_erc20_transfers_optimism = all_erc20_transfers_optimism.get(
@@ -3422,7 +3450,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
         if self.funding_events:
-            existing_optimism_data = self.funding_events.get("optimism", {})
+            existing_optimism_data = _drop_legacy_transfer_entries(
+                self.funding_events.get("optimism", {})
+            )
+            # Persist the migrated shape so subsequent loads don't need to
+            # re-filter and so the on-disk file stops carrying duplicates.
+            self.funding_events["optimism"] = existing_optimism_data
         else:
             existing_optimism_data = {}
 
@@ -4554,7 +4587,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Load persisted outgoing data
         if not self.funding_events:
             self.funding_events = self.read_funding_events() or {}
-        existing_outgoing = self.funding_events.get("optimism_outgoing", {})
+        existing_outgoing = _drop_legacy_transfer_entries(
+            self.funding_events.get("optimism_outgoing", {})
+        )
+        self.funding_events["optimism_outgoing"] = existing_outgoing
 
         all_transfers = {}
 
@@ -4699,7 +4735,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self,
         safe_address: str,
         final_timestamp: int,
-    ) -> Generator[None, None, Dict[str, Dict[str, List[Dict]]]]:
+    ) -> Generator[None, None, Optional[Dict[str, Dict[str, List[Dict]]]]]:
         """Fetch and organize ERC20 token transfers for Optimism chain using Safe API.
 
         Persists outgoing USDC transfers to funding_events.json under the
@@ -4708,6 +4744,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         (transferId, falling back to txHash + log_index) so a same-day
         withdrawal added after one already stored on the same date is not
         silently dropped.
+
+        Returns ``None`` on exception or on a mid-pagination fetch failure so
+        the caller can skip the kv same-day cache write and retry on the next
+        cycle. Returning ``None`` (rather than an empty dict) prevents a single
+        transient API blip from caching ``withdrawal=0`` for the rest of the
+        day, and prevents partial-pagination data from being persisted with a
+        falsely complete seen-set seeded into the next cycle.
         """
         try:
             if not self.funding_events:
@@ -4729,6 +4772,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
             new_by_date: Dict[str, List[Dict]] = {}
             current_date = datetime.fromtimestamp(final_timestamp).strftime("%Y-%m-%d")
+            fetch_failed = False
 
             while True:
                 success, response_json = yield from self._request_with_retries(
@@ -4742,6 +4786,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if not success:
                     self.context.logger.error("Failed to fetch Optimism transfers")
+                    fetch_failed = True
                     break
 
                 transfers = response_json.get("results", [])
@@ -4749,10 +4794,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if not transfers:
                     break
 
-                # Track how many transfers in this page have already-seen IDs.
-                # Safe returns newest-first, so once an entire page is old we
-                # can stop paginating.
-                consecutive_existing = 0
+                # Pre-pass: identify the eligible transfers on this page so the
+                # consecutive-existing early-stop is counted against the
+                # outgoing-ERC20 subset only. Without this, unrelated entries
+                # (incoming, ETH, non-ERC20) reset the counter on every page
+                # and the early-stop almost never trips against realistic
+                # mixed Safe traffic.
+                eligible_indices = []
+                for idx, t in enumerate(transfers):
+                    if (
+                        t.get("from", "").lower() == safe_address.lower()
+                        and t.get("type", "") == "ERC20_TRANSFER"
+                    ):
+                        eligible_indices.append(idx)
+                eligible_in_page = len(eligible_indices)
+                seen_eligible_in_page = 0
                 stop_pagination = False
 
                 for transfer in transfers:
@@ -4774,21 +4830,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if tx_date > current_date:
                         continue
 
+                    # Skip transfers that aren't outgoing ERC20s. These don't
+                    # contribute to the early-stop counter either way.
+                    if transfer.get("from", "").lower() != safe_address.lower():
+                        continue
+                    transfer_type = transfer.get("type", "")
+                    if transfer_type != "ERC20_TRANSFER":
+                        continue
+
                     # Per-transfer dedup against persisted + in-cycle seen IDs.
                     unique_id = _transfer_unique_id(transfer)
                     if unique_id and unique_id in seen_tx_ids:
-                        consecutive_existing += 1
-                        if consecutive_existing >= len(transfers):
+                        seen_eligible_in_page += 1
+                        if (
+                            eligible_in_page > 0
+                            and seen_eligible_in_page == eligible_in_page
+                        ):
                             stop_pagination = True
-                        continue
-                    consecutive_existing = 0
-
-                    # Only process outgoing transfers (where from address is equal to our safe address)
-                    if transfer.get("from", "").lower() != safe_address.lower():
-                        continue
-
-                    transfer_type = transfer.get("type", "")
-                    if transfer_type != "ERC20_TRANSFER":
                         continue
 
                     token_info = transfer.get("tokenInfo", {})
@@ -4839,7 +4897,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if stop_pagination:
                     self.context.logger.info(
-                        "Withdrawals: entire page already stored — stopping pagination"
+                        "Withdrawals: every outgoing ERC20 on this page is already stored — stopping pagination"
                     )
                     break
 
@@ -4847,6 +4905,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if not cursor:
                     break
                 transfers_url = cursor
+
+            if fetch_failed:
+                # Discard partial data so a single-page failure doesn't
+                # persist a partial history with a falsely-complete
+                # seen-set that would trip the early-stop next cycle and
+                # permanently drop the still-missing older pages.
+                return None
 
             # Merge new transfers into persisted data and save
             for date, transfers_list in new_by_date.items():
@@ -4859,7 +4924,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error tracking Optimism ERC20 transfers: {e}")
-            return {"outgoing": {}}
+            return None
 
     def _track_eth_transfers_mode(
         self,

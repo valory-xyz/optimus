@@ -479,6 +479,11 @@ class Params(BaseParams):
         self.min_investment_amount = self._ensure("min_investment_amount", kwargs, int)
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)
+        # Stored as a FRACTION (0.1 == 10%), not a percent — multiplied by 100 at the
+        # use-site. Matches max_fee_percentage / max_gas_percentage above.
+        self.max_slippage_percentage = self._ensure(
+            "max_slippage_percentage", kwargs, float
+        )
         self.balancer_graphql_endpoints = json.loads(
             self._ensure("balancer_graphql_endpoints", kwargs, str)
         )

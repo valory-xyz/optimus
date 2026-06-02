@@ -64,6 +64,7 @@ def _make_behaviour(**overrides: Any) -> DecisionMakingBehaviour:
     params.waiting_period_for_status_check = 0
     params.max_fee_percentage = 0.05
     params.max_gas_percentage = 0.05
+    params.max_slippage_percentage = 0.1
     params.slippage_for_swap = 0.03
 
     synced = MagicMock()
@@ -2671,7 +2672,7 @@ class TestCheckIfRouteIsProfitable:
     """TestCheckIfRouteIsProfitable."""
 
     def test_profitable(self):
-        """Test profitable."""
+        """A profitable route returns True with the total fee and gas."""
         b = _make_behaviour()
         b._get_step_transactions_data = _make_gen_method(
             [{"fee": 0.1, "gas_cost": 0.1}]
@@ -2679,13 +2680,9 @@ class TestCheckIfRouteIsProfitable:
         route = {"fromAmountUSD": "100", "toAmountUSD": "99", "steps": []}
         result = _exhaust(b.check_if_route_is_profitable(route))
         assert result[0] is True
+        assert result[1] == 0.1  # total_fee
+        assert result[2] == 0.1  # total_gas_cost
 
-    @pytest.mark.skip(
-        reason=(
-            "Profitability gate is bypassed for the Basius MVP — re-enable per "
-            "workstream 2 PR 2.6 and un-skip this test alongside that change."
-        )
-    )
     def test_not_profitable_fees(self):
         """Test not profitable fees."""
         b = _make_behaviour()
@@ -2709,6 +2706,47 @@ class TestCheckIfRouteIsProfitable:
         route = {"fromAmountUSD": "0", "toAmountUSD": "0", "steps": []}
         result = _exhaust(b.check_if_route_is_profitable(route))
         assert result[0] is False
+
+    def test_not_profitable_slippage(self):
+        """Route rejected when value-loss/slippage exceeds max_slippage_percentage."""
+        b = _make_behaviour()  # max_slippage_percentage = 0.1 (10%)
+        b._get_step_transactions_data = _make_gen_method(
+            [{"fee": 0.1, "gas_cost": 0.1}]
+        )
+        # Fees/gas pass the gate, but 20% value loss (100 -> 80) exceeds the 10% cap.
+        route = {"fromAmountUSD": "100", "toAmountUSD": "80", "steps": []}
+        result = _exhaust(b.check_if_route_is_profitable(route))
+        assert result[0] is False
+
+    def test_not_profitable_gas_only(self):
+        """Gas-only excess trips the gate (guards the `or gas` branch)."""
+        b = _make_behaviour()  # max_gas_percentage = 0.05
+        b._get_step_transactions_data = _make_gen_method([{"fee": 0.5, "gas_cost": 10}])
+        # fee 0.5% passes, gas 10% > 5% -> rejected by the gas branch.
+        route = {"fromAmountUSD": "100", "toAmountUSD": "99", "steps": []}
+        assert _exhaust(b.check_if_route_is_profitable(route))[0] is False
+
+    def test_slippage_at_cap_passes(self):
+        """Exactly the cap (10% loss) passes — guards against `>=` instead of `>`."""
+        b = _make_behaviour()  # max_slippage_percentage = 0.1
+        b._get_step_transactions_data = _make_gen_method(
+            [{"fee": 0.1, "gas_cost": 0.1}]
+        )
+        route = {
+            "fromAmountUSD": "100",
+            "toAmountUSD": "90",
+            "steps": [],
+        }  # exactly 10%
+        assert _exhaust(b.check_if_route_is_profitable(route))[0] is True
+
+    def test_value_gaining_route_passes(self):
+        """A value-gaining route (toAmountUSD > fromAmountUSD) has negative loss, passes."""
+        b = _make_behaviour()
+        b._get_step_transactions_data = _make_gen_method(
+            [{"fee": 0.1, "gas_cost": 0.1}]
+        )
+        route = {"fromAmountUSD": "100", "toAmountUSD": "101", "steps": []}
+        assert _exhaust(b.check_if_route_is_profitable(route))[0] is True
 
 
 class TestCheckStepCosts:

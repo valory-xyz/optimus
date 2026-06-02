@@ -9869,6 +9869,11 @@ class TestProxySafePagination:
         ), captured
         # No call leaked to Safe's host even though page 1 advertised it.
         assert all("safe.global" not in url for url in captured), captured
+        # Offset is advanced by ``len(transfers)`` (1 here), not by the
+        # requested ``limit`` (100). A short non-final page must not cause
+        # the next request to skip records.
+        assert "offset=0" in captured[0], captured[0]
+        assert "offset=1" in captured[1], captured[1]
 
     def test_pagination_respects_max_pagination_pages_cap(self):
         """The MAX_PAGINATION_PAGES backstop fires for a misbehaving API."""
@@ -9956,6 +9961,9 @@ class TestProxySafePagination:
             url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
         ), captured
         assert all("safe.global" not in url for url in captured), captured
+        # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
+        assert "offset=0" in captured[0], captured[0]
+        assert "offset=1" in captured[1], captured[1]
 
     def test_outgoing_eth_fetcher_paginates_via_proxy_base_url(self):
         """Same proxy-URL guarantee for the outgoing-ETH fetcher."""
@@ -9995,6 +10003,9 @@ class TestProxySafePagination:
             url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
         ), captured
         assert all("safe.global" not in url for url in captured), captured
+        # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
+        assert "offset=0" in captured[0], captured[0]
+        assert "offset=1" in captured[1], captured[1]
 
     def test_incoming_fetcher_max_pagination_cap(self):
         """MAX_PAGINATION_PAGES cap on incoming fetcher signals fetch failure."""
@@ -10075,6 +10086,58 @@ class TestProxySafePagination:
         # here because ``funding_events`` was seeded empty.
         obj.store_funding_events.assert_not_called()
         assert result == {}
+
+    def test_short_non_final_page_does_not_skip_records(self):
+        """Regression: short non-final page must not skip records.
+
+        Safe's DRF can return fewer rows than ``limit`` on a non-final
+        page (server-side clamp, partial filter). Advancing ``offset``
+        by the requested ``limit`` would skip the un-returned rows; the
+        correct increment is ``len(transfers)``. This test simulates
+        page 1 returning 50 rows with ``next != null`` and asserts that
+        page 2 fetches starting at offset=50, not offset=100.
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+
+        captured: List[str] = []
+        call_count = [0]
+        page_one = [self._outgoing_usdc(f"tid-{i}") for i in range(50)]
+
+        def req(*a, **kw):
+            captured.append(kw.get("endpoint", a[0] if a else ""))
+            call_count[0] += 1
+            yield
+            if call_count[0] == 1:
+                return (
+                    True,
+                    {
+                        "results": page_one,
+                        # Non-null next signals "more records exist" even
+                        # though this page is short.
+                        "next": (
+                            "https://safe-transaction-optimism.safe.global/api/v1/"
+                            "safes/0xS/transfers/?offset=100"
+                        ),
+                    },
+                )
+            return (True, {"results": [], "next": None})
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+        assert call_count[0] == 2
+        assert "offset=0" in captured[0], captured[0]
+        # Page 2 must request offset=50 (the count consumed), not
+        # offset=100 (the requested ``limit``). offset=100 would silently
+        # drop records 50-99.
+        assert "offset=50" in captured[1], captured[1]
 
 
 class TestKvCacheTtlBoundaries:

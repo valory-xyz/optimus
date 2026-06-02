@@ -4222,14 +4222,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Advance pagination by offset. Safe's DRF pagination signals
-                # "no more pages" via ``next: null``. Empty ``results`` is
-                # handled earlier in the loop. We deliberately don't gate on
-                # ``len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT`` because Safe
-                # is free to return short non-final pages.
+                # Advance pagination by the number of records actually
+                # returned, not by the requested ``limit``. Safe's DRF can
+                # return a short non-final page (server-side clamp or partial
+                # filter) with ``next != null``; advancing by ``limit`` would
+                # skip the un-returned records. Dedup via ``seen_transfer_ids``
+                # absorbs any overlap when Safe in fact returned a full page.
+                # Termination still consults ``next is None``; empty results
+                # are handled earlier in the loop.
                 if response_json.get("next") is None:
                     break
-                offset += SAFE_TRANSFERS_PAGE_LIMIT
+                offset += len(transfers)
 
             self.context.logger.info(
                 f"Completed Optimism transfers: {processed_count} found"
@@ -4892,14 +4895,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Advance pagination by offset. Safe's DRF pagination signals
-                # "no more pages" via ``next: null``. Empty ``results`` is
-                # handled earlier in the loop. We deliberately don't gate on
-                # ``len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT`` because Safe
-                # is free to return short non-final pages.
+                # Advance pagination by the number of records actually
+                # returned, not by the requested ``limit``. Safe's DRF can
+                # return a short non-final page (server-side clamp or partial
+                # filter) with ``next != null``; advancing by ``limit`` would
+                # skip the un-returned records. Dedup via ``seen_tx_ids``
+                # absorbs any overlap when Safe in fact returned a full page.
+                # Termination still consults ``next is None``; empty results
+                # are handled earlier in the loop.
                 if response_json.get("next") is None:
                     break
-                offset += SAFE_TRANSFERS_PAGE_LIMIT
+                offset += len(transfers)
 
             if fetch_failed:
                 self.context.logger.warning(
@@ -5132,14 +5138,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Advance pagination by offset. Safe's DRF pagination signals
-                # "no more pages" via ``next: null``. Empty ``results`` is
-                # handled earlier in the loop. We deliberately don't gate on
-                # ``len(transfers) < SAFE_TRANSFERS_PAGE_LIMIT`` because Safe
-                # is free to return short non-final pages.
+                # Advance pagination by the number of records actually
+                # returned, not by the requested ``limit``. Safe's DRF can
+                # return a short non-final page (server-side clamp or partial
+                # filter) with ``next != null``; advancing by ``limit`` would
+                # skip the un-returned records. Dedup via ``seen_tx_ids``
+                # absorbs any overlap when Safe in fact returned a full page.
+                # Termination still consults ``next is None``; empty results
+                # are handled earlier in the loop.
                 if response_json.get("next") is None:
                     break
-                offset += SAFE_TRANSFERS_PAGE_LIMIT
+                offset += len(transfers)
 
             if fetch_failed:
                 # Discard partial data so a single-page failure doesn't

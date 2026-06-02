@@ -9690,6 +9690,65 @@ class TestErc20OptimismFailureModes:
         # incoming entry is also present.
         assert call_count[0] == 1
 
+    def test_eligible_only_early_stop_with_non_usdc_outgoing_erc20(self):
+        """Non-USDC outgoing ERC20 must not block the early-stop.
+
+        The seen-set only ever receives outgoing-USDC uids, so any
+        non-USDC outgoing ERC20 (fee tokens, LP tokens, anything else
+        the safe might transfer out) must NOT be counted in
+        ``eligible_in_page``. Without this, a single non-USDC outgoing
+        entry on the page would make ``seen_eligible_in_page ==
+        eligible_in_page`` unreachable and the loop would paginate the
+        full history on every cache-miss for any safe with mixed
+        outgoing tokens.
+        """
+        obj = _mk()
+        obj.read_funding_events = lambda: {
+            "optimism_withdrawals": {
+                "2024-01-01": [
+                    {"transfer_id": "tid-usdc-seen"},
+                ]
+            }
+        }
+        obj.store_funding_events = MagicMock()
+        obj.funding_events = {}
+
+        usdc_outgoing_seen = self._transfer("tid-usdc-seen")
+        non_usdc_outgoing = {
+            "transferId": "tid-aero-unseen",
+            "executionDate": "2024-01-01T11:00:00Z",
+            "from": "0xaddr",
+            "to": "0xR",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "AERO", "decimals": 18},
+            "tokenAddress": "0xAERO",
+            "value": str(10**18),
+            "transactionHash": "0xH-aero",
+        }
+
+        call_count = [0]
+
+        def req(*a, **kw):
+            """Returns a page with one USDC (seen) and one non-USDC outgoing."""
+            call_count[0] += 1
+            yield
+            return (
+                True,
+                {
+                    "results": [usdc_outgoing_seen, non_usdc_outgoing],
+                    "next": "would-paginate-if-non-usdc-blocked-stop",
+                },
+            )
+
+        obj._request_with_retries = req
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        # One call: AERO is filtered out of eligible_in_page, so the
+        # single eligible (USDC) entry being already-seen trips the stop.
+        assert call_count[0] == 1
+
 
 class TestDropLegacyTransferEntries:
     """Migration that removes pre-PR persisted entries lacking transfer_id."""
@@ -9709,10 +9768,13 @@ class TestDropLegacyTransferEntries:
                 {"tx_hash": "0xC", "amount": "2.0"},
             ],
         }
-        migrated = _drop_legacy_transfer_entries(data)
+        migrated, dropped = _drop_legacy_transfer_entries(data)
         # Only the entry with transfer_id survives on 2024-01-01;
         # 2024-01-02 has no surviving entries so the key is dropped.
         assert migrated == {"2024-01-01": [{"transfer_id": "tid-1", "tx_hash": "0xB"}]}
+        # Two legacy entries were dropped (the 2024-01-01 first entry and
+        # the only 2024-01-02 entry).
+        assert dropped == 2
 
     def test_empty_input_returns_empty(self):
         """Empty/None input passes through untouched."""
@@ -9720,8 +9782,8 @@ class TestDropLegacyTransferEntries:
             _drop_legacy_transfer_entries,
         )
 
-        assert _drop_legacy_transfer_entries({}) == {}
-        assert _drop_legacy_transfer_entries(None) is None
+        assert _drop_legacy_transfer_entries({}) == ({}, 0)
+        assert _drop_legacy_transfer_entries(None) == (None, 0)
 
     def test_applied_when_loading_optimism_outgoing(self):
         """Loading optimism_outgoing strips legacy entries lacking transfer_id."""

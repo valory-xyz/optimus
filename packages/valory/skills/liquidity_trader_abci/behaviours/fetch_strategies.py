@@ -143,7 +143,9 @@ def _collect_seen_transfer_ids(date_keyed_data: Dict[str, Any]) -> set:
     return seen
 
 
-def _drop_legacy_transfer_entries(date_keyed_data: Dict[str, Any]) -> Dict[str, Any]:
+def _drop_legacy_transfer_entries(
+    date_keyed_data: Dict[str, Any],
+) -> Tuple[Dict[str, Any], int]:
     """Drop persisted transfer dicts that lack a ``transfer_id`` field.
 
     Legacy entries (persisted before this PR) lack the explicit ``transfer_id``
@@ -154,20 +156,33 @@ def _drop_legacy_transfer_entries(date_keyed_data: Dict[str, Any]) -> Dict[str, 
     one re-fetch that repopulates the date with proper ``transfer_id`` entries;
     the fetcher's early-stop keeps the cost bounded.
 
+    Returns a count of dropped entries so the caller can log it. The expected
+    case is "drop N, refetch fills them back in within MAX_PAGINATION_PAGES",
+    but for very old safes some entries may be beyond Safe's pagination
+    window or pruned server-side and therefore unrecoverable. Logging the
+    drop count makes that loss observable instead of silent.
+
     :param date_keyed_data: a ``{date: [transfer_dict, ...]}`` mapping.
-    :return: the same shape with any legacy entries removed (dates that end up
-        empty are dropped).
+    :return: ``(migrated, dropped_count)`` where ``migrated`` has the same
+        shape with legacy entries removed (dates that end up empty are
+        dropped) and ``dropped_count`` is the number of removed entries.
     """
     if not date_keyed_data:
-        return date_keyed_data
+        return date_keyed_data, 0
     migrated: Dict[str, Any] = {}
+    dropped = 0
     for date, transfers in date_keyed_data.items():
         if not isinstance(transfers, list):
             continue
-        kept = [t for t in transfers if isinstance(t, dict) and t.get("transfer_id")]
+        kept: List[Dict[str, Any]] = []
+        for t in transfers:
+            if isinstance(t, dict) and t.get("transfer_id"):
+                kept.append(t)
+            else:
+                dropped += 1
         if kept:
             migrated[date] = kept
-    return migrated
+    return migrated, dropped
 
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
@@ -3457,7 +3472,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self.funding_events = self.read_funding_events()
         if self.funding_events:
             raw_optimism_data = self.funding_events.get("optimism", {})
-            existing_optimism_data = _drop_legacy_transfer_entries(raw_optimism_data)
+            existing_optimism_data, dropped = _drop_legacy_transfer_entries(
+                raw_optimism_data
+            )
+            if dropped:
+                self.context.logger.info(
+                    f"Dropped {dropped} legacy optimism transfer entries "
+                    "without transfer_id; will be re-fetched if still within "
+                    "Safe's pagination window."
+                )
         else:
             raw_optimism_data = {}
             existing_optimism_data = {}
@@ -4629,7 +4652,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if not self.funding_events:
             self.funding_events = self.read_funding_events() or {}
         raw_existing_outgoing = self.funding_events.get("optimism_outgoing", {})
-        existing_outgoing = _drop_legacy_transfer_entries(raw_existing_outgoing)
+        existing_outgoing, dropped = _drop_legacy_transfer_entries(
+            raw_existing_outgoing
+        )
+        if dropped:
+            self.context.logger.info(
+                f"Dropped {dropped} legacy optimism_outgoing transfer entries "
+                "without transfer_id; will be re-fetched if still within "
+                "Safe's pagination window."
+            )
 
         all_transfers: Dict[str, List[Dict]] = {}
         fetch_failed = False
@@ -4669,7 +4700,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if not transfers:
                     break
 
-                consecutive_existing = 0
+                # Pre-pass: count the eligible (outgoing ETHER_TRANSFER) entries
+                # on this page so the early-stop is counted against the subset
+                # the seen-set actually receives. Unrelated entries (incoming,
+                # non-ETH outgoing) don't contribute to the counter, otherwise
+                # they would reset it on every mixed-traffic page and the stop
+                # would rarely fire.
+                eligible_in_page = 0
+                for t in transfers:
+                    if t.get("from", "").lower() != address.lower():
+                        continue
+                    if t.get("type", "") != "ETHER_TRANSFER":
+                        continue
+                    try:
+                        if int(t.get("value", "0") or "0") <= 0:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                    eligible_in_page += 1
+                seen_eligible_in_page = 0
                 stop_pagination = False
 
                 for transfer in transfers:
@@ -4696,11 +4745,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # Per-transfer dedup against persisted + in-cycle seen IDs.
                     unique_id = _transfer_unique_id(transfer)
                     if unique_id and unique_id in seen_tx_ids:
-                        consecutive_existing += 1
-                        if consecutive_existing >= len(transfers):
+                        seen_eligible_in_page += 1
+                        if (
+                            eligible_in_page > 0
+                            and seen_eligible_in_page == eligible_in_page
+                        ):
                             stop_pagination = True
                         continue
-                    consecutive_existing = 0
 
                     # Only process outgoing transfers (where from address is equal to our safe address)
                     if transfer.get("from", "").lower() == address.lower():

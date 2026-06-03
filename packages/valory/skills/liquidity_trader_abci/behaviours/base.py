@@ -30,7 +30,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Generator, List, Literal, Optional, Tuple, cast
 
 from aea.protocols.base import Message
 from eth_utils import to_checksum_address
@@ -91,7 +91,8 @@ MAX_RATE_LIMIT_WAIT_SECONDS = 30
 
 # Backoff schedule used when the rate-limit response has no Retry-After
 # header. Sleep on attempt ``i`` is
-# ``RATE_LIMIT_BACKOFF_SCHEDULE[i] + uniform(0, jitter)``.
+# ``RATE_LIMIT_BACKOFF_SCHEDULE[min(i, len-1)] + uniform(0, jitter)``;
+# ``attempt`` values past the last index saturate at the final entry.
 RATE_LIMIT_BACKOFF_SCHEDULE = (5, 10, 15)
 RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
@@ -569,7 +570,9 @@ class LiquidityTraderBaseBehaviour(
         )
         return balances
 
-    def _build_safe_api_url(self, chain: str, version: str, path: str) -> str:
+    def _build_safe_api_url(
+        self, chain: str, version: Literal["v1", "v2"], path: str
+    ) -> str:
         """Build a Safe API URL from the configured root + chain slug.
 
         Every Safe API call (across pages and versions) is built from the
@@ -1529,13 +1532,22 @@ class LiquidityTraderBaseBehaviour(
         :param attempt: zero-indexed retry attempt counter.
         :return: sleep duration in seconds.
         """
-        headers_blob = getattr(response, "headers", "") or ""
+        headers_blob = getattr(response, "headers", None)
+        if not headers_blob:
+            self.context.logger.debug(
+                "Rate-limit response had no headers; using backoff schedule"
+            )
+            headers_blob = ""
         for line in headers_blob.splitlines():
             name, _, value = line.partition(":")
             if name.strip().lower() == "retry-after":
                 try:
                     return min(int(value.strip()), MAX_RATE_LIMIT_WAIT_SECONDS)
                 except ValueError:
+                    self.context.logger.debug(
+                        f"Retry-After value {value.strip()!r} is not an "
+                        "integer; using backoff schedule"
+                    )
                     break
         idx = min(attempt, len(RATE_LIMIT_BACKOFF_SCHEDULE) - 1)
         base = RATE_LIMIT_BACKOFF_SCHEDULE[idx]

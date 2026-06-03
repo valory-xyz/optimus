@@ -60,7 +60,8 @@ def _make_behaviour(**overrides: Any) -> LiquidityTraderBaseBehaviour:
         "mode": "0x" + "dd" * 20,
     }
     params.target_investment_chains = ["optimism", "mode"]
-    params.safe_api_base_url = "https://safe.optimism.io/api/v1/safes"
+    params.safe_api_url = "https://safe.example.com"
+    params.safe_api_chain_slugs = {"optimism": "oeth", "mode": "mode"}
     params.mode_explorer_api_base_url = "https://explorer.mode.network"
     params.slippage_tolerance = 0.05
     params.velodrome_router_contract_addresses = {}
@@ -2644,6 +2645,128 @@ class TestCachePrice:
         b.context.logger.error.assert_called()
 
 
+class TestBuildSafeApiUrl:
+    """Test _build_safe_api_url."""
+
+    def _behaviour(self) -> Any:
+        b = _make_behaviour()
+        b.params.safe_api_url = "https://safe.example.com"
+        b.params.safe_api_chain_slugs = {"optimism": "oeth", "base": "base"}
+        return b
+
+    def test_v1_url_structure(self) -> None:
+        """v1 path is composed as root + slug + api/v1 + suffix."""
+        b = self._behaviour()
+        url = b._build_safe_api_url("optimism", "v1", "safes/0xAddr/transfers/")
+        assert url == "https://safe.example.com/oeth/api/v1/safes/0xAddr/transfers/"
+
+    def test_v2_url_structure(self) -> None:
+        """v2 path swaps version while keeping the slug and root."""
+        b = self._behaviour()
+        url = b._build_safe_api_url("optimism", "v2", "safes/0xAddr/balances/")
+        assert url == "https://safe.example.com/oeth/api/v2/safes/0xAddr/balances/"
+
+    def test_different_chain_uses_its_slug(self) -> None:
+        """Base chain produces a different URL prefix from Optimism."""
+        b = self._behaviour()
+        url = b._build_safe_api_url("base", "v1", "safes/0xAddr/")
+        assert url == "https://safe.example.com/base/api/v1/safes/0xAddr/"
+
+    def test_unknown_chain_raises_keyerror_with_message(self) -> None:
+        """Unknown chain raises KeyError whose message names the param."""
+        b = self._behaviour()
+        try:
+            b._build_safe_api_url("nosuchchain", "v1", "safes/0xAddr/")
+        except KeyError as exc:
+            assert "nosuchchain" in str(exc)
+            assert "safe_api_chain_slugs" in str(exc)
+        else:
+            raise AssertionError("expected KeyError")
+
+
+class TestComputeRateLimitWait:
+    """Test _compute_rate_limit_wait."""
+
+    def _response(self, headers_blob: Any) -> Any:
+        resp = MagicMock()
+        resp.headers = headers_blob
+        return resp
+
+    def test_retry_after_seconds_honoured(self) -> None:
+        """Integer-seconds Retry-After is returned directly when within cap."""
+        b = _make_behaviour()
+        resp = self._response("Retry-After: 7\r\nContent-Type: application/json")
+        assert b._compute_rate_limit_wait(resp, attempt=0) == 7
+
+    def test_retry_after_is_capped(self) -> None:
+        """A long Retry-After is clamped to MAX_RATE_LIMIT_WAIT_SECONDS."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            MAX_RATE_LIMIT_WAIT_SECONDS,
+        )
+
+        b = _make_behaviour()
+        resp = self._response(f"Retry-After: {MAX_RATE_LIMIT_WAIT_SECONDS + 100}")
+        assert (
+            b._compute_rate_limit_wait(resp, attempt=0) == MAX_RATE_LIMIT_WAIT_SECONDS
+        )
+
+    def test_retry_after_non_integer_falls_through(self) -> None:
+        """Non-integer Retry-After (e.g. HTTP-date) falls through to backoff."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            RATE_LIMIT_BACKOFF_JITTER_SECONDS,
+            RATE_LIMIT_BACKOFF_SCHEDULE,
+        )
+
+        b = _make_behaviour()
+        resp = self._response("Retry-After: Wed, 21 Oct 2026 07:28:00 GMT")
+        wait = b._compute_rate_limit_wait(resp, attempt=0)
+        assert (
+            RATE_LIMIT_BACKOFF_SCHEDULE[0]
+            <= wait
+            < RATE_LIMIT_BACKOFF_SCHEDULE[0] + RATE_LIMIT_BACKOFF_JITTER_SECONDS + 1
+        )
+
+    def test_no_header_uses_schedule_with_jitter(self) -> None:
+        """Without Retry-After, sleeps in ``[schedule, schedule + jitter)``."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            RATE_LIMIT_BACKOFF_JITTER_SECONDS,
+            RATE_LIMIT_BACKOFF_SCHEDULE,
+        )
+
+        b = _make_behaviour()
+        resp = self._response("")
+        for attempt in (0, 1, 2):
+            wait = b._compute_rate_limit_wait(resp, attempt=attempt)
+            base = RATE_LIMIT_BACKOFF_SCHEDULE[attempt]
+            assert (
+                base <= wait < base + RATE_LIMIT_BACKOFF_JITTER_SECONDS + 1
+            ), f"attempt={attempt} wait={wait} base={base}"
+
+    def test_attempt_past_schedule_saturates_at_last(self) -> None:
+        """High ``attempt`` saturates at the last schedule entry."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            RATE_LIMIT_BACKOFF_JITTER_SECONDS,
+            RATE_LIMIT_BACKOFF_SCHEDULE,
+        )
+
+        b = _make_behaviour()
+        resp = self._response("")
+        wait = b._compute_rate_limit_wait(resp, attempt=99)
+        last = RATE_LIMIT_BACKOFF_SCHEDULE[-1]
+        assert last <= wait < last + RATE_LIMIT_BACKOFF_JITTER_SECONDS + 1
+
+    def test_missing_headers_attribute_treated_as_no_header(self) -> None:
+        """A response object without ``headers`` falls through to backoff."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            RATE_LIMIT_BACKOFF_SCHEDULE,
+        )
+
+        b = _make_behaviour()
+        # Plain object with no ``headers`` attribute at all.
+        wait = b._compute_rate_limit_wait(object(), attempt=0)
+        assert wait >= RATE_LIMIT_BACKOFF_SCHEDULE[0]
+
+
 class TestRequestWithRetries:
     """Test _request_with_retries."""
 
@@ -2834,7 +2957,9 @@ class TestFetchSafeBalancesWithPagination:
         b = _make_behaviour()
         page_data = {"results": [{"tokenAddress": None}], "next": None}
         b._request_with_retries = _make_gen((True, page_data))  # type: ignore[assignment,method-assign]
-        success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        success, result = _exhaust(
+            b._fetch_safe_balances_with_pagination("optimism", "0xSafe")
+        )
         assert success is True
         assert len(result) == 1
 
@@ -2842,7 +2967,9 @@ class TestFetchSafeBalancesWithPagination:
         """Test failure."""
         b = _make_behaviour()
         b._request_with_retries = _make_gen((False, {"error": "fail"}))  # type: ignore[assignment,method-assign]
-        success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        success, result = _exhaust(
+            b._fetch_safe_balances_with_pagination("optimism", "0xSafe")
+        )
         assert success is False
         assert result == []
 
@@ -2850,7 +2977,9 @@ class TestFetchSafeBalancesWithPagination:
         """Test empty results."""
         b = _make_behaviour()
         b._request_with_retries = _make_gen((True, {"results": []}))  # type: ignore[assignment,method-assign]
-        success, result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        success, result = _exhaust(
+            b._fetch_safe_balances_with_pagination("optimism", "0xSafe")
+        )
         assert success is True
         assert result == []
 
@@ -4464,7 +4593,7 @@ class TestPaginationMultiPage:
             )
 
         b._request_with_retries = mock_request  # type: ignore[method-assign]
-        result = _exhaust(b._fetch_safe_balances_with_pagination("0xSafe"))
+        result = _exhaust(b._fetch_safe_balances_with_pagination("optimism", "0xSafe"))
         assert len(result) == 2
 
     def test_mode_tokens_two_pages(self) -> None:

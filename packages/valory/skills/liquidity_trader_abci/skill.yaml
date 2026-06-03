@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/base.py: bafybeiad2zzjupqvj73uh2eafkbsftq4fx4vs2gmmn4xvec2qhiuozb5sy
+  behaviours/base.py: bafybeibtpp5deuljh2ksas6r3fdarejl35rmhnwm4qecl2or4carx2efji
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeieidx73vhcck7i3o2wkr435tarz5ikl4sogopgocg5quakgtf3csy
   behaviours/decision_making.py: bafybeiemvgc2np3f26mm72mjawckzzkzrpfvajs5jz7cbahdc6a5q3i3by
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeifmmjlksawv55m7czbwcjqn3x2hh6s4mrbn5fwaquekmphmcqzzaq
+  models.py: bafybeial2s46bh3xmokm5du2d7rbyyiuuubbxk7bdad5gluz7i55ybv5qi
   payloads.py: bafybeifrnypndloixuq3tmpim6fhte26srsc6zhrpm4rp45hjib6k6ogdq
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -46,7 +46,7 @@ fingerprint:
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
-  tests/behaviours/test_base.py: bafybeiewybyn3gqjxr54jvjxrq2vbqhovxjicvvjeagr572w6labgonehq
+  tests/behaviours/test_base.py: bafybeienvjihhoo6lxs7ikkuc2kgq2jgx7ym64g6lxaqc6utpkls7tdvt4
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidv7ckk3qqyovnynl5v7nuxwzbols7jkhkrtiwa3uv7lxi4nykqtm
   tests/behaviours/test_decision_making.py: bafybeidmi7d6qxdhqvl6alcknlvw3g4bx2gcjiqb45ddemdnckabdbbila

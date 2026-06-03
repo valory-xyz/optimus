@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
-- valory/liquidity_trader_abci:0.1.0:bafybeidgcflsdgat7r3y2rddz6iz2q5gcmrobnqtdi2bsww3563e6rrmiu
+- valory/liquidity_trader_abci:0.1.0:bafybeif3pa4j6y7li6ltbkajq5trwofx3vzkmk7lyi5hbn2g5pa6j4iwly
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
 behaviours:
@@ -324,7 +324,8 @@ models:
       velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81","base":"0x940181a94A35A4569E4529A3CDfB74e38FD98631"}'
       slippage_tolerance: 0.01
       balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C","base":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5"}'
-      safe_api_base_url: https://safe-transaction-optimism.safe.global/api/v2/safes
+      safe_api_url: https://rpc-gate.autonolas.tech/safe/tx-service
+      safe_api_chain_slugs: '{"optimism":"oeth","base":"base"}'
       safe_api_timeout: 30
       mode_explorer_api_base_url: https://explorer-mode-mainnet-0.t.conduit.xyz
       mode_api_timeout: 30
@@ -336,7 +337,6 @@ models:
       lifi_quote_to_amount_url: https://li.quest/v1/quote/toAmount
       tls_verify: true
       mode_conduit_explorer_url: https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2
-      safe_api_v1_url: https://safe-transaction-optimism.safe.global/api/v1
       mode_native_explorer_url: https://explorer.mode.network/api
     class_name: Params
   coingecko:

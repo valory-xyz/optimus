@@ -552,6 +552,17 @@ class Params(BaseParams):
         self.safe_api_chain_slugs = json.loads(
             self._ensure("safe_api_chain_slugs", kwargs, str)
         )
+        if not isinstance(self.safe_api_chain_slugs, dict):
+            raise ValueError(
+                "safe_api_chain_slugs must be a JSON object mapping chain "
+                f"to slug; got {type(self.safe_api_chain_slugs).__name__}"
+            )
+        for chain, slug in self.safe_api_chain_slugs.items():
+            if not isinstance(slug, str) or not slug:
+                raise ValueError(
+                    f"safe_api_chain_slugs[{chain!r}] must be a non-empty "
+                    f"string; got {slug!r}"
+                )
         self.safe_api_timeout = self._ensure("safe_api_timeout", kwargs, int)
         self.mode_explorer_api_base_url = self._ensure(
             "mode_explorer_api_base_url", kwargs, str

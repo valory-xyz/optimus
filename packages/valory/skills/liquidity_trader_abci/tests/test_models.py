@@ -615,7 +615,8 @@ class TestParams:
             "velodrome_voter_contract_addresses": json.dumps({}),
             "velodrome_rewards_sugar_contract_addresses": json.dumps({}),
             "velo_token_contract_addresses": json.dumps({}),
-            "safe_api_base_url": "https://safe.example.com",
+            "safe_api_url": "https://safe.example.com",
+            "safe_api_chain_slugs": json.dumps({"optimism": "oeth", "base": "base"}),
             "safe_api_timeout": 30,
             "mode_explorer_api_base_url": "https://mode.example.com",
             "mode_api_timeout": 30,
@@ -628,7 +629,6 @@ class TestParams:
             "request_timeout": 20.0,
             "tls_verify": True,
             "mode_conduit_explorer_url": "https://conduit.example.com/api/v2",
-            "safe_api_v1_url": "https://safe.example.com/api/v1",
             "mode_native_explorer_url": "https://explorer.example.com/api",
             "skill_context": MagicMock(),
         }

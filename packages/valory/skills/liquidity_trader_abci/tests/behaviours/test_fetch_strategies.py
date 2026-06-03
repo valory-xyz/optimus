@@ -9796,7 +9796,7 @@ class TestDropLegacyTransferEntries:
 
 
 class TestProxySafePagination:
-    """Pagination uses safe_api_v1_url for every page, not the absolute next URL (PR 1.4)."""
+    """Pagination uses the configured safe_api_url + slug for every page, not the absolute next URL (PR 1.4)."""
 
     @staticmethod
     def _outgoing_usdc(tid: str, date: str = "2024-01-01") -> Dict[str, Any]:
@@ -9825,19 +9825,20 @@ class TestProxySafePagination:
         }
 
     def test_withdrawal_fetcher_paginates_via_proxy_base_url(self):
-        """Subsequent page requests use safe_api_v1_url, not Safe's absolute next URL.
+        """Subsequent page requests use the configured proxy + slug, not Safe's absolute next URL.
 
         Mocks two pages where the first page advertises an absolute
         ``next`` URL pointing at the real Safe host. Asserts that the
-        second request still goes to ``self.params.safe_api_v1_url``
-        (with an offset query string), so the agent stays inside the
-        configured proxy URL end-to-end.
+        second request still goes through ``self.params.safe_api_url``
+        with the chain slug (with an offset query string), so the agent
+        stays inside the configured proxy URL end-to-end.
         """
         obj = _mk()
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         captured: List[str] = []
         call_count = [0]
@@ -9865,7 +9866,8 @@ class TestProxySafePagination:
         # Two API calls (page 1 + page 2); both go to the proxy base URL.
         assert call_count[0] == 2
         assert all(
-            url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
+            url.startswith("https://safe-proxy.example.com/oeth/api/v1")
+            for url in captured
         ), captured
         # No call leaked to Safe's host even though page 1 advertised it.
         assert all("safe.global" not in url for url in captured), captured
@@ -9890,7 +9892,8 @@ class TestProxySafePagination:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         call_count = [0]
 
@@ -9923,13 +9926,14 @@ class TestProxySafePagination:
         """Same proxy-URL guarantee for the incoming-transfers fetcher.
 
         Mocks a paginated response whose ``next`` is an absolute Safe host
-        URL; asserts the second request stays on ``safe_api_v1_url``.
+        URL; asserts the second request stays on the configured proxy URL.
         """
         obj = _mk()
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         captured: List[str] = []
         call_count = [0]
@@ -9963,7 +9967,8 @@ class TestProxySafePagination:
 
         assert call_count[0] == 2
         assert all(
-            url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
+            url.startswith("https://safe-proxy.example.com/oeth/api/v1")
+            for url in captured
         ), captured
         assert all("safe.global" not in url for url in captured), captured
         # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
@@ -9980,7 +9985,8 @@ class TestProxySafePagination:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         captured: List[str] = []
         call_count = [0]
@@ -10009,7 +10015,8 @@ class TestProxySafePagination:
 
         assert call_count[0] == 2
         assert all(
-            url.startswith("https://safe-proxy.example.com/api/v1") for url in captured
+            url.startswith("https://safe-proxy.example.com/oeth/api/v1")
+            for url in captured
         ), captured
         assert all("safe.global" not in url for url in captured), captured
         # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
@@ -10030,7 +10037,8 @@ class TestProxySafePagination:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         call_count = [0]
 
@@ -10071,7 +10079,8 @@ class TestProxySafePagination:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         call_count = [0]
 
@@ -10114,7 +10123,8 @@ class TestProxySafePagination:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         captured: List[str] = []
         call_count = [0]
@@ -10170,7 +10180,8 @@ class TestProxySafePagination:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         captured: List[str] = []
         call_count = [0]
@@ -10222,7 +10233,8 @@ class TestProxySafePagination:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
-        obj.params.safe_api_v1_url = "https://safe-proxy.example.com/api/v1"
+        obj.params.safe_api_url = "https://safe-proxy.example.com"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
 
         captured: List[str] = []
         call_count = [0]

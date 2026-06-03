@@ -4055,7 +4055,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             the early-stop seeded from it next cycle, would permanently drop
             the still-missing older pages.
         """
-        base_url = self.params.safe_api_v1_url
         fetch_failed = False
 
         try:
@@ -4065,11 +4064,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Fetch incoming transfers. We paginate by offset rather than
             # following Safe's response ``next`` URL: that URL is absolute
-            # and points at safe-transaction-*.safe.global, so under a proxy
-            # only page 1 would go through our infra — page 2 onwards would
-            # bypass it. Building the URL ourselves from safe_api_v1_url
-            # keeps every page going through the configured endpoint.
-            transfers_base_url = f"{base_url}/safes/{address}/incoming-transfers/"
+            # and points at the upstream API, so under a proxy only page 1
+            # would go through our infra — page 2 onwards would bypass it.
+            # Building the URL ourselves via _build_safe_api_url keeps every
+            # page going through the configured endpoint.
+            transfers_base_url = self._build_safe_api_url(
+                "optimism", "v1", f"safes/{address}/incoming-transfers/"
+            )
 
             processed_count = 0
             offset = 0
@@ -4315,7 +4316,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 is_eoa = True
             else:
                 # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{from_address}/"
+                safe_check_url = self._build_safe_api_url(
+                    "optimism", "v1", f"safes/{from_address}/"
+                )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4396,7 +4399,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 is_eoa = True
             else:
                 # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{to_address}/"
+                safe_check_url = self._build_safe_api_url(
+                    "optimism", "v1", f"safes/{to_address}/"
+                )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4766,8 +4771,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Use SafeGlobal API for Optimism transfers. Paginate by offset
             # (see _fetch_optimism_transfers_safeglobal for why we don't
             # follow Safe's absolute ``next`` URL).
-            base_url = self.params.safe_api_v1_url
-            transfers_base_url = f"{base_url}/safes/{address}/transfers/"
+            transfers_base_url = self._build_safe_api_url(
+                "optimism", "v1", f"safes/{address}/transfers/"
+            )
 
             processed_count = 0
             offset = 0
@@ -4985,10 +4991,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return {"outgoing": existing_outgoing}
 
-            base_url = self.params.safe_api_v1_url
             # Paginate by offset rather than following Safe's absolute ``next``
             # URL — see _fetch_optimism_transfers_safeglobal for why.
-            transfers_base_url = f"{base_url}/safes/{safe_address}/transfers/"
+            transfers_base_url = self._build_safe_api_url(
+                "optimism", "v1", f"safes/{safe_address}/transfers/"
+            )
 
             processed_count = 0
             offset = 0

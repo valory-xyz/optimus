@@ -22,6 +22,7 @@
 import json
 import logging
 import math
+import random
 import time
 import types
 from abc import ABC
@@ -82,6 +83,19 @@ MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
 MAX_RETRIES_FOR_STATUS_CHECK = 5
 MAX_SWAP_CONFIRMATION_RETRIES = 60
+
+# Upper bound for any single sleep on a 429 response, whether the wait
+# came from the Retry-After header or from the backoff schedule. Sized
+# to stay well inside FSM round budgets.
+MAX_RATE_LIMIT_WAIT_SECONDS = 30
+
+# Base backoff schedule used when the rate-limit response has no
+# Retry-After header. The actual sleep on attempt ``i`` is
+# ``RATE_LIMIT_BACKOFF_SCHEDULE[i] + uniform(0, jitter)``. Jitter
+# de-correlates many agents that 429 at the same wall-clock second
+# and would otherwise all retry at the same moment.
+RATE_LIMIT_BACKOFF_SCHEDULE = (5, 10, 15)
+RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
 CAMPAIGN_TYPES = [1, 2]
@@ -476,7 +490,9 @@ class LiquidityTraderBaseBehaviour(
 
         # Fetch all balances with pagination
         api_success, all_balances = (
-            yield from self._fetch_safe_balances_with_pagination(safe_address)
+            yield from self._fetch_safe_balances_with_pagination(
+                "optimism", safe_address
+            )
         )
 
         if api_success:
@@ -555,11 +571,37 @@ class LiquidityTraderBaseBehaviour(
         )
         return balances
 
+    def _build_safe_api_url(self, chain: str, version: str, path: str) -> str:
+        """Build a Safe API URL from the configured root + chain slug.
+
+        The configured root URL points at the team's reverse proxy in
+        front of api.safe.global, so every Safe API call (across pages
+        and versions) flows through one routed endpoint.
+
+        :param chain: chain identifier as used in ``target_investment_chains``
+            (e.g. ``"optimism"``, ``"base"``).
+        :param version: API version segment, ``"v1"`` or ``"v2"``.
+        :param path: trailing path after ``/api/{version}/``, with no
+            leading slash (e.g. ``"safes/0x.../transfers/"``).
+        :raises KeyError: if ``chain`` has no entry in
+            ``safe_api_chain_slugs``.
+        :return: fully-qualified URL.
+        """
+        try:
+            slug = self.params.safe_api_chain_slugs[chain]
+        except KeyError as exc:
+            raise KeyError(
+                f"No Safe API slug configured for chain {chain!r}; "
+                f"check safe_api_chain_slugs"
+            ) from exc
+        return f"{self.params.safe_api_url}/{slug}/api/{version}/{path}"
+
     def _fetch_safe_balances_with_pagination(
-        self, safe_address: str
+        self, chain: str, safe_address: str
     ) -> Generator[None, None, Tuple[bool, List[Dict]]]:
         """Fetch all balances from SafeApi with pagination support.
 
+        :param chain: chain identifier (e.g. ``"optimism"``).
         :param safe_address: the Safe contract address.
         :yield: None
         :return: (api_success, balances) tuple. api_success is False only
@@ -571,7 +613,9 @@ class LiquidityTraderBaseBehaviour(
         api_success = True
 
         while True:
-            url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
+            url = self._build_safe_api_url(
+                chain, "v2", f"safes/{safe_address}/balances/"
+            )
             params = f"?exclude_spam=true&trusted=true&limit={limit}&offset={offset}"
             endpoint = url + params
 
@@ -1472,6 +1516,34 @@ class LiquidityTraderBaseBehaviour(
 
         return 0
 
+    def _compute_rate_limit_wait(self, response: Message, attempt: int) -> int:
+        """Decide how long to sleep before retrying a rate-limited request.
+
+        Honours ``Retry-After`` if the upstream sets it (only the
+        integer-seconds form is parsed; an HTTP-date form falls
+        through to the backoff schedule). Otherwise uses
+        ``RATE_LIMIT_BACKOFF_SCHEDULE`` indexed by ``attempt``, plus
+        a small uniform jitter so a fleet of agents all 429'd at the
+        same wall-clock second don't all retry at the same later
+        second. Always clamped to ``MAX_RATE_LIMIT_WAIT_SECONDS``.
+
+        :param response: the rate-limited HTTP response.
+        :param attempt: zero-indexed retry attempt counter.
+        :return: sleep duration in seconds.
+        """
+        headers_blob = getattr(response, "headers", "") or ""
+        for line in headers_blob.splitlines():
+            name, _, value = line.partition(":")
+            if name.strip().lower() == "retry-after":
+                try:
+                    return min(int(value.strip()), MAX_RATE_LIMIT_WAIT_SECONDS)
+                except ValueError:
+                    break
+        idx = min(attempt, len(RATE_LIMIT_BACKOFF_SCHEDULE) - 1)
+        base = RATE_LIMIT_BACKOFF_SCHEDULE[idx]
+        jitter = random.uniform(0, RATE_LIMIT_BACKOFF_JITTER_SECONDS)
+        return min(int(base + jitter), MAX_RATE_LIMIT_WAIT_SECONDS)
+
     def _request_with_retries(
         self,
         endpoint: str,
@@ -1524,10 +1596,9 @@ class LiquidityTraderBaseBehaviour(
                     )
                     return False, response_json
 
-                # Wait before retrying rate-limited request
-                wait_time = retry_wait if retry_wait > 0 else 60
+                wait_time = self._compute_rate_limit_wait(response, retries - 1)
                 self.context.logger.info(
-                    f"Waiting {wait_time} seconds before retrying rate-limited request"
+                    f"Waiting {wait_time}s before retrying rate-limited request"
                 )
                 yield from self.sleep(wait_time)
                 continue

@@ -2278,10 +2278,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             balances = []
 
             # Get current balances dynamically instead of using static assets
-            if chain == Chain.OPTIMISM.value:
-                balances = yield from self._get_optimism_balances_from_safe_api()
-
-            if chain == Chain.MODE.value:
+            if chain in self.params.safe_api_chain_slugs:
+                balances = yield from self._get_safe_balances_from_safe_api(chain)
+            elif chain == Chain.MODE.value:
                 balances = yield from self._get_mode_balances_from_explorer_api()
 
             if not balances:
@@ -2326,17 +2325,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if adjusted_balance <= 0:  # pragma: no cover
                     continue
 
-                velo_token_address = self._get_velo_token_address(chain)
-                # Get token price
-                if token_address == ZERO_ADDRESS:
-                    token_price = yield from self._fetch_zero_address_price()
-                elif token_address.lower() == velo_token_address:
-                    velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
-                    token_price = yield from self._fetch_coin_price(velo_coin_id)
-                else:
-                    token_price = yield from self._fetch_token_price(
-                        token_address, chain
-                    )
+                # Prefer Safe's own USD valuation when it ships one in the
+                # response: it covers the whitelisted-token path for free
+                # and avoids a paid CoinGecko call per token per cycle.
+                # ``_get_safe_balances_from_safe_api`` carries forward
+                # ``fiat_balance`` and ``fiat_conversion`` from the API
+                # response. Reward-token entries (OLAS/VELO) and on-chain
+                # backstop entries don't have these fields, so we still
+                # fall back to ``_fetch_token_price`` for those.
+                token_price = None
+                safe_fiat_balance = balance.get("fiat_balance")
+                safe_fiat_conversion = balance.get("fiat_conversion")
+                if safe_fiat_balance is not None and safe_fiat_conversion is not None:
+                    try:
+                        token_price = Decimal(str(safe_fiat_conversion))
+                    except (InvalidOperation, ValueError, TypeError):
+                        token_price = None
+
+                if token_price is None:
+                    velo_token_address = self._get_velo_token_address(chain)
+                    if token_address == ZERO_ADDRESS:
+                        token_price = yield from self._fetch_zero_address_price()
+                    elif token_address.lower() == velo_token_address:
+                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        token_price = yield from self._fetch_coin_price(velo_coin_id)
+                    else:
+                        token_price = yield from self._fetch_token_price(
+                            token_address, chain
+                        )
 
                 if token_price is None:
                     self.context.logger.warning(

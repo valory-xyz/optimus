@@ -58,6 +58,10 @@ def _mk():
     obj.service_staking_state = MagicMock()
     obj.store_funding_events = MagicMock()
     obj.read_funding_events = MagicMock(return_value={})
+    # Default slug map so per-chain dispatch in _calculate_safe_balances_value
+    # treats Optimism + Base as Safe-API chains. Tests that need a different
+    # configuration override this on the instance.
+    obj.params.safe_api_chain_slugs = {"optimism": "oeth", "base": "base"}
     return obj
 
 
@@ -3898,7 +3902,7 @@ class TestCalculateSafeBalancesValue:
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        obj._get_optimism_balances_from_safe_api = _gen_return([])
+        obj._get_safe_balances_from_safe_api = _gen_return([])
         gen = obj._calculate_safe_balances_value([])
         assert _drive(gen) == Decimal(0)
 
@@ -3916,7 +3920,7 @@ class TestCalculateSafeBalancesValue:
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xT", "asset_symbol": "TKN", "balance": 0}]
         )
         gen = obj._calculate_safe_balances_value([])
@@ -3928,7 +3932,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         olas = OLAS_ADDRESSES["optimism"]
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": olas, "asset_symbol": "OLAS", "balance": 10**18}]
         )
         gen = obj._calculate_safe_balances_value([])
@@ -3940,7 +3944,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": ZERO_ADDRESS, "asset_symbol": "ETH", "balance": 10**18}]
         )
         obj._fetch_zero_address_price = _gen_return(3000.0)
@@ -3954,7 +3958,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xUSDC", "asset_symbol": "USDC", "balance": 10**6}]
         )
         obj._get_token_decimals = _gen_return(6)
@@ -3969,7 +3973,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xTKN", "asset_symbol": "TKN", "balance": 10**18}]
         )
         obj._get_token_decimals = _gen_return(18)
@@ -3983,7 +3987,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xTKN", "asset_symbol": "TKN", "balance": 10**18}]
         )
         obj._get_token_decimals = _gen_return(None)
@@ -3996,7 +4000,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": "0xvelo"}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xVELO", "asset_symbol": "VELO", "balance": 10**18}]
         )
         obj._get_token_decimals = _gen_return(18)
@@ -5119,7 +5123,7 @@ class TestCalculateSafeBalancesValueZeroBalance:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xTKN", "asset_symbol": "TKN", "balance": 0}]
         )
         obj._get_token_decimals = _gen_return(18)

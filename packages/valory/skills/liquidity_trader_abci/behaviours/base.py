@@ -94,6 +94,14 @@ MAX_RATE_LIMIT_WAIT_SECONDS = 30
 # ``RATE_LIMIT_BACKOFF_SCHEDULE[min(i, len-1)] + uniform(0, jitter)``;
 # ``attempt`` values past the last index saturate at the final entry.
 RATE_LIMIT_BACKOFF_SCHEDULE = (5, 10, 15)
+
+# Time-to-live for the kv-side cache around the Safe API balances fetch.
+# Set to 3 hours so the cache survives between FetchStrategies cycles in
+# the common idle case while still bounding how stale balances can get
+# in the absence of any inflow signal. Per-cycle RPC change-detection
+# and the PostTxSettlement hook both invalidate the cache eagerly, so
+# the TTL is a safety floor, not the primary freshness mechanism.
+SAFE_BALANCES_CACHE_TTL_SECONDS = 3 * 3600
 RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
@@ -454,15 +462,15 @@ class LiquidityTraderBaseBehaviour(
         return data
 
     def get_positions(self) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get positions using SafeApi for Optimism, Mode Explorer for Mode"""
+        """Get positions using SafeApi for chains with a slug, Mode Explorer for Mode"""
         all_balances = defaultdict(list)
 
         for chain in self.params.target_investment_chains:
-            if chain == Chain.OPTIMISM.value:
-                # Use SafeApi for Optimism
-                balances = yield from self._get_optimism_balances_from_safe_api()
+            if chain in self.params.safe_api_chain_slugs:
+                # Use SafeApi for any chain wired into ``safe_api_chain_slugs``.
+                balances = yield from self._get_safe_balances_from_safe_api(chain)
             elif chain == Chain.MODE.value:  # pragma: no branch
-                # Use Mode Explorer API for Mode
+                # Mode is not on the Safe Transaction Service; use Mode Explorer.
                 balances = yield from self._get_mode_balances_from_explorer_api()
 
             if balances:
@@ -474,53 +482,236 @@ class LiquidityTraderBaseBehaviour(
 
         return positions
 
-    def _get_optimism_balances_from_safe_api(
-        self,
-    ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get Optimism balances using SafeApi with pagination"""
-        safe_address = self.params.safe_contract_addresses.get("optimism")
-        if not safe_address:
-            self.context.logger.error("No safe address set for Optimism chain")
-            return []
+    def _detect_and_invalidate_on_inflow(
+        self, chain: str, safe_address: str
+    ) -> Generator[None, None, None]:
+        """Reset cache timestamps if a whitelisted balance went up.
 
-        self.context.logger.info(
-            f"Fetching Optimism balances from SafeApi for safe: {safe_address}"
-        )
+        Reads the agent safe's on-chain balances for native ETH plus the
+        whitelisted tokens on ``chain``, compares to the per-token snapshot
+        persisted in ``last_known_safe_balances``, and if any token's
+        on-chain balance is strictly greater than what we last saw,
+        invalidates two kv timestamps:
 
-        # Fetch all balances with pagination
-        api_success, all_balances = (
-            yield from self._fetch_safe_balances_with_pagination(
-                "optimism", safe_address
+        - ``last_safe_balances_calculated_timestamp`` so the next cycle
+          re-fetches Safe API and surfaces the new balance.
+        - ``last_initial_value_calculated_timestamp`` so the initial-
+          investment recompute picks up the corresponding incoming
+          transfer instead of serving a stale cached value.
+
+        The current readings are then persisted as the new baseline.
+        Sequential RPC reads are intentional here: at ~5 whitelisted
+        tokens per chain the per-cycle cost is small, and using the
+        existing helpers keeps this change contained to base.py.
+
+        :param chain: chain identifier (e.g. ``"optimism"``).
+        :param safe_address: the Safe contract address on that chain.
+        :yield: None
+        """
+        current: Dict[str, int] = {}
+        native_balance = yield from self._get_native_balance(chain, safe_address)
+        if native_balance is not None:
+            current[ZERO_ADDRESS.lower()] = int(native_balance)
+
+        for token_addr, _symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+            token_balance = yield from self._get_token_balance(
+                chain, safe_address, token_addr
             )
-        )
+            if token_balance is not None:
+                current[token_addr.lower()] = int(token_balance)
 
-        if api_success:
-            # Cache fresh data on successful API fetch (including empty — clears stale cache)
+        last_known_blob = yield from self._read_kv(("last_known_safe_balances",))
+        last_known: Dict[str, int] = {}
+        last_known_raw = (
+            last_known_blob.get("last_known_safe_balances") if last_known_blob else None
+        )
+        if last_known_raw:
+            try:
+                parsed = json.loads(last_known_raw)
+                if isinstance(parsed, dict):
+                    for key, val in parsed.items():
+                        try:
+                            last_known[key.lower()] = int(val)
+                        except (ValueError, TypeError):
+                            continue
+            except (json.JSONDecodeError, TypeError):
+                self.context.logger.warning(
+                    "Unparseable last_known_safe_balances; treating as empty"
+                )
+
+        inflow_token: Optional[str] = None
+        for addr, current_balance in current.items():
+            previous = last_known.get(addr, 0)
+            if current_balance > previous:
+                inflow_token = addr
+                self.context.logger.info(
+                    f"External inflow detected on {chain}: token {addr} "
+                    f"{previous} -> {current_balance}; invalidating caches"
+                )
+                break
+
+        if inflow_token is not None:
             try:
                 yield from self._write_kv(
-                    {"safe_balances_optimism": json.dumps(all_balances)}
+                    {
+                        "last_safe_balances_calculated_timestamp": "0",
+                        "last_initial_value_calculated_timestamp": "0",
+                    }
                 )
             except Exception:  # nosec B110
-                self.context.logger.debug("Failed to cache safe balances to KV store")
-        else:
-            # API failed — fall back to cached balances
-            try:
-                cached = yield from self._read_kv(("safe_balances_optimism",))
-                if cached and cached.get("safe_balances_optimism"):
-                    self.context.logger.warning(
-                        "SafeGlobal API failed, using cached balances"
-                    )
-                    all_balances = json.loads(cached["safe_balances_optimism"])
-            except Exception:
-                self.context.logger.warning(
-                    "Failed to read cached balances from KV store"
+                self.context.logger.debug(
+                    "Failed to invalidate cache timestamps after inflow detection"
                 )
+
+        try:
+            yield from self._write_kv({"last_known_safe_balances": json.dumps(current)})
+        except Exception:  # nosec B110
+            self.context.logger.debug("Failed to persist last_known_safe_balances")
+
+    def _invalidate_caches_after_tx(self) -> Generator[None, None, None]:
+        """Reset cache timestamps after a successful agent transaction.
+
+        The agent has just submitted a tx (swap, enter pool, exit pool,
+        withdrawal, etc.), so the kv-cached balances and withdrawal value
+        are stale. Setting the two timestamps to ``"0"`` forces the next
+        FetchStrategies cycle to re-fetch instead of serving cached data.
+
+        :yield: None
+        """
+        try:
+            yield from self._write_kv(
+                {
+                    "last_safe_balances_calculated_timestamp": "0",
+                    "last_withdrawals_calculated_timestamp": "0",
+                }
+            )
+        except Exception:  # nosec B110
+            self.context.logger.debug(
+                "Failed to invalidate cache timestamps after tx settlement"
+            )
+
+    def _get_safe_balances_from_safe_api(
+        self, chain: str
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Get balances for ``chain`` using SafeApi with pagination.
+
+        Reads from the kv cache if the last successful fetch is within
+        ``SAFE_BALANCES_CACHE_TTL_SECONDS`` and no other code path has
+        invalidated it (RPC change-detect, PostTxSettlement hook). On a
+        cache miss, hits SafeApi, persists the result, then returns it.
+        On API failure with no usable cache, falls back to the on-chain
+        backstop in ``_supplement_with_onchain_whitelisted_balances``.
+
+        :param chain: chain identifier as used in
+            ``target_investment_chains`` (e.g. ``"optimism"``, ``"base"``).
+        :yield: None
+        :return: normalised list of balance entries.
+        """
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        if not safe_address:
+            self.context.logger.error(f"No safe address set for {chain} chain")
+            return []
+
+        # Pre-cache: check for external inflow via cheap on-chain reads.
+        # If a whitelisted balance went up since last cycle, the helper
+        # invalidates ``last_safe_balances_calculated_timestamp`` so the
+        # cache lookup below falls through to a fresh SafeApi fetch.
+        yield from self._detect_and_invalidate_on_inflow(chain, safe_address)
+
+        # TTL cache: skip the SafeApi fetch if a recent result is on disk.
+        cached_blob: Dict[str, Any] = {}
+        try:
+            read = yield from self._read_kv(
+                ("safe_balances", "last_safe_balances_calculated_timestamp")
+            )
+            cached_blob = read or {}
+        except Exception:  # nosec B110
+            self.context.logger.debug(
+                "Failed to read safe balances cache from KV store"
+            )
+        now_ts = int(self._get_current_timestamp())
+        last_ts_raw = cached_blob.get("last_safe_balances_calculated_timestamp")
+        cache_age: Optional[int] = None
+        if last_ts_raw:
+            try:
+                cache_age = now_ts - int(last_ts_raw)
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    f"Unparseable last_safe_balances_calculated_timestamp "
+                    f"{last_ts_raw!r}; treating cache as expired"
+                )
+                cache_age = SAFE_BALANCES_CACHE_TTL_SECONDS
+
+        cached_payload = cached_blob.get("safe_balances")
+        use_cache = (
+            cache_age is not None
+            and 0 <= cache_age < SAFE_BALANCES_CACHE_TTL_SECONDS
+            and cached_payload
+        )
+        if use_cache:
+            try:
+                all_balances = json.loads(cached_payload)
+                api_success = True
+                self.context.logger.info(
+                    f"Safe balances cache hit ({cache_age}s old, "
+                    f"ttl {SAFE_BALANCES_CACHE_TTL_SECONDS}s)"
+                )
+            except (json.JSONDecodeError, TypeError):
+                self.context.logger.warning(
+                    "Failed to parse cached safe balances; refetching"
+                )
+                use_cache = False
+
+        if not use_cache:
+            self.context.logger.info(
+                f"Fetching {chain} balances from SafeApi for safe: {safe_address}"
+            )
+            api_success, all_balances = (
+                yield from self._fetch_safe_balances_with_pagination(
+                    chain, safe_address
+                )
+            )
+
+            if api_success:
+                # Persist the raw response plus the timestamp so future
+                # cycles can hit the cache instead of refetching.
+                try:
+                    yield from self._write_kv(
+                        {
+                            "safe_balances": json.dumps(all_balances),
+                            "last_safe_balances_calculated_timestamp": str(now_ts),
+                        }
+                    )
+                except Exception:  # nosec B110
+                    self.context.logger.debug(
+                        "Failed to cache safe balances to KV store"
+                    )
+            else:
+                # API failed AND the TTL cache wasn't usable; reach for the
+                # last-known persisted payload before the on-chain backstop.
+                if cached_payload:
+                    try:
+                        self.context.logger.warning(
+                            "SafeApi failed, using stale cached balances"
+                        )
+                        all_balances = json.loads(cached_payload)
+                    except (json.JSONDecodeError, TypeError):
+                        all_balances = []
+                else:
+                    all_balances = []
 
         balances = []
         for balance_data in all_balances:
             token_address = balance_data.get("tokenAddress")
             token_info = balance_data.get("token")
             balance = balance_data.get("balance", "0")
+            # ``fiatBalance`` / ``fiatConversion`` come straight from the
+            # Safe Transaction Service; using them avoids a paid CoinGecko
+            # lookup per token for the whitelisted tokens Safe already
+            # prices. Missing/null is fine: the downstream consumer falls
+            # back to ``_fetch_token_price`` when the field is absent.
+            fiat_balance = balance_data.get("fiatBalance")
+            fiat_conversion = balance_data.get("fiatConversion")
 
             if token_address is None:
                 # Native ETH
@@ -530,6 +721,8 @@ class LiquidityTraderBaseBehaviour(
                         "asset_type": "native",
                         "address": to_checksum_address(ZERO_ADDRESS),
                         "balance": int(balance),
+                        "fiat_balance": fiat_balance,
+                        "fiat_conversion": fiat_conversion,
                     }
                 )
             else:
@@ -547,6 +740,8 @@ class LiquidityTraderBaseBehaviour(
                             "asset_type": "erc_20",
                             "address": to_checksum_address(token_address),
                             "balance": int(balance),
+                            "fiat_balance": fiat_balance,
+                            "fiat_conversion": fiat_conversion,
                         }
                     )
 
@@ -557,11 +752,11 @@ class LiquidityTraderBaseBehaviour(
         # separately. Reward tokens (OLAS, VELO) are disjoint from the
         # whitelist and handled by _fetch_reward_balances below.
         yield from self._supplement_with_onchain_whitelisted_balances(
-            "optimism", safe_address, balances
+            chain, safe_address, balances
         )
 
-        # Add separate reward token balance fetch for Optimism
-        reward_balances = yield from self._fetch_reward_balances("optimism")
+        # Add separate reward token balance fetch
+        reward_balances = yield from self._fetch_reward_balances(chain)
         if reward_balances:
             balances.extend(reward_balances)
 

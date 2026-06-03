@@ -923,7 +923,7 @@ class TestGetPositions:
         """Test optimism and mode."""
         b = _make_behaviour()
         b.params.target_investment_chains = ["optimism", "mode"]
-        b._get_optimism_balances_from_safe_api = _make_gen(  # type: ignore[assignment,method-assign]
+        b._get_safe_balances_from_safe_api = _make_gen(  # type: ignore[assignment,method-assign]
             [{"asset_symbol": "USDC", "balance": 100}]
         )
         b._get_mode_balances_from_explorer_api = _make_gen(  # type: ignore[assignment,method-assign]
@@ -936,35 +936,39 @@ class TestGetPositions:
         """Test empty balances."""
         b = _make_behaviour()
         b.params.target_investment_chains = ["optimism"]
-        b._get_optimism_balances_from_safe_api = _make_gen([])  # type: ignore[assignment,method-assign]
+        b._get_safe_balances_from_safe_api = _make_gen([])  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_positions())
         assert result == []
 
 
 def _make_optimism_b() -> Any:
-    """Behaviour with default no-op stubs for _get_optimism_balances_from_safe_api.
+    """Behaviour with default no-op stubs for _get_safe_balances_from_safe_api.
 
-    Stubs the reward fetch and the on-chain backstop to no-ops so tests can
-    isolate the SafeApi-parse and cache paths. Tests that need either side
-    to be live override the relevant stub.
+    Stubs the reward fetch, the on-chain backstop, the inflow detector,
+    the kv reads, and the current timestamp so tests can isolate the
+    SafeApi-parse path. Tests that need any of these live override the
+    relevant stub.
 
     :return: behaviour instance with the noop stubs installed.
     """
     b = _make_behaviour()
     b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+    b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
+    b._get_current_timestamp = lambda: 0  # type: ignore[assignment,method-assign]
+    b._detect_and_invalidate_on_inflow = _make_gen(None)  # type: ignore[assignment,method-assign]
     b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
     b._supplement_with_onchain_whitelisted_balances = _make_gen(None)  # type: ignore[assignment,method-assign]
     return b
 
 
 class TestGetOptimismBalances:
-    """Test _get_optimism_balances_from_safe_api."""
+    """Test _get_safe_balances_from_safe_api."""
 
     def test_no_safe_address(self) -> None:
         """Test no safe address."""
         b = _make_behaviour()
         b.params.safe_contract_addresses = {}
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert result == []
 
     def test_with_balances(self) -> None:
@@ -984,7 +988,7 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 2
         assert result[0]["asset_symbol"] == "ETH"
         assert result[1]["asset_symbol"] == "USDC"
@@ -1004,7 +1008,7 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
 
     def test_skips_token_without_info(self) -> None:
@@ -1022,14 +1026,14 @@ class TestGetOptimismBalances:
                 ],
             )
         )
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
 
     def test_api_success_empty_no_cache_fallback(self) -> None:
         """API succeeds but Safe is empty - must NOT fall back to cache."""
         b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((True, []))  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
 
     def test_api_success_empty_with_rewards(self) -> None:
@@ -1037,7 +1041,7 @@ class TestGetOptimismBalances:
         b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((True, []))  # type: ignore[assignment,method-assign]
         b._fetch_reward_balances = _make_gen([{"asset_symbol": "VELO", "balance": 100}])  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 1
         assert result[0]["asset_symbol"] == "VELO"
 
@@ -1053,8 +1057,8 @@ class TestGetOptimismBalances:
         ]
         b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
-        b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        b._read_kv = _make_gen({"safe_balances": json.dumps(cached_data)})  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 2
         assert result[0]["asset_symbol"] == "ETH"
         assert result[1]["asset_symbol"] == "USDC"
@@ -1063,8 +1067,8 @@ class TestGetOptimismBalances:
         """API fails and cache has no data - return empty."""
         b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
-        b._read_kv = _make_gen({"safe_balances_optimism": None})  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        b._read_kv = _make_gen({"safe_balances": None})  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
 
     def test_cache_write_failure(self) -> None:
@@ -1080,7 +1084,7 @@ class TestGetOptimismBalances:
             (True, [{"tokenAddress": None, "balance": "1000"}])
         )
         b._write_kv = _failing_write  # type: ignore[method-assign]
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 1
 
     def test_cache_read_failure(self) -> None:
@@ -1094,7 +1098,7 @@ class TestGetOptimismBalances:
         b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
         b._read_kv = _failing_read  # type: ignore[method-assign]
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
 
     def test_backstop_integrates_when_safeapi_partial(self) -> None:
@@ -1104,12 +1108,15 @@ class TestGetOptimismBalances:
         ERC20s (including oUSDT) on top, without duplicating ETH.
 
         This guards the ordering and dedup contract between
-        ``_get_optimism_balances_from_safe_api`` and the live
+        ``_get_safe_balances_from_safe_api`` and the live
         ``_supplement_with_onchain_whitelisted_balances``: if the backstop
         is moved or its dedup loosened, this fails.
         """
         b = _make_behaviour()
         b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
+        b._get_current_timestamp = lambda: 0  # type: ignore[assignment,method-assign]
+        b._detect_and_invalidate_on_inflow = _make_gen(None)  # type: ignore[assignment,method-assign]
         b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
         # SafeApi returns ETH only (partial response).
         b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
@@ -1128,7 +1135,7 @@ class TestGetOptimismBalances:
 
         b._get_token_balance = fake_token_balance  # type: ignore[assignment,method-assign]
 
-        result = _exhaust(b._get_optimism_balances_from_safe_api())
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         symbols = [r["asset_symbol"] for r in result]
         eth_entries = [r for r in result if r["asset_symbol"] == "ETH"]
         ousdt_entries = [r for r in result if r["asset_symbol"] == "oUSDT"]

@@ -3141,14 +3141,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
                 continue
 
+            # ``all_transfers`` is only this cycle's freshly-fetched delta (it merges into
+            # funding_events as a side effect). The valuation reads the full persisted
+            # funding_events directly, so recompute even when nothing new was fetched —
+            # historical rows still count.
             if not all_transfers:
-                self.context.logger.warning(f"No transfers found for {chain} chain")
-                continue
+                self.context.logger.info(
+                    f"No new {chain} transfers this cycle; valuing persisted history"
+                )
 
             # Calculate investment value for this chain
-            chain_investment = yield from self._calculate_chain_investment_value(
-                all_transfers, chain, safe_address
-            )
+            chain_investment = yield from self._calculate_chain_investment_value(chain)
             total_investment += chain_investment
 
         yield from self._save_chain_total_investment(chain, total_investment)
@@ -3197,38 +3200,46 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         yield from self._write_kv({key: json.dumps(priced, ensure_ascii=True)})
 
     def _calculate_chain_investment_value(
-        self, all_transfers: Dict, chain: str, safe_address: str
+        self, chain: str
     ) -> Generator[None, None, float]:
         """Compute a chain's initial investment directly from funding_events.
 
-        funding_events is the canonical record: incoming USDC + ETH live under ``chain``
-        and reverted (outgoing) ETH under ``{chain}_outgoing``. The denominator is::
+        funding_events is the canonical record. Incoming funding lives under ``chain``;
+        reverted (outgoing) ETH under ``{chain}_outgoing``::
 
-            initial = sum(priced incoming USDC + ETH) - sum(priced outgoing ETH)
+            initial = sum(priced incoming) - sum(priced outgoing ETH)
 
         Each row is priced once and cached in ``{chain}_priced_transfers`` (one-time per
-        row, not per cycle). ``all_transfers`` is the freshly-fetched incoming data the
-        caller already merged into ``funding_events[chain]``; we read the full persisted
-        record so the total reflects all history, not just newly-fetched rows.
+        row, not per cycle); the full persisted record is read so the total reflects all
+        history.
 
-        :param all_transfers: newly-fetched incoming transfers (already merged on disk).
+        Going forward only USDC is recorded as incoming funding for Optimism (the incoming
+        ETHER_TRANSFER-recording branch was removed with the reversion logic), so a
+        freshly-deployed agent is effectively USDC-only. Incoming ETH and the reverted-ETH
+        subtraction are therefore **historical-only**: they apply solely to rows the old
+        code already persisted. Nothing writes ``{chain}_outgoing`` anymore, so Optimism
+        reversions are subtracted from legacy on-disk data only, and Mode (which never
+        persisted a ``mode_outgoing`` key) gets no reversion subtraction — accepted because
+        Mode ETH is gas-dust and no new reversions occur once the revert-tx path is gone.
+
         :param chain: the chain to value.
-        :param safe_address: the safe address (kept for signature stability).
         :yield: None: generator yield for async operations.
         :return: the chain's initial investment in USD.
         """
         if not self.funding_events:
-            self.funding_events = self.read_funding_events() or {}
+            self.read_funding_events()  # side-effects self.funding_events
+        if not self.funding_events:
+            self.funding_events = {}
         priced_transfers = yield from self._load_priced_transfers(chain)
 
-        incoming = (self.funding_events or {}).get(chain, {}) or {}
+        incoming = self.funding_events.get(chain, {}) or {}
         incoming_value, inc_updated = yield from self._sum_priced_chain_transfers(
-            incoming, chain, priced_transfers, exclude_airdrop=True
+            incoming, chain, priced_transfers
         )
-        # Reverted ETH that left the safe is a fixed record on disk; price and subtract.
-        outgoing = (self.funding_events or {}).get(f"{chain}_outgoing", {}) or {}
+        # Reverted ETH that left the safe is a fixed historical record on disk; subtract it.
+        outgoing = self.funding_events.get(f"{chain}_outgoing", {}) or {}
         reverted_value, out_updated = yield from self._sum_priced_chain_transfers(
-            outgoing, chain, priced_transfers, exclude_airdrop=False
+            outgoing, chain, priced_transfers
         )
 
         if inc_updated or out_updated:
@@ -3247,19 +3258,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         date_keyed: Dict,
         chain: str,
         priced_transfers: Dict[str, float],
-        exclude_airdrop: bool,
     ) -> Generator[None, None, Tuple[float, bool]]:
         """Price (once, cached) and sum a date-keyed transfer dict.
 
         Shared by the incoming-funding and reverted-ETH legs of the investment
-        calculation. Counts positive amounts only; airdropped USDC is excluded when
-        ``exclude_airdrop`` is set (mode incoming). Prices are cached per transfer key in
-        ``priced_transfers`` (mutated in place) so each row is priced at most once.
+        calculation. Counts positive amounts only. Airdropped USDC on Mode is excluded; the
+        filter is gated on ``symbol == USDC`` so it is a no-op on the ETH-only outgoing leg.
+        Prices are cached per transfer key in ``priced_transfers`` (mutated in place) so
+        each row is priced at most once.
 
         :param date_keyed: a ``{date: [transfer, ...]}`` mapping from funding_events.
         :param chain: the chain (for token-id lookup and pricing).
         :param priced_transfers: the per-row USD price cache, mutated in place.
-        :param exclude_airdrop: drop airdropped USDC (mode incoming) when True.
         :yield: None: generator yield for async operations.
         :return: a ``(summed_value, cache_updated)`` tuple.
         """
@@ -3272,9 +3282,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     amount = transfer.get("delta", transfer.get("amount", 0))
                     if amount <= 0:
                         continue
+                    # Exclude airdropped USDC on mode (no-op on the ETH-only outgoing leg).
                     if (
-                        exclude_airdrop
-                        and chain == "mode"
+                        chain == "mode"
                         and token_symbol.upper() == "USDC"
                         and self.params.airdrop_started
                         and self.params.airdrop_contract_address

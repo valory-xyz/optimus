@@ -8993,8 +8993,15 @@ class TestDirectReadInvestment:
                 "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xc"}],
             },
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
-        assert abs(result - (16 + 0.0057 * 2600)) < 1e-6
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        # Show the reversion subtraction explicitly: the 0.005 ETH revert appears
+        # in BOTH the incoming (2025-06-11) and outgoing (2025-06-20) ledgers and
+        # must cancel, leaving USDC + the genuinely-retained 0.0057 ETH.
+        incoming_total = 16 + (0.0057 + 0.005) * 2600
+        outgoing_total = 0.005 * 2600
+        expected = incoming_total - outgoing_total
+        assert abs(result - expected) < 1e-6
+        assert abs(expected - (16 + 0.0057 * 2600)) < 1e-6
 
     def test_usdc_only_no_outgoing(self):
         """Base/Basius: USDC only, no reverted ETH -> initial = sum(USDC)."""
@@ -9002,7 +9009,7 @@ class TestDirectReadInvestment:
         obj.funding_events = {
             "base": {"2026-01-01": [{"symbol": "USDC", "amount": 50, "tx_hash": "0x1"}]}
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "base", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("base"))
         assert result == 50.0
 
     def test_cached_price_not_refetched(self):
@@ -9015,7 +9022,7 @@ class TestDirectReadInvestment:
         }
         obj._load_priced_transfers = _gen_return({"2025-01-01_0xT": 500.0})
         obj._fetch_historical_token_price = _gen_return(9999.0)
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 500.0
 
     def test_delta_field_fallback(self):
@@ -9026,7 +9033,7 @@ class TestDirectReadInvestment:
                 "2025-01-01": [{"symbol": "USDC", "delta": 7, "tx_hash": "0xD"}]
             }
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 7.0
 
     def test_airdrop_usdc_excluded(self):
@@ -9046,7 +9053,7 @@ class TestDirectReadInvestment:
                 ]
             }
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "mode", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("mode"))
         assert result == 0.0
 
     def test_negative_amount_skipped(self):
@@ -9057,7 +9064,7 @@ class TestDirectReadInvestment:
                 "2025-01-01": [{"symbol": "USDC", "amount": -5, "tx_hash": "0xN"}]
             }
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 0.0
 
     def test_no_coingecko_id_skipped(self):
@@ -9069,7 +9076,7 @@ class TestDirectReadInvestment:
                 "2025-01-01": [{"symbol": "WEIRD", "amount": 3, "tx_hash": "0xW"}]
             }
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 0.0
 
     def test_price_fetch_failure_warns(self):
@@ -9081,7 +9088,7 @@ class TestDirectReadInvestment:
                 "2025-01-01": [{"symbol": "USDC", "amount": 3, "tx_hash": "0xP"}]
             }
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 0.0
         obj.context.logger.warning.assert_called()
 
@@ -9091,15 +9098,60 @@ class TestDirectReadInvestment:
         obj.funding_events = {
             "optimism": {"bad-date": [{"symbol": "USDC", "amount": 3}]}
         }
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 0.0
 
     def test_reads_funding_events_when_empty(self):
-        """funding_events not yet in memory is loaded from disk."""
+        """Empty in-memory funding_events is loaded from disk, then valued.
+
+        Asserts the disk-load path actually feeds the calculation (not just that an
+        empty record yields 0): read_funding_events populates the record and the
+        loaded USDC row is what produces the result.
+        """
         obj = self._obj()
         obj.funding_events = {}
-        result = _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
-        assert result == 0.0
+
+        def _load_from_disk():
+            obj.funding_events = {
+                "optimism": {
+                    "2025-01-01": [{"symbol": "USDC", "amount": 12, "tx_hash": "0xR"}]
+                }
+            }
+
+        obj.read_funding_events = _load_from_disk
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 12.0
+
+    def test_save_called_when_only_outgoing_updates(self):
+        """OR-isolation: incoming fully cached, outgoing uncached -> cache still saved.
+
+        Guards the ``inc_updated or out_updated`` save condition: pricing only the
+        reverted-ETH leg must still persist the cache, otherwise the newly-priced
+        outgoing row would be re-fetched every cycle.
+        """
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [{"symbol": "USDC", "amount": 16, "tx_hash": "0xINC"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xOUT"}],
+            },
+        }
+        # Incoming row is already in the cache; only the outgoing ETH row is new.
+        obj._load_priced_transfers = _gen_return({"2025-06-05_0xINC": 16.0})
+        saved = []
+
+        def _save(chain, priced):
+            saved.append((chain, dict(priced)))
+            yield
+
+        obj._save_priced_transfers = _save
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert abs(result - (16 - 0.005 * 2600)) < 1e-6
+        # The outgoing leg updated the cache, so the save fired despite a cached incoming.
+        assert len(saved) == 1
+        assert "2025-06-20_0xOUT" in saved[0][1]
 
 
 class TestDirectReadWs1EdgeCoverage:

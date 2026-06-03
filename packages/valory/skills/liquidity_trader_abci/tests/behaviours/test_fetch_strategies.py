@@ -5916,7 +5916,9 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
-        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": ts})
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp_optimism": ts}
+        )
         obj._load_chain_total_investment = _gen_return(999.0)
         obj._write_kv = _gen_none
         obj._save_chain_total_investment = _gen_none
@@ -5934,7 +5936,9 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
-        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": ts})
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp_optimism": ts}
+        )
         obj._load_chain_total_investment = _gen_return(0.0)
         obj._fetch_all_transfers_until_date_optimism = _gen_return(
             {"d": [{"symbol": "ETH", "delta": 1}]}
@@ -5953,7 +5957,9 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
-        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": "bad"})
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp_optimism": "bad"}
+        )
         obj._write_kv = _gen_none
         obj._fetch_all_transfers_until_date_optimism = _gen_return(
             {"d": [{"symbol": "ETH", "delta": 1}]}
@@ -9522,8 +9528,8 @@ class TestCalculateWithdrawalsValueTtlCache:
         # Last calc was 60 seconds ago; TTL is 30 minutes, so it's a hit.
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts - 60),
-            "optimism_total_withdrawals": "12.5",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts - 60),
+            "total_withdrawals_optimism": "12.5",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -9555,8 +9561,8 @@ class TestCalculateWithdrawalsValueTtlCache:
         # 31 minutes ago → just outside the 30-minute TTL.
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts - 31 * 60),
-            "optimism_total_withdrawals": "8.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts - 31 * 60),
+            "total_withdrawals_optimism": "8.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -9589,8 +9595,8 @@ class TestCalculateWithdrawalsValueTtlCache:
 
         result = _drive(obj.calculate_withdrawals_value())
         assert result == Decimal("3.0")
-        assert writes["optimism_total_withdrawals"] == "3.0"
-        assert writes["last_withdrawals_calculated_timestamp"] == "1704067200"
+        assert writes["total_withdrawals_optimism"] == "3.0"
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == "1704067200"
 
     def test_cache_with_no_prior_timestamp_falls_through(self):
         """No prior kv entry → fetcher runs and cache is freshly written."""
@@ -9617,8 +9623,8 @@ class TestCalculateWithdrawalsValueTtlCache:
         result = _drive(obj.calculate_withdrawals_value())
         assert result == Decimal("0")
         # First-time write seeds the cache
-        assert "optimism_total_withdrawals" in writes
-        assert "last_withdrawals_calculated_timestamp" in writes
+        assert "total_withdrawals_optimism" in writes
+        assert "last_withdrawals_calculated_timestamp_optimism" in writes
 
     def test_fetcher_failure_skips_kv_write(self):
         """Fetcher returning None must skip the kv TTL cache write."""
@@ -9630,8 +9636,8 @@ class TestCalculateWithdrawalsValueTtlCache:
 
         yesterday_ts = int((datetime.now() - timedelta(days=2)).timestamp())
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(yesterday_ts),
-            "optimism_total_withdrawals": "5.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(yesterday_ts),
+            "total_withdrawals_optimism": "5.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10367,8 +10373,8 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         # Stored ts is in the future relative to "now" → age is negative.
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts + 3600),
-            "optimism_total_withdrawals": "12.5",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts + 3600),
+            "total_withdrawals_optimism": "12.5",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10399,7 +10405,7 @@ class TestKvCacheTtlBoundaries:
         # Cache treated as expired → fetcher ran, kv rewritten.
         assert result == Decimal("0")
         assert called[0] == 1
-        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == str(now_ts)
 
     def test_initial_investment_cache_age_zero_is_hit(self):
         """Age = 0 (same-second read/write) is a cache hit, pinning the ``<=`` lower bound."""
@@ -10411,7 +10417,7 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(now_ts)}
+            {"last_initial_value_calculated_timestamp_optimism": str(now_ts)}
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10428,8 +10434,8 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts),
-            "optimism_total_withdrawals": "12.5",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts),
+            "total_withdrawals_optimism": "12.5",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10466,7 +10472,11 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         just_inside_ttl_ts = now_ts - (INITIAL_INVESTMENT_CACHE_TTL_SECONDS - 1)
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(just_inside_ttl_ts)}
+            {
+                "last_initial_value_calculated_timestamp_optimism": str(
+                    just_inside_ttl_ts
+                )
+            }
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10488,8 +10498,8 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         just_inside_ttl_ts = now_ts - (WITHDRAWAL_CACHE_TTL_SECONDS - 1)
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(just_inside_ttl_ts),
-            "optimism_total_withdrawals": "42.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(just_inside_ttl_ts),
+            "total_withdrawals_optimism": "42.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10524,8 +10534,8 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         at_ttl_ts = now_ts - WITHDRAWAL_CACHE_TTL_SECONDS
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(at_ttl_ts),
-            "optimism_total_withdrawals": "42.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(at_ttl_ts),
+            "total_withdrawals_optimism": "42.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10545,7 +10555,7 @@ class TestKvCacheTtlBoundaries:
         obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
 
         assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
-        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == str(now_ts)
 
     def test_initial_investment_cache_exactly_at_ttl_is_miss(self):
         """Age = TTL exactly is a cache miss for the initial-investment path.
@@ -10567,7 +10577,7 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         at_ttl_ts = now_ts - INITIAL_INVESTMENT_CACHE_TTL_SECONDS
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(at_ttl_ts)}
+            {"last_initial_value_calculated_timestamp_optimism": str(at_ttl_ts)}
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10606,8 +10616,8 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": "not-a-number",
-            "optimism_total_withdrawals": "42.0",
+            "last_withdrawals_calculated_timestamp_optimism": "not-a-number",
+            "total_withdrawals_optimism": "42.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10638,7 +10648,7 @@ class TestKvCacheTtlBoundaries:
         # with a parseable value so the next cycle is clean.
         assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
         assert called[0] == 1
-        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == str(now_ts)
 
     def test_withdrawal_cache_within_ttl_missing_cached_val_falls_through(self):
         """Within-TTL hit with no ``optimism_total_withdrawals`` recomputes.
@@ -10655,7 +10665,7 @@ class TestKvCacheTtlBoundaries:
         # Two reads: the first returns just the timestamp (within TTL),
         # the second (for the cached value) returns no value.
         reads = [
-            {"last_withdrawals_calculated_timestamp": str(now_ts - 60)},
+            {"last_withdrawals_calculated_timestamp_optimism": str(now_ts - 60)},
             {},
         ]
         read_idx = [0]
@@ -10701,8 +10711,8 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts - 60),
-            "optimism_total_withdrawals": "garbage",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts - 60),
+            "total_withdrawals_optimism": "garbage",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10738,7 +10748,7 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         future_ts = str(now_ts + 3600)
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": future_ts}
+            {"last_initial_value_calculated_timestamp_optimism": future_ts}
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10782,7 +10792,7 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(now_ts - 60)}
+            {"last_initial_value_calculated_timestamp_optimism": str(now_ts - 60)}
         )
         obj._get_current_timestamp = lambda: now_ts
         # Stored cache value is falsy — triggers the "load full history" branch.

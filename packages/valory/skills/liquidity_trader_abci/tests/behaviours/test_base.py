@@ -992,7 +992,7 @@ class TestDetectAndInvalidateOnInflow:
         # Should NOT include the invalidate-timestamps write.
         for w in writes:
             assert "last_safe_balances_calculated_timestamp_optimism" not in w
-            assert "last_initial_value_calculated_timestamp" not in w
+            assert "last_initial_value_calculated_timestamp_optimism" not in w
 
     def test_inflow_triggers_invalidation(self) -> None:
         """Current balance > last-known fires the cache invalidation write."""
@@ -1065,7 +1065,7 @@ class TestInvalidateCachesAfterTx:
         assert len(writes) == 1
         payload = writes[0]
         assert payload["last_safe_balances_calculated_timestamp_optimism"] == "0"
-        assert payload["last_withdrawals_calculated_timestamp"] == "0"
+        assert payload["last_withdrawals_calculated_timestamp_optimism"] == "0"
 
     def test_write_failure_swallowed(self) -> None:
         """A kv write exception is logged and does not propagate."""

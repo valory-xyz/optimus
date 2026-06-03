@@ -2484,19 +2484,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # calculation was within WITHDRAWAL_CACHE_TTL_SECONDS. Negative
             # ages (clock skew, malformed timestamp) are treated as expired
             # so we recompute rather than serve a possibly-stale value.
+            ts_key = f"last_withdrawals_calculated_timestamp_{chain}"
+            total_key = f"total_withdrawals_{chain}"
             now_ts = int(self._get_current_timestamp())
-            last_calc = yield from self._read_kv(
-                keys=("last_withdrawals_calculated_timestamp",)
-            )
-            if last_calc and (
-                ts := last_calc.get("last_withdrawals_calculated_timestamp")
-            ):
+            last_calc = yield from self._read_kv(keys=(ts_key,))
+            if last_calc and (ts := last_calc.get(ts_key)):
                 try:
                     age_seconds = now_ts - int(ts)
                 except (ValueError, TypeError):
                     self.context.logger.warning(
-                        f"Unparseable last_withdrawals_calculated_timestamp "
-                        f"{ts!r}; treating cache as expired"
+                        f"Unparseable {ts_key} {ts!r}; treating cache as expired"
                     )
                     # Negative age is documented as "expired" in the guard
                     # below and is independent of the strict < TTL boundary,
@@ -2504,12 +2501,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # this fallback into a spurious cache hit.
                     age_seconds = -1
                 if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
-                    cached = yield from self._read_kv(
-                        keys=("optimism_total_withdrawals",)
-                    )
-                    cached_val = (
-                        cached.get("optimism_total_withdrawals") if cached else None
-                    )
+                    cached = yield from self._read_kv(keys=(total_key,))
+                    cached_val = cached.get(total_key) if cached else None
                     if cached_val is not None:
                         try:
                             self.context.logger.info(
@@ -2552,10 +2545,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             yield from self._write_kv(
                 {
-                    "optimism_total_withdrawals": str(withdrawal_value),
-                    "last_withdrawals_calculated_timestamp": str(
-                        int(self._get_current_timestamp())
-                    ),
+                    total_key: str(withdrawal_value),
+                    ts_key: str(int(self._get_current_timestamp())),
                 }
             )
             return withdrawal_value
@@ -3184,17 +3175,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 # Normal logic when airdrop is not started
                 # Check when we last calculated initial value
-                last_calculated_timestamp = yield from self._read_kv(
-                    keys=("last_initial_value_calculated_timestamp",)
-                )
+                ii_ts_key = f"last_initial_value_calculated_timestamp_{chain}"
+                last_calculated_timestamp = yield from self._read_kv(keys=(ii_ts_key,))
 
                 if (
                     last_calculated_timestamp
-                    and (
-                        timestamp := last_calculated_timestamp.get(
-                            "last_initial_value_calculated_timestamp"
-                        )
-                    )
+                    and (timestamp := last_calculated_timestamp.get(ii_ts_key))
                     and timestamp is not None
                 ):
                     self.context.logger.info(
@@ -3206,8 +3192,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     except (ValueError, TypeError):
                         self.context.logger.warning(
-                            f"Unparseable last_initial_value_calculated_timestamp "
-                            f"{timestamp!r}; treating cache as expired"
+                            f"Unparseable {ii_ts_key} {timestamp!r}; "
+                            "treating cache as expired"
                         )
                         # Negative age is documented as "expired" in the
                         # guard below and is independent of the strict <
@@ -3277,7 +3263,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         timestamp = int(self._get_current_timestamp())
         yield from self._write_kv(
-            {"last_initial_value_calculated_timestamp": str(timestamp)}
+            {f"last_initial_value_calculated_timestamp_{chain}": str(timestamp)}
         )
 
         self.context.logger.info(

@@ -556,7 +556,7 @@ class LiquidityTraderBaseBehaviour(
                 yield from self._write_kv(
                     {
                         f"last_safe_balances_calculated_timestamp_{chain}": "0",
-                        "last_initial_value_calculated_timestamp": "0",
+                        f"last_initial_value_calculated_timestamp_{chain}": "0",
                     }
                 )
             except Exception:  # nosec B110
@@ -573,11 +573,10 @@ class LiquidityTraderBaseBehaviour(
         """Reset cache timestamps after a successful agent transaction.
 
         The agent has just submitted a tx (swap, enter pool, exit pool,
-        withdrawal, etc.) on ``chain``, so that chain's kv-cached safe
-        balances are stale, and the (un-chained) withdrawal value is
-        also stale. Setting the two timestamps to ``"0"`` forces the
-        next FetchStrategies cycle to re-fetch instead of serving
-        cached data.
+        withdrawal, etc.) on ``chain``, so the kv-cached safe balances
+        and withdrawal value for that chain are stale. Setting both
+        timestamps to ``"0"`` forces the next FetchStrategies cycle to
+        re-fetch instead of serving cached data.
 
         :param chain: chain identifier of the just-settled tx.
         :yield: None
@@ -586,7 +585,7 @@ class LiquidityTraderBaseBehaviour(
             yield from self._write_kv(
                 {
                     f"last_safe_balances_calculated_timestamp_{chain}": "0",
-                    "last_withdrawals_calculated_timestamp": "0",
+                    f"last_withdrawals_calculated_timestamp_{chain}": "0",
                 }
             )
         except Exception:  # nosec B110

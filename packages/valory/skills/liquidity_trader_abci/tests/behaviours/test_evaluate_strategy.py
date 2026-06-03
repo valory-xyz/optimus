@@ -3759,6 +3759,53 @@ class TestCheckAndUseCachedClOpportunity:
         # absent period -> None != current_period -> invalidated (not left to time-expiry)
         assert invalidated
 
+    def test_cache_used_when_period_zero(self):
+        """period_count == 0 with a period-0 cache is valid (``!=``, not truthiness).
+
+        Pins the docstring promise: a truthiness mutation (``not cached_period``)
+        would treat the valid period-0 cache as stale and break first-period agents.
+        """
+        b = _mk()
+        b.synchronized_data.period_count = 0
+        b.current_positions = []
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1", "period": 0})
+        b._should_use_cached_cl_data = MagicMock(return_value=True)
+        b._update_cl_pool_round_tracking = _gen_none
+        b._reconstruct_actions_from_cached_cl_pool = _gen_return(
+            [{"action": "EnterPool"}]
+        )
+        invalidated = []
+
+        def _inv(chain):
+            invalidated.append(chain)
+            yield
+
+        b._invalidate_cl_pool_cache = _inv
+        result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 10)
+        assert result == [{"action": "EnterPool"}]
+        assert not invalidated  # period 0 == period 0 -> not stale
+
+    def test_cache_invalidated_non_adjacent_period(self):
+        """A cache two periods stale (period=2, current=3) is still invalidated.
+
+        ``period=0, current=1`` alone can't distinguish ``!=`` from ``<`` or
+        ``current - 1``; a non-adjacent rollover proves the check is membership-based.
+        """
+        b = _mk()
+        b.synchronized_data.period_count = 3
+        b.current_positions = []
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1", "period": 2})
+        invalidated = []
+
+        def _inv(chain):
+            invalidated.append(chain)
+            yield
+
+        b._invalidate_cl_pool_cache = _inv
+        result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 10)
+        assert result is None
+        assert invalidated
+
 
 class TestReconstructActionsFromCachedClPool:
     """Tests for _reconstruct_actions_from_cached_cl_pool."""

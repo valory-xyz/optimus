@@ -961,6 +961,125 @@ def _make_optimism_b() -> Any:
     return b
 
 
+class TestDetectAndInvalidateOnInflow:
+    """Test _detect_and_invalidate_on_inflow."""
+
+    def _b(self) -> Any:
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        return b
+
+    def test_no_change_no_invalidation(self) -> None:
+        """If on-chain balances match last-known, no invalidate write fires."""
+        b = self._b()
+        # Snapshot agrees with current readings (both 0 for everything).
+        last_known = {ZERO_ADDRESS.lower(): 0}
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {"last_known_safe_balances_optimism": json.dumps(last_known)}
+        )
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._write_kv = capture_write  # type: ignore[method-assign]
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+        # Should NOT include the invalidate-timestamps write.
+        for w in writes:
+            assert "last_safe_balances_calculated_timestamp_optimism" not in w
+            assert "last_initial_value_calculated_timestamp" not in w
+
+    def test_inflow_triggers_invalidation(self) -> None:
+        """Current balance > last-known fires the cache invalidation write."""
+        b = self._b()
+        b._get_native_balance = _make_gen(100)  # type: ignore[assignment,method-assign]
+        # No snapshot in kv → last_known is empty → 100 > 0 → inflow.
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._write_kv = capture_write  # type: ignore[method-assign]
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+        # Look for the chain-scoped invalidate timestamp.
+        assert any(
+            "last_safe_balances_calculated_timestamp_optimism" in w
+            and w["last_safe_balances_calculated_timestamp_optimism"] == "0"
+            for w in writes
+        )
+
+    def test_native_balance_none_is_skipped(self) -> None:
+        """A None native-balance read just doesn't seed the entry."""
+        b = self._b()
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        # Should not crash; just no entry for ZERO_ADDRESS.
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+
+    def test_unparseable_last_known_treated_as_empty(self) -> None:
+        """Garbage in ``last_known_safe_balances_<chain>`` doesn't crash."""
+        b = self._b()
+        b._get_native_balance = _make_gen(50)  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {"last_known_safe_balances_optimism": "not-json"}
+        )
+        # Should not raise. Inflow still fires because last_known is treated as empty.
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+
+    def test_write_failure_swallowed(self) -> None:
+        """A kv write exception is logged and does not propagate."""
+        b = self._b()
+        b._get_native_balance = _make_gen(50)  # type: ignore[assignment,method-assign]
+
+        def _failing_write(payload: Any) -> Any:
+            if False:
+                yield  # noqa
+            raise ConnectionError("kv down")
+
+        b._write_kv = _failing_write  # type: ignore[method-assign]
+        # Both the invalidate and the baseline write fail; method still completes.
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+
+
+class TestInvalidateCachesAfterTx:
+    """Test _invalidate_caches_after_tx."""
+
+    def test_writes_chain_scoped_balances_ts_and_withdrawals_ts(self) -> None:
+        """Both timestamps go to ``"0"`` and the balances key is chain-scoped."""
+        b = _make_behaviour()
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._write_kv = capture_write  # type: ignore[method-assign]
+        _exhaust(b._invalidate_caches_after_tx("optimism"))
+        assert len(writes) == 1
+        payload = writes[0]
+        assert payload["last_safe_balances_calculated_timestamp_optimism"] == "0"
+        assert payload["last_withdrawals_calculated_timestamp"] == "0"
+
+    def test_write_failure_swallowed(self) -> None:
+        """A kv write exception is logged and does not propagate."""
+
+        def _failing_write(payload: Any) -> Any:
+            if False:
+                yield  # noqa
+            raise ConnectionError("kv down")
+
+        b = _make_behaviour()
+        b._write_kv = _failing_write  # type: ignore[method-assign]
+        _exhaust(b._invalidate_caches_after_tx("optimism"))
+
+
 class TestGetOptimismBalances:
     """Test _get_safe_balances_from_safe_api."""
 
@@ -1057,7 +1176,7 @@ class TestGetOptimismBalances:
         ]
         b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
-        b._read_kv = _make_gen({"safe_balances": json.dumps(cached_data)})  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 2
         assert result[0]["asset_symbol"] == "ETH"
@@ -1067,7 +1186,7 @@ class TestGetOptimismBalances:
         """API fails and cache has no data - return empty."""
         b = _make_optimism_b()
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
-        b._read_kv = _make_gen({"safe_balances": None})  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({"safe_balances_optimism": None})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
 
@@ -1100,6 +1219,78 @@ class TestGetOptimismBalances:
         b._read_kv = _failing_read  # type: ignore[method-assign]
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
+
+    def test_ttl_cache_hit_skips_safeapi_fetch(self) -> None:
+        """Within-TTL cache hit returns persisted payload without hitting SafeApi."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            SAFE_BALANCES_CACHE_TTL_SECONDS,
+        )
+
+        b = _make_optimism_b()
+        now = 1_700_000_000
+        b._get_current_timestamp = lambda: now  # type: ignore[assignment,method-assign]
+        # 10 minutes old, well inside the 3 h TTL.
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "safe_balances_optimism": json.dumps(
+                    [{"tokenAddress": None, "balance": "12345"}]
+                ),
+                "last_safe_balances_calculated_timestamp_optimism": str(now - 600),
+            }
+        )
+
+        fetch_calls: list = []
+
+        def _should_not_be_called(*args: Any, **kwargs: Any) -> Any:
+            fetch_calls.append((args, kwargs))
+            yield
+            return (True, [])
+
+        b._fetch_safe_balances_with_pagination = _should_not_be_called  # type: ignore[method-assign]
+
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        assert fetch_calls == [], "TTL cache hit should skip SafeApi"
+        # Cached entry parsed as ETH.
+        assert any(r["asset_symbol"] == "ETH" for r in result)
+        # Sanity that we're inside the TTL window.
+        assert SAFE_BALANCES_CACHE_TTL_SECONDS > 600
+
+    def test_unparseable_timestamp_treated_as_expired_then_refetches(self) -> None:
+        """Garbage timestamp logs a warning and routes through the SafeApi path."""
+        b = _make_optimism_b()
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "safe_balances_optimism": json.dumps(
+                    [{"tokenAddress": None, "balance": "99"}]
+                ),
+                "last_safe_balances_calculated_timestamp_optimism": "not-a-number",
+            }
+        )
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (True, [{"tokenAddress": None, "balance": "1"}])
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        # The refetch result (balance=1), not the cached one (balance=99).
+        eths = [r for r in result if r["asset_symbol"] == "ETH"]
+        assert eths and eths[0]["balance"] == 1
+
+    def test_unparseable_cached_payload_falls_back_to_refetch(self) -> None:
+        """Cache-hit JSON decode error logs and falls through to SafeApi."""
+        b = _make_optimism_b()
+        now = 1_700_000_000
+        b._get_current_timestamp = lambda: now  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "safe_balances_optimism": "{not json",
+                "last_safe_balances_calculated_timestamp_optimism": str(now - 60),
+            }
+        )
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (True, [{"tokenAddress": None, "balance": "7"}])
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        eths = [r for r in result if r["asset_symbol"] == "ETH"]
+        assert eths and eths[0]["balance"] == 7
 
     def test_backstop_integrates_when_safeapi_partial(self) -> None:
         """End-to-end backstop integration when SafeApi returns partial data.

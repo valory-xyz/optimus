@@ -2341,6 +2341,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         token_price = Decimal(str(safe_fiat_conversion))
                     except (InvalidOperation, ValueError, TypeError):
                         token_price = None
+                    # Safe Transaction Service returns ``fiatConversion: "0.0"``
+                    # for trusted tokens it has no live price feed for. Treat
+                    # the non-positive case as "no Safe price" so the
+                    # CoinGecko fallback runs instead of valuing the token at
+                    # ``balance * 0``.
+                    if token_price is not None and token_price <= 0:
+                        token_price = None
 
                 if token_price is None:
                     velo_token_address = self._get_velo_token_address(chain)

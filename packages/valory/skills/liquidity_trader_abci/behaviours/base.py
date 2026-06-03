@@ -520,10 +520,11 @@ class LiquidityTraderBaseBehaviour(
             if token_balance is not None:
                 current[token_addr.lower()] = int(token_balance)
 
-        last_known_blob = yield from self._read_kv(("last_known_safe_balances",))
+        last_known_key = f"last_known_safe_balances_{chain}"
+        last_known_blob = yield from self._read_kv((last_known_key,))
         last_known: Dict[str, int] = {}
         last_known_raw = (
-            last_known_blob.get("last_known_safe_balances") if last_known_blob else None
+            last_known_blob.get(last_known_key) if last_known_blob else None
         )
         if last_known_raw:
             try:
@@ -536,7 +537,7 @@ class LiquidityTraderBaseBehaviour(
                             continue
             except (json.JSONDecodeError, TypeError):
                 self.context.logger.warning(
-                    "Unparseable last_known_safe_balances; treating as empty"
+                    f"Unparseable {last_known_key}; treating as empty"
                 )
 
         inflow_token: Optional[str] = None
@@ -554,7 +555,7 @@ class LiquidityTraderBaseBehaviour(
             try:
                 yield from self._write_kv(
                     {
-                        "last_safe_balances_calculated_timestamp": "0",
+                        f"last_safe_balances_calculated_timestamp_{chain}": "0",
                         "last_initial_value_calculated_timestamp": "0",
                     }
                 )
@@ -564,24 +565,27 @@ class LiquidityTraderBaseBehaviour(
                 )
 
         try:
-            yield from self._write_kv({"last_known_safe_balances": json.dumps(current)})
+            yield from self._write_kv({last_known_key: json.dumps(current)})
         except Exception:  # nosec B110
-            self.context.logger.debug("Failed to persist last_known_safe_balances")
+            self.context.logger.debug(f"Failed to persist {last_known_key}")
 
-    def _invalidate_caches_after_tx(self) -> Generator[None, None, None]:
+    def _invalidate_caches_after_tx(self, chain: str) -> Generator[None, None, None]:
         """Reset cache timestamps after a successful agent transaction.
 
         The agent has just submitted a tx (swap, enter pool, exit pool,
-        withdrawal, etc.), so the kv-cached balances and withdrawal value
-        are stale. Setting the two timestamps to ``"0"`` forces the next
-        FetchStrategies cycle to re-fetch instead of serving cached data.
+        withdrawal, etc.) on ``chain``, so that chain's kv-cached safe
+        balances are stale, and the (un-chained) withdrawal value is
+        also stale. Setting the two timestamps to ``"0"`` forces the
+        next FetchStrategies cycle to re-fetch instead of serving
+        cached data.
 
+        :param chain: chain identifier of the just-settled tx.
         :yield: None
         """
         try:
             yield from self._write_kv(
                 {
-                    "last_safe_balances_calculated_timestamp": "0",
+                    f"last_safe_balances_calculated_timestamp_{chain}": "0",
                     "last_withdrawals_calculated_timestamp": "0",
                 }
             )
@@ -619,30 +623,30 @@ class LiquidityTraderBaseBehaviour(
         yield from self._detect_and_invalidate_on_inflow(chain, safe_address)
 
         # TTL cache: skip the SafeApi fetch if a recent result is on disk.
+        balances_key = f"safe_balances_{chain}"
+        ts_key = f"last_safe_balances_calculated_timestamp_{chain}"
         cached_blob: Dict[str, Any] = {}
         try:
-            read = yield from self._read_kv(
-                ("safe_balances", "last_safe_balances_calculated_timestamp")
-            )
+            read = yield from self._read_kv((balances_key, ts_key))
             cached_blob = read or {}
         except Exception:  # nosec B110
             self.context.logger.debug(
                 "Failed to read safe balances cache from KV store"
             )
         now_ts = int(self._get_current_timestamp())
-        last_ts_raw = cached_blob.get("last_safe_balances_calculated_timestamp")
+        last_ts_raw = cached_blob.get(ts_key)
         cache_age: Optional[int] = None
         if last_ts_raw:
             try:
                 cache_age = now_ts - int(last_ts_raw)
             except (ValueError, TypeError):
                 self.context.logger.warning(
-                    f"Unparseable last_safe_balances_calculated_timestamp "
-                    f"{last_ts_raw!r}; treating cache as expired"
+                    f"Unparseable {ts_key} {last_ts_raw!r}; "
+                    "treating cache as expired"
                 )
                 cache_age = SAFE_BALANCES_CACHE_TTL_SECONDS
 
-        cached_payload = cached_blob.get("safe_balances")
+        cached_payload = cached_blob.get(balances_key)
         use_cache = (
             cache_age is not None
             and 0 <= cache_age < SAFE_BALANCES_CACHE_TTL_SECONDS
@@ -653,8 +657,8 @@ class LiquidityTraderBaseBehaviour(
                 all_balances = json.loads(cached_payload)
                 api_success = True
                 self.context.logger.info(
-                    f"Safe balances cache hit ({cache_age}s old, "
-                    f"ttl {SAFE_BALANCES_CACHE_TTL_SECONDS}s)"
+                    f"Safe balances cache hit for {chain} "
+                    f"({cache_age}s old, ttl {SAFE_BALANCES_CACHE_TTL_SECONDS}s)"
                 )
             except (json.JSONDecodeError, TypeError):
                 self.context.logger.warning(
@@ -678,8 +682,8 @@ class LiquidityTraderBaseBehaviour(
                 try:
                     yield from self._write_kv(
                         {
-                            "safe_balances": json.dumps(all_balances),
-                            "last_safe_balances_calculated_timestamp": str(now_ts),
+                            balances_key: json.dumps(all_balances),
+                            ts_key: str(now_ts),
                         }
                     )
                 except Exception:  # nosec B110

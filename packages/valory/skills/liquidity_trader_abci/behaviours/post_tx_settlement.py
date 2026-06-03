@@ -49,11 +49,11 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.fetch_and_log_gas_details()
 
             # The agent just changed safe state (swap/enter/exit/withdrawal/
-            # approval/etc.), so the kv-cached balances and withdrawal value
-            # are no longer accurate. Reset both timestamps so the next
-            # FetchStrategies cycle picks up the new state instead of serving
-            # cached data.
-            yield from self._invalidate_caches_after_tx()
+            # approval/etc.) on ``chain_id``, so that chain's kv-cached
+            # balances and the (un-chained) withdrawal value are no longer
+            # accurate. Reset both timestamps so the next FetchStrategies
+            # cycle picks up the new state instead of serving cached data.
+            yield from self._invalidate_caches_after_tx(self.synchronized_data.chain_id)
 
             payload = PostTxSettlementPayload(
                 sender=self.context.agent_address, content="Transaction settled"

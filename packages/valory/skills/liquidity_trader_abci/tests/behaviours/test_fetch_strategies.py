@@ -3938,6 +3938,87 @@ class TestCalculateSafeBalancesValue:
         gen = obj._calculate_safe_balances_value([])
         assert _drive(gen) == Decimal(0)
 
+    def test_safe_fiat_conversion_used_directly(self):
+        """Non-null ``fiat_conversion`` is used as price; CoinGecko is skipped."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+
+        coingecko_calls: List[Any] = []
+
+        def fake_coingecko(*a: Any, **kw: Any) -> Any:
+            coingecko_calls.append((a, kw))
+            yield
+            return 12345.0  # should never be returned if fiat_conversion is used
+
+        obj._fetch_zero_address_price = fake_coingecko
+        obj._fetch_token_price = fake_coingecko
+
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": "1.0",
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        obj._get_token_decimals = _gen_return(6)
+        result = _drive(obj._calculate_safe_balances_value([]))
+        # 1 USDC at $1 = $1.00, with no CoinGecko call.
+        assert result == Decimal("1") * Decimal("1.0")
+        assert coingecko_calls == []
+
+    def test_safe_fiat_conversion_zero_falls_back_to_coingecko(self):
+        """``fiat_conversion: "0.0"`` (no Safe price feed) falls back to CoinGecko."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_token_price = _gen_return(2.5)
+        obj._get_token_decimals = _gen_return(6)
+
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xMystery",
+                    "asset_symbol": "MYS",
+                    "balance": 10**6,
+                    "fiat_balance": "0.0",
+                    "fiat_conversion": "0.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        # Should use the CoinGecko price ($2.5), not value the token at $0.
+        assert result == Decimal("1") * Decimal("2.5")
+
+    def test_safe_fiat_conversion_invalid_decimal_falls_back(self):
+        """A malformed ``fiat_conversion`` string falls back to CoinGecko."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_token_price = _gen_return(7.0)
+        obj._get_token_decimals = _gen_return(6)
+
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xToken",
+                    "asset_symbol": "TKN",
+                    "balance": 10**6,
+                    "fiat_balance": "not-a-number",
+                    "fiat_conversion": "not-a-number",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        assert result == Decimal("1") * Decimal("7.0")
+
     def test_eth_balance(self):
         """Test eth balance."""
         obj = _mk()

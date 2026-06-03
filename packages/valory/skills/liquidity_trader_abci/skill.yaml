@@ -13,7 +13,7 @@ fingerprint:
   behaviours/check_staking_kpi_met.py: bafybeieidx73vhcck7i3o2wkr435tarz5ikl4sogopgocg5quakgtf3csy
   behaviours/decision_making.py: bafybeiemvgc2np3f26mm72mjawckzzkzrpfvajs5jz7cbahdc6a5q3i3by
   behaviours/evaluate_strategy.py: bafybeif5ugkb2m7cipc3ck2xqbpk4ouivvuhjebiyhsd3oqpqzxb6rw45u
-  behaviours/fetch_strategies.py: bafybeibjc2x55acfp3k62b7ebpi6ffdsbjihmaupg6ny6jbe5vyruaxoiu
+  behaviours/fetch_strategies.py: bafybeickjq67lbyi3inenjapbpsfnlfprrm7agyiyrpue6xtvasej7lr6u
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeifubrt3bcjbwokx3kgkkoci2suzeicojgsxpdrjmpzagrmqrpqyme
   behaviours/round_behaviour.py: bafybeiafqu4chrxrtxqijd22h6xim4sbon5j4rz3any3vfpbi3qhsovyua
@@ -51,7 +51,7 @@ fingerprint:
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidv7ckk3qqyovnynl5v7nuxwzbols7jkhkrtiwa3uv7lxi4nykqtm
   tests/behaviours/test_decision_making.py: bafybeidmi7d6qxdhqvl6alcknlvw3g4bx2gcjiqb45ddemdnckabdbbila
   tests/behaviours/test_evaluate_strategy.py: bafybeidnbd6depueufcmq57ndoxghekv3lpnpthbopfcje5zfq3jpben7e
-  tests/behaviours/test_fetch_strategies.py: bafybeic6xsn4lskcpg2quzlsynepjoyoc4hnrj4itb27iwywc4try3cule
+  tests/behaviours/test_fetch_strategies.py: bafybeibyuxpt2qf4nyjz6n2yrw5niiaom74aix6okjqavgdjqummgd4pk4
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeifj3fxvrr6cq43ao24prvvfltl3lwtao2e5d3kujuyn7aznygsz3q
   tests/behaviours/test_round_behaviour.py: bafybeibwy6np27mile6hf72nfjh65qsvegzedmsyeskfeprdwfvjbe77jq
@@ -110,7 +110,6 @@ contracts:
 - valory/velodrome_cl_pool:0.1.0:bafybeihlkgpjycu26ncolkeqp3tatkvecimsj3ikmvjimpwc7rbwmm7oru
 - valory/velodrome_non_fungible_position_manager:0.1.0:bafybeih5swx6k3rc3ky4w6lf7fhmwwqenc2pz6fnx2im2ui2bdarj4niwu
 - valory/velodrome_pool:0.1.0:bafybeid6wlv6sgm3y7f63j7ehvoajr6bjn37s4cck4xonuuwbzwypzfxki
-- valory/service_registry:0.1.0:bafybeihktixbuw7dz3oa2xzfvpuchbnid7eob224n3spm77xx2yj2wixcm
 - valory/velodrome_gauge:0.1.0:bafybeia5rqa5q5f7jfb7lrcn6ot2jjk5nfmqqt4kfsvn3gmawubl3dpbgm
 - valory/velodrome_voter:0.1.0:bafybeieawpdivhzrbjk6ivsrncxah5y5gbb32qxmrcb2dxmw55ev7gowda
 - valory/velodrome_cl_gauge:0.1.0:bafybeicqjs5styv3qubfd7askc6nnd2hrwqlawd6b7rvzyvp2ycbenensm

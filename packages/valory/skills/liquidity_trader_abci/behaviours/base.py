@@ -89,11 +89,9 @@ MAX_SWAP_CONFIRMATION_RETRIES = 60
 # to stay well inside FSM round budgets.
 MAX_RATE_LIMIT_WAIT_SECONDS = 30
 
-# Base backoff schedule used when the rate-limit response has no
-# Retry-After header. The actual sleep on attempt ``i`` is
-# ``RATE_LIMIT_BACKOFF_SCHEDULE[i] + uniform(0, jitter)``. Jitter
-# de-correlates many agents that 429 at the same wall-clock second
-# and would otherwise all retry at the same moment.
+# Backoff schedule used when the rate-limit response has no Retry-After
+# header. Sleep on attempt ``i`` is
+# ``RATE_LIMIT_BACKOFF_SCHEDULE[i] + uniform(0, jitter)``.
 RATE_LIMIT_BACKOFF_SCHEDULE = (5, 10, 15)
 RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
@@ -1523,9 +1521,9 @@ class LiquidityTraderBaseBehaviour(
         integer-seconds form is parsed; an HTTP-date form falls
         through to the backoff schedule). Otherwise uses
         ``RATE_LIMIT_BACKOFF_SCHEDULE`` indexed by ``attempt``, plus
-        a small uniform jitter so a fleet of agents all 429'd at the
-        same wall-clock second don't all retry at the same later
-        second. Always clamped to ``MAX_RATE_LIMIT_WAIT_SECONDS``.
+        a small uniform jitter so two retries from the same starting
+        second don't land at exactly the same later second. Always
+        clamped to ``MAX_RATE_LIMIT_WAIT_SECONDS``.
 
         :param response: the rate-limited HTTP response.
         :param attempt: zero-indexed retry attempt counter.
@@ -1541,7 +1539,9 @@ class LiquidityTraderBaseBehaviour(
                     break
         idx = min(attempt, len(RATE_LIMIT_BACKOFF_SCHEDULE) - 1)
         base = RATE_LIMIT_BACKOFF_SCHEDULE[idx]
-        jitter = random.uniform(0, RATE_LIMIT_BACKOFF_JITTER_SECONDS)
+        # Non-cryptographic randomness is correct here: jitter only needs to
+        # vary retry timings slightly, not be unguessable.
+        jitter = random.uniform(0, RATE_LIMIT_BACKOFF_JITTER_SECONDS)  # nosec B311
         return min(int(base + jitter), MAX_RATE_LIMIT_WAIT_SECONDS)
 
     def _request_with_retries(

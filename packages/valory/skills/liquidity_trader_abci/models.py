@@ -544,7 +544,7 @@ class Params(BaseParams):
         self.velo_token_contract_addresses = json.loads(
             self._ensure("velo_token_contract_addresses", kwargs, str)
         )
-        # Root URL of the Safe Transaction Service routed through our infra.
+        # Root URL of the Safe Transaction Service the agent talks to.
         # Each fetcher derives its endpoint as
         # ``{safe_api_url}/{slug}/api/{version}/safes/{addr}/...`` where the
         # per-chain slug comes from ``safe_api_chain_slugs``.

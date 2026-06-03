@@ -572,9 +572,9 @@ class LiquidityTraderBaseBehaviour(
     def _build_safe_api_url(self, chain: str, version: str, path: str) -> str:
         """Build a Safe API URL from the configured root + chain slug.
 
-        The configured root URL points at the team's reverse proxy in
-        front of api.safe.global, so every Safe API call (across pages
-        and versions) flows through one routed endpoint.
+        Every Safe API call (across pages and versions) is built from the
+        same configured root, so changing where the agent talks to Safe
+        is one config flip rather than touching every call site.
 
         :param chain: chain identifier as used in ``target_investment_chains``
             (e.g. ``"optimism"``, ``"base"``).

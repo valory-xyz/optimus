@@ -8,12 +8,12 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/base.py: bafybeid6oa2ty67nyolgwac36yrekk3nyiebjyqpydgarlly3rrc7uonva
+  behaviours/base.py: bafybeiad2zzjupqvj73uh2eafkbsftq4fx4vs2gmmn4xvec2qhiuozb5sy
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeieidx73vhcck7i3o2wkr435tarz5ikl4sogopgocg5quakgtf3csy
   behaviours/decision_making.py: bafybeiemvgc2np3f26mm72mjawckzzkzrpfvajs5jz7cbahdc6a5q3i3by
   behaviours/evaluate_strategy.py: bafybeif5ugkb2m7cipc3ck2xqbpk4ouivvuhjebiyhsd3oqpqzxb6rw45u
-  behaviours/fetch_strategies.py: bafybeictwraejhymuxdcoeo3ztkrjagck3blskvewe4ql57setdfgviuo4
+  behaviours/fetch_strategies.py: bafybeibjc2x55acfp3k62b7ebpi6ffdsbjihmaupg6ny6jbe5vyruaxoiu
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeifubrt3bcjbwokx3kgkkoci2suzeicojgsxpdrjmpzagrmqrpqyme
   behaviours/round_behaviour.py: bafybeiafqu4chrxrtxqijd22h6xim4sbon5j4rz3any3vfpbi3qhsovyua
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiecywu6ymgqenqznpicvqnwlpbw3b3l6vosslehyvtxyivshu77ee
+  models.py: bafybeifmmjlksawv55m7czbwcjqn3x2hh6s4mrbn5fwaquekmphmcqzzaq
   payloads.py: bafybeifrnypndloixuq3tmpim6fhte26srsc6zhrpm4rp45hjib6k6ogdq
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy

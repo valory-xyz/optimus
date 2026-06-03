@@ -4063,11 +4063,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             # Fetch incoming transfers. We paginate by offset rather than
-            # following Safe's response ``next`` URL: that URL is absolute
-            # and points at the upstream API, so under a proxy only page 1
-            # would go through our infra — page 2 onwards would bypass it.
-            # Building the URL ourselves via _build_safe_api_url keeps every
-            # page going through the configured endpoint.
+            # following Safe's response ``next`` URL so every page request
+            # uses the URL we construct from the configured params; the
+            # response ``next`` is absolute and can drop the agent off the
+            # endpoint it was configured to talk to.
             transfers_base_url = self._build_safe_api_url(
                 "optimism", "v1", f"safes/{address}/incoming-transfers/"
             )

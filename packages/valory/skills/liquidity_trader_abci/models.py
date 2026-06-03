@@ -544,7 +544,25 @@ class Params(BaseParams):
         self.velo_token_contract_addresses = json.loads(
             self._ensure("velo_token_contract_addresses", kwargs, str)
         )
-        self.safe_api_base_url = self._ensure("safe_api_base_url", kwargs, str)
+        # Root URL of the Safe Transaction Service the agent talks to.
+        # Each fetcher derives its endpoint as
+        # ``{safe_api_url}/{slug}/api/{version}/safes/{addr}/...`` where the
+        # per-chain slug comes from ``safe_api_chain_slugs``.
+        self.safe_api_url = self._ensure("safe_api_url", kwargs, str)
+        self.safe_api_chain_slugs = json.loads(
+            self._ensure("safe_api_chain_slugs", kwargs, str)
+        )
+        if not isinstance(self.safe_api_chain_slugs, dict):
+            raise ValueError(
+                "safe_api_chain_slugs must be a JSON object mapping chain "
+                f"to slug; got {type(self.safe_api_chain_slugs).__name__}"
+            )
+        for chain, slug in self.safe_api_chain_slugs.items():
+            if not isinstance(slug, str) or not slug:
+                raise ValueError(
+                    f"safe_api_chain_slugs[{chain!r}] must be a non-empty "
+                    f"string; got {slug!r}"
+                )
         self.safe_api_timeout = self._ensure("safe_api_timeout", kwargs, int)
         self.mode_explorer_api_base_url = self._ensure(
             "mode_explorer_api_base_url", kwargs, str
@@ -566,7 +584,6 @@ class Params(BaseParams):
         self.mode_conduit_explorer_url: str = self._ensure(
             "mode_conduit_explorer_url", kwargs, str
         )
-        self.safe_api_v1_url: str = self._ensure("safe_api_v1_url", kwargs, str)
         self.mode_native_explorer_url: str = self._ensure(
             "mode_native_explorer_url", kwargs, str
         )

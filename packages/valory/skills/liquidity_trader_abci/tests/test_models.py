@@ -650,6 +650,36 @@ class TestParams:
             assert params.genai_model == "test_model"
             assert params.use_x402 is False
 
+    def test_safe_api_chain_slugs_non_dict_raises(self) -> None:
+        """Non-dict ``safe_api_chain_slugs`` (e.g. JSON list) fails at startup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["safe_api_chain_slugs"] = json.dumps([])
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(ValueError, match="must be a JSON object"):
+                    params.__init__(**kwargs)  # type: ignore[misc]
+
+    def test_safe_api_chain_slugs_empty_string_raises(self) -> None:
+        """Empty-string slug fails at startup with a chain-naming message."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["safe_api_chain_slugs"] = json.dumps({"optimism": ""})
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(ValueError, match="non-empty"):
+                    params.__init__(**kwargs)  # type: ignore[misc]
+
+    def test_safe_api_chain_slugs_non_string_value_raises(self) -> None:
+        """Non-string slug value (e.g. int) fails at startup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["safe_api_chain_slugs"] = json.dumps({"optimism": 1})
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(ValueError, match="non-empty"):
+                    params.__init__(**kwargs)  # type: ignore[misc]
+
     def test_initialization_with_stoploss_multiplier(self) -> None:
         """Test Params initialization with custom stoploss_threshold_multiplier."""
         with tempfile.TemporaryDirectory() as tmpdir:

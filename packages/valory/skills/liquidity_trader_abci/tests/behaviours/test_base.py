@@ -2758,13 +2758,21 @@ class TestComputeRateLimitWait:
     def test_missing_headers_attribute_treated_as_no_header(self) -> None:
         """A response object without ``headers`` falls through to backoff."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            RATE_LIMIT_BACKOFF_JITTER_SECONDS,
             RATE_LIMIT_BACKOFF_SCHEDULE,
         )
 
         b = _make_behaviour()
         # Plain object with no ``headers`` attribute at all.
         wait = b._compute_rate_limit_wait(object(), attempt=0)
-        assert wait >= RATE_LIMIT_BACKOFF_SCHEDULE[0]
+        base = RATE_LIMIT_BACKOFF_SCHEDULE[0]
+        assert base <= wait < base + RATE_LIMIT_BACKOFF_JITTER_SECONDS + 1
+
+    def test_negative_retry_after_is_floored_at_zero(self) -> None:
+        """A negative Retry-After value is clamped to 0, not sleep(-N)."""
+        b = _make_behaviour()
+        resp = self._response("Retry-After: -5")
+        assert b._compute_rate_limit_wait(resp, attempt=0) == 0
 
 
 class TestRequestWithRetries:

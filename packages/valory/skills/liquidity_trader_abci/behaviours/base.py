@@ -1542,7 +1542,13 @@ class LiquidityTraderBaseBehaviour(
             name, _, value = line.partition(":")
             if name.strip().lower() == "retry-after":
                 try:
-                    return min(int(value.strip()), MAX_RATE_LIMIT_WAIT_SECONDS)
+                    # Floor at 0: spec says Retry-After is non-negative, but
+                    # a malformed ``-N`` header would otherwise pass through
+                    # to ``self.sleep(-N)``.
+                    return max(
+                        0,
+                        min(int(value.strip()), MAX_RATE_LIMIT_WAIT_SECONDS),
+                    )
                 except ValueError:
                     self.context.logger.debug(
                         f"Retry-After value {value.strip()!r} is not an "

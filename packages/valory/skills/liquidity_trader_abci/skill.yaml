@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeihm2qzqvvlnnpxzwyf5sapiawelndohktjz7sjdgta7jwveih4vgm
+  models.py: bafybeihz42wusni5urkw64t7gftfsg3xw37fuez36zfbzfmvzvmtexosty
   payloads.py: bafybeifrnypndloixuq3tmpim6fhte26srsc6zhrpm4rp45hjib6k6ogdq
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -49,7 +49,7 @@ fingerprint:
   tests/behaviours/test_base.py: bafybeifeds2sqspatms4r5ereixkbkthxhonptc52ettf33p4pljybmv5m
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidv7ckk3qqyovnynl5v7nuxwzbols7jkhkrtiwa3uv7lxi4nykqtm
-  tests/behaviours/test_decision_making.py: bafybeib6if3k63uknuvl7kmag7l5wjc66osvgmfjqgqjsnzjzwebcpifwa
+  tests/behaviours/test_decision_making.py: bafybeighgbljrovh4klaeyrqymlvlncqrw7f66qmmwhuhvcsngkcy34vty
   tests/behaviours/test_evaluate_strategy.py: bafybeicd73ykx3gtfp77yv6er63ixyf2wj2cruravzrglxd2mwnlef3nce
   tests/behaviours/test_fetch_strategies.py: bafybeicngxpu3hfq5cxzxpuvoiayv4trol6pwj634vw3suoj4frofgleuq
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu

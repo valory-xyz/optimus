@@ -62,8 +62,10 @@ def _make_behaviour(**overrides: Any) -> DecisionMakingBehaviour:
     params.lifi_fetch_step_transaction_url = "https://li.fi/step"
     params.lifi_advance_routes_url = "https://li.fi/routes"
     params.waiting_period_for_status_check = 0
-    params.max_fee_percentage = 0.05
-    params.max_gas_percentage = 0.05
+    # Distinct so a production-side threshold swap (fee checked against the gas limit
+    # or vice-versa) is observable in TestCheckIfRouteIsProfitable.
+    params.max_fee_percentage = 0.05  # 5%
+    params.max_gas_percentage = 0.25  # 25%
     params.max_slippage_percentage = 0.1
     params.slippage_for_swap = 0.03
 
@@ -2684,12 +2686,31 @@ class TestCheckIfRouteIsProfitable:
         assert result[2] == 0.1  # total_gas_cost
 
     def test_not_profitable_fees(self):
-        """Test not profitable fees."""
+        """Fee-only excess trips the gate against the FEE limit, not the gas limit.
+
+        fee 10% sits between max_fee (5%) and max_gas (25%); gas is 0 and value loss
+        is 1% (under the 10% cap), so only the fee branch can reject. A swap to
+        ``fee_percentage > allowed_gas_percentage`` (10% > 25% -> False) would let this
+        route through — this case is the canary for that swap.
+        """
         b = _make_behaviour()
-        b._get_step_transactions_data = _make_gen_method([{"fee": 50, "gas_cost": 0}])
-        route = {"fromAmountUSD": "100", "toAmountUSD": "50", "steps": []}
+        b._get_step_transactions_data = _make_gen_method([{"fee": 10, "gas_cost": 0}])
+        route = {"fromAmountUSD": "100", "toAmountUSD": "99", "steps": []}
         result = _exhaust(b.check_if_route_is_profitable(route))
         assert result[0] is False
+
+    def test_gas_within_gas_limit_passes(self):
+        """Gas 10% (> fee limit 5%, < gas limit 25%) passes — guards the gas threshold.
+
+        Complements test_not_profitable_fees: if the gas check were swapped to
+        ``gas_percentage > allowed_fee_percentage`` (10% > 5% -> True) this route would
+        be wrongly rejected. fee is 0 and value loss is 1%, so only the gas threshold's
+        identity decides the outcome.
+        """
+        b = _make_behaviour()
+        b._get_step_transactions_data = _make_gen_method([{"fee": 0, "gas_cost": 10}])
+        route = {"fromAmountUSD": "100", "toAmountUSD": "99", "steps": []}
+        assert _exhaust(b.check_if_route_is_profitable(route))[0] is True
 
     def test_no_step_transactions(self):
         """Test no step transactions."""
@@ -2720,9 +2741,9 @@ class TestCheckIfRouteIsProfitable:
 
     def test_not_profitable_gas_only(self):
         """Gas-only excess trips the gate (guards the `or gas` branch)."""
-        b = _make_behaviour()  # max_gas_percentage = 0.05
-        b._get_step_transactions_data = _make_gen_method([{"fee": 0.5, "gas_cost": 10}])
-        # fee 0.5% passes, gas 10% > 5% -> rejected by the gas branch.
+        b = _make_behaviour()  # max_gas_percentage = 0.25
+        b._get_step_transactions_data = _make_gen_method([{"fee": 0.5, "gas_cost": 30}])
+        # fee 0.5% passes, gas 30% > 25% -> rejected by the gas branch.
         route = {"fromAmountUSD": "100", "toAmountUSD": "99", "steps": []}
         assert _exhaust(b.check_if_route_is_profitable(route))[0] is False
 

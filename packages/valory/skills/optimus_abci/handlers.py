@@ -200,6 +200,7 @@ def _call_with_web3_retries(
 
 USDC_ADDRESSES = {
     "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+    "base": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 }
 
 

@@ -3973,6 +3973,95 @@ class TestCalculateSafeBalancesValue:
         assert result == Decimal("1") * Decimal("1.0")
         assert coingecko_calls == []
 
+    def test_safe_fiat_balance_used_for_total_when_conversion_present(self):
+        """Safe's precomputed ``fiat_balance`` is the total when ``fiat_conversion`` is non-zero.
+
+        ``fiat_balance`` is Safe's precomputed
+        ``adjusted_balance * fiat_conversion``. Reading it directly
+        saves the decimals-divide + multiplication and uses Safe's own
+        Decimal precision. Asserts the total trusts ``fiat_balance``
+        even when it disagrees with the recompute, so a regression to
+        ``adjusted_balance * token_price`` would be caught.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+
+        obj._fetch_zero_address_price = _gen_return(None)
+        obj._fetch_token_price = _gen_return(None)
+        obj._get_token_decimals = _gen_return(6)
+        # ``fiat_balance`` deliberately disagrees with the recomputed
+        # ``balance / 10**6 * fiat_conversion`` (which would be 1.00) so a
+        # regression that ignores fiat_balance and re-multiplies would
+        # produce 1.00 instead of 1.23 and fail.
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": "1.23",
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        assert result == Decimal("1.23")
+
+    def test_safe_fiat_balance_missing_falls_back_to_recompute(self):
+        """A null ``fiat_balance`` still totals via ``adjusted_balance * token_price``.
+
+        Reward-token entries and on-chain backstop entries don't carry
+        ``fiat_balance``. The total path must still compute
+        ``adjusted_balance * token_price`` for those instead of dropping
+        the entry.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_zero_address_price = _gen_return(None)
+        obj._fetch_token_price = _gen_return(None)
+        obj._get_token_decimals = _gen_return(6)
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": None,
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        # 1 USDC * $1.0 from the recompute path.
+        assert result == Decimal("1") * Decimal("1.0")
+
+    def test_safe_fiat_balance_unparseable_falls_back_to_recompute(self):
+        """A garbage ``fiat_balance`` string falls back to the recompute path."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_zero_address_price = _gen_return(None)
+        obj._fetch_token_price = _gen_return(None)
+        obj._get_token_decimals = _gen_return(6)
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": "garbage",
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        assert result == Decimal("1") * Decimal("1.0")
+
     def test_safe_fiat_conversion_zero_falls_back_to_coingecko(self):
         """``fiat_conversion: "0.0"`` (no Safe price feed) falls back to CoinGecko."""
         obj = _mk()
@@ -5816,18 +5905,20 @@ class TestAsyncAct:
                 gen = obj.async_act()
                 _drive(gen)
 
-    def test_inflow_detector_runs_once_per_target_chain(self):
-        """Pin the per-cycle inflow-detect hoist to target_investment_chains.
+    def test_inflow_detector_runs_only_for_safe_api_chains(self):
+        """Pin the per-cycle inflow-detect hoist to ``safe_api_chain_slugs``.
 
-        async_act hoists ``_detect_and_invalidate_on_inflow`` so the
-        downstream getters in this round / GetPositions / DecisionMaking
-        share a single per-chain invalidation pass. Asserts the hoist
-        is keyed off ``target_investment_chains`` and skips chains
-        without a configured safe address. Removing the hoist would
-        mean each downstream caller re-runs the same on-chain balance
-        reads, and a future regression where the loop iterates a
-        single hard-coded chain (the pre-multi-chain shape) would let
-        ``base`` go un-invalidated.
+        The detector exists to invalidate the Safe API cache. Mode and
+        any other explorer-routed chain read no kv key this loop
+        touches, so running it on them would burn RPC reads and write
+        orphaned kv entries. Asserts:
+
+        - chains in ``safe_api_chain_slugs`` with a safe address are
+          called once each in target-chain order;
+        - chains absent from ``safe_api_chain_slugs`` (Mode here) are
+          skipped even when they have a configured safe address;
+        - chains without a configured safe address are skipped even
+          when present in ``safe_api_chain_slugs``.
         """
         obj = _mk()
         bm = MagicMock()
@@ -5844,13 +5935,25 @@ class TestAsyncAct:
         ) as mock_sd:
             mock_sd.return_value = MagicMock(period_count=1)
 
-            # Three target chains, but only two have a safe address —
-            # the third must be skipped (no inflow call), and the other
-            # two must each see exactly one call in order.
-            obj.params.target_investment_chains = ["optimism", "base", "mode"]
+            # ``ethereum`` is in the slug map but has no safe address (skip).
+            # ``optimism`` and ``base`` are wired (run).
+            # ``mode`` has a safe address but no slug entry (skip — Mode
+            # dispatches to the explorer, which doesn't use this cache).
+            obj.params.target_investment_chains = [
+                "optimism",
+                "base",
+                "mode",
+                "ethereum",
+            ]
             obj.params.safe_contract_addresses = {
                 "optimism": "0xSafeOp",
                 "base": "0xSafeBase",
+                "mode": "0xSafeMode",
+            }
+            obj.params.safe_api_chain_slugs = {
+                "optimism": "oeth",
+                "base": "base",
+                "ethereum": "eth",
             }
             obj.params.available_strategies = {"optimism": ["uniswapV3"]}
             obj.params.initial_assets = {}

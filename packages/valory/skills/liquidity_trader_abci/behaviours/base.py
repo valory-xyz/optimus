@@ -619,9 +619,15 @@ class LiquidityTraderBaseBehaviour(
         payload: Dict[str, str] = {last_known_key: json.dumps(merged_snapshot)}
         if inflow_token is not None:
             payload[safe_balances_ts_kv_key(chain)] = "0"
+        # ``_write_kv`` returns ``False`` on a non-SUCCESS response
+        # rather than raising, so check the bool too: a silently-dropped
+        # invalidation write would let the cache serve stale balances
+        # for up to the full TTL with no operator log.
         try:
-            yield from self._write_kv(payload)
+            ok = yield from self._write_kv(payload)
         except Exception:
+            ok = False
+        if not ok:
             self.context.logger.warning(
                 f"Failed to persist balance snapshot / invalidate cache for "
                 f"{chain} after balance-increase detection; the next cycle "
@@ -643,13 +649,15 @@ class LiquidityTraderBaseBehaviour(
         :yield: None
         """
         try:
-            yield from self._write_kv(
+            ok = yield from self._write_kv(
                 {
                     safe_balances_ts_kv_key(chain): "0",
                     withdrawals_ts_kv_key(chain): "0",
                 }
             )
         except Exception:
+            ok = False
+        if not ok:
             self.context.logger.warning(
                 f"Failed to invalidate cache timestamps for {chain} after tx "
                 "settlement; cached balances may be served as fresh within the TTL"
@@ -667,8 +675,12 @@ class LiquidityTraderBaseBehaviour(
         ``_detect_and_invalidate_on_inflow`` and after each settled tx
         via ``_invalidate_caches_after_tx``. On a cache miss, hits
         SafeApi, persists the result, then returns it. On API failure
-        with no usable cache, falls back to the on-chain backstop in
-        ``_supplement_with_onchain_whitelisted_balances``.
+        with no usable cache, falls back to the persisted cached
+        payload if there is one. The on-chain backstop in
+        ``_supplement_with_onchain_whitelisted_balances`` runs
+        unconditionally after this stage as a supplement: it covers
+        whitelisted tokens that SafeApi may omit even on a successful
+        response.
 
         :param chain: chain identifier as used in
             ``target_investment_chains`` (e.g. ``"optimism"``, ``"base"``).
@@ -738,13 +750,15 @@ class LiquidityTraderBaseBehaviour(
                 # Persist the raw response plus the timestamp so future
                 # cycles can hit the cache instead of refetching.
                 try:
-                    yield from self._write_kv(
+                    persisted = yield from self._write_kv(
                         {
                             balances_key: json.dumps(all_balances),
                             ts_key: str(now_ts),
                         }
                     )
                 except Exception:
+                    persisted = False
+                if not persisted:
                     self.context.logger.warning(
                         "Failed to cache safe balances to KV store; "
                         "next cycle will refetch from SafeApi"

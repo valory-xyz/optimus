@@ -262,6 +262,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Current ETH balance: {eth_balance}")
 
                 for inflow_chain in self.params.target_investment_chains:
+                    # Only chains that flow through ``_get_safe_balances_from_safe_api``
+                    # have a cache for this loop to invalidate. Mode (and any
+                    # other explorer-routed chain) reads no kv cache key
+                    # this loop touches, so running it would just burn RPC
+                    # reads and write orphaned kv entries.
+                    if inflow_chain not in self.params.safe_api_chain_slugs:
+                        continue
                     inflow_safe = self.params.safe_contract_addresses.get(inflow_chain)
                     if inflow_safe:
                         yield from self._detect_and_invalidate_on_inflow(
@@ -2292,6 +2299,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 balances = yield from self._get_safe_balances_from_safe_api(chain)
             elif chain == Chain.MODE.value:
                 balances = yield from self._get_mode_balances_from_explorer_api()
+            else:
+                self.context.logger.warning(
+                    f"No balances dispatch for {chain}: not in "
+                    "safe_api_chain_slugs and not Mode; skipping"
+                )
+                continue
 
             if not balances:
                 self.context.logger.warning(f"No balances found for chain {chain}")
@@ -2359,6 +2372,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     except (InvalidOperation, ValueError, TypeError):
                         token_price = None
 
+                # Prefer Safe's precomputed ``fiat_balance`` for the total:
+                # equal to ``adjusted_balance * token_price`` but skips the
+                # decimals-divide round-trip we already did above. Only
+                # trust it when the Safe price was usable (non-null,
+                # positive) so we don't carry forward a stale or zeroed
+                # total.
+                token_value_usd: Optional[Decimal] = None
+                safe_fiat_balance = balance.get("fiat_balance")
+                if token_price is not None and safe_fiat_balance is not None:
+                    try:
+                        token_value_usd = Decimal(str(safe_fiat_balance))
+                    except (InvalidOperation, ValueError, TypeError):
+                        token_value_usd = None
+
                 if token_price is None:
                     velo_token_address = self._get_velo_token_address(chain)
                     if token_address == ZERO_ADDRESS:
@@ -2378,7 +2405,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 token_price = Decimal(str(token_price))
-                token_value_usd = adjusted_balance * token_price
+                if token_value_usd is None:
+                    token_value_usd = adjusted_balance * token_price
                 total_safe_value += token_value_usd
 
                 self.context.logger.info(

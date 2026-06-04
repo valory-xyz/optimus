@@ -48,12 +48,6 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             ):
                 yield from self.fetch_and_log_gas_details()
 
-            # The agent just changed safe state (swap/enter/exit/withdrawal/
-            # approval/etc.) on ``chain_id``, so the kv-cached balances
-            # and withdrawal value for that chain are no longer accurate.
-            # Reset both timestamps so the next FetchStrategies cycle
-            # picks up the new state instead of serving cached data.
-            #
             # ``chain_id`` is ``Optional[str]`` on the synced data; today
             # the SETTLE path always sets it, but the guard keeps a future
             # caller from silently writing ``…_None`` keys.

@@ -1062,7 +1062,7 @@ class TestDetectAndInvalidateOnInflow:
         return b
 
     def test_no_change_no_invalidation(self) -> None:
-        """If on-chain balances match last-known, no invalidate write fires."""
+        """If on-chain balances match last-known, baseline persists but no invalidate fires."""
         b = self._b()
         # Snapshot agrees with current readings (both 0 for everything).
         last_known = {ZERO_ADDRESS.lower(): 0}
@@ -1078,6 +1078,13 @@ class TestDetectAndInvalidateOnInflow:
 
         b._write_kv = capture_write  # type: ignore[method-assign]
         _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+        # The baseline snapshot write fires unconditionally so a future
+        # refactor that drops it would be caught here. Without this
+        # assertion, the loop below trivially passes when no write fires.
+        snapshot_writes = [
+            w for w in writes if "last_known_safe_balances_optimism" in w
+        ]
+        assert len(snapshot_writes) == 1
         # Should NOT include the invalidate-timestamps write.
         for w in writes:
             assert "last_safe_balances_calculated_timestamp_optimism" not in w
@@ -1287,7 +1294,7 @@ class TestInvalidateCachesAfterTx:
         _exhaust(b._invalidate_caches_after_tx("optimism"))
 
 
-class TestGetOptimismBalances:
+class TestGetSafeBalancesFromSafeApi:
     """Test _get_safe_balances_from_safe_api."""
 
     def test_no_safe_address(self) -> None:
@@ -1549,15 +1556,49 @@ class TestGetOptimismBalances:
         eths = [r for r in result if r["asset_symbol"] == "ETH"]
         assert eths and eths[0]["balance"] == 7
 
+    def test_cache_exactly_at_ttl_is_miss(self) -> None:
+        """``cache_age == SAFE_BALANCES_CACHE_TTL_SECONDS`` falls through to the API.
+
+        Pins the strict ``<`` on the TTL guard in ``_get_safe_balances_from_safe_api``.
+        Mutating ``<`` to ``<=`` would let a payload sitting exactly at
+        TTL be served as fresh. Asserts the API is hit (not the cached
+        value) when the timestamp differs from ``now_ts`` by exactly
+        ``SAFE_BALANCES_CACHE_TTL_SECONDS``.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            SAFE_BALANCES_CACHE_TTL_SECONDS,
+        )
+
+        b = _make_optimism_b()
+        now = 1_700_000_000
+        cached = [{"tokenAddress": None, "balance": "55"}]
+        b._get_current_timestamp = lambda: now  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "safe_balances_optimism": json.dumps(cached),
+                "last_safe_balances_calculated_timestamp_optimism": str(
+                    now - SAFE_BALANCES_CACHE_TTL_SECONDS
+                ),
+            }
+        )
+        # Live API returns a *different* payload so we can tell which
+        # branch ran from the result alone.
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (True, [{"tokenAddress": None, "balance": "1234"}])
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        eths = [r for r in result if r["asset_symbol"] == "ETH"]
+        assert eths and eths[0]["balance"] == 1234
+
     def test_api_failure_with_expired_cache_uses_stale_payload(self) -> None:
         """API fails AND cache is past TTL → still serve the stale payload.
 
-        Tightens ``test_api_failure_falls_back_to_cache``: that test
-        only exercised the within-TTL branch because the stub
-        ``_get_current_timestamp`` returned 0, giving cache_age=0.
-        This case sets the timestamp comfortably past the TTL so the
-        cache lookup falls through and we hit the dedicated
-        ``api_success is False + cached_payload exists`` branch.
+        Covers the ``api_success is False + cached_payload exists +
+        cache_age >= TTL`` branch directly: the TTL gate above misses
+        on the expired timestamp, the API call returns ``(False, [])``,
+        and the function falls through to ``json.loads(cached_payload)``
+        so we don't surface an empty list to consumers when we have a
+        stale-but-non-empty snapshot on disk.
         """
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
             SAFE_BALANCES_CACHE_TTL_SECONDS,

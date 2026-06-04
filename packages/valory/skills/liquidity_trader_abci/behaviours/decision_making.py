@@ -2239,9 +2239,32 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"Details: total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
         )
 
-        # TEMP (Basius MVP): profitability gate bypassed, re-enable per
-        # workstream 2 PR 2.6 by gating on fee_percentage/gas_percentage
-        # against allowed_fee_percentage/allowed_gas_percentage.
+        if (
+            fee_percentage > allowed_fee_percentage
+            or gas_percentage > allowed_gas_percentage
+        ):
+            self.context.logger.error(
+                f"Route is not profitable: fee {fee_percentage:.2f}% "
+                f"(allowed {allowed_fee_percentage:.2f}%), gas {gas_percentage:.2f}% "
+                f"(allowed {allowed_gas_percentage:.2f}%)"
+            )
+            return False, None, None
+
+        # Combined value-loss cap: (fromAmountUSD - toAmountUSD) / fromAmountUSD bounds the
+        # total value lost on the route. LiFi's toAmountUSD is net of protocol/integrator
+        # fees, so this captures fees + price impact together (an agent-side backstop
+        # independent of LiFi's own slippage param) — it is NOT market slippage alone, and
+        # can fire even when the fee/gas gates above pass.
+        slippage_percentage = (
+            (from_amount_usd - to_amount_usd) / from_amount_usd
+        ) * 100
+        allowed_slippage_percentage = self.params.max_slippage_percentage * 100
+        if slippage_percentage > allowed_slippage_percentage:
+            self.context.logger.error(
+                f"Route slippage too high: {slippage_percentage:.2f}% of input "
+                f"(allowed {allowed_slippage_percentage:.2f}%)"
+            )
+            return False, None, None
 
         self.context.logger.info("Route is profitable!")
         return True, total_fee, total_gas_cost

@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeielhxk7hstefud4xkvw2cxysverkegttcpm6uec7en7cmeuli2d6q
-  handlers.py: bafybeiclmvazecsberthoqil7wutwead4wtxpkdri3ep3xt6j7eci64vcu
+  handlers.py: bafybeiasobikcutd6u2jmnjmehunalj3gyp4mmg7feqkov6lqvwms46qka
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
-- valory/liquidity_trader_abci:0.1.0:bafybeibl65xakv3h4piyyo5nwxbtelecgcjebg4lzranx3nql3thvznvay
+- valory/liquidity_trader_abci:0.1.0:bafybeiesvvserjhfc5ofzs2v4segk7hdymkhfvd6bg6inczun5fcyukmba
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
 behaviours:
@@ -306,7 +306,7 @@ models:
       - uniswap
       selected_hyper_strategy: max_apr_selection
       service_endpoint_base: https://optimism.autonolas.tech/
-      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","velodrome":"velodrome_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","velodrome":"velodrome_pools_search","aerodrome":"velodrome_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
       profit_threshold: 50
       loss_threshold: 30
@@ -335,6 +335,7 @@ models:
       use_x402: true
       x402_payment_requirements: '{"threshold":0.2,"top_up":0.25}'
       optimism_ledger_rpc: https://mainnet.optimism.io
+      base_ledger_rpc: https://mainnet.base.org
       lifi_quote_to_amount_url: https://li.quest/v1/quote/toAmount
       tls_verify: true
       mode_conduit_explorer_url: https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2

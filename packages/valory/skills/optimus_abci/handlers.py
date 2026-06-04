@@ -570,7 +570,11 @@ class HttpHandler(BaseHttpHandler):
     def _get_web3_instance(self, chain: str) -> Optional[Web3]:
         """Get Web3 instance for the specified chain."""
         try:
-            rpc_url = self.context.params.optimism_ledger_rpc
+            chain_to_rpc = {
+                "base": self.context.params.base_ledger_rpc,
+                "optimism": self.context.params.optimism_ledger_rpc,
+            }
+            rpc_url = chain_to_rpc.get(chain.lower())
 
             if not rpc_url:
                 self.context.logger.warning(f"No RPC URL for {chain}")

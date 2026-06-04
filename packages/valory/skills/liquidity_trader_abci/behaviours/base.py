@@ -199,6 +199,17 @@ class DexType(Enum):
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
     VELODROME = "velodrome"
+    AERODROME = "aerodrome"
+
+
+# Aerodrome is the Base-specific deployment of the Velodrome protocol
+# (same router / NFPM / voter / sugar / slipstream-helper ABI), so
+# entry, exit, position-valuation and metrics paths route through the
+# same VelodromePoolBehaviour. Anywhere in the FSM that branches on
+# dex_type for "velodrome" semantics should accept either string.
+VELODROME_FAMILY_DEX_TYPES: frozenset = frozenset(
+    {DexType.VELODROME.value, DexType.AERODROME.value}
+)
 
 
 class Action(Enum):
@@ -304,6 +315,15 @@ WHITELISTED_ASSETS = {
         "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
         "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
         "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
+        # Shortlist additions for testing, separate PR pending
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
+        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
+        "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
+        "0x4621b7a9c75199271f773ebd9a499dbd165c3191": "DOLA",
+        "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186": "MUSD",
+        "0x35e5db674d8e93a03d814fa0ada70731efe8a4b9": "USR",
+        "0x04d5ddf5f3a8939889f11e97f8c4bb48317f1938": "USDz",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     },
 }
 
@@ -350,8 +370,15 @@ COIN_ID_MAPPING = {
     "base": {
         "usdc": "usd-coin",
         "aero": "aerodrome-finance",
-        "usdt": "bridged-usdt",
+        "usdt": "l2-standard-bridged-usdt-base",
         "ousdt": "openusdt",
+        "usde": "ethena-usde",
+        "eusd": "electronic-usd",
+        "dola": "dola-usd",
+        "musd": "mezo-usd",
+        "usr": "resolv-usr",
+        "usdz": "anzen-usdz",
+        "bold": "liquity-bold-2",
     },
 }
 
@@ -409,6 +436,12 @@ class LiquidityTraderBaseBehaviour(
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
         self.pools[DexType.VELODROME.value] = VelodromePoolBehaviour
+        # Aerodrome is the Base-specific deployment of the Velodrome
+        # protocol; same router/NFPM/voter ABI shape, same pool entry
+        # and exit code paths. The velodrome customs strategy emits
+        # dex_type="aerodrome" for Base pools, so register the same
+        # handler under that alias.
+        self.pools[DexType.AERODROME.value] = VelodromePoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
@@ -2018,7 +2051,7 @@ class LiquidityTraderBaseBehaviour(
         response = yield from self._do_connection_request(
             kv_store_message, kv_store_dialogue  # type: ignore
         )
-        return response == KvStoreMessage.Performative.SUCCESS
+        return response.performative == KvStoreMessage.Performative.SUCCESS
 
     def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, bool]:
         """Invalidate (delete) the cached CL pool data for a chain.
@@ -2771,7 +2804,7 @@ class LiquidityTraderBaseBehaviour(
 
         # Handle Velodrome CL pools with multiple positions
         if (
-            dex_type == DexType.VELODROME.value
+            dex_type in VELODROME_FAMILY_DEX_TYPES
             and is_cl_pool
             and "positions" in position
         ):
@@ -3022,7 +3055,7 @@ class LiquidityTraderBaseBehaviour(
             gauge_address = position.get("gauge_address")
 
             # Only create unstaking actions for Velodrome pools
-            if dex_type != "velodrome":
+            if dex_type not in VELODROME_FAMILY_DEX_TYPES:
                 self.context.logger.info(
                     f"Skipping unstaking for non-Velodrome pool: {dex_type}"
                 )
@@ -3163,7 +3196,7 @@ class LiquidityTraderBaseBehaviour(
         pool_address = position.get("pool_address")
         chain = position.get("chain")
 
-        if dex_type != "velodrome" or not is_cl_pool:
+        if dex_type not in VELODROME_FAMILY_DEX_TYPES or not is_cl_pool:
             return self._build_unstake_lp_tokens_action(position)
 
         safe_address = self.params.safe_contract_addresses.get(chain)

@@ -588,6 +588,7 @@ class Params(BaseParams):
             self._ensure("x402_payment_requirements", kwargs, str)
         )
         self.optimism_ledger_rpc = self._ensure("optimism_ledger_rpc", kwargs, str)
+        self.base_ledger_rpc = self._ensure("base_ledger_rpc", kwargs, str)
         self.lifi_quote_to_amount_url = self._ensure(
             "lifi_quote_to_amount_url", kwargs, str
         )

@@ -62,6 +62,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     SAFE_TX_GAS,
     SLEEP_TIME,
     SwapStatus,
+    VELODROME_FAMILY_DEX_TYPES,
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
 )
@@ -423,7 +424,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
             self.current_positions.append(current_position)
 
-        elif action.get("dex_type") == DexType.VELODROME.value:
+        elif action.get("dex_type") in VELODROME_FAMILY_DEX_TYPES:
             is_cl_pool = action.get("is_cl_pool", False)
             if is_cl_pool:
                 # For Velodrome CL pools, we need to handle multiple positions
@@ -597,7 +598,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
                 # For Velodrome CL pools, log all the positions that were exited
                 if (
-                    dex_type == DexType.VELODROME.value
+                    dex_type in VELODROME_FAMILY_DEX_TYPES
                     and is_cl_pool
                     and "positions" in position
                 ):
@@ -1451,7 +1452,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None, None
 
         # Handle Velodrome-specific parameters
-        if dex_type == DexType.VELODROME.value:
+        if dex_type in VELODROME_FAMILY_DEX_TYPES:
             if is_cl_pool:
                 # For CL pools, use the specialized method that requires token percentages
                 max_amounts_in = (
@@ -1553,7 +1554,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None, None, None
 
-        if dex_type != DexType.VELODROME.value and any(
+        if dex_type not in VELODROME_FAMILY_DEX_TYPES and any(
             amount <= 0 or amount is None for amount in max_amounts_in
         ):
             self.context.logger.error(
@@ -1574,7 +1575,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
         # Add Velodrome-specific parameters if applicable
-        if dex_type == DexType.VELODROME.value:
+        if dex_type in VELODROME_FAMILY_DEX_TYPES:
             # Log action fields before extraction
             self.context.logger.info(
                 f"Action fields in get_enter_pool_tx_hash: {list(action.keys())}"
@@ -1772,7 +1773,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
         # Add specific parameters based on pool type
-        if dex_type == DexType.VELODROME.value:
+        if dex_type in VELODROME_FAMILY_DEX_TYPES:
             exit_pool_kwargs["is_stable"] = is_stable
             exit_pool_kwargs["is_cl_pool"] = is_cl_pool
 
@@ -3821,7 +3822,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             is_cl_pool = action.get("is_cl_pool", False)
             safe_address = self.params.safe_contract_addresses.get(chain)
 
-            if dex_type != "velodrome":
+            if dex_type not in VELODROME_FAMILY_DEX_TYPES:
                 self.context.logger.error(
                     f"Staking only supported for Velodrome, got: {dex_type}"
                 )
@@ -3985,7 +3986,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             is_cl_pool = action.get("is_cl_pool", False)
             safe_address = self.params.safe_contract_addresses.get(chain)
 
-            if dex_type != "velodrome":
+            if dex_type not in VELODROME_FAMILY_DEX_TYPES:
                 self.context.logger.error(
                     f"Unstaking only supported for Velodrome, got: {dex_type}"
                 )
@@ -4152,7 +4153,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             is_cl_pool = action.get("is_cl_pool", False)
             safe_address = self.params.safe_contract_addresses.get(chain)
 
-            if dex_type != "velodrome":
+            if dex_type not in VELODROME_FAMILY_DEX_TYPES:
                 self.context.logger.error(
                     f"Reward claiming only supported for Velodrome, got: {dex_type}"
                 )

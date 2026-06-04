@@ -56,6 +56,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
     TradingType,
+    VELODROME_FAMILY_DEX_TYPES,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     _noop_rate_limit_callback,
@@ -867,7 +868,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return []
 
         # For Velodrome positions, we only get tick ranges if it's a CL pool
-        if position.get("dex_type") == DexType.VELODROME.value and not position.get(
+        if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES and not position.get(
             "is_cl_pool"
         ):
             return []
@@ -879,7 +880,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get current tick from pool
         contract_id = (
             VelodromeCLPoolContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else UniswapV3PoolContract.contract_id
         )
 
@@ -905,7 +906,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
             )
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
 
@@ -918,7 +919,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get contract ID for position manager
         contract_id = (
             VelodromeNonFungiblePositionManagerContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else UniswapV3NonfungiblePositionManagerContract.contract_id
         )
 
@@ -1510,7 +1511,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Add VELO rewards if position is staked
         velo_rewards_usd = Decimal(0)
-        if position.get("staked", False) and position.get("dex_type") == "velodrome":
+        if position.get("staked", False) and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES:
             # Get VELO token address and check if it's in current_balances
             velo_token_address = self._get_velo_token_address(chain)
             if velo_token_address and velo_token_address in current_balances:
@@ -1583,7 +1584,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 pool_address, token_id, chain, position
             )
 
-        elif dex_type == DexType.VELODROME.value:
+        elif dex_type in VELODROME_FAMILY_DEX_TYPES:
             user_address = self.params.safe_contract_addresses.get(chain)
             pool_address = position.get("pool_address")
             token_id = position.get("token_id")
@@ -1795,7 +1796,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         # Use DEX-specific calculation methods
-        if dex_type == DexType.VELODROME.value and token_id:
+        if dex_type in VELODROME_FAMILY_DEX_TYPES and token_id:
             # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
             position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
@@ -2795,7 +2796,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             dex_type = position.get("dex_type")
 
-            if dex_type == DexType.VELODROME.value and position.get("is_cl_pool"):
+            if dex_type in VELODROME_FAMILY_DEX_TYPES and position.get("is_cl_pool"):
                 # For Velodrome CL pools, check all sub-positions
                 all_positions_zero = True
                 for pos in position.get("positions", []):
@@ -2858,7 +2859,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._update_balancer_position(position)
             elif dex_type == DexType.UNISWAP_V3.value:
                 yield from self._update_uniswap_position(position)
-            elif dex_type == DexType.VELODROME.value:
+            elif dex_type in VELODROME_FAMILY_DEX_TYPES:
                 yield from self._update_velodrome_position(position)
             elif dex_type == DexType.STURDY.value:
                 yield from self._update_sturdy_position(position)
@@ -5120,7 +5121,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Validate Velodrome v2 pool addresses for all positions."""
         for position in self.current_positions:
             if (
-                position.get("dex_type") == "velodrome"
+                position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
                 and not position.get("is_cl_pool", False)
                 and position.get("is_stable", False)
             ):  # Only validate if isStable is true

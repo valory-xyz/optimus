@@ -420,9 +420,8 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
-@lru_cache(maxsize=8)
 def get_web3_connection(rpc_url):
-    """Get or create a Web3 connection with caching."""
+    """Get a fresh Web3 connection per call to avoid stuck pooled sessions."""
     return Web3(
         Web3.HTTPProvider(
             rpc_url,
@@ -1273,7 +1272,7 @@ def get_velodrome_pools_via_sugar(
                 ),
                 "inputTokenBalances": [str(pool["reserve0"]), str(pool["reserve1"])],
                 "cumulativeVolumeUSD": "0",  # Not available directly
-                "sugar_data": pool,  # Store the original data,
+                "sugar_data": {**pool, "chain": CHAIN_NAMES.get(chain_id, "unknown")},
                 "pool_fee": pool["pool_fee"],
             }
 
@@ -1440,7 +1439,7 @@ def calculate_position_details_for_velodrome(
             # Get chain ID from pool data or context
             try:
                 tick_bands = calculate_tick_lower_and_upper_velodrome(
-                    chain="optimism",  # Should be passed as parameter
+                    chain=pool_data.get("chain", "optimism"),
                     pool_address=pool_data.get("id"),
                     is_stable=(pool_type == 0),
                     coingecko_api_key=coingecko_api_key,
@@ -2753,8 +2752,10 @@ def format_velodrome_pool_data(
         # Determine if it's a concentrated liquidity pool based on type
         is_cl_pool = pool_type not in [0, -1]
 
-        # Prepare base data including all required fields
-        # Use "aerodrome" for Base chain, "velodrome" for others
+        # Prepare base data including all required fields.
+        # Use "aerodrome" on Base (the Base-specific brand of the
+        # Velodrome protocol) and "velodrome" elsewhere. The agent
+        # dispatch accepts both as the same family.
         dex_type = AERODROME if chain_name == "base" else VELODROME
         formatted_pool = {
             "dex_type": dex_type,
@@ -3311,6 +3312,17 @@ def run(
     """
     # Clear previous errors
     get_errors().clear()
+
+    # Apply caller-provided per-chain RPC overrides so the strategy talks to
+    # the same endpoints as the agent's ledger connection. Falls back to the
+    # hardcoded defaults when a chain is not supplied.
+    chain_to_rpc = kwargs.pop("chain_to_rpc", None) or {}
+    if chain_to_rpc:
+        name_to_id = {cname: cid for cid, cname in CHAIN_NAMES.items()}
+        for chain_name, rpc_url in chain_to_rpc.items():
+            cid = name_to_id.get(chain_name.lower())
+            if cid is not None and rpc_url:
+                RPC_ENDPOINTS[cid] = rpc_url
 
     # Apply configurable price cache TTL and shared cache dict
     price_cache_ttl_val = int(kwargs.pop("price_cache_ttl", 1800))

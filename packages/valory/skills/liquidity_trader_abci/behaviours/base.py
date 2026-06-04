@@ -107,8 +107,10 @@ SAFE_BALANCES_CACHE_TTL_SECONDS = 3 * 3600
 # Single source of truth for the chain-scoped kv keys this skill uses.
 # Producers and consumers live in different modules (base.py +
 # fetch_strategies.py + post_tx_settlement.py); centralising the format
-# string here means a rename only happens in one place and a typo at a
-# call site fails mypy rather than silently writing a parallel key.
+# string here means a rename only happens in one place. A grep for any
+# of these builder names finds every read and write site for the
+# corresponding key, which is the point — raw kv strings scattered
+# across modules were the pre-PR shape and easy to miss on rename.
 def safe_balances_kv_key(chain: str) -> str:
     """KV key for the persisted Safe API balances payload, per chain."""
     return f"safe_balances_{chain}"
@@ -594,22 +596,21 @@ class LiquidityTraderBaseBehaviour(
                 )
                 break
 
+        # Atomic write: timestamp reset and baseline-snapshot update go in
+        # the same kv payload. If the write raises, NEITHER lands — the
+        # next cycle re-detects the same delta and re-tries. Splitting the
+        # writes would let the baseline advance on a half-failed cycle and
+        # silently lose the inflow signal for the rest of the TTL.
+        payload: Dict[str, str] = {last_known_key: json.dumps(current)}
         if inflow_token is not None:
-            try:
-                yield from self._write_kv({safe_balances_ts_kv_key(chain): "0"})
-            except Exception:
-                self.context.logger.warning(
-                    "Failed to invalidate safe-balances cache timestamp "
-                    "after balance-increase detection; cache may serve "
-                    "stale data this cycle"
-                )
-
+            payload[safe_balances_ts_kv_key(chain)] = "0"
         try:
-            yield from self._write_kv({last_known_key: json.dumps(current)})
+            yield from self._write_kv(payload)
         except Exception:
             self.context.logger.warning(
-                f"Failed to persist {last_known_key}; the next cycle will "
-                "re-detect the same balance increase"
+                f"Failed to persist balance snapshot / invalidate cache for "
+                f"{chain} after balance-increase detection; the next cycle "
+                "will re-detect the same delta"
             )
 
     def _invalidate_caches_after_tx(self, chain: str) -> Generator[None, None, None]:
@@ -635,7 +636,8 @@ class LiquidityTraderBaseBehaviour(
             )
         except Exception:
             self.context.logger.warning(
-                "Failed to invalidate cache timestamps after tx settlement"
+                f"Failed to invalidate cache timestamps for {chain} after tx "
+                "settlement; cached balances may be served as fresh within the TTL"
             )
 
     def _get_safe_balances_from_safe_api(
@@ -697,7 +699,6 @@ class LiquidityTraderBaseBehaviour(
             and 0 <= cache_age < SAFE_BALANCES_CACHE_TTL_SECONDS
             and cached_payload
         )
-        api_success = False
         if use_cache:
             try:
                 all_balances = json.loads(cached_payload)

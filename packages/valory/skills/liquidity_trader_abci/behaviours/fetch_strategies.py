@@ -2341,14 +2341,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if safe_fiat_conversion is not None:
                     try:
                         token_price = Decimal(str(safe_fiat_conversion))
+                        # Safe Transaction Service returns
+                        # ``fiatConversion: "0.0"`` for trusted tokens it
+                        # has no live price feed for. Treat non-positive
+                        # as "no Safe price" so the CoinGecko fallback
+                        # runs instead of valuing the token at
+                        # ``balance * 0``.
+                        if token_price <= 0:
+                            token_price = None
                     except (InvalidOperation, ValueError, TypeError):
-                        token_price = None
-                    # Safe Transaction Service returns ``fiatConversion: "0.0"``
-                    # for trusted tokens it has no live price feed for. Treat
-                    # the non-positive case as "no Safe price" so the
-                    # CoinGecko fallback runs instead of valuing the token at
-                    # ``balance * 0``.
-                    if token_price is not None and token_price <= 0:
                         token_price = None
 
                 if token_price is None:

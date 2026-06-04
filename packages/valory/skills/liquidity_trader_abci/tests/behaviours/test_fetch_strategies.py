@@ -9517,7 +9517,7 @@ class TestErc20OptimismWithdrawalCache:
 
 
 class TestCalculateWithdrawalsValueTtlCache:
-    """TTL-based kv cache for the optimism withdrawal path (PRs 1.1 + 1.3)."""
+    """TTL-based kv cache for the optimism withdrawal path."""
 
     def test_cache_hit_skips_fetcher(self):
         """Cache hit within the TTL returns cached value without calling the fetcher."""
@@ -10603,7 +10603,7 @@ class TestKvCacheTtlBoundaries:
         assert load_called[0] == 0
 
     def test_withdrawal_cache_invalid_timestamp_format(self):
-        """Unparseable ``last_withdrawals_calculated_timestamp`` recomputes.
+        """Unparseable ``last_withdrawals_calculated_timestamp_{chain}`` recomputes.
 
         Symmetric with ``test_invalid_timestamp_format`` on the
         initial-investment path. A regression flipping the parse-error
@@ -10651,7 +10651,7 @@ class TestKvCacheTtlBoundaries:
         assert writes["last_withdrawals_calculated_timestamp_optimism"] == str(now_ts)
 
     def test_withdrawal_cache_within_ttl_missing_cached_val_falls_through(self):
-        """Within-TTL hit with no ``optimism_total_withdrawals`` recomputes.
+        """Within-TTL hit with no ``total_withdrawals_{chain}`` recomputes.
 
         The cache-hit branch reads the value via a second ``_read_kv``;
         if that key is missing the code must fall through to the
@@ -10698,7 +10698,7 @@ class TestKvCacheTtlBoundaries:
     def test_withdrawal_cache_within_ttl_unparseable_cached_val_falls_through(
         self,
     ):
-        """Within-TTL hit with a garbage ``optimism_total_withdrawals`` recomputes.
+        """Within-TTL hit with a garbage ``total_withdrawals_{chain}`` recomputes.
 
         ``Decimal(str(cached_val))`` raises ``InvalidOperation`` on a
         non-numeric value; the code catches that and must fall through

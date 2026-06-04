@@ -61,7 +61,9 @@ def _make_behaviour(**overrides: Any) -> LiquidityTraderBaseBehaviour:
     }
     params.target_investment_chains = ["optimism", "mode"]
     params.safe_api_url = "https://safe.example.com"
-    params.safe_api_chain_slugs = {"optimism": "oeth", "mode": "mode"}
+    # Production shape: Mode is *not* in the slug map (it has no Safe API),
+    # so the dispatch in get_positions routes it to the explorer path.
+    params.safe_api_chain_slugs = {"optimism": "oeth", "base": "base"}
     params.mode_explorer_api_base_url = "https://explorer.mode.network"
     params.slippage_tolerance = 0.05
     params.velodrome_router_contract_addresses = {}
@@ -939,6 +941,53 @@ class TestGetPositions:
         b._get_safe_balances_from_safe_api = _make_gen([])  # type: ignore[assignment,method-assign]
         result = _exhaust(b.get_positions())
         assert result == []
+
+    def test_chain_dispatch_routes_by_slug_membership(self) -> None:
+        """Slug membership decides between Safe API and the Mode explorer.
+
+        Pins the new ``if chain in self.params.safe_api_chain_slugs``
+        dispatch in ``get_positions``: replacing the condition with
+        ``True`` would let Mode silently hit the Safe API path, and
+        ``False`` would skip Optimism. We verify which branch ran by
+        counting calls to each path.
+        """
+        b = _make_behaviour()
+
+        safe_api_calls: list = []
+
+        def safe_api_path(chain: Any) -> Any:
+            safe_api_calls.append(chain)
+            yield
+            return [{"asset_symbol": "USDC", "balance": 1}]
+
+        explorer_calls: list = []
+
+        def explorer_path() -> Any:
+            explorer_calls.append("mode")
+            yield
+            return [{"asset_symbol": "ETH", "balance": 2}]
+
+        b._get_safe_balances_from_safe_api = safe_api_path  # type: ignore[method-assign]
+        b._get_mode_balances_from_explorer_api = explorer_path  # type: ignore[method-assign]
+
+        # Mode-only target with an empty slug map: dispatch sends Mode to the
+        # explorer path because it's not in the slug map. The Safe API path is
+        # NOT called.
+        b.params.target_investment_chains = ["mode"]
+        b.params.safe_api_chain_slugs = {}
+        _exhaust(b.get_positions())
+        assert explorer_calls == ["mode"]
+        assert safe_api_calls == []
+
+        # With Optimism in the slug map, Optimism routes to the Safe API path
+        # and Mode (still absent from the slug map) keeps the explorer path.
+        b.params.target_investment_chains = ["optimism", "mode"]
+        b.params.safe_api_chain_slugs = {"optimism": "oeth"}
+        safe_api_calls.clear()
+        explorer_calls.clear()
+        _exhaust(b.get_positions())
+        assert safe_api_calls == ["optimism"]
+        assert explorer_calls == ["mode"]
 
 
 def _make_optimism_b() -> Any:

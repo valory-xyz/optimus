@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/base.py: bafybeidmrruxxlbf2jnrroimzmsvikvuzzhd6yhfg2un6r4gay7rrgfw5a
+  behaviours/base.py: bafybeigkncau53avnrnrht4i53swmapvqbenredsyc7tj5c23vpe2cye5m
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeieidx73vhcck7i3o2wkr435tarz5ikl4sogopgocg5quakgtf3csy
   behaviours/decision_making.py: bafybeianrv4kqump7fy4qtqxhv3ysfzqebw6jmsd7qcqb4deh76hctuukm
@@ -51,7 +51,7 @@ fingerprint:
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidv7ckk3qqyovnynl5v7nuxwzbols7jkhkrtiwa3uv7lxi4nykqtm
   tests/behaviours/test_decision_making.py: bafybeigs63ccyv6nivol2p4nqxvhfn6obkukib2kgaa5hzrhtje564ziuu
   tests/behaviours/test_evaluate_strategy.py: bafybeicd73ykx3gtfp77yv6er63ixyf2wj2cruravzrglxd2mwnlef3nce
-  tests/behaviours/test_fetch_strategies.py: bafybeiajkpz3lr7ahxt7u7mnhng3ppmo3y7mmald3p6ejdxu5k5vmhk2vi
+  tests/behaviours/test_fetch_strategies.py: bafybeifl2jrlxpblqy4vrzznxfzliuhhdamjg77brkmfetn4ejjtcahbmu
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeigievecybq7geucnqou7av3rrqsnjitgxydbo6fjopmki34n74q5u
   tests/behaviours/test_round_behaviour.py: bafybeibwy6np27mile6hf72nfjh65qsvegzedmsyeskfeprdwfvjbe77jq

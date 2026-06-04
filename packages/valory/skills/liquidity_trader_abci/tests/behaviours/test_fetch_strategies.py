@@ -5847,7 +5847,9 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         assert (
             "mode",
             75.0,
-        ) not in saves, f"post-loop cross-chain sum overwrites mode_total_investment; saves={saves}"
+        ) not in saves, (
+            f"post-loop cross-chain sum overwrites mode_total_investment; saves={saves}"
+        )
 
 
 class TestFetchAllTransfersUntilDateMode:

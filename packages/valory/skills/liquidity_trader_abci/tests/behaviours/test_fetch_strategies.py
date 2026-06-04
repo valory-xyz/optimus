@@ -5794,6 +5794,61 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         assert calls[0] == 1
         assert result == 25.0
 
+    def test_multi_chain_per_chain_total_saved_not_cross_chain_sum(self):
+        """For a multi-chain config, the last-iterated chain's persisted total must
+        reflect that chain's own value, not the cross-chain sum.
+
+        Regression guard: a trailing ``_save_chain_total_investment(chain, total_investment)``
+        after the for-loop would write the cross-chain sum to the last chain's key, since
+        ``chain`` holds the last loop value and ``total_investment`` is the running sum.
+        The per-chain saves inside ``_calculate_chain_investment_value`` are the only
+        legitimate writes — this asserts no post-loop overwrite happens.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism", "mode"]
+        obj.params.safe_contract_addresses = {
+            "optimism": "0xSafeOp",
+            "mode": "0xSafeMode",
+        }
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_optimism = _gen_return(
+            {"2025-01-01": [{"symbol": "USDC", "amount": 1}]}
+        )
+        obj._fetch_all_transfers_until_date_mode = _gen_return(
+            {"2025-01-01": [{"symbol": "USDC", "amount": 1}]}
+        )
+        obj._get_current_timestamp = lambda: 100
+
+        chain_calc_returns = {"optimism": 50.0, "mode": 25.0}
+
+        def fake_calc(chain):
+            yield
+            return chain_calc_returns[chain]
+
+        obj._calculate_chain_investment_value = fake_calc
+
+        saves: List[tuple] = []
+
+        def fake_save(chain, total):
+            saves.append((chain, total))
+            yield
+
+        obj._save_chain_total_investment = fake_save
+
+        result = _drive(obj.calculate_initial_investment_value_from_funding_events())
+        # The outer return is the cross-chain sum (50 + 25 = 75) for reporting.
+        assert result == 75.0
+        # But the only post-loop persistence calls (if any) must NOT carry the
+        # cross-chain sum onto a single per-chain key. The stub above replaces
+        # the inner per-chain saves with a no-op; what matters is that NO save
+        # records (chain="mode", total=75.0) — the bug-fix removed that line.
+        assert (
+            "mode",
+            75.0,
+        ) not in saves, f"post-loop cross-chain sum overwrites mode_total_investment; saves={saves}"
+
 
 class TestFetchAllTransfersUntilDateMode:
     """TestFetchAllTransfersUntilDateMode."""

@@ -2703,14 +2703,30 @@ class TestInvalidateClPoolCache:
     """Test _invalidate_cl_pool_cache."""
 
     def test_success(self) -> None:
-        """Test success."""
+        """Successful KV write -> True, info logged."""
         b = _make_behaviour()
         b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
-        _exhaust(b._invalidate_cl_pool_cache("optimism"))
+        result = _exhaust(b._invalidate_cl_pool_cache("optimism"))
+        assert result is True
         b.context.logger.info.assert_called()
 
+    def test_soft_kv_failure_returns_false(self) -> None:
+        """Soft KV failure (_write_kv returns False without raising) -> False, error logged.
+
+        Pins the bug-fix that `_invalidate_cl_pool_cache` propagates the
+        `_write_kv` return value. Before the fix the function discarded
+        the result and returned True unconditionally, so the False-handling
+        at both call sites (evaluate_strategy rollover, decision_making
+        post-entry) was dead for everything except an exception.
+        """
+        b = _make_behaviour()
+        b._write_kv = _make_gen(False)  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._invalidate_cl_pool_cache("optimism"))
+        assert result is False
+        b.context.logger.error.assert_called()
+
     def test_exception(self) -> None:
-        """Test exception."""
+        """Test exception -> False, error logged."""
         b = _make_behaviour()
 
         def bad_write(*a: Any, **kw: Any) -> Generator[Any, Any, Any]:
@@ -2719,7 +2735,8 @@ class TestInvalidateClPoolCache:
             yield  # noqa: unreachable
 
         b._write_kv = bad_write  # type: ignore[method-assign]
-        _exhaust(b._invalidate_cl_pool_cache("optimism"))
+        result = _exhaust(b._invalidate_cl_pool_cache("optimism"))
+        assert result is False
         b.context.logger.error.assert_called()
 
 

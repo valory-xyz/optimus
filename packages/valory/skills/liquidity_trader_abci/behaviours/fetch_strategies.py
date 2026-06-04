@@ -3201,7 +3201,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_investment = yield from self._calculate_chain_investment_value(chain)
             total_investment += chain_investment
 
-        yield from self._save_chain_total_investment(chain, total_investment)
+        # Per-chain totals are written inside ``_calculate_chain_investment_value``;
+        # a single post-loop write would target only the last-iterated chain with
+        # the cross-chain sum and over-count it on the next cache-hit read.
 
         timestamp = int(self._get_current_timestamp())
         yield from self._write_kv({initial_value_ts_kv_key(chain): str(timestamp)})

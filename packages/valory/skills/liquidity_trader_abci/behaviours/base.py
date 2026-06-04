@@ -2037,13 +2037,22 @@ class LiquidityTraderBaseBehaviour(
         try:
             kv_key = f"velodrome_cl_pool_{chain}"
 
-            # Delete the cache by writing an invalidation marker
-            yield from self._write_kv(
+            # Delete the cache by writing an invalidation marker. ``_write_kv``
+            # returns False on a soft KV failure (non-SUCCESS performative)
+            # without raising, so capture the result and propagate it rather
+            # than reporting success unconditionally.
+            success = yield from self._write_kv(
                 {kv_key: json.dumps({"invalidated": True}, ensure_ascii=True)}
             )
-
-            self.context.logger.info(f"Invalidated CL pool cache for chain {chain}")
-            return True
+            if success:
+                self.context.logger.info(
+                    f"Invalidated CL pool cache for chain {chain}"
+                )
+            else:
+                self.context.logger.error(
+                    f"KV write failed invalidating CL pool cache for chain {chain}"
+                )
+            return success
 
         except Exception as e:
             self.context.logger.error(f"Error invalidating CL pool cache: {str(e)}")

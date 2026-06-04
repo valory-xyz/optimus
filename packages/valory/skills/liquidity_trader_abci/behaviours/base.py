@@ -1246,17 +1246,17 @@ class LiquidityTraderBaseBehaviour(
                     if isinstance(assets, list):
                         if len(assets) >= 1:
                             position["token0"] = assets[0]
-                            position[
-                                "token0_symbol"
-                            ] = yield from self._get_token_symbol(
-                                position.get("chain"), assets[0]
+                            position["token0_symbol"] = (
+                                yield from self._get_token_symbol(
+                                    position.get("chain"), assets[0]
+                                )
                             )
                         if len(assets) >= 2:
                             position["token1"] = assets[1]
-                            position[
-                                "token1_symbol"
-                            ] = yield from self._get_token_symbol(
-                                position.get("chain"), assets[1]
+                            position["token1_symbol"] = (
+                                yield from self._get_token_symbol(
+                                    position.get("chain"), assets[1]
+                                )
                             )
                 if "status" not in position:
                     position["status"] = PositionStatus.OPEN.value
@@ -2226,9 +2226,9 @@ class LiquidityTraderBaseBehaviour(
                     pool_id = position.get("pool_address", position.get("pool_id"))
                     tx_hash = position.get("tx_hash")
                     position_key = f"{pool_id}_{tx_hash}"
-                    self.initial_investment_values_per_pool[
-                        position_key
-                    ] = position_value
+                    self.initial_investment_values_per_pool[position_key] = (
+                        position_value
+                    )
 
                 else:
                     self.context.logger.warning(
@@ -2558,8 +2558,7 @@ class LiquidityTraderBaseBehaviour(
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
         service_id = self.params.on_chain_service_id
 
-        query = {
-            "query": f"""
+        query = {"query": f"""
             {{
             service(id: {service_id!r}) {{
                 blockNumber
@@ -2569,8 +2568,7 @@ class LiquidityTraderBaseBehaviour(
                 olasRewardsEarned
             }}
             }}
-            """
-        }
+            """}
 
         self.context.logger.info(
             f"Querying subgraph for service {service_id} on {chain}"

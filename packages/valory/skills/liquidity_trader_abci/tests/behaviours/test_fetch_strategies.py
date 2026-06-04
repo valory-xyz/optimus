@@ -5795,14 +5795,17 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         assert result == 25.0
 
     def test_multi_chain_per_chain_total_saved_not_cross_chain_sum(self):
-        """For a multi-chain config, the last-iterated chain's persisted total must
-        reflect that chain's own value, not the cross-chain sum.
+        """Per-chain persisted totals must not leak the cross-chain sum.
 
-        Regression guard: a trailing ``_save_chain_total_investment(chain, total_investment)``
-        after the for-loop would write the cross-chain sum to the last chain's key, since
-        ``chain`` holds the last loop value and ``total_investment`` is the running sum.
-        The per-chain saves inside ``_calculate_chain_investment_value`` are the only
-        legitimate writes — this asserts no post-loop overwrite happens.
+        For a multi-chain config, the last-iterated chain's persisted total
+        must reflect that chain's own value, not the cross-chain sum.
+        Regression guard: a trailing
+        ``_save_chain_total_investment(chain, total_investment)`` after the
+        for-loop would write the cross-chain sum to the last chain's key,
+        since ``chain`` holds the last loop value and ``total_investment``
+        is the running sum. The per-chain saves inside
+        ``_calculate_chain_investment_value`` are the only legitimate
+        writes — this asserts no post-loop overwrite happens.
         """
         obj = _mk()
         obj.params.target_investment_chains = ["optimism", "mode"]

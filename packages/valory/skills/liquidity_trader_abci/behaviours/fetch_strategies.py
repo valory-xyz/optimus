@@ -65,6 +65,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     _noop_rate_limit_callback,
+    initial_value_ts_kv_key,
+    total_withdrawals_kv_key,
+    withdrawals_ts_kv_key,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
@@ -2334,9 +2337,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # backstop entries don't have these fields, so we still
                 # fall back to ``_fetch_token_price`` for those.
                 token_price = None
-                safe_fiat_balance = balance.get("fiat_balance")
                 safe_fiat_conversion = balance.get("fiat_conversion")
-                if safe_fiat_balance is not None and safe_fiat_conversion is not None:
+                if safe_fiat_conversion is not None:
                     try:
                         token_price = Decimal(str(safe_fiat_conversion))
                     except (InvalidOperation, ValueError, TypeError):
@@ -2484,8 +2486,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # calculation was within WITHDRAWAL_CACHE_TTL_SECONDS. Negative
             # ages (clock skew, malformed timestamp) are treated as expired
             # so we recompute rather than serve a possibly-stale value.
-            ts_key = f"last_withdrawals_calculated_timestamp_{chain}"
-            total_key = f"total_withdrawals_{chain}"
+            ts_key = withdrawals_ts_kv_key(chain)
+            total_key = total_withdrawals_kv_key(chain)
             now_ts = int(self._get_current_timestamp())
             last_calc = yield from self._read_kv(keys=(ts_key,))
             if last_calc and (ts := last_calc.get(ts_key)):
@@ -3175,13 +3177,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 # Normal logic when airdrop is not started
                 # Check when we last calculated initial value
-                ii_ts_key = f"last_initial_value_calculated_timestamp_{chain}"
+                ii_ts_key = initial_value_ts_kv_key(chain)
                 last_calculated_timestamp = yield from self._read_kv(keys=(ii_ts_key,))
 
-                if (
-                    last_calculated_timestamp
-                    and (timestamp := last_calculated_timestamp.get(ii_ts_key))
-                    and timestamp is not None
+                # The walrus already short-circuits on a falsy value
+                # (None included), so no extra ``is not None`` is needed.
+                if last_calculated_timestamp and (
+                    timestamp := last_calculated_timestamp.get(ii_ts_key)
                 ):
                     self.context.logger.info(
                         f"Found last calculation timestamp: {timestamp}"
@@ -3262,9 +3264,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         yield from self._save_chain_total_investment(chain, total_investment)
 
         timestamp = int(self._get_current_timestamp())
-        yield from self._write_kv(
-            {f"last_initial_value_calculated_timestamp_{chain}": str(timestamp)}
-        )
+        yield from self._write_kv({initial_value_ts_kv_key(chain): str(timestamp)})
 
         self.context.logger.info(
             f"Total initial investment from all chains: ${total_investment}"

@@ -1046,6 +1046,65 @@ class TestDetectAndInvalidateOnInflow:
         # Both the invalidate and the baseline write fail; method still completes.
         _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
 
+    def test_inflow_on_whitelisted_erc20_triggers_invalidation(self) -> None:
+        """A whitelisted ERC-20 going up (not just native) fires the invalidate."""
+        usdc_op = "0x0b2c639c533813f4aa9d7837caf62653d097ff85"
+        b = self._b()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+
+        def fake_token_balance(
+            chain: Any, account: Any, address: Any
+        ) -> Generator[None, None, int]:
+            yield
+            return 1_000_000 if (address or "").lower() == usdc_op else 0
+
+        b._get_token_balance = fake_token_balance  # type: ignore[method-assign]
+        # Snapshot has USDC at 0 explicitly so we know the delta is the ERC-20,
+        # not native ETH.
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "last_known_safe_balances_optimism": json.dumps(
+                    {ZERO_ADDRESS.lower(): 0, usdc_op: 0}
+                )
+            }
+        )
+
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._write_kv = capture_write  # type: ignore[method-assign]
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+        assert any(
+            w.get("last_safe_balances_calculated_timestamp_optimism") == "0"
+            for w in writes
+        )
+
+    def test_inflow_does_not_invalidate_initial_value_cache(self) -> None:
+        """Initial-investment timestamp is deliberately NOT reset here.
+
+        A balance increase can come from agent activity (swap output,
+        pool exit, reward), and zeroing the initial-investment cache
+        on those would thrash a recompute that's already correct.
+        """
+        b = self._b()
+        b._get_native_balance = _make_gen(100)  # type: ignore[assignment,method-assign]
+
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._write_kv = capture_write  # type: ignore[method-assign]
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+        for w in writes:
+            assert "last_initial_value_calculated_timestamp_optimism" not in w, w
+
 
 class TestInvalidateCachesAfterTx:
     """Test _invalidate_caches_after_tx."""
@@ -1291,6 +1350,39 @@ class TestGetOptimismBalances:
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         eths = [r for r in result if r["asset_symbol"] == "ETH"]
         assert eths and eths[0]["balance"] == 7
+
+    def test_api_failure_with_expired_cache_uses_stale_payload(self) -> None:
+        """API fails AND cache is past TTL → still serve the stale payload.
+
+        Tightens ``test_api_failure_falls_back_to_cache``: that test
+        only exercised the within-TTL branch because the stub
+        ``_get_current_timestamp`` returned 0, giving cache_age=0.
+        This case sets the timestamp comfortably past the TTL so the
+        cache lookup falls through and we hit the dedicated
+        ``api_success is False + cached_payload exists`` branch.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            SAFE_BALANCES_CACHE_TTL_SECONDS,
+        )
+
+        b = _make_optimism_b()
+        now = 1_700_000_000
+        cached = [{"tokenAddress": None, "balance": "55"}]
+        b._get_current_timestamp = lambda: now  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "safe_balances_optimism": json.dumps(cached),
+                "last_safe_balances_calculated_timestamp_optimism": str(
+                    now - SAFE_BALANCES_CACHE_TTL_SECONDS - 1
+                ),
+            }
+        )
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (False, [])
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        eths = [r for r in result if r["asset_symbol"] == "ETH"]
+        assert eths and eths[0]["balance"] == 55
 
     def test_backstop_integrates_when_safeapi_partial(self) -> None:
         """End-to-end backstop integration when SafeApi returns partial data.

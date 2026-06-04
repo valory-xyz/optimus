@@ -91,10 +91,88 @@ class TestPostTxSettlementBehaviour:
             obj.wait_until_round_end = fake_wait
             obj.set_done = MagicMock()
 
+            writes: list = []
+
+            def capture_write_kv(payload: Any) -> Any:
+                writes.append(payload)
+                yield
+                return True
+
+            obj._write_kv = capture_write_kv  # type: ignore[method-assign]
+
             gen = obj.async_act()
             _drive(gen)
 
             obj.set_done.assert_called_once()
+            # Behavioural assertion: the post-tx invalidation actually
+            # writes the chain-scoped reset for the just-settled chain.
+            invalidation_payload = next(
+                w
+                for w in writes
+                if "last_safe_balances_calculated_timestamp_optimism" in w
+            )
+            assert (
+                invalidation_payload["last_safe_balances_calculated_timestamp_optimism"]
+                == "0"
+            )
+            assert (
+                invalidation_payload["last_withdrawals_calculated_timestamp_optimism"]
+                == "0"
+            )
+
+    def test_async_act_skips_invalidation_when_chain_id_missing(self) -> None:
+        """A None ``chain_id`` skips invalidation, doesn't write ``_None`` keys."""
+        obj = _make_behaviour()
+        benchmark_mock = MagicMock()
+        obj.context.benchmark_tool.measure.return_value = benchmark_mock
+        obj.context.agent_address = "0xagent"
+        obj.context.params = MagicMock()
+
+        synced = MagicMock()
+        synced.tx_submitter = "some_other_round"
+        synced.final_tx_hash = "0xhash123"
+        synced.chain_id = None
+
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ):
+
+            def fake_fetch_gas() -> Generator[Any, Any, Any]:
+                """Fake fetch gas."""
+                yield
+                return None
+
+            def fake_send(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake send."""
+                yield
+
+            def fake_wait(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+                """Fake wait."""
+                yield
+
+            obj.fetch_and_log_gas_details = fake_fetch_gas
+            obj.send_a2a_transaction = fake_send
+            obj.wait_until_round_end = fake_wait
+            obj.set_done = MagicMock()
+
+            writes: list = []
+
+            def capture_write_kv(payload: Any) -> Any:
+                writes.append(payload)
+                yield
+                return True
+
+            obj._write_kv = capture_write_kv  # type: ignore[method-assign]
+
+            gen = obj.async_act()
+            _drive(gen)
+
+            # No write should mention ``_None`` keys.
+            for payload in writes:
+                assert not any(k.endswith("_None") for k in payload)
 
     def test_async_act_checkpoint_submitter_skips_gas(self) -> None:
         """Test async_act when tx_submitter IS the CheckStakingKPIMetRound (skips gas)."""

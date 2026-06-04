@@ -102,6 +102,43 @@ RATE_LIMIT_BACKOFF_SCHEDULE = (5, 10, 15)
 # and the PostTxSettlement hook both invalidate the cache eagerly, so
 # the TTL is a safety floor, not the primary freshness mechanism.
 SAFE_BALANCES_CACHE_TTL_SECONDS = 3 * 3600
+
+
+# Single source of truth for the chain-scoped kv keys this skill uses.
+# Producers and consumers live in different modules (base.py +
+# fetch_strategies.py + post_tx_settlement.py); centralising the format
+# string here means a rename only happens in one place and a typo at a
+# call site fails mypy rather than silently writing a parallel key.
+def safe_balances_kv_key(chain: str) -> str:
+    """KV key for the persisted Safe API balances payload, per chain."""
+    return f"safe_balances_{chain}"
+
+
+def safe_balances_ts_kv_key(chain: str) -> str:
+    """KV key for the Safe API balances cache timestamp, per chain."""
+    return f"last_safe_balances_calculated_timestamp_{chain}"
+
+
+def last_known_safe_balances_kv_key(chain: str) -> str:
+    """KV key for the per-token balance snapshot used by inflow detection."""
+    return f"last_known_safe_balances_{chain}"
+
+
+def withdrawals_ts_kv_key(chain: str) -> str:
+    """KV key for the withdrawal-value cache timestamp, per chain."""
+    return f"last_withdrawals_calculated_timestamp_{chain}"
+
+
+def total_withdrawals_kv_key(chain: str) -> str:
+    """KV key for the cached total-withdrawals USD value, per chain."""
+    return f"total_withdrawals_{chain}"
+
+
+def initial_value_ts_kv_key(chain: str) -> str:
+    """KV key for the initial-investment cache timestamp, per chain."""
+    return f"last_initial_value_calculated_timestamp_{chain}"
+
+
 RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
@@ -485,24 +522,26 @@ class LiquidityTraderBaseBehaviour(
     def _detect_and_invalidate_on_inflow(
         self, chain: str, safe_address: str
     ) -> Generator[None, None, None]:
-        """Reset cache timestamps if a whitelisted balance went up.
+        """Invalidate the safe-balances cache if a whitelisted balance went up.
 
         Reads the agent safe's on-chain balances for native ETH plus the
         whitelisted tokens on ``chain``, compares to the per-token snapshot
-        persisted in ``last_known_safe_balances``, and if any token's
-        on-chain balance is strictly greater than what we last saw,
-        invalidates two kv timestamps:
+        persisted in ``last_known_safe_balances_{chain}``, and if any
+        token's on-chain balance is strictly greater than what we last
+        saw, invalidates the safe-balances cache by resetting
+        ``last_safe_balances_calculated_timestamp_{chain}`` so the next
+        cycle re-fetches Safe API.
 
-        - ``last_safe_balances_calculated_timestamp`` so the next cycle
-          re-fetches Safe API and surfaces the new balance.
-        - ``last_initial_value_calculated_timestamp`` so the initial-
-          investment recompute picks up the corresponding incoming
-          transfer instead of serving a stale cached value.
-
-        The current readings are then persisted as the new baseline.
-        Sequential RPC reads are intentional here: at ~5 whitelisted
-        tokens per chain the per-cycle cost is small, and using the
-        existing helpers keeps this change contained to base.py.
+        The increase signal cannot distinguish an external deposit from
+        the agent's own activity (a swap output, a pool exit, an OLAS
+        reward), so this method intentionally does **not** invalidate
+        the initial-investment cache here — that path has its own TTL
+        and is driven by incoming-transfer records, which are not
+        produced by agent-internal token movement. The current readings
+        are then persisted as the new baseline. Sequential RPC reads
+        are intentional here: at ~5 whitelisted tokens per chain the
+        per-cycle cost is small, and using the existing helpers keeps
+        this change contained to base.py.
 
         :param chain: chain identifier (e.g. ``"optimism"``).
         :param safe_address: the Safe contract address on that chain.
@@ -520,7 +559,7 @@ class LiquidityTraderBaseBehaviour(
             if token_balance is not None:
                 current[token_addr.lower()] = int(token_balance)
 
-        last_known_key = f"last_known_safe_balances_{chain}"
+        last_known_key = last_known_safe_balances_kv_key(chain)
         last_known_blob = yield from self._read_kv((last_known_key,))
         last_known: Dict[str, int] = {}
         last_known_raw = (
@@ -545,29 +584,33 @@ class LiquidityTraderBaseBehaviour(
             previous = last_known.get(addr, 0)
             if current_balance > previous:
                 inflow_token = addr
+                # "Balance increase" rather than "external inflow": the
+                # signal can't distinguish an external deposit from the
+                # agent's own swap output / pool exit / reward.
                 self.context.logger.info(
-                    f"External inflow detected on {chain}: token {addr} "
-                    f"{previous} -> {current_balance}; invalidating caches"
+                    f"Balance increase detected on {chain}: token {addr} "
+                    f"{previous} -> {current_balance}; refreshing safe "
+                    "balances cache"
                 )
                 break
 
         if inflow_token is not None:
             try:
-                yield from self._write_kv(
-                    {
-                        f"last_safe_balances_calculated_timestamp_{chain}": "0",
-                        f"last_initial_value_calculated_timestamp_{chain}": "0",
-                    }
-                )
-            except Exception:  # nosec B110
-                self.context.logger.debug(
-                    "Failed to invalidate cache timestamps after inflow detection"
+                yield from self._write_kv({safe_balances_ts_kv_key(chain): "0"})
+            except Exception:
+                self.context.logger.warning(
+                    "Failed to invalidate safe-balances cache timestamp "
+                    "after balance-increase detection; cache may serve "
+                    "stale data this cycle"
                 )
 
         try:
             yield from self._write_kv({last_known_key: json.dumps(current)})
-        except Exception:  # nosec B110
-            self.context.logger.debug(f"Failed to persist {last_known_key}")
+        except Exception:
+            self.context.logger.warning(
+                f"Failed to persist {last_known_key}; the next cycle will "
+                "re-detect the same balance increase"
+            )
 
     def _invalidate_caches_after_tx(self, chain: str) -> Generator[None, None, None]:
         """Reset cache timestamps after a successful agent transaction.
@@ -575,8 +618,10 @@ class LiquidityTraderBaseBehaviour(
         The agent has just submitted a tx (swap, enter pool, exit pool,
         withdrawal, etc.) on ``chain``, so the kv-cached safe balances
         and withdrawal value for that chain are stale. Setting both
-        timestamps to ``"0"`` forces the next FetchStrategies cycle to
-        re-fetch instead of serving cached data.
+        ``last_safe_balances_calculated_timestamp_{chain}`` and
+        ``last_withdrawals_calculated_timestamp_{chain}`` to ``"0"``
+        forces the next FetchStrategies cycle to re-fetch instead of
+        serving cached data.
 
         :param chain: chain identifier of the just-settled tx.
         :yield: None
@@ -584,12 +629,12 @@ class LiquidityTraderBaseBehaviour(
         try:
             yield from self._write_kv(
                 {
-                    f"last_safe_balances_calculated_timestamp_{chain}": "0",
-                    f"last_withdrawals_calculated_timestamp_{chain}": "0",
+                    safe_balances_ts_kv_key(chain): "0",
+                    withdrawals_ts_kv_key(chain): "0",
                 }
             )
-        except Exception:  # nosec B110
-            self.context.logger.debug(
+        except Exception:
+            self.context.logger.warning(
                 "Failed to invalidate cache timestamps after tx settlement"
             )
 
@@ -617,20 +662,21 @@ class LiquidityTraderBaseBehaviour(
 
         # Pre-cache: check for external inflow via cheap on-chain reads.
         # If a whitelisted balance went up since last cycle, the helper
-        # invalidates ``last_safe_balances_calculated_timestamp`` so the
-        # cache lookup below falls through to a fresh SafeApi fetch.
+        # invalidates ``last_safe_balances_calculated_timestamp_{chain}``
+        # so the cache lookup below falls through to a fresh SafeApi fetch.
         yield from self._detect_and_invalidate_on_inflow(chain, safe_address)
 
         # TTL cache: skip the SafeApi fetch if a recent result is on disk.
-        balances_key = f"safe_balances_{chain}"
-        ts_key = f"last_safe_balances_calculated_timestamp_{chain}"
+        balances_key = safe_balances_kv_key(chain)
+        ts_key = safe_balances_ts_kv_key(chain)
         cached_blob: Dict[str, Any] = {}
         try:
             read = yield from self._read_kv((balances_key, ts_key))
             cached_blob = read or {}
-        except Exception:  # nosec B110
-            self.context.logger.debug(
-                "Failed to read safe balances cache from KV store"
+        except Exception:
+            self.context.logger.warning(
+                "Failed to read safe balances cache from KV store; "
+                "will fetch from SafeApi"
             )
         now_ts = int(self._get_current_timestamp())
         last_ts_raw = cached_blob.get(ts_key)
@@ -651,10 +697,10 @@ class LiquidityTraderBaseBehaviour(
             and 0 <= cache_age < SAFE_BALANCES_CACHE_TTL_SECONDS
             and cached_payload
         )
+        api_success = False
         if use_cache:
             try:
                 all_balances = json.loads(cached_payload)
-                api_success = True
                 self.context.logger.info(
                     f"Safe balances cache hit for {chain} "
                     f"({cache_age}s old, ttl {SAFE_BALANCES_CACHE_TTL_SECONDS}s)"
@@ -685,9 +731,10 @@ class LiquidityTraderBaseBehaviour(
                             ts_key: str(now_ts),
                         }
                     )
-                except Exception:  # nosec B110
-                    self.context.logger.debug(
-                        "Failed to cache safe balances to KV store"
+                except Exception:
+                    self.context.logger.warning(
+                        "Failed to cache safe balances to KV store; "
+                        "next cycle will refetch from SafeApi"
                     )
             else:
                 # API failed AND the TTL cache wasn't usable; reach for the

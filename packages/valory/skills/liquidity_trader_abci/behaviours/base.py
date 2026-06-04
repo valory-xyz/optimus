@@ -2019,14 +2019,20 @@ class LiquidityTraderBaseBehaviour(
         )
         return response == KvStoreMessage.Performative.SUCCESS
 
-    def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, None]:
+    def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, bool]:
         """Invalidate (delete) the cached CL pool data for a chain.
 
         Called both after a successful pool entry (so we don't retry the same pool) and
         when a stale cross-period cache is dropped (so a failed invest isn't retried).
 
+        Returns True on a successful invalidation write, False on a caught exception
+        so the caller can surface the failure. A False return means the stale entry
+        is still on disk and the next cycle will hit the same path again; the
+        caller should not pretend the cache was cleared.
+
         :param chain: the chain to invalidate the cache for
         :yield: None: Generator yield for async operations
+        :return: True if the invalidation marker was written, False otherwise.
         """
         try:
             kv_key = f"velodrome_cl_pool_{chain}"
@@ -2037,9 +2043,11 @@ class LiquidityTraderBaseBehaviour(
             )
 
             self.context.logger.info(f"Invalidated CL pool cache for chain {chain}")
+            return True
 
         except Exception as e:
             self.context.logger.error(f"Error invalidating CL pool cache: {str(e)}")
+            return False
 
     def _fetch_token_prices(
         self, token_balances: List[Dict[str, Any]]

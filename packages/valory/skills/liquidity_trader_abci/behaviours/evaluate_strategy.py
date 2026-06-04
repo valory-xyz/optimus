@@ -3656,7 +3656,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"CL pool cache for chain {chain} is from period {cached_period} "
                         f"(current {current_period}); invalidating stale opportunity"
                     )
-                    yield from self._invalidate_cl_pool_cache(chain)
+                    invalidated = yield from self._invalidate_cl_pool_cache(chain)
+                    if not invalidated:
+                        # KV write failed; the stale entry is still on disk and
+                        # the next cycle will hit this same branch again. Skip
+                        # this chain (using the stale ``cached_data`` would be
+                        # worse than retrying) but surface the failure so the
+                        # operator can see the cache is dead-locked.
+                        self.context.logger.warning(
+                            f"CL pool cache invalidation for {chain} failed; "
+                            "stale entry will persist until the next successful write"
+                        )
                     continue
 
                 # Validate cache

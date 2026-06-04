@@ -487,6 +487,15 @@ class Params(BaseParams):
         # a route at the fee/gas limits already reports ~that much value loss here even at
         # zero price impact, so a value too close to those limits rejects otherwise-fine
         # routes. See check_if_route_is_profitable for the use-site.
+        #
+        # CONCRETE WITH CURRENT DEFAULTS: max_fee (5%) + max_gas (25%) = 30%, but
+        # max_slippage = 10%. The slippage gate is therefore the dominant cap by
+        # construction — any route with combined fee + gas value-loss above 10% is
+        # rejected here before the fee/gas gates above can fire. The 25% gas cap and
+        # the bulk of the 5% fee cap are effectively informational at these defaults.
+        # If you want the gas gate to be a real gate, lower max_gas_percentage so
+        # that max_fee + max_gas <= max_slippage; if you want headroom for actual
+        # price impact on top of fees+gas, raise max_slippage_percentage.
         self.max_slippage_percentage = self._ensure(
             "max_slippage_percentage", kwargs, float
         )

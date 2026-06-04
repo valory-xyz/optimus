@@ -3212,15 +3212,26 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return total_investment if total_investment > 0 else None
 
-    def _get_transfer_key(self, date: str, transfer: Dict, index: int) -> str:
-        """Build a unique key for a transfer using tx_hash or fallback fields."""
+    def _get_transfer_key(
+        self, leg: str, date: str, transfer: Dict, index: int
+    ) -> str:
+        """Build a unique key for a transfer using tx_hash or fallback fields.
+
+        ``leg`` ("in" / "out") is prefixed so the incoming-funding and
+        reverted-ETH legs cannot collide on the same shared cache when a
+        single tx_hash appears on both sides of the ledger (multisend,
+        internal-transfer scenarios, or legacy on-disk data from prior
+        bugs). Without the prefix, whichever leg ran first would write
+        its USD value to the shared key and the second leg would
+        short-circuit on the cache hit and silently use the wrong value.
+        """
         tx_hash = transfer.get("tx_hash", "")
         if tx_hash:
-            return f"{date}_{tx_hash}"
+            return f"{leg}_{date}_{tx_hash}"
         symbol = transfer.get("symbol", "")
         amount = transfer.get("delta", transfer.get("amount", 0))
         from_addr = transfer.get("from_address", "")
-        return f"{date}_{symbol}_{amount}_{from_addr}_{index}"
+        return f"{leg}_{date}_{symbol}_{amount}_{from_addr}_{index}"
 
     def _load_priced_transfers(
         self, chain: str
@@ -3274,17 +3285,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if not self.funding_events:
             self.read_funding_events()  # side-effects self.funding_events
         if not self.funding_events:
+            # Either a fresh agent with no history yet, or the on-disk read
+            # failed (``_read_data`` logs ERROR and leaves the attribute
+            # unchanged on JSON-decode / PermissionError / OSError). Surface
+            # the empty state explicitly so an operator hitting a ROI of $0
+            # can grep for this warning and check the upstream error log to
+            # distinguish "no history" from "disk failed".
+            self.context.logger.warning(
+                f"funding_events empty for chain {chain} after disk read; "
+                "treating as fresh agent. Check for prior _read_data errors "
+                "if a non-empty history was expected."
+            )
             self.funding_events = {}
         priced_transfers = yield from self._load_priced_transfers(chain)
 
         incoming = self.funding_events.get(chain, {}) or {}
         incoming_value, inc_updated = yield from self._sum_priced_chain_transfers(
-            incoming, chain, priced_transfers
+            incoming, chain, priced_transfers, leg="in"
         )
         # Reverted ETH that left the safe is a fixed historical record on disk; subtract it.
         outgoing = self.funding_events.get(f"{chain}_outgoing", {}) or {}
         reverted_value, out_updated = yield from self._sum_priced_chain_transfers(
-            outgoing, chain, priced_transfers
+            outgoing, chain, priced_transfers, leg="out"
         )
 
         if inc_updated or out_updated:
@@ -3303,6 +3325,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         date_keyed: Dict,
         chain: str,
         priced_transfers: Dict[str, float],
+        leg: str,
     ) -> Generator[None, None, Tuple[float, bool]]:
         """Price (once, cached) and sum a date-keyed transfer dict.
 
@@ -3315,6 +3338,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :param date_keyed: a ``{date: [transfer, ...]}`` mapping from funding_events.
         :param chain: the chain (for token-id lookup and pricing).
         :param priced_transfers: the per-row USD price cache, mutated in place.
+        :param leg: "in" or "out" — namespaces the cache key so a tx_hash that
+            appears on both ledger sides cannot be priced once and re-used by
+            the other leg.
         :yield: None: generator yield for async operations.
         :return: a ``(summed_value, cache_updated)`` tuple.
         """
@@ -3337,7 +3363,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         == self.params.airdrop_contract_address.lower()
                     ):
                         continue
-                    transfer_key = self._get_transfer_key(date, transfer, idx)
+                    transfer_key = self._get_transfer_key(leg, date, transfer, idx)
                     if transfer_key in priced_transfers:
                         total += priced_transfers[transfer_key]
                         continue
@@ -3364,9 +3390,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         self.context.logger.warning(
                             f"{chain.upper()} SKIPPED {date}: {amount} {token_symbol} — price fetch failed"
                         )
-                except Exception as e:
-                    self.context.logger.error(
-                        f"Error processing {chain} transfer: {str(e)}"
+                except (ValueError, TypeError, KeyError) as e:
+                    # Narrow catch + .exception() so the traceback is preserved.
+                    # An unexpected exception (e.g. a schema change that breaks
+                    # ``transfer.get("symbol")`` on every row) now propagates
+                    # rather than being silently swallowed into a zero basis.
+                    self.context.logger.exception(
+                        f"Skipping {chain} transfer due to {type(e).__name__}: {e}"
                     )
                     continue
         return total, updated

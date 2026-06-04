@@ -477,10 +477,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     # Invalidate CL pool cache if this was a Velodrome CL pool
                     chain = action.get("chain")
-                    yield from self._invalidate_cl_pool_cache(chain)
-                    self.context.logger.info(
-                        f"Invalidated Velodrome CL pool cache for chain {chain} after successful entry"
-                    )
+                    invalidated = yield from self._invalidate_cl_pool_cache(chain)
+                    if invalidated:
+                        self.context.logger.info(
+                            f"Invalidated Velodrome CL pool cache for chain {chain} after successful entry"
+                        )
+                    else:
+                        self.context.logger.warning(
+                            f"Failed to invalidate Velodrome CL pool cache for chain {chain} after successful entry; "
+                            "stale entry will persist until the next successful write"
+                        )
                 else:
                     # Fallback to single position handling
                     (

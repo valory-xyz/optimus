@@ -2760,6 +2760,34 @@ class TestCheckIfRouteIsProfitable:
         }  # exactly 10%
         assert _exhaust(b.check_if_route_is_profitable(route))[0] is True
 
+    def test_fee_at_cap_passes(self):
+        """Exactly at the fee cap (5%) passes — guards `>` vs `>=` on the fee branch.
+
+        Sibling to ``test_slippage_at_cap_passes`` for the fee gate. With
+        ``max_fee_percentage = 0.05``, ``total_fee = 5`` on a $100 route is
+        exactly 5%. Mutating ``fee_percentage > allowed_fee_percentage`` to
+        ``>=`` would reject this route.
+        """
+        b = _make_behaviour()  # max_fee_percentage = 0.05
+        b._get_step_transactions_data = _make_gen_method([{"fee": 5, "gas_cost": 0}])
+        # to=99 keeps slippage at 1% so it can't pre-empt the fee gate.
+        route = {"fromAmountUSD": "100", "toAmountUSD": "99", "steps": []}
+        assert _exhaust(b.check_if_route_is_profitable(route))[0] is True
+
+    def test_gas_at_cap_passes(self):
+        """Exactly at the gas cap (25%) passes — guards `>` vs `>=` on the gas branch.
+
+        Sibling to ``test_slippage_at_cap_passes`` for the gas gate. With
+        ``max_gas_percentage = 0.25``, ``gas_cost = 25`` on a $100 route is
+        exactly 25%. Mutating ``gas_percentage > allowed_gas_percentage`` to
+        ``>=`` would reject this route.
+        """
+        b = _make_behaviour()  # max_gas_percentage = 0.25
+        b._get_step_transactions_data = _make_gen_method([{"fee": 0, "gas_cost": 25}])
+        # to=99 keeps slippage at 1% so it can't pre-empt the gas gate.
+        route = {"fromAmountUSD": "100", "toAmountUSD": "99", "steps": []}
+        assert _exhaust(b.check_if_route_is_profitable(route))[0] is True
+
     def test_value_gaining_route_passes(self):
         """A value-gaining route (toAmountUSD > fromAmountUSD) has negative loss, passes."""
         b = _make_behaviour()

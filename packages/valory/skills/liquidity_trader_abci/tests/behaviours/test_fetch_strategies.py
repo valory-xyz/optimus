@@ -239,7 +239,6 @@ class TestFetchStrategiesWithdrawalGate:
                 obj._validate_velodrome_v2_pool_addresses = _gen_none
                 obj.update_position_amounts = _gen_none
                 obj.check_and_update_zero_liquidity_positions = MagicMock()
-                obj._check_and_create_eth_revert_transactions = _gen_none
                 obj.store_portfolio_data = MagicMock(
                     side_effect=lambda *a, **kw: call_order.append(
                         "store_portfolio_data"
@@ -5396,9 +5395,7 @@ class TestAsyncAct:
             obj._validate_velodrome_v2_pool_addresses = _gen_none
             obj.update_position_amounts = _gen_none
             obj.check_and_update_zero_liquidity_positions = MagicMock()
-            obj._get_native_balance = _gen_return(1.0)
             obj._detect_and_invalidate_on_inflow = _gen_none
-            obj._check_and_create_eth_revert_transactions = _gen_none
             obj._read_kv = _gen_return({})
             obj._write_kv = _gen_none
 
@@ -7534,18 +7531,20 @@ class TestCoverageGaps:
     """Tests for uncovered lines/branches in new code."""
 
     def test_get_transfer_key_no_tx_hash(self):
-        """Fallback key when tx_hash is missing."""
+        """Fallback key when tx_hash is missing — namespaced by leg."""
         o = _mk()
         key = o._get_transfer_key(
-            "2025-01-01", {"symbol": "ETH", "delta": 1.5, "from_address": "0xF"}, 3
+            "in", "2025-01-01", {"symbol": "ETH", "delta": 1.5, "from_address": "0xF"}, 3
         )
-        assert key == "2025-01-01_ETH_1.5_0xF_3"
+        assert key == "in_2025-01-01_ETH_1.5_0xF_3"
 
     def test_get_transfer_key_empty_tx_hash(self):
-        """Fallback key when tx_hash is empty string."""
+        """Fallback key when tx_hash is empty string — namespaced by leg."""
         o = _mk()
-        key = o._get_transfer_key("2025-01-01", {"tx_hash": "", "symbol": "USDC"}, 0)
-        assert key == "2025-01-01_USDC_0__0"
+        key = o._get_transfer_key(
+            "out", "2025-01-01", {"tx_hash": "", "symbol": "USDC"}, 0
+        )
+        assert key == "out_2025-01-01_USDC_0__0"
 
     def test_load_priced_transfers_valid(self):
         """Load valid JSON from KV store."""
@@ -9348,7 +9347,7 @@ class TestDirectReadInvestment:
                 "2025-01-01": [{"symbol": "USDC", "amount": 9, "tx_hash": "0xT"}]
             }
         }
-        obj._load_priced_transfers = _gen_return({"2025-01-01_0xT": 500.0})
+        obj._load_priced_transfers = _gen_return({"in_2025-01-01_0xT": 500.0})
         obj._fetch_historical_token_price = _gen_return(9999.0)
         result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 500.0
@@ -9467,7 +9466,7 @@ class TestDirectReadInvestment:
             },
         }
         # Incoming row is already in the cache; only the outgoing ETH row is new.
-        obj._load_priced_transfers = _gen_return({"2025-06-05_0xINC": 16.0})
+        obj._load_priced_transfers = _gen_return({"in_2025-06-05_0xINC": 16.0})
         saved = []
 
         def _save(chain, priced):
@@ -9479,7 +9478,75 @@ class TestDirectReadInvestment:
         assert abs(result - (16 - 0.005 * 2600)) < 1e-6
         # The outgoing leg updated the cache, so the save fired despite a cached incoming.
         assert len(saved) == 1
-        assert "2025-06-20_0xOUT" in saved[0][1]
+        assert "out_2025-06-20_0xOUT" in saved[0][1]
+
+    def test_save_called_when_only_incoming_updates(self):
+        """OR-isolation: outgoing fully cached, incoming uncached -> cache still saved.
+
+        Symmetric to ``test_save_called_when_only_outgoing_updates``: pricing only the
+        incoming leg must still persist the cache. Together with the outgoing-only and
+        both-cached siblings, the three cover the full truth table of the
+        ``inc_updated or out_updated`` save condition.
+        """
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [{"symbol": "USDC", "amount": 16, "tx_hash": "0xINC"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xOUT"}],
+            },
+        }
+        # Outgoing row already in the cache; only the incoming USDC row is new.
+        obj._load_priced_transfers = _gen_return({"out_2025-06-20_0xOUT": 13.0})
+        saved = []
+
+        def _save(chain, priced):
+            saved.append((chain, dict(priced)))
+            yield
+
+        obj._save_priced_transfers = _save
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert abs(result - (16.0 - 13.0)) < 1e-6
+        # The incoming leg updated the cache, so the save fired despite a cached outgoing.
+        assert len(saved) == 1
+        assert "in_2025-06-05_0xINC" in saved[0][1]
+
+    def test_leg_namespaced_keys_prevent_in_out_collision(self):
+        """A tx_hash that appears on both ledger sides is priced per-leg, not once.
+
+        Regression guard for the shared-cache collision: ``_get_transfer_key`` now
+        prefixes the key with ``in_`` / ``out_`` so the same ``(date, tx_hash)`` cannot
+        cache one leg's USD value and have the other leg short-circuit on the hit.
+        If the prefix is dropped, the second leg would silently use the first leg's
+        cached value.
+        """
+        obj = self._obj()
+        # Same date + tx_hash on both ledger sides, different amounts.
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [{"symbol": "USDC", "amount": 10, "tx_hash": "0xCOLLIDE"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-05": [{"symbol": "ETH", "amount": 0.01, "tx_hash": "0xCOLLIDE"}],
+            },
+        }
+        captured: Dict[str, float] = {}
+
+        def _load(chain):
+            yield
+            return captured
+
+        obj._save_priced_transfers = _gen_none
+        obj._load_priced_transfers = _load
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        # Both legs were priced from their own rows: 10 USDC - 0.01 ETH * 2600 = -16.
+        assert abs(result - (10.0 - 0.01 * 2600)) < 1e-6
+        # Both leg-namespaced keys are present and distinct.
+        assert "in_2025-06-05_0xCOLLIDE" in captured
+        assert "out_2025-06-05_0xCOLLIDE" in captured
+        assert captured["in_2025-06-05_0xCOLLIDE"] == 10.0
+        assert captured["out_2025-06-05_0xCOLLIDE"] == 0.01 * 2600
 
     def test_save_skipped_when_both_legs_cached(self):
         """Fully-cached cycle must not write the cache.
@@ -9500,7 +9567,7 @@ class TestDirectReadInvestment:
             },
         }
         obj._load_priced_transfers = _gen_return(
-            {"2025-06-05_0xINC": 16.0, "2025-06-20_0xOUT": 13.0}
+            {"in_2025-06-05_0xINC": 16.0, "out_2025-06-20_0xOUT": 13.0}
         )
         saved = []
 
@@ -9538,7 +9605,7 @@ class TestDirectReadInvestment:
         obj._load_priced_transfers = _load
         result = _drive(obj._calculate_chain_investment_value("optimism"))
         assert result == 0.0
-        assert "2025-01-01_0xP" not in captured_cache
+        assert "in_2025-01-01_0xP" not in captured_cache
         obj.context.logger.warning.assert_called()
 
 
@@ -9569,7 +9636,15 @@ class TestDirectReadWs1EdgeCoverage:
         assert dropped == 0 and migrated == {}
 
     def test_safeglobal_transfer_without_unique_id(self):
-        """Incoming transfer lacking ids -> empty unique_id -> 'if unique_id' False."""
+        """An incoming transfer lacking every ID source is processed but not
+        registered in the dedup set.
+
+        ``_transfer_unique_id`` returns ``""`` when no ``transferId``,
+        ``transactionHash``, or fallback identifier is present. The dedup
+        guards short-circuit on an empty id (``if unique_id and ...`` /
+        ``if unique_id:``), so the transfer flows through to the appended
+        list with ``transfer_id == ""`` and the seen-set stays empty.
+        """
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
@@ -9581,11 +9656,18 @@ class TestDirectReadWs1EdgeCoverage:
         o = self._obj()
         o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
         o._should_include_transfer_optimism = _gen_return(True)
+        all_transfers: Dict[str, List[Dict]] = defaultdict(list)
         _drive(
             o._fetch_optimism_transfers_safeglobal(
-                "0xA", "2025-01-01", defaultdict(list), {}
+                "0xA", "2025-01-01", all_transfers, {}
             )
         )
+        # The transfer is appended (no silent drop) and carries an empty
+        # transfer_id, signalling it was not registered with the dedup set.
+        assert "2024-12-15" in all_transfers
+        appended = all_transfers["2024-12-15"]
+        assert len(appended) == 1
+        assert appended[0]["transfer_id"] == ""
 
     def test_erc20_existing_funding_events_skips_read(self):
         """funding_events already in memory -> skip the read branch."""
@@ -9595,7 +9677,13 @@ class TestDirectReadWs1EdgeCoverage:
         _drive(o._track_erc20_transfers_optimism("0xA", 1704067200))
 
     def test_erc20_outgoing_usdc_without_unique_id(self):
-        """Outgoing USDC lacking ids -> empty unique_id -> 'if unique_id' False."""
+        """An outgoing USDC transfer lacking every ID source is persisted but
+        not registered in the dedup set.
+
+        Mirror of ``test_safeglobal_transfer_without_unique_id`` for the
+        outgoing path: an empty ``unique_id`` skips the seen-set add but
+        does NOT skip the persist into ``funding_events["optimism_withdrawals"]``.
+        """
         td = {
             "executionDate": "2023-06-01T00:00:00Z",
             "from": "0xs",
@@ -9607,4 +9695,13 @@ class TestDirectReadWs1EdgeCoverage:
         }
         o = self._obj()
         o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o.funding_events = {}
+        o.read_funding_events = lambda: {}
+        o.store_funding_events = MagicMock()
         _drive(o._track_erc20_transfers_optimism("0xS", 1704067200))
+        # Persisted with an empty transfer_id (no dedup-set entry).
+        withdrawals = o.funding_events.get("optimism_withdrawals", {})
+        assert "2023-06-01" in withdrawals
+        assert len(withdrawals["2023-06-01"]) == 1
+        assert withdrawals["2023-06-01"][0]["transfer_id"] == ""
+        o.store_funding_events.assert_called()

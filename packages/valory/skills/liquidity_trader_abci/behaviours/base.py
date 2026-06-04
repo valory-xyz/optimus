@@ -2876,6 +2876,7 @@ class LiquidityTraderBaseBehaviour(
             usdc_addresses = {
                 "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
                 "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                "base": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
             }
 
             usdc_address = usdc_addresses.get(chain.lower())

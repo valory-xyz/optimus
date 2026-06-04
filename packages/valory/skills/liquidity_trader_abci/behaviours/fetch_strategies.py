@@ -3184,6 +3184,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         safe_address, current_date
                     )
                 )
+            elif chain == Chain.BASE.value:
+                self.context.logger.info("Using Base-specific transfer fetching")
+                all_transfers = (
+                    yield from self._fetch_all_transfers_until_date_base(
+                        safe_address, current_date
+                    )
+                )
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
                 continue
@@ -3573,6 +3580,64 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            return {}
+
+    def _fetch_all_transfers_until_date_base(
+        self, address: str, end_date: str
+    ) -> Generator[None, None, Dict]:
+        """Fetch all Base transfers from the beginning until a specific date, organized by date."""
+        # Load existing unified data from kv_store
+        self.funding_events = self.read_funding_events()
+        if self.funding_events:
+            raw_base_data = self.funding_events.get("base", {})
+            existing_base_data, dropped = _drop_legacy_transfer_entries(raw_base_data)
+            if dropped:
+                self.context.logger.info(
+                    f"Dropped {dropped} legacy base transfer entries "
+                    "without transfer_id; will be re-fetched if still within "
+                    "Safe's pagination window."
+                )
+        else:
+            raw_base_data = {}
+            existing_base_data = {}
+
+        all_transfers_by_date = defaultdict(list)
+
+        try:
+            self.context.logger.info(f"Fetching all Base transfers until {end_date}...")
+
+            fetch_succeeded = yield from self._fetch_base_transfers_safeglobal(
+                address, end_date, all_transfers_by_date, existing_base_data
+            )
+
+            if not fetch_succeeded:
+                self.context.logger.warning(
+                    "Base incoming-transfers fetch failed mid-stream; "
+                    "skipping persist and returning previously-persisted data"
+                )
+                return dict(raw_base_data)
+
+            for date, transfers in all_transfers_by_date.items():
+                existing_base_data.setdefault(date, []).extend(transfers)
+
+            if not self.funding_events:
+                self.funding_events = {}
+            self.funding_events["base"] = existing_base_data
+            self.store_funding_events()
+
+            total_dates = len(all_transfers_by_date)
+            total_transfers = sum(
+                len(transfers) for transfers in all_transfers_by_date.values()
+            )
+
+            self.context.logger.info(
+                f"Base Summary: {total_dates} dates with transfers, {total_transfers} total transfers"
+            )
+
+            return dict(all_transfers_by_date)
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Base transfers: {e}")
             return {}
 
     def _fetch_token_transfers(
@@ -4219,6 +4284,191 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            fetch_failed = True
+
+        return not fetch_failed
+
+    def _fetch_base_transfers_safeglobal(
+        self,
+        address: str,
+        end_date: str,
+        all_transfers_by_date: dict,
+        existing_data: dict,
+    ) -> Generator[None, None, bool]:
+        """Fetch Base transfers using SafeGlobal API.
+
+        Mirrors ``_fetch_optimism_transfers_safeglobal`` but routes through the
+        Base safe-API slug. Same offset-based pagination contract, same
+        early-stop semantics on already-seen ids, same atomic-persist
+        invariant on the caller. The from-address EOA-or-GnosisSafe filter
+        also reuses Optimism's helper because the Safe Transaction Service
+        record shape is identical across chains; only the chain slug at
+        URL build time differs.
+
+        :param address: the Safe contract address.
+        :param end_date: ISO date string used as the upper bound for transfer
+            filtering.
+        :param all_transfers_by_date: mutated in place with newly fetched
+            transfers, keyed by date.
+        :param existing_data: persisted date-keyed transfers, used to seed
+            the in-cycle dedup set.
+        :yield: None.
+        :return: ``True`` on a fully-successful pagination, ``False`` on any
+            mid-stream page fetch failure or exception.
+        """
+        fetch_failed = False
+
+        try:
+            self.context.logger.info(
+                "Fetching Base transfers using SafeGlobal API..."
+            )
+
+            transfers_base_url = self._build_safe_api_url(
+                "base", "v1", f"safes/{address}/incoming-transfers/"
+            )
+
+            processed_count = 0
+            offset = 0
+            pages_processed = 0
+            seen_transfer_ids = _collect_seen_transfer_ids(existing_data)
+            while True:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
+                        "Base incoming-transfers; treating as a failed fetch "
+                        "so partial data is not persisted with a falsely "
+                        "complete seen-set"
+                    )
+                    fetch_failed = True
+                    break
+
+                transfers_url = (
+                    f"{transfers_base_url}?limit={SAFE_TRANSFERS_PAGE_LIMIT}"
+                    f"&offset={offset}"
+                )
+                success, response_json = yield from self._request_with_retries(
+                    endpoint=transfers_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=_noop_rate_limit_callback,
+                    retry_wait=5,
+                    max_retries=2,
+                )
+
+                if not success:
+                    self.context.logger.error("Failed to fetch Base transfers")
+                    fetch_failed = True
+                    break
+
+                transfers = response_json.get("results", [])
+                if not transfers:
+                    break
+                pages_processed += 1
+
+                consecutive_existing = 0
+                stop_pagination = False
+
+                for transfer in transfers:
+                    timestamp = transfer.get("executionDate")
+                    if not timestamp:
+                        continue
+
+                    tx_datetime = self._get_datetime_from_timestamp(timestamp)
+                    tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
+
+                    if not tx_date:
+                        continue
+
+                    unique_id = _transfer_unique_id(transfer)
+                    if unique_id and unique_id in seen_transfer_ids:
+                        consecutive_existing += 1
+                        if consecutive_existing >= len(transfers):
+                            stop_pagination = True
+                        continue
+                    consecutive_existing = 0
+
+                    if tx_date > end_date:
+                        continue
+
+                    if unique_id:
+                        seen_transfer_ids.add(unique_id)
+
+                    from_address = transfer.get("from", address)
+                    transfer_type = transfer.get("type", "")
+
+                    if from_address.lower() == address.lower():
+                        continue
+
+                    should_include = yield from self._should_include_transfer_optimism(
+                        from_address
+                    )
+                    if not should_include:
+                        continue
+
+                    if transfer_type == "ERC20_TRANSFER":
+                        token_info = transfer.get("tokenInfo", {})
+                        token_address = transfer.get("tokenAddress", "")
+                        if not token_info:
+                            if token_address:
+                                decimals = yield from self._get_token_decimals(
+                                    "base", token_address
+                                )
+                                symbol = yield from self._get_token_symbol(
+                                    "base", token_address
+                                )
+                            else:
+                                continue
+                        else:
+                            symbol = token_info.get("symbol", "Unknown")
+                            decimals = int(token_info.get("decimals", 18) or 18)
+
+                        if symbol.lower() != "usdc":
+                            continue
+
+                        value_raw = int(transfer.get("value", "0") or "0")
+                        amount = value_raw / (10**decimals)
+
+                        transfer_data = {
+                            "from_address": from_address,
+                            "amount": amount,
+                            "token_address": token_address,
+                            "symbol": symbol,
+                            "timestamp": timestamp,
+                            "tx_hash": transfer.get("transactionHash", ""),
+                            "type": "token",
+                            "transfer_id": unique_id,
+                        }
+
+                    elif transfer_type == "ERC721_TRANSFER":
+                        continue
+
+                    else:
+                        continue
+
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+
+                if processed_count % 100 == 0:
+                    self.context.logger.info(
+                        f"Processed {processed_count} Base transfers..."
+                    )
+
+                if stop_pagination:
+                    self.context.logger.info(
+                        "All transfers on this page already stored — stopping pagination"
+                    )
+                    break
+
+                if response_json.get("next") is None:
+                    break
+                offset += len(transfers)
+
+            self.context.logger.info(
+                f"Completed Base transfers: {processed_count} found"
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Base transfers: {e}")
             fetch_failed = True
 
         return not fetch_failed

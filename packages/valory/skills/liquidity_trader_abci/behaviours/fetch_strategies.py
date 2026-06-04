@@ -65,6 +65,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     _noop_rate_limit_callback,
+    initial_value_ts_kv_key,
+    total_withdrawals_kv_key,
+    withdrawals_ts_kv_key,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
@@ -257,6 +260,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # update locally stored eth balance in-case it's incorrect
                 eth_balance = yield from self._get_native_balance(chain, safe_address)
                 self.context.logger.info(f"Current ETH balance: {eth_balance}")
+
+                for inflow_chain in self.params.target_investment_chains:
+                    # Only chains that flow through ``_get_safe_balances_from_safe_api``
+                    # have a cache for this loop to invalidate. Mode (and any
+                    # other explorer-routed chain) reads no kv cache key
+                    # this loop touches, so running it would just burn RPC
+                    # reads and write orphaned kv entries.
+                    if inflow_chain not in self.params.safe_api_chain_slugs:
+                        continue
+                    inflow_safe = self.params.safe_contract_addresses.get(inflow_chain)
+                    if inflow_safe:
+                        yield from self._detect_and_invalidate_on_inflow(
+                            inflow_chain, inflow_safe
+                        )
 
                 if self.synchronized_data.period_count == 0:
                     yield from self._check_and_create_eth_revert_transactions(
@@ -2278,11 +2295,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             balances = []
 
             # Get current balances dynamically instead of using static assets
-            if chain == Chain.OPTIMISM.value:
-                balances = yield from self._get_optimism_balances_from_safe_api()
-
-            if chain == Chain.MODE.value:
+            if chain in self.params.safe_api_chain_slugs:
+                balances = yield from self._get_safe_balances_from_safe_api(chain)
+            elif chain == Chain.MODE.value:
                 balances = yield from self._get_mode_balances_from_explorer_api()
+            else:
+                self.context.logger.warning(
+                    f"No balances dispatch for {chain}: not in "
+                    "safe_api_chain_slugs and not Mode; skipping"
+                )
+                continue
 
             if not balances:
                 self.context.logger.warning(f"No balances found for chain {chain}")
@@ -2326,17 +2348,55 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if adjusted_balance <= 0:  # pragma: no cover
                     continue
 
-                velo_token_address = self._get_velo_token_address(chain)
-                # Get token price
-                if token_address == ZERO_ADDRESS:
-                    token_price = yield from self._fetch_zero_address_price()
-                elif token_address.lower() == velo_token_address:
-                    velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
-                    token_price = yield from self._fetch_coin_price(velo_coin_id)
-                else:
-                    token_price = yield from self._fetch_token_price(
-                        token_address, chain
-                    )
+                # Prefer Safe's own USD valuation when it ships one in the
+                # response: it covers the whitelisted-token path for free
+                # and avoids a paid CoinGecko call per token per cycle.
+                # ``_get_safe_balances_from_safe_api`` carries forward
+                # ``fiat_balance`` and ``fiat_conversion`` from the API
+                # response. Reward-token entries (OLAS/VELO) and on-chain
+                # backstop entries don't have these fields, so we still
+                # fall back to ``_fetch_token_price`` for those.
+                token_price = None
+                safe_fiat_conversion = balance.get("fiat_conversion")
+                if safe_fiat_conversion is not None:
+                    try:
+                        token_price = Decimal(str(safe_fiat_conversion))
+                        # Safe Transaction Service returns
+                        # ``fiatConversion: "0.0"`` for trusted tokens it
+                        # has no live price feed for. Treat non-positive
+                        # as "no Safe price" so the CoinGecko fallback
+                        # runs instead of valuing the token at
+                        # ``balance * 0``.
+                        if token_price <= 0:
+                            token_price = None
+                    except (InvalidOperation, ValueError, TypeError):
+                        token_price = None
+
+                # Prefer Safe's precomputed ``fiat_balance`` for the total:
+                # equal to ``adjusted_balance * token_price`` but skips the
+                # decimals-divide round-trip we already did above. Only
+                # trust it when the Safe price was usable (non-null,
+                # positive) so we don't carry forward a stale or zeroed
+                # total.
+                token_value_usd: Optional[Decimal] = None
+                safe_fiat_balance = balance.get("fiat_balance")
+                if token_price is not None and safe_fiat_balance is not None:
+                    try:
+                        token_value_usd = Decimal(str(safe_fiat_balance))
+                    except (InvalidOperation, ValueError, TypeError):
+                        token_value_usd = None
+
+                if token_price is None:
+                    velo_token_address = self._get_velo_token_address(chain)
+                    if token_address == ZERO_ADDRESS:
+                        token_price = yield from self._fetch_zero_address_price()
+                    elif token_address.lower() == velo_token_address:
+                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        token_price = yield from self._fetch_coin_price(velo_coin_id)
+                    else:
+                        token_price = yield from self._fetch_token_price(
+                            token_address, chain
+                        )
 
                 if token_price is None:
                     self.context.logger.warning(
@@ -2345,7 +2405,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 token_price = Decimal(str(token_price))
-                token_value_usd = adjusted_balance * token_price
+                if token_value_usd is None:
+                    token_value_usd = adjusted_balance * token_price
                 total_safe_value += token_value_usd
 
                 self.context.logger.info(
@@ -2461,19 +2522,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # calculation was within WITHDRAWAL_CACHE_TTL_SECONDS. Negative
             # ages (clock skew, malformed timestamp) are treated as expired
             # so we recompute rather than serve a possibly-stale value.
+            ts_key = withdrawals_ts_kv_key(chain)
+            total_key = total_withdrawals_kv_key(chain)
             now_ts = int(self._get_current_timestamp())
-            last_calc = yield from self._read_kv(
-                keys=("last_withdrawals_calculated_timestamp",)
-            )
-            if last_calc and (
-                ts := last_calc.get("last_withdrawals_calculated_timestamp")
-            ):
+            last_calc = yield from self._read_kv(keys=(ts_key,))
+            if last_calc and (ts := last_calc.get(ts_key)):
                 try:
                     age_seconds = now_ts - int(ts)
                 except (ValueError, TypeError):
                     self.context.logger.warning(
-                        f"Unparseable last_withdrawals_calculated_timestamp "
-                        f"{ts!r}; treating cache as expired"
+                        f"Unparseable {ts_key} {ts!r}; treating cache as expired"
                     )
                     # Negative age is documented as "expired" in the guard
                     # below and is independent of the strict < TTL boundary,
@@ -2481,12 +2539,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # this fallback into a spurious cache hit.
                     age_seconds = -1
                 if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
-                    cached = yield from self._read_kv(
-                        keys=("optimism_total_withdrawals",)
-                    )
-                    cached_val = (
-                        cached.get("optimism_total_withdrawals") if cached else None
-                    )
+                    cached = yield from self._read_kv(keys=(total_key,))
+                    cached_val = cached.get(total_key) if cached else None
                     if cached_val is not None:
                         try:
                             self.context.logger.info(
@@ -2529,10 +2583,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             yield from self._write_kv(
                 {
-                    "optimism_total_withdrawals": str(withdrawal_value),
-                    "last_withdrawals_calculated_timestamp": str(
-                        int(self._get_current_timestamp())
-                    ),
+                    total_key: str(withdrawal_value),
+                    ts_key: str(int(self._get_current_timestamp())),
                 }
             )
             return withdrawal_value
@@ -3161,18 +3213,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 # Normal logic when airdrop is not started
                 # Check when we last calculated initial value
-                last_calculated_timestamp = yield from self._read_kv(
-                    keys=("last_initial_value_calculated_timestamp",)
-                )
+                ii_ts_key = initial_value_ts_kv_key(chain)
+                last_calculated_timestamp = yield from self._read_kv(keys=(ii_ts_key,))
 
-                if (
-                    last_calculated_timestamp
-                    and (
-                        timestamp := last_calculated_timestamp.get(
-                            "last_initial_value_calculated_timestamp"
-                        )
-                    )
-                    and timestamp is not None
+                # The walrus already short-circuits on a falsy value
+                # (None included), so no extra ``is not None`` is needed.
+                if last_calculated_timestamp and (
+                    timestamp := last_calculated_timestamp.get(ii_ts_key)
                 ):
                     self.context.logger.info(
                         f"Found last calculation timestamp: {timestamp}"
@@ -3183,8 +3230,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     except (ValueError, TypeError):
                         self.context.logger.warning(
-                            f"Unparseable last_initial_value_calculated_timestamp "
-                            f"{timestamp!r}; treating cache as expired"
+                            f"Unparseable {ii_ts_key} {timestamp!r}; "
+                            "treating cache as expired"
                         )
                         # Negative age is documented as "expired" in the
                         # guard below and is independent of the strict <
@@ -3253,9 +3300,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         yield from self._save_chain_total_investment(chain, total_investment)
 
         timestamp = int(self._get_current_timestamp())
-        yield from self._write_kv(
-            {"last_initial_value_calculated_timestamp": str(timestamp)}
-        )
+        yield from self._write_kv({initial_value_ts_kv_key(chain): str(timestamp)})
 
         self.context.logger.info(
             f"Total initial investment from all chains: ${total_investment}"

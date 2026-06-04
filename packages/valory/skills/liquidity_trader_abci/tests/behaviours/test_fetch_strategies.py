@@ -58,6 +58,10 @@ def _mk():
     obj.service_staking_state = MagicMock()
     obj.store_funding_events = MagicMock()
     obj.read_funding_events = MagicMock(return_value={})
+    # Default slug map so per-chain dispatch in _calculate_safe_balances_value
+    # treats Optimism + Base as Safe-API chains. Tests that need a different
+    # configuration override this on the instance.
+    obj.params.safe_api_chain_slugs = {"optimism": "oeth", "base": "base"}
     return obj
 
 
@@ -111,6 +115,7 @@ class TestFetchStrategiesWithdrawalGate:
         obj.params.available_strategies = {"optimism": ["uniswapV3"]}
         obj.params.initial_assets = {}
         obj._get_native_balance = _gen_return(1.0)
+        obj._detect_and_invalidate_on_inflow = _gen_none
         obj._read_kv = _gen_return(
             {
                 "selected_protocols": json.dumps(["uniswapV3"]),
@@ -3898,7 +3903,7 @@ class TestCalculateSafeBalancesValue:
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        obj._get_optimism_balances_from_safe_api = _gen_return([])
+        obj._get_safe_balances_from_safe_api = _gen_return([])
         gen = obj._calculate_safe_balances_value([])
         assert _drive(gen) == Decimal(0)
 
@@ -3916,7 +3921,7 @@ class TestCalculateSafeBalancesValue:
         obj = _mk()
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xT", "asset_symbol": "TKN", "balance": 0}]
         )
         gen = obj._calculate_safe_balances_value([])
@@ -3928,11 +3933,181 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         olas = OLAS_ADDRESSES["optimism"]
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": olas, "asset_symbol": "OLAS", "balance": 10**18}]
         )
         gen = obj._calculate_safe_balances_value([])
         assert _drive(gen) == Decimal(0)
+
+    def test_safe_fiat_conversion_used_directly(self):
+        """Non-null ``fiat_conversion`` is used as price; CoinGecko is skipped."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+
+        coingecko_calls: List[Any] = []
+
+        def fake_coingecko(*a: Any, **kw: Any) -> Any:
+            coingecko_calls.append((a, kw))
+            yield
+            return 12345.0  # should never be returned if fiat_conversion is used
+
+        obj._fetch_zero_address_price = fake_coingecko
+        obj._fetch_token_price = fake_coingecko
+
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": "1.0",
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        obj._get_token_decimals = _gen_return(6)
+        result = _drive(obj._calculate_safe_balances_value([]))
+        # 1 USDC at $1 = $1.00, with no CoinGecko call.
+        assert result == Decimal("1") * Decimal("1.0")
+        assert coingecko_calls == []
+
+    def test_safe_fiat_balance_used_for_total_when_conversion_present(self):
+        """Safe's precomputed ``fiat_balance`` is the total when ``fiat_conversion`` is non-zero.
+
+        ``fiat_balance`` is Safe's precomputed
+        ``adjusted_balance * fiat_conversion``. Reading it directly
+        saves the decimals-divide + multiplication and uses Safe's own
+        Decimal precision. Asserts the total trusts ``fiat_balance``
+        even when it disagrees with the recompute, so a regression to
+        ``adjusted_balance * token_price`` would be caught.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+
+        obj._fetch_zero_address_price = _gen_return(None)
+        obj._fetch_token_price = _gen_return(None)
+        obj._get_token_decimals = _gen_return(6)
+        # ``fiat_balance`` deliberately disagrees with the recomputed
+        # ``balance / 10**6 * fiat_conversion`` (which would be 1.00) so a
+        # regression that ignores fiat_balance and re-multiplies would
+        # produce 1.00 instead of 1.23 and fail.
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": "1.23",
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        assert result == Decimal("1.23")
+
+    def test_safe_fiat_balance_missing_falls_back_to_recompute(self):
+        """A null ``fiat_balance`` still totals via ``adjusted_balance * token_price``.
+
+        Reward-token entries and on-chain backstop entries don't carry
+        ``fiat_balance``. The total path must still compute
+        ``adjusted_balance * token_price`` for those instead of dropping
+        the entry.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_zero_address_price = _gen_return(None)
+        obj._fetch_token_price = _gen_return(None)
+        obj._get_token_decimals = _gen_return(6)
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": None,
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        # 1 USDC * $1.0 from the recompute path.
+        assert result == Decimal("1") * Decimal("1.0")
+
+    def test_safe_fiat_balance_unparseable_falls_back_to_recompute(self):
+        """A garbage ``fiat_balance`` string falls back to the recompute path."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_zero_address_price = _gen_return(None)
+        obj._fetch_token_price = _gen_return(None)
+        obj._get_token_decimals = _gen_return(6)
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xUsdc",
+                    "asset_symbol": "USDC",
+                    "balance": 10**6,
+                    "fiat_balance": "garbage",
+                    "fiat_conversion": "1.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        assert result == Decimal("1") * Decimal("1.0")
+
+    def test_safe_fiat_conversion_zero_falls_back_to_coingecko(self):
+        """``fiat_conversion: "0.0"`` (no Safe price feed) falls back to CoinGecko."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_token_price = _gen_return(2.5)
+        obj._get_token_decimals = _gen_return(6)
+
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xMystery",
+                    "asset_symbol": "MYS",
+                    "balance": 10**6,
+                    "fiat_balance": "0.0",
+                    "fiat_conversion": "0.0",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        # Should use the CoinGecko price ($2.5), not value the token at $0.
+        assert result == Decimal("1") * Decimal("2.5")
+
+    def test_safe_fiat_conversion_invalid_decimal_falls_back(self):
+        """A malformed ``fiat_conversion`` string falls back to CoinGecko."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {"optimism": None}
+        obj._fetch_token_price = _gen_return(7.0)
+        obj._get_token_decimals = _gen_return(6)
+
+        obj._get_safe_balances_from_safe_api = _gen_return(
+            [
+                {
+                    "address": "0xToken",
+                    "asset_symbol": "TKN",
+                    "balance": 10**6,
+                    "fiat_balance": "not-a-number",
+                    "fiat_conversion": "not-a-number",
+                }
+            ]
+        )
+        result = _drive(obj._calculate_safe_balances_value([]))
+        assert result == Decimal("1") * Decimal("7.0")
 
     def test_eth_balance(self):
         """Test eth balance."""
@@ -3940,7 +4115,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": ZERO_ADDRESS, "asset_symbol": "ETH", "balance": 10**18}]
         )
         obj._fetch_zero_address_price = _gen_return(3000.0)
@@ -3954,7 +4129,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xUSDC", "asset_symbol": "USDC", "balance": 10**6}]
         )
         obj._get_token_decimals = _gen_return(6)
@@ -3969,7 +4144,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xTKN", "asset_symbol": "TKN", "balance": 10**18}]
         )
         obj._get_token_decimals = _gen_return(18)
@@ -3983,7 +4158,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xTKN", "asset_symbol": "TKN", "balance": 10**18}]
         )
         obj._get_token_decimals = _gen_return(None)
@@ -3996,7 +4171,7 @@ class TestCalculateSafeBalancesValue:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": "0xvelo"}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xVELO", "asset_symbol": "VELO", "balance": 10**18}]
         )
         obj._get_token_decimals = _gen_return(18)
@@ -5119,7 +5294,7 @@ class TestCalculateSafeBalancesValueZeroBalance:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.velo_token_contract_addresses = {"optimism": None}
-        obj._get_optimism_balances_from_safe_api = _gen_return(
+        obj._get_safe_balances_from_safe_api = _gen_return(
             [{"address": "0xTKN", "asset_symbol": "TKN", "balance": 0}]
         )
         obj._get_token_decimals = _gen_return(18)
@@ -5590,6 +5765,7 @@ class TestAsyncAct:
             obj.params.initial_assets = {}
 
             obj._get_native_balance = _gen_return(1.0)
+            obj._detect_and_invalidate_on_inflow = _gen_none
             obj._read_kv = _gen_return(
                 {
                     "selected_protocols": json.dumps(["uniswapV3"]),
@@ -5643,6 +5819,7 @@ class TestAsyncAct:
             obj.update_position_amounts = _gen_none
             obj.check_and_update_zero_liquidity_positions = MagicMock()
             obj._get_native_balance = _gen_return(1.0)
+            obj._detect_and_invalidate_on_inflow = _gen_none
             obj._check_and_create_eth_revert_transactions = _gen_none
             obj._read_kv = _gen_return({})
             obj._write_kv = _gen_none
@@ -5689,6 +5866,7 @@ class TestAsyncAct:
             obj.params.available_strategies = {}
 
             obj._get_native_balance = _gen_return(1.0)
+            obj._detect_and_invalidate_on_inflow = _gen_none
             obj._read_investing_paused = _gen_return(False)
 
             read_call = [0]
@@ -5726,6 +5904,98 @@ class TestAsyncAct:
 
                 gen = obj.async_act()
                 _drive(gen)
+
+    def test_inflow_detector_runs_only_for_safe_api_chains(self):
+        """Pin the per-cycle inflow-detect hoist to ``safe_api_chain_slugs``.
+
+        The detector exists to invalidate the Safe API cache. Mode and
+        any other explorer-routed chain read no kv key this loop
+        touches, so running it on them would burn RPC reads and write
+        orphaned kv entries. Asserts:
+
+        - chains in ``safe_api_chain_slugs`` with a safe address are
+          called once each in target-chain order;
+        - chains absent from ``safe_api_chain_slugs`` (Mode here) are
+          skipped even when they have a configured safe address;
+        - chains without a configured safe address are skipped even
+          when present in ``safe_api_chain_slugs``.
+        """
+        obj = _mk()
+        bm = MagicMock()
+        bm.local.return_value.__enter__ = MagicMock(return_value=None)
+        bm.local.return_value.__exit__ = MagicMock(return_value=False)
+        bm.consensus.return_value.__enter__ = MagicMock(return_value=None)
+        bm.consensus.return_value.__exit__ = MagicMock(return_value=False)
+        obj.context.benchmark_tool.measure.return_value = bm
+        obj.context.agent_address = "0xAgent"
+        obj.current_positions = []
+
+        with patch.object(
+            type(obj), "synchronized_data", new_callable=PropertyMock
+        ) as mock_sd:
+            mock_sd.return_value = MagicMock(period_count=1)
+
+            # ``ethereum`` is in the slug map but has no safe address (skip).
+            # ``optimism`` and ``base`` are wired (run).
+            # ``mode`` has a safe address but no slug entry (skip — Mode
+            # dispatches to the explorer, which doesn't use this cache).
+            obj.params.target_investment_chains = [
+                "optimism",
+                "base",
+                "mode",
+                "ethereum",
+            ]
+            obj.params.safe_contract_addresses = {
+                "optimism": "0xSafeOp",
+                "base": "0xSafeBase",
+                "mode": "0xSafeMode",
+            }
+            obj.params.safe_api_chain_slugs = {
+                "optimism": "oeth",
+                "base": "base",
+                "ethereum": "eth",
+            }
+            obj.params.available_strategies = {"optimism": ["uniswapV3"]}
+            obj.params.initial_assets = {}
+
+            inflow_calls: List[Any] = []
+
+            def fake_inflow(chain: Any, safe_address: Any) -> Any:
+                """Fake inflow detector."""
+                inflow_calls.append((chain, safe_address))
+                yield
+
+            obj._detect_and_invalidate_on_inflow = fake_inflow
+            obj._get_native_balance = _gen_return(1.0)
+            obj._read_kv = _gen_return(
+                {
+                    "selected_protocols": json.dumps(["uniswapV3"]),
+                    "trading_type": "balanced",
+                }
+            )
+            obj._write_kv = _gen_none
+
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                mock_ss.return_value = MagicMock()
+                obj.whitelisted_assets = {"optimism": {"0xT": "TKN"}}
+                obj.read_whitelisted_assets = MagicMock()
+                obj._get_current_timestamp = lambda: 100
+                obj._track_whitelisted_assets = _gen_none
+                obj.calculate_user_share_values = _gen_none
+                obj.store_portfolio_data = MagicMock()
+                obj._update_agent_performance_metrics = MagicMock()
+                obj.send_a2a_transaction = _gen_none
+                obj.wait_until_round_end = _gen_none
+                obj.set_done = MagicMock()
+
+                _drive(obj.async_act())
+
+        assert inflow_calls == [
+            ("optimism", "0xSafeOp"),
+            ("base", "0xSafeBase"),
+        ]
 
 
 class TestCalculateInitialInvestmentValueFromFundingEvents:
@@ -5831,7 +6101,9 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
-        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": ts})
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp_optimism": ts}
+        )
         obj._load_chain_total_investment = _gen_return(999.0)
         obj._write_kv = _gen_none
         obj._save_chain_total_investment = _gen_none
@@ -5849,7 +6121,9 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
-        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": ts})
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp_optimism": ts}
+        )
         obj._load_chain_total_investment = _gen_return(0.0)
         obj._fetch_all_transfers_until_date_optimism = _gen_return(
             {"d": [{"symbol": "ETH", "delta": 1}]}
@@ -5868,7 +6142,9 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
-        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": "bad"})
+        obj._read_kv = _gen_return(
+            {"last_initial_value_calculated_timestamp_optimism": "bad"}
+        )
         obj._write_kv = _gen_none
         obj._fetch_all_transfers_until_date_optimism = _gen_return(
             {"d": [{"symbol": "ETH", "delta": 1}]}
@@ -9426,7 +9702,7 @@ class TestErc20OptimismWithdrawalCache:
 
 
 class TestCalculateWithdrawalsValueTtlCache:
-    """TTL-based kv cache for the optimism withdrawal path (PRs 1.1 + 1.3)."""
+    """TTL-based kv cache for the optimism withdrawal path."""
 
     def test_cache_hit_skips_fetcher(self):
         """Cache hit within the TTL returns cached value without calling the fetcher."""
@@ -9437,8 +9713,8 @@ class TestCalculateWithdrawalsValueTtlCache:
         # Last calc was 60 seconds ago; TTL is 30 minutes, so it's a hit.
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts - 60),
-            "optimism_total_withdrawals": "12.5",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts - 60),
+            "total_withdrawals_optimism": "12.5",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -9470,8 +9746,8 @@ class TestCalculateWithdrawalsValueTtlCache:
         # 31 minutes ago → just outside the 30-minute TTL.
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts - 31 * 60),
-            "optimism_total_withdrawals": "8.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts - 31 * 60),
+            "total_withdrawals_optimism": "8.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -9504,8 +9780,8 @@ class TestCalculateWithdrawalsValueTtlCache:
 
         result = _drive(obj.calculate_withdrawals_value())
         assert result == Decimal("3.0")
-        assert writes["optimism_total_withdrawals"] == "3.0"
-        assert writes["last_withdrawals_calculated_timestamp"] == "1704067200"
+        assert writes["total_withdrawals_optimism"] == "3.0"
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == "1704067200"
 
     def test_cache_with_no_prior_timestamp_falls_through(self):
         """No prior kv entry → fetcher runs and cache is freshly written."""
@@ -9532,8 +9808,8 @@ class TestCalculateWithdrawalsValueTtlCache:
         result = _drive(obj.calculate_withdrawals_value())
         assert result == Decimal("0")
         # First-time write seeds the cache
-        assert "optimism_total_withdrawals" in writes
-        assert "last_withdrawals_calculated_timestamp" in writes
+        assert "total_withdrawals_optimism" in writes
+        assert "last_withdrawals_calculated_timestamp_optimism" in writes
 
     def test_fetcher_failure_skips_kv_write(self):
         """Fetcher returning None must skip the kv TTL cache write."""
@@ -9545,8 +9821,8 @@ class TestCalculateWithdrawalsValueTtlCache:
 
         yesterday_ts = int((datetime.now() - timedelta(days=2)).timestamp())
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(yesterday_ts),
-            "optimism_total_withdrawals": "5.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(yesterday_ts),
+            "total_withdrawals_optimism": "5.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10282,8 +10558,8 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         # Stored ts is in the future relative to "now" → age is negative.
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts + 3600),
-            "optimism_total_withdrawals": "12.5",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts + 3600),
+            "total_withdrawals_optimism": "12.5",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10314,7 +10590,7 @@ class TestKvCacheTtlBoundaries:
         # Cache treated as expired → fetcher ran, kv rewritten.
         assert result == Decimal("0")
         assert called[0] == 1
-        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == str(now_ts)
 
     def test_initial_investment_cache_age_zero_is_hit(self):
         """Age = 0 (same-second read/write) is a cache hit, pinning the ``<=`` lower bound."""
@@ -10326,7 +10602,7 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(now_ts)}
+            {"last_initial_value_calculated_timestamp_optimism": str(now_ts)}
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10343,8 +10619,8 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts),
-            "optimism_total_withdrawals": "12.5",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts),
+            "total_withdrawals_optimism": "12.5",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10381,7 +10657,11 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         just_inside_ttl_ts = now_ts - (INITIAL_INVESTMENT_CACHE_TTL_SECONDS - 1)
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(just_inside_ttl_ts)}
+            {
+                "last_initial_value_calculated_timestamp_optimism": str(
+                    just_inside_ttl_ts
+                )
+            }
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10403,8 +10683,8 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         just_inside_ttl_ts = now_ts - (WITHDRAWAL_CACHE_TTL_SECONDS - 1)
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(just_inside_ttl_ts),
-            "optimism_total_withdrawals": "42.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(just_inside_ttl_ts),
+            "total_withdrawals_optimism": "42.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10439,8 +10719,8 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         at_ttl_ts = now_ts - WITHDRAWAL_CACHE_TTL_SECONDS
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(at_ttl_ts),
-            "optimism_total_withdrawals": "42.0",
+            "last_withdrawals_calculated_timestamp_optimism": str(at_ttl_ts),
+            "total_withdrawals_optimism": "42.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10460,7 +10740,7 @@ class TestKvCacheTtlBoundaries:
         obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("0"))
 
         assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
-        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == str(now_ts)
 
     def test_initial_investment_cache_exactly_at_ttl_is_miss(self):
         """Age = TTL exactly is a cache miss for the initial-investment path.
@@ -10482,7 +10762,7 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         at_ttl_ts = now_ts - INITIAL_INVESTMENT_CACHE_TTL_SECONDS
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(at_ttl_ts)}
+            {"last_initial_value_calculated_timestamp_optimism": str(at_ttl_ts)}
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10508,7 +10788,7 @@ class TestKvCacheTtlBoundaries:
         assert load_called[0] == 0
 
     def test_withdrawal_cache_invalid_timestamp_format(self):
-        """Unparseable ``last_withdrawals_calculated_timestamp`` recomputes.
+        """Unparseable ``last_withdrawals_calculated_timestamp_{chain}`` recomputes.
 
         Symmetric with ``test_invalid_timestamp_format`` on the
         initial-investment path. A regression flipping the parse-error
@@ -10521,8 +10801,8 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": "not-a-number",
-            "optimism_total_withdrawals": "42.0",
+            "last_withdrawals_calculated_timestamp_optimism": "not-a-number",
+            "total_withdrawals_optimism": "42.0",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10553,10 +10833,10 @@ class TestKvCacheTtlBoundaries:
         # with a parseable value so the next cycle is clean.
         assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
         assert called[0] == 1
-        assert writes["last_withdrawals_calculated_timestamp"] == str(now_ts)
+        assert writes["last_withdrawals_calculated_timestamp_optimism"] == str(now_ts)
 
     def test_withdrawal_cache_within_ttl_missing_cached_val_falls_through(self):
-        """Within-TTL hit with no ``optimism_total_withdrawals`` recomputes.
+        """Within-TTL hit with no ``total_withdrawals_{chain}`` recomputes.
 
         The cache-hit branch reads the value via a second ``_read_kv``;
         if that key is missing the code must fall through to the
@@ -10570,7 +10850,7 @@ class TestKvCacheTtlBoundaries:
         # Two reads: the first returns just the timestamp (within TTL),
         # the second (for the cached value) returns no value.
         reads = [
-            {"last_withdrawals_calculated_timestamp": str(now_ts - 60)},
+            {"last_withdrawals_calculated_timestamp_optimism": str(now_ts - 60)},
             {},
         ]
         read_idx = [0]
@@ -10603,7 +10883,7 @@ class TestKvCacheTtlBoundaries:
     def test_withdrawal_cache_within_ttl_unparseable_cached_val_falls_through(
         self,
     ):
-        """Within-TTL hit with a garbage ``optimism_total_withdrawals`` recomputes.
+        """Within-TTL hit with a garbage ``total_withdrawals_{chain}`` recomputes.
 
         ``Decimal(str(cached_val))`` raises ``InvalidOperation`` on a
         non-numeric value; the code catches that and must fall through
@@ -10616,8 +10896,8 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         kv_state = {
-            "last_withdrawals_calculated_timestamp": str(now_ts - 60),
-            "optimism_total_withdrawals": "garbage",
+            "last_withdrawals_calculated_timestamp_optimism": str(now_ts - 60),
+            "total_withdrawals_optimism": "garbage",
         }
 
         def fake_read_kv(*args, **kwargs):
@@ -10653,7 +10933,7 @@ class TestKvCacheTtlBoundaries:
         now_ts = 1704067200
         future_ts = str(now_ts + 3600)
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": future_ts}
+            {"last_initial_value_calculated_timestamp_optimism": future_ts}
         )
         obj._get_current_timestamp = lambda: now_ts
 
@@ -10697,7 +10977,7 @@ class TestKvCacheTtlBoundaries:
 
         now_ts = 1704067200
         obj._read_kv = _gen_return(
-            {"last_initial_value_calculated_timestamp": str(now_ts - 60)}
+            {"last_initial_value_calculated_timestamp_optimism": str(now_ts - 60)}
         )
         obj._get_current_timestamp = lambda: now_ts
         # Stored cache value is falsy — triggers the "load full history" branch.

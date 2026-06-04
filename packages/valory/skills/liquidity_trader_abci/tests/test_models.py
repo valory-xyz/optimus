@@ -588,6 +588,7 @@ class TestParams:
             "min_investment_amount": 100,
             "max_fee_percentage": 0.1,
             "max_gas_percentage": 0.05,
+            "max_slippage_percentage": 0.1,
             "balancer_graphql_endpoints": json.dumps({}),
             "target_investment_chains": ["ethereum"],
             "staking_chain": "ethereum",

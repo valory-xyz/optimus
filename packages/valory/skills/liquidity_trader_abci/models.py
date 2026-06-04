@@ -479,6 +479,17 @@ class Params(BaseParams):
         self.min_investment_amount = self._ensure("min_investment_amount", kwargs, int)
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)
+        # Stored as a FRACTION (0.1 == 10%), not a percent — multiplied by 100 at the
+        # use-site. Matches max_fee_percentage / max_gas_percentage above.
+        # NOTE: this gate bounds COMBINED value loss (fromAmountUSD - toAmountUSD), which
+        # includes protocol/integrator fees as well as price impact, so it overlaps the
+        # fee gate. Set it with max_fee_percentage + max_gas_percentage headroom in mind:
+        # a route at the fee/gas limits already reports ~that much value loss here even at
+        # zero price impact, so a value too close to those limits rejects otherwise-fine
+        # routes. See check_if_route_is_profitable for the use-site.
+        self.max_slippage_percentage = self._ensure(
+            "max_slippage_percentage", kwargs, float
+        )
         self.balancer_graphql_endpoints = json.loads(
             self._ensure("balancer_graphql_endpoints", kwargs, str)
         )

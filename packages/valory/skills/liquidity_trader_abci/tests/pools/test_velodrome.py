@@ -226,8 +226,7 @@ class TestCheckPriceMovement:
         """Price within tolerance -> False."""
         b = make_behaviour()
         b.params.slippage_tolerance = 0.05  # 5%
-        # tick_range = 200, normalization = 200/10000 = 0.02
-        # price_change_pct = abs(1.0 - 1.0) / 0.02 * 100 = 0
+        # price_change_pct = abs(1.0 - 1.0) / 1.0 * 100 = 0% < 5% -> not moved
         gen = self._make_gen(
             b,
             current_price=1.0,
@@ -241,8 +240,7 @@ class TestCheckPriceMovement:
         """Price beyond tolerance -> True."""
         b = make_behaviour()
         b.params.slippage_tolerance = 0.01  # 1% tolerance
-        # tick_range = 200, normalization = 200/10000 = 0.02
-        # price_change_pct = abs(1.0 - 1.5) / 0.02 * 100 = 2500%
+        # price_change_pct = abs(1.5 - 1.0) / 1.0 * 100 = 50% > 1% -> moved
         gen = self._make_gen(
             b,
             current_price=1.5,
@@ -253,14 +251,14 @@ class TestCheckPriceMovement:
         assert result is True
 
     def test_narrowest_range_used(self) -> None:
-        """When multiple positions exist, the narrowest tick range is used."""
+        """When multiple positions exist, the narrowest tick range is selected
+        for the zero-width guard (the percentage formula itself is range-free)."""
         b = make_behaviour()
         b.params.slippage_tolerance = (
             0.10  # 10% tolerance -> slippage_tolerance_pct = 10
         )
-        # Narrowest range: 20 (tick -10 to 10), normalization = 20/10000 = 0.002
-        # price_change_pct = abs(1.0 - 1.0001) / 0.002 * 100 = 5%
-        # 5% < 10% -> not moved
+        # Narrowest range (tick -10 to 10) passes the zero-width guard.
+        # price_change_pct = abs(1.0001 - 1.0) / 1.0 * 100 = 0.01% < 10% -> not moved
         gen = self._make_gen(
             b,
             current_price=1.0001,
@@ -272,6 +270,20 @@ class TestCheckPriceMovement:
                     {"tick_lower": -50, "tick_upper": 50},  # range 100
                 ]
             ],
+        )
+        result = exhaust_generator(gen)
+        assert result is False
+
+    def test_zero_price_at_selection_returns_false(self) -> None:
+        """A falsy baseline price yields 0% change (avoids div-by-zero) -> False."""
+        b = make_behaviour()
+        b.params.slippage_tolerance = 0.01  # 1% tolerance
+        # price_at_selection = 0 -> price_change_pct defaults to 0.0 -> not moved
+        gen = self._make_gen(
+            b,
+            current_price=1.0,
+            price_at_selection=0.0,
+            tick_ranges=[[{"tick_lower": -100, "tick_upper": 100}]],
         )
         result = exhaust_generator(gen)
         assert result is False
@@ -2259,6 +2271,59 @@ class TestEnterClPool:
         assert result is not None
         assert len(result[0]) == 2
 
+    def test_scaling_single_sided_not_zeroed(self) -> None:
+        """A single-sided position (one token's max is 0) must not be zeroed by
+        the over-max scaling. Regression for the Base 1-tick band where
+        max_amounts_in[0] == 0 forced scale_factor to 0 and minted 0/0."""
+        b = self._make_b()
+        tr = [
+            [
+                {
+                    "tick_lower": 276337,
+                    "tick_upper": 276338,
+                    "allocation": 1.0,
+                    "token0_ratio": 0.0,
+                    "token1_ratio": 1.0,
+                },
+            ]
+        ]
+        b._get_cached_price_at_selection = MagicMock(return_value=_gen_return(1.0))
+        b._check_price_movement = MagicMock(return_value=_gen_return(False))
+        b._get_sqrt_price_x96 = MagicMock(return_value=_gen_return(2**96))
+        b._get_token_decimals = _mock_gen(18)
+        b._calculate_band_investment_with_pool_price = MagicMock(return_value=1100)
+        # All token1, slightly over max1 so the over-max scaling path runs.
+        b._calculate_individual_token_amounts = MagicMock(return_value=(0, 1100))
+        b._calculate_slippage_protection = MagicMock(return_value=(0, 990))
+        mint_calls: list = []
+
+        def rec_contract_interact(**kwargs):
+            """Record mint calls, return a dummy tx hash for every call."""
+            if kwargs.get("contract_callable") == "mint":
+                mint_calls.append(kwargs)
+            yield
+            return "0xMint"
+
+        b.contract_interact = rec_contract_interact
+        result = exhaust(
+            b._enter_cl_pool(
+                "0xPool",
+                "0xSafe",
+                ["0xT0", "0xT1"],
+                "optimism",
+                [0, 1000],
+                False,
+                tick_ranges=tr,
+                tick_spacing=1,
+            )
+        )
+        assert result is not None
+        assert mint_calls, "mint was not called"
+        # token0 stays 0 (single-sided); token1 must NOT be zeroed, and is
+        # clamped to max_amounts_in[1] (1000) rather than the 1100 overshoot.
+        assert mint_calls[0]["amount0_desired"] == 0
+        assert 0 < mint_calls[0]["amount1_desired"] <= 1000
+
     def test_multiple_positions_success(self) -> None:
         """Test multiple positions success."""
         b = self._make_b()
@@ -4084,9 +4149,14 @@ class TestCalculateIndividualTokenAmounts:
         assert a1 == 0
 
     def test_different_decimals(self) -> None:
-        """Should handle different token decimals correctly."""
+        """Should handle different token decimals correctly.
+
+        token0 has 6 decimals, token1 has 18, both ~$1. A 1:1 USD pool means a
+        raw price of 1e12 (sqrt_price = 1e6 * 2**96), i.e. a human price of 1.0.
+        A 50/50 value split of 1.0 token0-equivalent must give 0.5 of each in
+        human units."""
         b = make_behaviour()
-        sqrt_price_x96 = 2**96  # price = 1.0
+        sqrt_price_x96 = int(1_000_000 * 2**96)  # raw price 1e12 -> human price 1.0
         a0, a1 = b._calculate_individual_token_amounts(
             total_band_investment=1_000_000,  # 1.0 token0 (6 decimals)
             token0_ratio=0.5,
@@ -4137,7 +4207,11 @@ class TestCalculateIndividualTokenAmounts:
         assert a1 is None
 
     def test_non_unit_price(self) -> None:
-        """Test with non-unit price ratio."""
+        """Test with non-unit price ratio (same decimals).
+
+        price_ratio = (1.5)^2 = 2.25 raw token1 per raw token0; same decimals so
+        human price = 2.25. A token0-equivalent value converts to token1 by
+        multiplying by the price, so 0.5 token0-value -> 0.5 * 2.25 token1."""
         b = make_behaviour()
         # price_ratio = (1.5)^2 = 2.25
         sqrt_price_x96 = int(2**96 * 1.5)
@@ -4150,8 +4224,8 @@ class TestCalculateIndividualTokenAmounts:
         )
         # token0 = 0.5 * 1.0 = 0.5 -> 500_000
         assert a0 == 500_000
-        # token1 = (0.5 / 2.25) -> ~0.2222 -> ~222_222
-        expected_t1 = int(0.5 / 2.25 * 1_000_000)
+        # token1 = 0.5 token0-value * 2.25 token1/token0 = 1.125 -> 1_125_000
+        expected_t1 = int(0.5 * 2.25 * 1_000_000)
         assert a1 == expected_t1
 
 

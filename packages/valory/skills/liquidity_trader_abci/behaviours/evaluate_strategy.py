@@ -329,11 +329,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         sqrt_ratio_b_x96,
                         unit_liquidity,
                     )
-                    # Calculate from actual amounts
-                    total_amount = amount0 + amount1
+                    # amount0/amount1 are raw (token base units). Weight amount0
+                    # by the raw pool price (raw token1 per raw token0) so both
+                    # legs share units before forming the value ratio. Without
+                    # this, a token1 with more decimals than token0 dominates the
+                    # raw sum and forces token1_ratio to 1.0 — e.g. USDC (6) /
+                    # eUSD (18) on Base. Reduces to amount0/total when the pool
+                    # price is ~1 (same-decimal stable pairs).
+                    raw_price = (sqrt_price_x96 / (2**96)) ** 2
+                    amount0_in_token1 = amount0 * raw_price
+                    total_amount = amount0_in_token1 + amount1
                     if total_amount > 0:
                         # Round to 5 decimal places for precision
-                        token0_ratio = round(amount0 / total_amount, 5)
+                        token0_ratio = round(amount0_in_token1 / total_amount, 5)
                         token1_ratio = round(amount1 / total_amount, 5)
                     else:
                         # Fallback if calculation fails
@@ -447,9 +455,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         results = {}
         max_ration = 1.0
         for opportunity in self.selected_opportunities:  # type: ignore[attr-defined]
-            if opportunity.get("dex_type") in VELODROME_FAMILY_DEX_TYPES and opportunity.get(
-                "is_cl_pool"
-            ):
+            if opportunity.get(
+                "dex_type"
+            ) in VELODROME_FAMILY_DEX_TYPES and opportunity.get("is_cl_pool"):
                 try:
                     chain = opportunity["chain"]
                     pool_address = opportunity["pool_address"]
@@ -2286,9 +2294,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
             # Cache the enter pool action if this is a Velodrome CL pool
-            if opportunity.get("dex_type") in VELODROME_FAMILY_DEX_TYPES and opportunity.get(
-                "is_cl_pool"
-            ):
+            if opportunity.get(
+                "dex_type"
+            ) in VELODROME_FAMILY_DEX_TYPES and opportunity.get("is_cl_pool"):
                 yield from self._cache_enter_pool_action_for_cl_pool(
                     opportunity, enter_pool_action
                 )

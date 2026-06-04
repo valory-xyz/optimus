@@ -429,10 +429,10 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         adjusted_amounts = max_amounts_in
 
-        # TEMP (Basius MVP): Aerodrome slippage protection bypassed, re-enable
-        # per workstream 3 PR 3.3 by restoring the _query_add_liquidity_velodrome
-        # call here against (router_address, assets, is_stable, adjusted_amounts).
-        expected_amounts = {"amount_a": 0, "amount_b": 0}
+        # Query expected amounts and apply slippage protection
+        expected_amounts = yield from self._query_add_liquidity_velodrome(
+            router_address, assets[0], assets[1], is_stable, adjusted_amounts, chain
+        )
 
         if expected_amounts:
             slippage_tolerance = self.params.slippage_tolerance

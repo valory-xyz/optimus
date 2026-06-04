@@ -834,15 +834,6 @@ class TestEnterStableVolatilePool:
         result = exhaust_generator(gen)
         assert result == (None, None)
 
-    @pytest.mark.skip(
-        reason=(
-            "Aerodrome slippage protection is bypassed for the Basius MVP — the "
-            "_query_add_liquidity_velodrome call is replaced with a hardcoded "
-            "{amount_a: 0, amount_b: 0} so the 'returns None' branch is "
-            "unreachable. Re-enable per workstream 3 PR 3.3 and un-skip this "
-            "test alongside that change."
-        )
-    )
     def test_query_returns_none(self) -> None:
         """When _query_add_liquidity_velodrome returns None, returns (None, None)."""
         b = make_behaviour()

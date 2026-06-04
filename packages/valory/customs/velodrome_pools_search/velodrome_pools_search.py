@@ -69,17 +69,28 @@ CHAIN_NAMES = {
 }
 
 # Sugar contract addresses
+# Base value bumped 2026-06-04 to the LpSugar deployment listed in
+# velodrome-finance/sugar/deployments/base.env. LP_SUGAR_ABI's ``all``
+# signature and field order match the current Vyper source, so the
+# bump is ABI-compatible.
 SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
     OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
-    BASE_CHAIN_ID: "0x27fc745390d1f4BaF8D184FBd97748340f786634",  # Base Sugar contract address
+    BASE_CHAIN_ID: "0x69dD9db6d8f8E7d83887A704f447b1a584b599A1",  # Base LpSugar (V3)
 }
 
 # RewardsSugar contract addresses
+# Base value left on the older deployment 0xD4aD2... pending a struct
+# migration: the latest RewardsSugar V3 returns ``LpEpoch`` (ts, lp,
+# votes, emissions, bribes, fees) — not the ``EpochData`` shape
+# (timestamp, totalLiquidity, votes, emissions, emissionsToken, fees,
+# volume) that the consumer below decodes by index. Bumping without
+# rewriting the consumer would mis-decode index 1 (was totalLiquidity,
+# would be the lp address) and crash on float().
 REWARDS_SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0xD5d3ABAcB8CF075636792658EE0be8B03AF517B8",  # Mode RewardsSugar contract address (placeholder)
-    OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address (same as LpSugar for now)
-    BASE_CHAIN_ID: "0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E",  # Base RewardsSugar contract address (same as LpSugar for now)
+    OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address
+    BASE_CHAIN_ID: "0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E",  # Base RewardsSugar (older deployment; see note above)
 }
 
 # RPC endpoints

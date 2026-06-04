@@ -3212,9 +3212,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return total_investment if total_investment > 0 else None
 
-    def _get_transfer_key(
-        self, leg: str, date: str, transfer: Dict, index: int
-    ) -> str:
+    def _get_transfer_key(self, leg: str, date: str, transfer: Dict, index: int) -> str:
         """Build a unique key for a transfer using tx_hash or fallback fields.
 
         ``leg`` ("in" / "out") is prefixed so the incoming-funding and
@@ -3224,6 +3222,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         bugs). Without the prefix, whichever leg ran first would write
         its USD value to the shared key and the second leg would
         short-circuit on the cache hit and silently use the wrong value.
+
+        :param leg: ``"in"`` for incoming-funding entries, ``"out"`` for
+            reverted-ETH / outgoing entries.
+        :param date: ISO-8601 ``YYYY-MM-DD`` bucket the transfer belongs to.
+        :param transfer: the transfer record being keyed.
+        :param index: stable per-bucket index used as a tie-breaker when
+            no ``tx_hash`` is available.
+        :return: the cache key string.
         """
         tx_hash = transfer.get("tx_hash", "")
         if tx_hash:

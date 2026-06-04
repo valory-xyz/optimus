@@ -7534,7 +7534,10 @@ class TestCoverageGaps:
         """Fallback key when tx_hash is missing — namespaced by leg."""
         o = _mk()
         key = o._get_transfer_key(
-            "in", "2025-01-01", {"symbol": "ETH", "delta": 1.5, "from_address": "0xF"}, 3
+            "in",
+            "2025-01-01",
+            {"symbol": "ETH", "delta": 1.5, "from_address": "0xF"},
+            3,
         )
         assert key == "in_2025-01-01_ETH_1.5_0xF_3"
 
@@ -9525,10 +9528,14 @@ class TestDirectReadInvestment:
         # Same date + tx_hash on both ledger sides, different amounts.
         obj.funding_events = {
             "optimism": {
-                "2025-06-05": [{"symbol": "USDC", "amount": 10, "tx_hash": "0xCOLLIDE"}],
+                "2025-06-05": [
+                    {"symbol": "USDC", "amount": 10, "tx_hash": "0xCOLLIDE"}
+                ],
             },
             "optimism_outgoing": {
-                "2025-06-05": [{"symbol": "ETH", "amount": 0.01, "tx_hash": "0xCOLLIDE"}],
+                "2025-06-05": [
+                    {"symbol": "ETH", "amount": 0.01, "tx_hash": "0xCOLLIDE"}
+                ],
             },
         }
         captured: Dict[str, float] = {}
@@ -9636,8 +9643,7 @@ class TestDirectReadWs1EdgeCoverage:
         assert dropped == 0 and migrated == {}
 
     def test_safeglobal_transfer_without_unique_id(self):
-        """An incoming transfer lacking every ID source is processed but not
-        registered in the dedup set.
+        """ID-less incoming transfer is appended but skips the dedup set.
 
         ``_transfer_unique_id`` returns ``""`` when no ``transferId``,
         ``transactionHash``, or fallback identifier is present. The dedup
@@ -9677,8 +9683,7 @@ class TestDirectReadWs1EdgeCoverage:
         _drive(o._track_erc20_transfers_optimism("0xA", 1704067200))
 
     def test_erc20_outgoing_usdc_without_unique_id(self):
-        """An outgoing USDC transfer lacking every ID source is persisted but
-        not registered in the dedup set.
+        """ID-less outgoing USDC transfer is persisted but skips the dedup set.
 
         Mirror of ``test_safeglobal_transfer_without_unique_id`` for the
         outgoing path: an empty ``unique_id`` skips the seen-set add but

@@ -993,10 +993,9 @@ class TestGetPositions:
 def _make_optimism_b() -> Any:
     """Behaviour with default no-op stubs for _get_safe_balances_from_safe_api.
 
-    Stubs the reward fetch, the on-chain backstop, the inflow detector,
-    the kv reads, and the current timestamp so tests can isolate the
-    SafeApi-parse path. Tests that need any of these live override the
-    relevant stub.
+    Stubs the reward fetch, the on-chain backstop, the kv reads, and
+    the current timestamp so tests can isolate the SafeApi-parse path.
+    Tests that need any of these live override the relevant stub.
 
     :return: behaviour instance with the noop stubs installed.
     """
@@ -1004,7 +1003,6 @@ def _make_optimism_b() -> Any:
     b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
     b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
     b._get_current_timestamp = lambda: 0  # type: ignore[assignment,method-assign]
-    b._detect_and_invalidate_on_inflow = _make_gen(None)  # type: ignore[assignment,method-assign]
     b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
     b._supplement_with_onchain_whitelisted_balances = _make_gen(None)  # type: ignore[assignment,method-assign]
     return b
@@ -1448,7 +1446,6 @@ class TestGetOptimismBalances:
         b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
         b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
         b._get_current_timestamp = lambda: 0  # type: ignore[assignment,method-assign]
-        b._detect_and_invalidate_on_inflow = _make_gen(None)  # type: ignore[assignment,method-assign]
         b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
         # SafeApi returns ETH only (partial response).
         b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]

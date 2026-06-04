@@ -115,6 +115,7 @@ class TestFetchStrategiesWithdrawalGate:
         obj.params.available_strategies = {"optimism": ["uniswapV3"]}
         obj.params.initial_assets = {}
         obj._get_native_balance = _gen_return(1.0)
+        obj._detect_and_invalidate_on_inflow = _gen_none
         obj._read_kv = _gen_return(
             {
                 "selected_protocols": json.dumps(["uniswapV3"]),
@@ -5675,6 +5676,7 @@ class TestAsyncAct:
             obj.params.initial_assets = {}
 
             obj._get_native_balance = _gen_return(1.0)
+            obj._detect_and_invalidate_on_inflow = _gen_none
             obj._read_kv = _gen_return(
                 {
                     "selected_protocols": json.dumps(["uniswapV3"]),
@@ -5728,6 +5730,7 @@ class TestAsyncAct:
             obj.update_position_amounts = _gen_none
             obj.check_and_update_zero_liquidity_positions = MagicMock()
             obj._get_native_balance = _gen_return(1.0)
+            obj._detect_and_invalidate_on_inflow = _gen_none
             obj._check_and_create_eth_revert_transactions = _gen_none
             obj._read_kv = _gen_return({})
             obj._write_kv = _gen_none
@@ -5774,6 +5777,7 @@ class TestAsyncAct:
             obj.params.available_strategies = {}
 
             obj._get_native_balance = _gen_return(1.0)
+            obj._detect_and_invalidate_on_inflow = _gen_none
             obj._read_investing_paused = _gen_return(False)
 
             read_call = [0]
@@ -5811,6 +5815,84 @@ class TestAsyncAct:
 
                 gen = obj.async_act()
                 _drive(gen)
+
+    def test_inflow_detector_runs_once_per_target_chain(self):
+        """Pin the per-cycle inflow-detect hoist to target_investment_chains.
+
+        async_act hoists ``_detect_and_invalidate_on_inflow`` so the
+        downstream getters in this round / GetPositions / DecisionMaking
+        share a single per-chain invalidation pass. Asserts the hoist
+        is keyed off ``target_investment_chains`` and skips chains
+        without a configured safe address. Removing the hoist would
+        mean each downstream caller re-runs the same on-chain balance
+        reads, and a future regression where the loop iterates a
+        single hard-coded chain (the pre-multi-chain shape) would let
+        ``base`` go un-invalidated.
+        """
+        obj = _mk()
+        bm = MagicMock()
+        bm.local.return_value.__enter__ = MagicMock(return_value=None)
+        bm.local.return_value.__exit__ = MagicMock(return_value=False)
+        bm.consensus.return_value.__enter__ = MagicMock(return_value=None)
+        bm.consensus.return_value.__exit__ = MagicMock(return_value=False)
+        obj.context.benchmark_tool.measure.return_value = bm
+        obj.context.agent_address = "0xAgent"
+        obj.current_positions = []
+
+        with patch.object(
+            type(obj), "synchronized_data", new_callable=PropertyMock
+        ) as mock_sd:
+            mock_sd.return_value = MagicMock(period_count=1)
+
+            # Three target chains, but only two have a safe address —
+            # the third must be skipped (no inflow call), and the other
+            # two must each see exactly one call in order.
+            obj.params.target_investment_chains = ["optimism", "base", "mode"]
+            obj.params.safe_contract_addresses = {
+                "optimism": "0xSafeOp",
+                "base": "0xSafeBase",
+            }
+            obj.params.available_strategies = {"optimism": ["uniswapV3"]}
+            obj.params.initial_assets = {}
+
+            inflow_calls: List[Any] = []
+
+            def fake_inflow(chain: Any, safe_address: Any) -> Any:
+                """Fake inflow detector."""
+                inflow_calls.append((chain, safe_address))
+                yield
+
+            obj._detect_and_invalidate_on_inflow = fake_inflow
+            obj._get_native_balance = _gen_return(1.0)
+            obj._read_kv = _gen_return(
+                {
+                    "selected_protocols": json.dumps(["uniswapV3"]),
+                    "trading_type": "balanced",
+                }
+            )
+            obj._write_kv = _gen_none
+
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                mock_ss.return_value = MagicMock()
+                obj.whitelisted_assets = {"optimism": {"0xT": "TKN"}}
+                obj.read_whitelisted_assets = MagicMock()
+                obj._get_current_timestamp = lambda: 100
+                obj._track_whitelisted_assets = _gen_none
+                obj.calculate_user_share_values = _gen_none
+                obj.store_portfolio_data = MagicMock()
+                obj._update_agent_performance_metrics = MagicMock()
+                obj.send_a2a_transaction = _gen_none
+                obj.wait_until_round_end = _gen_none
+                obj.set_done = MagicMock()
+
+                _drive(obj.async_act())
+
+        assert inflow_calls == [
+            ("optimism", "0xSafeOp"),
+            ("base", "0xSafeBase"),
+        ]
 
 
 class TestCalculateInitialInvestmentValueFromFundingEvents:

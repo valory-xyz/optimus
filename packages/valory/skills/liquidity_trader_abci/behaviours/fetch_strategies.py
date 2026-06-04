@@ -261,6 +261,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 eth_balance = yield from self._get_native_balance(chain, safe_address)
                 self.context.logger.info(f"Current ETH balance: {eth_balance}")
 
+                for inflow_chain in self.params.target_investment_chains:
+                    inflow_safe = self.params.safe_contract_addresses.get(inflow_chain)
+                    if inflow_safe:
+                        yield from self._detect_and_invalidate_on_inflow(
+                            inflow_chain, inflow_safe
+                        )
+
                 if self.synchronized_data.period_count == 0:
                     yield from self._check_and_create_eth_revert_transactions(
                         chain, safe_address, sender

@@ -647,10 +647,13 @@ class LiquidityTraderBaseBehaviour(
 
         Reads from the kv cache if the last successful fetch is within
         ``SAFE_BALANCES_CACHE_TTL_SECONDS`` and no other code path has
-        invalidated it (RPC change-detect, PostTxSettlement hook). On a
-        cache miss, hits SafeApi, persists the result, then returns it.
-        On API failure with no usable cache, falls back to the on-chain
-        backstop in ``_supplement_with_onchain_whitelisted_balances``.
+        invalidated it. Invalidation happens once per period upstream
+        in ``FetchStrategiesBehaviour.async_act`` via
+        ``_detect_and_invalidate_on_inflow`` and after each settled tx
+        via ``_invalidate_caches_after_tx``. On a cache miss, hits
+        SafeApi, persists the result, then returns it. On API failure
+        with no usable cache, falls back to the on-chain backstop in
+        ``_supplement_with_onchain_whitelisted_balances``.
 
         :param chain: chain identifier as used in
             ``target_investment_chains`` (e.g. ``"optimism"``, ``"base"``).
@@ -661,12 +664,6 @@ class LiquidityTraderBaseBehaviour(
         if not safe_address:
             self.context.logger.error(f"No safe address set for {chain} chain")
             return []
-
-        # Pre-cache: check for external inflow via cheap on-chain reads.
-        # If a whitelisted balance went up since last cycle, the helper
-        # invalidates ``last_safe_balances_calculated_timestamp_{chain}``
-        # so the cache lookup below falls through to a fresh SafeApi fetch.
-        yield from self._detect_and_invalidate_on_inflow(chain, safe_address)
 
         # TTL cache: skip the SafeApi fetch if a recent result is on disk.
         balances_key = safe_balances_kv_key(chain)

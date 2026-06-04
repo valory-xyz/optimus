@@ -5473,6 +5473,54 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
             _drive(obj.calculate_initial_investment_value_from_funding_events()) is None
         )
 
+    def test_empty_fetch_still_values_persisted_history(self):
+        """An empty fetch must still value the chain's persisted history.
+
+        ``all_transfers == {}`` means no fresh transfers this cycle, but
+        ``funding_events[chain]`` still holds every row priced in earlier
+        cycles. The loop must reach ``_calculate_chain_investment_value`` so
+        the persisted rows are valued. A revert that re-adds ``continue``
+        after the empty-fetch log would skip the call entirely and drop the
+        persisted denominator to zero.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_optimism = _gen_return({})
+        obj._load_priced_transfers = _gen_return({})
+        obj._save_priced_transfers = _gen_none
+        obj._save_chain_total_investment = _gen_none
+        obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
+        obj._fetch_historical_token_price = _gen_return(1.0)
+        obj._get_current_timestamp = lambda: 100
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [
+                    {"symbol": "USDC", "amount": 25, "tx_hash": "0xPERS"},
+                ]
+            }
+        }
+        # Spy on the per-chain valuation so the test fails loudly if a
+        # regression skips it. A simple stub would mask the regression
+        # because the empty-fetch branch only differs in whether the call
+        # happens; the call's *return value* is identical.
+        real_calc = obj._calculate_chain_investment_value
+        calls = [0]
+
+        def spy(chain):
+            calls[0] += 1
+            result = yield from real_calc(chain)
+            return result
+
+        obj._calculate_chain_investment_value = spy
+
+        result = _drive(obj.calculate_initial_investment_value_from_funding_events())
+        assert calls[0] == 1
+        assert result == 25.0
+
 
 class TestFetchAllTransfersUntilDateMode:
     """TestFetchAllTransfersUntilDateMode."""
@@ -9152,6 +9200,66 @@ class TestDirectReadInvestment:
         # The outgoing leg updated the cache, so the save fired despite a cached incoming.
         assert len(saved) == 1
         assert "2025-06-20_0xOUT" in saved[0][1]
+
+    def test_save_skipped_when_both_legs_cached(self):
+        """Fully-cached cycle must not write the cache.
+
+        Sibling to ``test_save_called_when_only_outgoing_updates``: when both
+        legs short-circuit on cache hits, ``inc_updated`` and ``out_updated``
+        are both False and the save must be skipped. Removing the
+        ``if inc_updated or out_updated:`` guard would turn the warm-cycle
+        path into an unconditional KV write.
+        """
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [{"symbol": "USDC", "amount": 16, "tx_hash": "0xINC"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xOUT"}],
+            },
+        }
+        obj._load_priced_transfers = _gen_return(
+            {"2025-06-05_0xINC": 16.0, "2025-06-20_0xOUT": 13.0}
+        )
+        saved = []
+
+        def _save(chain, priced):
+            saved.append((chain, dict(priced)))
+            yield
+
+        obj._save_priced_transfers = _save
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert abs(result - (16.0 - 13.0)) < 1e-6
+        assert saved == []
+
+    def test_failed_price_not_cached(self):
+        """A failed price fetch must leave the row uncached.
+
+        Pricing failure is transient (rate limit, upstream outage). Caching
+        any sentinel value would make the failure permanent, since the
+        ``if transfer_key in priced_transfers`` short-circuit would skip the
+        re-fetch once the price endpoint recovers.
+        """
+        obj = self._obj()
+        obj._fetch_historical_token_price = _gen_return(None)
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [{"symbol": "USDC", "amount": 3, "tx_hash": "0xP"}]
+            }
+        }
+        # Custom loader so we can inspect the mutated cache dict directly.
+        captured_cache: Dict[str, float] = {}
+
+        def _load(chain):
+            yield
+            return captured_cache
+
+        obj._load_priced_transfers = _load
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 0.0
+        assert "2025-01-01_0xP" not in captured_cache
+        obj.context.logger.warning.assert_called()
 
 
 class TestDirectReadWs1EdgeCoverage:

@@ -505,12 +505,19 @@ class LiquidityTraderBaseBehaviour(
         all_balances = defaultdict(list)
 
         for chain in self.params.target_investment_chains:
+            balances: List[Dict[str, Any]] = []
             if chain in self.params.safe_api_chain_slugs:
                 # Use SafeApi for any chain wired into ``safe_api_chain_slugs``.
                 balances = yield from self._get_safe_balances_from_safe_api(chain)
-            elif chain == Chain.MODE.value:  # pragma: no branch
+            elif chain == Chain.MODE.value:
                 # Mode is not on the Safe Transaction Service; use Mode Explorer.
                 balances = yield from self._get_mode_balances_from_explorer_api()
+            else:
+                self.context.logger.warning(
+                    f"No balances dispatch for {chain}: not in "
+                    "safe_api_chain_slugs and not Mode; skipping"
+                )
+                continue
 
             if balances:
                 all_balances[chain].extend(balances)
@@ -540,10 +547,12 @@ class LiquidityTraderBaseBehaviour(
         the initial-investment cache here — that path has its own TTL
         and is driven by incoming-transfer records, which are not
         produced by agent-internal token movement. The current readings
-        are then persisted as the new baseline. Sequential RPC reads
-        are intentional here: at ~5 whitelisted tokens per chain the
-        per-cycle cost is small, and using the existing helpers keeps
-        this change contained to base.py.
+        are merged into the persisted baseline rather than replacing
+        it so a single timed-out RPC read doesn't drop a token from the
+        snapshot and trigger a spurious inflow on the next cycle.
+        Sequential RPC reads are intentional here: at ~5 whitelisted
+        tokens per chain the per-cycle cost is small, and using the
+        existing helpers keeps this change contained to base.py.
 
         :param chain: chain identifier (e.g. ``"optimism"``).
         :param safe_address: the Safe contract address on that chain.
@@ -596,12 +605,18 @@ class LiquidityTraderBaseBehaviour(
                 )
                 break
 
+        # Merge, don't replace: ``current`` only holds tokens whose RPC
+        # reads succeeded this cycle. A wholesale overwrite would drop
+        # any timed-out key and the next cycle would mistake the real
+        # balance for an inflow against the missing-=>-0 default.
+        merged_snapshot = {**last_known, **current}
+
         # Atomic write: timestamp reset and baseline-snapshot update go in
         # the same kv payload. If the write raises, NEITHER lands — the
         # next cycle re-detects the same delta and re-tries. Splitting the
         # writes would let the baseline advance on a half-failed cycle and
         # silently lose the inflow signal for the rest of the TTL.
-        payload: Dict[str, str] = {last_known_key: json.dumps(current)}
+        payload: Dict[str, str] = {last_known_key: json.dumps(merged_snapshot)}
         if inflow_token is not None:
             payload[safe_balances_ts_kv_key(chain)] = "0"
         try:
@@ -752,7 +767,19 @@ class LiquidityTraderBaseBehaviour(
         for balance_data in all_balances:
             token_address = balance_data.get("tokenAddress")
             token_info = balance_data.get("token")
-            balance = balance_data.get("balance", "0")
+            raw_balance = balance_data.get("balance", "0")
+            # ``raw_balance`` defaults to ``"0"`` only when the key is
+            # absent; a present JSON ``null`` (reachable via a corrupt
+            # cached payload) would otherwise crash ``int(None)`` and
+            # propagate out of ``get_positions``.
+            try:
+                balance_int = int(raw_balance)
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    f"Skipping safe balance entry with unparseable balance "
+                    f"{raw_balance!r} for token {token_address!r}"
+                )
+                continue
             # ``fiatBalance`` / ``fiatConversion`` come straight from the
             # Safe Transaction Service; using them avoids a paid CoinGecko
             # lookup per token for the whitelisted tokens Safe already
@@ -768,7 +795,7 @@ class LiquidityTraderBaseBehaviour(
                         "asset_symbol": "ETH",
                         "asset_type": "native",
                         "address": to_checksum_address(ZERO_ADDRESS),
-                        "balance": int(balance),
+                        "balance": balance_int,
                         "fiat_balance": fiat_balance,
                         "fiat_conversion": fiat_conversion,
                     }
@@ -787,7 +814,7 @@ class LiquidityTraderBaseBehaviour(
                             "asset_symbol": token_info.get("symbol", "UNKNOWN"),
                             "asset_type": "erc_20",
                             "address": to_checksum_address(token_address),
-                            "balance": int(balance),
+                            "balance": balance_int,
                             "fiat_balance": fiat_balance,
                             "fiat_conversion": fiat_conversion,
                         }

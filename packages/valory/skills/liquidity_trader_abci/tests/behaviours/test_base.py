@@ -25,7 +25,7 @@ import json
 import os
 import tempfile
 import time
-from typing import Any, Generator
+from typing import Any, Generator, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -989,6 +989,48 @@ class TestGetPositions:
         assert safe_api_calls == ["optimism"]
         assert explorer_calls == ["mode"]
 
+    def test_chain_dispatch_skips_chain_with_no_handler(self) -> None:
+        """Chains that match neither dispatch branch are skipped.
+
+        A chain that's not in ``safe_api_chain_slugs`` and not Mode
+        (e.g. a future mainnet entry added before its slug is wired)
+        must NOT carry over the previous iteration's ``balances``: that
+        would double-credit one chain's assets to another's positions.
+        The current iteration must produce no entry for the unhandled
+        chain and the next iteration must dispatch cleanly.
+        """
+        b = _make_behaviour()
+
+        safe_api_calls: list = []
+
+        def safe_api_path(chain: Any) -> Any:
+            safe_api_calls.append(chain)
+            yield
+            return [
+                {
+                    "asset_symbol": "USDC",
+                    "balance": 7,
+                    "address": "0xUSDC",
+                }
+            ]
+
+        b._get_safe_balances_from_safe_api = safe_api_path  # type: ignore[method-assign]
+
+        # ``unknown`` matches neither branch and must be skipped.
+        # ``optimism`` follows it and must produce its own entry, not
+        # inherit ``unknown``'s (uninitialized / leftover) balances.
+        b.params.target_investment_chains = ["unknown", "optimism"]
+        b.params.safe_api_chain_slugs = {"optimism": "oeth"}
+        positions = _exhaust(b.get_positions())
+        assert safe_api_calls == ["optimism"]
+        chains_returned = [p["chain"] for p in positions]
+        assert "unknown" not in chains_returned
+        assert chains_returned == ["optimism"]
+        optimism_assets = next(
+            p["assets"] for p in positions if p["chain"] == "optimism"
+        )
+        assert [a["balance"] for a in optimism_assets] == [7]
+
 
 def _make_optimism_b() -> Any:
     """Behaviour with default no-op stubs for _get_safe_balances_from_safe_api.
@@ -1130,6 +1172,65 @@ class TestDetectAndInvalidateOnInflow:
             for w in writes
         )
 
+    def test_partial_rpc_read_preserves_baseline_keys(self) -> None:
+        """A timed-out token read must NOT drop that token from the baseline.
+
+        ``current`` only collects tokens whose RPC reads returned non-None.
+        Replacing ``last_known_safe_balances_{chain}`` wholesale with
+        ``current`` would drop any timed-out key; next cycle the real
+        balance would compare against the missing-=>-0 default and fire a
+        spurious inflow + cache invalidation every cycle until a single
+        fully-successful pass restored the snapshot. Asserts the persisted
+        snapshot is the merge ``{**last_known, **current}``: USDC keeps
+        its prior 999 (read failed this cycle) and native ETH stays at
+        the same 50 (no real inflow).
+        """
+        usdc_op = "0x0b2c639c533813f4aa9d7837caf62653d097ff85"
+        b = self._b()
+        b._get_native_balance = _make_gen(50)  # type: ignore[assignment,method-assign]
+
+        def fake_token_balance(
+            chain: Any, account: Any, address: Any
+        ) -> Generator[None, None, Optional[int]]:
+            yield
+            # USDC read times out (returns None); everything else 0.
+            if (address or "").lower() == usdc_op:
+                return None
+            return 0
+
+        b._get_token_balance = fake_token_balance  # type: ignore[method-assign]
+        # Prior baseline has USDC at 999; native ETH at 50 (unchanged).
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "last_known_safe_balances_optimism": json.dumps(
+                    {ZERO_ADDRESS.lower(): 50, usdc_op: 999}
+                )
+            }
+        )
+
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._write_kv = capture_write  # type: ignore[method-assign]
+        _exhaust(b._detect_and_invalidate_on_inflow("optimism", "0xSafe"))
+
+        snapshot_writes = [
+            w for w in writes if "last_known_safe_balances_optimism" in w
+        ]
+        assert len(snapshot_writes) == 1
+        persisted = json.loads(snapshot_writes[0]["last_known_safe_balances_optimism"])
+        # USDC retained from prior baseline despite timed-out read.
+        assert persisted[usdc_op] == 999
+        # Native ETH stays at 50, matching the prior baseline.
+        assert persisted[ZERO_ADDRESS.lower()] == 50
+        # No spurious inflow: nothing went up.
+        for w in writes:
+            assert "last_safe_balances_calculated_timestamp_optimism" not in w, w
+
     def test_inflow_does_not_invalidate_initial_value_cache(self) -> None:
         """Initial-investment timestamp is deliberately NOT reset here.
 
@@ -1235,6 +1336,56 @@ class TestGetOptimismBalances:
         )
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         assert len(result) == 0
+
+    def test_skips_entry_with_null_balance(self) -> None:
+        """A present-but-null ``balance`` is skipped rather than crashing.
+
+        ``balance_data.get("balance", "0")`` returns ``"0"`` only when
+        the key is *absent*; a JSON ``null`` (reachable via a corrupt
+        cached payload, since the live Safe Transaction Service shouldn't
+        emit one) makes ``int(None)`` raise ``TypeError`` and propagate
+        out of ``get_positions``. The parse loop must catch this, log,
+        and continue so one bad entry doesn't poison the whole list.
+        """
+        b = _make_optimism_b()
+        token_addr = "0x" + "cd" * 20
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (
+                True,
+                [
+                    # Native ETH with a null balance: skipped.
+                    {"tokenAddress": None, "balance": None},
+                    # Valid ERC-20 alongside: still included, proving the
+                    # loop didn't abort on the bad entry.
+                    {
+                        "tokenAddress": token_addr,
+                        "token": {"symbol": "USDC"},
+                        "balance": "500",
+                    },
+                ],
+            )
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        assert [r["asset_symbol"] for r in result] == ["USDC"]
+        assert result[0]["balance"] == 500
+
+    def test_skips_entry_with_non_numeric_balance(self) -> None:
+        """A non-numeric ``balance`` string is skipped, not raised."""
+        b = _make_optimism_b()
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (
+                True,
+                [
+                    {
+                        "tokenAddress": "0x" + "ef" * 20,
+                        "token": {"symbol": "BAD"},
+                        "balance": "not-a-number",
+                    },
+                ],
+            )
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        assert result == []
 
     def test_skips_token_without_info(self) -> None:
         """ERC-20 token with no token info is skipped."""

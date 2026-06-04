@@ -34,11 +34,6 @@ from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
 from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
-from packages.valory.contracts.gnosis_safe.contract import (
-    GnosisSafeContract,
-    SafeOperation,
-)
-from packages.valory.contracts.service_registry.contract import ServiceRegistryContract
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
@@ -60,7 +55,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     OLAS_ADDRESSES,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
-    SAFE_TX_GAS,
     TradingType,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
@@ -69,7 +63,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     total_withdrawals_kv_key,
     withdrawals_ts_kv_key,
 )
-from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     Event,
     FetchStrategiesPayload,
@@ -81,9 +74,6 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
-)
-from packages.valory.skills.transaction_settlement_abci.payload_tools import (
-    hash_payload_to_hex,
 )
 
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
@@ -254,13 +244,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.context.logger.info(f"Current Positions: {self.current_positions}")
 
-                chain = self.params.target_investment_chains[0]
-                safe_address = self.params.safe_contract_addresses.get(chain)
-
-                # update locally stored eth balance in-case it's incorrect
-                eth_balance = yield from self._get_native_balance(chain, safe_address)
-                self.context.logger.info(f"Current ETH balance: {eth_balance}")
-
                 for inflow_chain in self.params.target_investment_chains:
                     # Only chains that flow through ``_get_safe_balances_from_safe_api``
                     # have a cache for this loop to invalidate. Mode (and any
@@ -274,11 +257,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         yield from self._detect_and_invalidate_on_inflow(
                             inflow_chain, inflow_safe
                         )
-
-                if self.synchronized_data.period_count == 0:
-                    yield from self._check_and_create_eth_revert_transactions(
-                        chain, safe_address, sender
-                    )
 
                 db_data = yield from self._read_kv(
                     keys=("selected_protocols", "trading_type")
@@ -507,83 +485,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             "Completed price-based filtering of whitelisted assets"
         )
-
-    def _check_and_create_eth_revert_transactions(
-        self, chain, safe_address, sender
-    ) -> Generator[None, None, None]:
-        """Check if there are any ETH revert transactions and create them if there are."""
-
-        if not safe_address:
-            self.context.logger.error(f"No safe address found for chain {chain}")
-            return
-
-        res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
-
-        to_address = res.get("master_safe_address")
-        eth_amount = int(res.get("reversion_amount", 0) * 10**18)
-
-        if eth_amount > 0:
-            if not to_address:
-                self.context.logger.error(
-                    f"No master safe address found for chain {chain}"
-                )
-                # Continue with normal flow
-            else:
-                self.context.logger.info(
-                    f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}"
-                )
-
-                # Create ETH transfer transaction
-                safe_tx_hash = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=safe_address,
-                    contract_public_id=GnosisSafeContract.contract_id,
-                    contract_callable="get_raw_safe_transaction_hash",
-                    data_key="tx_hash",
-                    to_address=to_address,
-                    value=eth_amount,
-                    data=b"",
-                    operation=SafeOperation.CALL.value,
-                    safe_tx_gas=SAFE_TX_GAS,
-                    chain_id=chain,
-                )
-
-                if safe_tx_hash:
-                    safe_tx_hash = safe_tx_hash[2:]
-                    payload_string = hash_payload_to_hex(
-                        safe_tx_hash=safe_tx_hash,
-                        ether_value=eth_amount,
-                        safe_tx_gas=SAFE_TX_GAS,
-                        operation=SafeOperation.CALL.value,
-                        to_address=to_address,
-                        data=b"",
-                    )
-
-                    # Create settlement payload
-                    payload = FetchStrategiesPayload(
-                        sender=sender,
-                        content=json.dumps(
-                            {
-                                "event": "settle",
-                                "updates": {
-                                    "tx_submitter": FetchStrategiesRound.auto_round_id(),
-                                    "most_voted_tx_hash": payload_string,
-                                    "chain_id": chain,
-                                    "safe_contract_address": safe_address,
-                                },
-                            },
-                            sort_keys=True,
-                        ),
-                    )
-
-                    with self.context.benchmark_tool.measure(
-                        self.behaviour_id
-                    ).consensus():
-                        yield from self.send_a2a_transaction(payload)
-                        yield from self.wait_until_round_end()
-
-                    self.set_done()
-                    return
 
     def _get_historical_price_for_date(
         self, token_address: str, token_symbol: str, date_str: str, chain: str
@@ -3287,17 +3188,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
                 continue
 
+            # ``all_transfers`` is only this cycle's freshly-fetched delta (it merges into
+            # funding_events as a side effect). The valuation reads the full persisted
+            # funding_events directly, so recompute even when nothing new was fetched —
+            # historical rows still count.
             if not all_transfers:
-                self.context.logger.warning(f"No transfers found for {chain} chain")
-                continue
+                self.context.logger.info(
+                    f"No new {chain} transfers this cycle; valuing persisted history"
+                )
 
             # Calculate investment value for this chain
-            chain_investment = yield from self._calculate_chain_investment_value(
-                all_transfers, chain, safe_address
-            )
+            chain_investment = yield from self._calculate_chain_investment_value(chain)
             total_investment += chain_investment
 
-        yield from self._save_chain_total_investment(chain, total_investment)
+        # Per-chain totals are written inside ``_calculate_chain_investment_value``;
+        # a single post-loop write would target only the last-iterated chain with
+        # the cross-chain sum and over-count it on the next cache-hit read.
 
         timestamp = int(self._get_current_timestamp())
         yield from self._write_kv({initial_value_ts_kv_key(chain): str(timestamp)})
@@ -3308,15 +3214,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return total_investment if total_investment > 0 else None
 
-    def _get_transfer_key(self, date: str, transfer: Dict, index: int) -> str:
-        """Build a unique key for a transfer using tx_hash or fallback fields."""
+    def _get_transfer_key(self, leg: str, date: str, transfer: Dict, index: int) -> str:
+        """Build a unique key for a transfer using tx_hash or fallback fields.
+
+        ``leg`` ("in" / "out") is prefixed so the incoming-funding and
+        reverted-ETH legs cannot collide on the same shared cache when a
+        single tx_hash appears on both sides of the ledger (multisend,
+        internal-transfer scenarios, or legacy on-disk data from prior
+        bugs). Without the prefix, whichever leg ran first would write
+        its USD value to the shared key and the second leg would
+        short-circuit on the cache hit and silently use the wrong value.
+
+        :param leg: ``"in"`` for incoming-funding entries, ``"out"`` for
+            reverted-ETH / outgoing entries.
+        :param date: ISO-8601 ``YYYY-MM-DD`` bucket the transfer belongs to.
+        :param transfer: the transfer record being keyed.
+        :param index: stable per-bucket index used as a tie-breaker when
+            no ``tx_hash`` is available.
+        :return: the cache key string.
+        """
         tx_hash = transfer.get("tx_hash", "")
         if tx_hash:
-            return f"{date}_{tx_hash}"
+            return f"{leg}_{date}_{tx_hash}"
         symbol = transfer.get("symbol", "")
         amount = transfer.get("delta", transfer.get("amount", 0))
         from_addr = transfer.get("from_address", "")
-        return f"{date}_{symbol}_{amount}_{from_addr}_{index}"
+        return f"{leg}_{date}_{symbol}_{amount}_{from_addr}_{index}"
 
     def _load_priced_transfers(
         self, chain: str
@@ -3341,83 +3264,118 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         yield from self._write_kv({key: json.dumps(priced, ensure_ascii=True)})
 
     def _calculate_chain_investment_value(
-        self, all_transfers: Dict, chain: str, safe_address: str
+        self, chain: str
     ) -> Generator[None, None, float]:
-        """Calculate investment value for a specific chain and update stored total."""
-        new_investment = 0.0
-        total_reversion = 0.0
+        """Compute a chain's initial investment directly from funding_events.
 
-        # Track ETH transfers and reversions first
-        reversion_info = yield from self._track_eth_transfers_and_reversions(
-            safe_address, chain
-        )
-        reversion_amount = reversion_info.get("reversion_amount", 0)
-        historical_reversion_value = reversion_info.get(
-            "historical_reversion_value", 0.0
-        )
-        reversion_date = reversion_info.get("reversion_date")
+        funding_events is the canonical record. Incoming funding lives under ``chain``;
+        reverted (outgoing) ETH under ``{chain}_outgoing``::
 
-        if historical_reversion_value > 0:
-            total_reversion += historical_reversion_value
-            self.context.logger.info(
-                f"{chain.upper()} REVERSION: {historical_reversion_value} ETH (from {reversion_date})"
+            initial = sum(priced incoming) - sum(priced outgoing ETH)
+
+        Each row is priced once and cached in ``{chain}_priced_transfers`` (one-time per
+        row, not per cycle); the full persisted record is read so the total reflects all
+        history.
+
+        Going forward only USDC is recorded as incoming funding for Optimism (the incoming
+        ETHER_TRANSFER-recording branch was removed with the reversion logic), so a
+        freshly-deployed agent is effectively USDC-only. Incoming ETH and the reverted-ETH
+        subtraction are therefore **historical-only**: they apply solely to rows the old
+        code already persisted. Nothing writes ``{chain}_outgoing`` anymore, so Optimism
+        reversions are subtracted from legacy on-disk data only, and Mode (which never
+        persisted a ``mode_outgoing`` key) gets no reversion subtraction — accepted because
+        Mode ETH is gas-dust and no new reversions occur once the revert-tx path is gone.
+
+        :param chain: the chain to value.
+        :yield: None: generator yield for async operations.
+        :return: the chain's initial investment in USD.
+        """
+        if not self.funding_events:
+            self.read_funding_events()  # side-effects self.funding_events
+        if not self.funding_events:
+            # Either a fresh agent with no history yet, or the on-disk read
+            # failed (``_read_data`` logs ERROR and leaves the attribute
+            # unchanged on JSON-decode / PermissionError / OSError). Surface
+            # the empty state explicitly so an operator hitting a ROI of $0
+            # can grep for this warning and check the upstream error log to
+            # distinguish "no history" from "disk failed".
+            self.context.logger.warning(
+                f"funding_events empty for chain {chain} after disk read; "
+                "treating as fresh agent. Check for prior _read_data errors "
+                "if a non-empty history was expected."
             )
-
-        if reversion_amount > 0:
-            date_str = (
-                reversion_date
-                if reversion_date
-                else datetime.now().strftime("%d-%m-%Y")
-            )
-            eth_price = yield from self._fetch_historical_eth_price(date_str)
-            if eth_price:  # pragma: no branch
-                reversion_value = reversion_amount * eth_price
-                total_reversion += reversion_value
-                self.context.logger.info(
-                    f"{chain.upper()} REVERSION: {reversion_amount} ETH @ ${eth_price} = ${reversion_value} (from {reversion_date})"
-                )
-
-        # Load previously priced transfers so we never re-fetch their prices
+            self.funding_events = {}
         priced_transfers = yield from self._load_priced_transfers(chain)
-        cached_investment = 0.0
-        priced_updated = False
 
-        for date, transfers in all_transfers.items():
+        incoming = self.funding_events.get(chain, {}) or {}
+        incoming_value, inc_updated = yield from self._sum_priced_chain_transfers(
+            incoming, chain, priced_transfers, leg="in"
+        )
+        # Reverted ETH that left the safe is a fixed historical record on disk; subtract it.
+        outgoing = self.funding_events.get(f"{chain}_outgoing", {}) or {}
+        reverted_value, out_updated = yield from self._sum_priced_chain_transfers(
+            outgoing, chain, priced_transfers, leg="out"
+        )
+
+        if inc_updated or out_updated:
+            yield from self._save_priced_transfers(chain, priced_transfers)
+
+        total = incoming_value - reverted_value
+        yield from self._save_chain_total_investment(chain, total)
+        self.context.logger.info(
+            f"Total {chain} investment: ${total} "
+            f"(incoming: ${incoming_value}, reverted ETH: ${reverted_value})"
+        )
+        return total
+
+    def _sum_priced_chain_transfers(
+        self,
+        date_keyed: Dict,
+        chain: str,
+        priced_transfers: Dict[str, float],
+        leg: str,
+    ) -> Generator[None, None, Tuple[float, bool]]:
+        """Price (once, cached) and sum a date-keyed transfer dict.
+
+        Shared by the incoming-funding and reverted-ETH legs of the investment
+        calculation. Counts positive amounts only. Airdropped USDC on Mode is excluded; the
+        filter is gated on ``symbol == USDC`` so it is a no-op on the ETH-only outgoing leg.
+        Prices are cached per transfer key in ``priced_transfers`` (mutated in place) so
+        each row is priced at most once.
+
+        :param date_keyed: a ``{date: [transfer, ...]}`` mapping from funding_events.
+        :param chain: the chain (for token-id lookup and pricing).
+        :param priced_transfers: the per-row USD price cache, mutated in place.
+        :param leg: "in" or "out" — namespaces the cache key so a tx_hash that
+            appears on both ledger sides cannot be priced once and re-used by
+            the other leg.
+        :yield: None: generator yield for async operations.
+        :return: a ``(summed_value, cache_updated)`` tuple.
+        """
+        total = 0.0
+        updated = False
+        for date, transfers in date_keyed.items():
             for idx, transfer in enumerate(transfers):
                 try:
                     token_symbol = transfer.get("symbol", "Unknown")
                     amount = transfer.get("delta", transfer.get("amount", 0))
-
                     if amount <= 0:
                         continue
-
-                    # Check if this is an airdropped USDC transfer and exclude it from initial investment
+                    # Exclude airdropped USDC on mode (no-op on the ETH-only outgoing leg).
                     if (
                         chain == "mode"
                         and token_symbol.upper() == "USDC"
                         and self.params.airdrop_started
                         and self.params.airdrop_contract_address
+                        and str(transfer.get("from_address", "")).lower()
+                        == self.params.airdrop_contract_address.lower()
                     ):
-                        from_address = transfer.get("from_address", "")
-                        if (  # pragma: no branch
-                            from_address.lower()
-                            == self.params.airdrop_contract_address.lower()
-                        ):
-                            self.context.logger.info(
-                                f"Excluding airdropped USDC transfer from initial investment: {amount} USDC from {from_address}"
-                            )
-                            continue
-
-                    transfer_key = self._get_transfer_key(date, transfer, idx)
-
-                    # If this transfer was already priced, use the cached value
-                    if transfer_key in priced_transfers:
-                        cached_investment += priced_transfers[transfer_key]
                         continue
-
-                    # Get historical price for the transfer date
+                    transfer_key = self._get_transfer_key(leg, date, transfer, idx)
+                    if transfer_key in priced_transfers:
+                        total += priced_transfers[transfer_key]
+                        continue
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
-
                     if token_symbol == "ETH":  # nosec B105
                         price = yield from self._fetch_historical_eth_price(date_str)
                     else:
@@ -3428,41 +3386,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             )
                         else:
                             price = None
-
                     if price:
-                        transfer_value = amount * price
-                        new_investment += transfer_value
-                        # Persist the priced value so it is never re-fetched
-                        priced_transfers[transfer_key] = transfer_value
-                        priced_updated = True
+                        value = amount * price
+                        total += value
+                        priced_transfers[transfer_key] = value
+                        updated = True
                         self.context.logger.info(
-                            f"{chain.upper()} NEW transfer on {date}: {amount} {token_symbol} @ ${price} = ${transfer_value}"
+                            f"{chain.upper()} priced {date}: {amount} {token_symbol} @ ${price} = ${value}"
                         )
                     else:
                         self.context.logger.warning(
-                            f"{chain.upper()} SKIPPED transfer on {date}: {amount} {token_symbol} — price fetch failed"
+                            f"{chain.upper()} SKIPPED {date}: {amount} {token_symbol} — price fetch failed"
                         )
-
-                except Exception as e:
-                    self.context.logger.error(
-                        f"Error processing {chain} transfer: {str(e)}"
+                except (ValueError, TypeError, KeyError) as e:
+                    # Narrow catch + .exception() so the traceback is preserved.
+                    # An unexpected exception (e.g. a schema change that breaks
+                    # ``transfer.get("symbol")`` on every row) now propagates
+                    # rather than being silently swallowed into a zero basis.
+                    self.context.logger.exception(
+                        f"Skipping {chain} transfer due to {type(e).__name__}: {e}"
                     )
                     continue
-
-        # Persist priced transfers if any new ones were added
-        if priced_updated:
-            yield from self._save_priced_transfers(chain, priced_transfers)
-
-        # Total = previously priced + newly priced - reversions
-        updated_total = cached_investment + new_investment - total_reversion
-        yield from self._save_chain_total_investment(chain, updated_total)
-
-        self.context.logger.info(
-            f"Total {chain} investment (updated): ${updated_total} "
-            f"(cached: ${cached_investment}, new: ${new_investment}, reversions: ${total_reversion})"
-        )
-
-        return updated_total
+        return total, updated
 
     def _fetch_all_transfers_until_date_mode(
         self, address: str, end_date: str, fetch_till_date: bool
@@ -4239,32 +4184,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "transfer_id": unique_id,
                         }
 
-                    elif transfer_type == "ETHER_TRANSFER":
-                        # ETH transfer
-                        try:
-                            value_wei = int(transfer.get("value", "0") or "0")
-                            amount_eth = value_wei / 10**18
-
-                            # Skip zero-value ETH transfers
-                            if amount_eth <= 0:
-                                continue
-                        except (ValueError, TypeError):
-                            self.context.logger.warning(
-                                f"Skipping transfer with invalid value: {transfer.get('value')}"
-                            )
-                            continue
-
-                        transfer_data = {
-                            "from_address": from_address,
-                            "amount": amount_eth,
-                            "token_address": "",  # nosec B105
-                            "symbol": "ETH",
-                            "timestamp": timestamp,
-                            "tx_hash": transfer.get("transactionHash", ""),
-                            "type": "eth",
-                            "transfer_id": unique_id,
-                        }
-
                     elif transfer_type == "ERC721_TRANSFER":
                         # NFT transfer - skip for now
                         continue
@@ -4494,507 +4413,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Save total investment value for a specific chain to kv_store."""
         key = f"{chain}_total_investment"
         yield from self._write_kv({key: str(total)})
-
-    def _load_funding_events_data(self) -> Generator[None, None, Dict]:
-        """Load unified transfer data from kv_store."""
-        cached_data = yield from self._read_kv(keys=("funding_events",))
-        if cached_data and cached_data.get("funding_events"):
-            try:
-                return json.loads(cached_data.get("funding_events"))
-            except json.JSONDecodeError:
-                self.context.logger.warning(
-                    "Failed to parse cached unified transfer data"
-                )
-                return {}
-        return {}
-
-    def _count_transfers(self, transfers_dict: Dict) -> int:
-        """Count total number of individual transfers across all dates."""
-        return sum(len(v) for v in transfers_dict.values())
-
-    def _track_eth_transfers_and_reversions(
-        self,
-        safe_address: str,
-        chain: str,
-    ) -> Generator[None, None, Dict[str, Any]]:
-        """Track ETH transfers to safe address and handle reversion logic."""
-        try:
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            # Get all transfers until date
-            all_incoming_transfers = {}
-            all_outgoing_transfers = {}
-            if chain == Chain.OPTIMISM.value:
-                all_incoming_transfers = (
-                    yield from self._fetch_all_transfers_until_date_optimism(
-                        safe_address, current_date
-                    )
-                ) or {}
-                all_outgoing_transfers = (
-                    yield from self._fetch_outgoing_transfers_until_date_optimism(
-                        safe_address, current_date
-                    )
-                ) or {}
-
-                # Check if reversion result is cached and still valid
-                total_count = self._count_transfers(
-                    all_incoming_transfers
-                ) + self._count_transfers(all_outgoing_transfers)
-                cached_reversion = self.funding_events.get("optimism_reversion_info")
-                cached_count = self.funding_events.get(
-                    "optimism_reversion_transfer_count", -1
-                )
-                if (
-                    cached_reversion
-                    and isinstance(cached_reversion, dict)
-                    and cached_count == total_count
-                ):
-                    self.context.logger.info(
-                        f"Using cached reversion info (transfer count unchanged: {total_count})"
-                    )
-                    return cached_reversion
-
-            elif chain == Chain.MODE.value:
-                # Use new Mode-specific tracking function
-                transfers = self._track_eth_transfers_mode(safe_address, current_date)
-                all_incoming_transfers = transfers.get("incoming", {})
-                all_outgoing_transfers = transfers.get("outgoing", {})
-            else:
-                self.context.logger.warning(f"Unsupported chain: {chain}")
-                return {}
-
-            if not all_incoming_transfers:
-                self.context.logger.warning(f"No transfers found for {chain} chain")
-                return {}
-
-            master_safe_address = yield from self.get_master_safe_address()
-            if not master_safe_address:
-                self.context.logger.error("No master safe address found")
-                return {}
-
-            self.context.logger.info(f"Master safe address: {master_safe_address}")
-
-            # Track ETH transfers
-            eth_transfers = []
-            initial_funding = None
-            reversion_transfers = []
-            historical_reversion_value = 0.0
-            reversion_date = None
-
-            # Sort transfers by timestamp
-            sorted_incoming_transfers = []
-            for _, transfers in all_incoming_transfers.items():
-                for transfer in transfers:
-                    if (
-                        isinstance(transfer, dict) and "timestamp" in transfer
-                    ):  # pragma: no branch
-                        sorted_incoming_transfers.append(transfer)
-
-            sorted_incoming_transfers.sort(key=lambda x: x["timestamp"])
-
-            sorted_outgoing_transfers = []
-            for _, transfers in all_outgoing_transfers.items():
-                for transfer in transfers:
-                    if (
-                        isinstance(transfer, dict) and "timestamp" in transfer
-                    ):  # pragma: no branch
-                        sorted_outgoing_transfers.append(transfer)
-
-            sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
-
-            # Process transfers
-            for transfer in sorted_incoming_transfers:
-                # Check if it's an ETH transfer
-                if transfer.get("symbol") == "ETH":  # pragma: no branch
-                    # If this is the first transfer, store it as initial funding
-                    if not initial_funding:
-                        initial_funding = {
-                            "amount": transfer.get("amount", 0),
-                            "from_address": transfer.get("from_address"),
-                            "timestamp": transfer.get("timestamp"),
-                        }
-                        eth_transfers.append(transfer)
-                    # If it's from the same address as initial funding
-                    elif (  # pragma: no branch
-                        transfer.get("from_address", "").lower()
-                        == master_safe_address.lower()
-                    ):
-                        eth_transfers.append(transfer)
-
-            for transfer in sorted_outgoing_transfers:
-                if transfer.get("symbol") == "ETH":  # pragma: no branch
-                    if (  # pragma: no branch
-                        transfer.get("to_address", "").lower()
-                        == master_safe_address.lower()
-                        and transfer.get("from_address", "").lower()
-                        == safe_address.lower()
-                    ):
-                        reversion_transfers.append(transfer)
-
-            # Get current ETH balance
-            chain = self.params.target_investment_chains[0]
-            account = self.params.safe_contract_addresses.get(chain)
-            current_eth_balance = yield from self._get_native_balance(chain, account)
-
-            # Determine if reversion is needed
-            reversion_amount = 0
-
-            if initial_funding and len(eth_transfers) > 1:
-                # If there are additional transfers after initial funding
-                if len(reversion_transfers) == 0:
-                    # No reversion has happened yet, revert the last transfer amount
-                    last_transfer = eth_transfers[-1]
-                    reversion_amount = float(last_transfer.get("amount", 0))
-
-                    # Get the date of the last transfer that needs reversion
-                    try:
-                        # Handle ISO format timestamp
-                        timestamp = last_transfer.get("timestamp", "")
-                        if timestamp.endswith("Z"):
-                            # Convert ISO format to datetime
-                            tx_datetime = datetime.fromisoformat(
-                                timestamp.replace("Z", "+00:00")
-                            )
-                            reversion_date = tx_datetime.strftime("%d-%m-%Y")
-                        else:
-                            # Try parsing as Unix timestamp
-                            reversion_date = datetime.fromtimestamp(
-                                int(timestamp)
-                            ).strftime("%d-%m-%Y")
-                    except (ValueError, TypeError) as e:
-                        self.context.logger.warning(f"Error parsing timestamp: {e}")
-                        # Use current date as fallback
-                        reversion_date = current_date
-
-                    if current_eth_balance < reversion_amount:
-                        reversion_amount = current_eth_balance
-                        self.context.logger.info(
-                            f"Current ETH balance is {current_eth_balance} which is less than the reversion amount {reversion_amount} indicating that some ETH has already been used"
-                        )
-
-                    self.context.logger.info(
-                        f"Found additional ETH transfer of {reversion_amount} that needs reversion from date: {reversion_date}"
-                    )
-                else:
-                    # Reversion has already happened, set amount to 0
-                    reversion_amount = 0
-                    self.context.logger.info(
-                        "Additional ETH transfer has already been reverted"
-                    )
-
-            if len(reversion_transfers) > 0:
-                historical_reversion_value = (
-                    yield from self._calculate_total_reversion_value(
-                        eth_transfers, reversion_transfers
-                    )
-                )
-
-            result = {
-                "reversion_amount": reversion_amount,
-                "master_safe_address": master_safe_address,
-                "historical_reversion_value": historical_reversion_value,
-                "reversion_date": reversion_date,
-            }
-
-            # Cache the reversion result for Optimism so we skip recomputation
-            # when no new transfers have arrived
-            if chain == Chain.OPTIMISM.value:
-                self.funding_events["optimism_reversion_info"] = result
-                self.funding_events["optimism_reversion_transfer_count"] = (
-                    self._count_transfers(all_incoming_transfers)
-                    + self._count_transfers(all_outgoing_transfers)
-                )
-                self.store_funding_events()
-
-            return result
-
-        except Exception as e:
-            self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
-            return {
-                "reversion_amount": 0,
-                "master_safe_address": None,
-                "historical_reversion_value": 0.0,
-                "reversion_date": None,
-            }
-
-    def _calculate_total_reversion_value(
-        self, eth_transfers: List[Dict], reversion_transfers: List[Dict]
-    ) -> Generator[None, None, Optional[float]]:
-        """Calculate the total reversion value from the reversion transfers."""
-        reversion_amount = 0.0
-        reversion_date = None
-        reversion_value = 0.0
-        last_transfer = eth_transfers[-1]
-        current_date = datetime.now().strftime("%d-%m-%Y")
-
-        try:
-            # Handle ISO format timestamp
-            timestamp = last_transfer.get("timestamp", "")
-            if timestamp.endswith("Z"):
-                # Convert ISO format to datetime
-                tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                reversion_date = tx_datetime.strftime("%d-%m-%Y")
-            else:
-                # Try parsing as Unix timestamp
-                reversion_date = datetime.fromtimestamp(int(timestamp)).strftime(
-                    "%d-%m-%Y"
-                )
-        except (ValueError, TypeError) as e:
-            self.context.logger.warning(f"Error parsing timestamp: {e}")
-            # Use current date as fallback
-            reversion_date = current_date
-
-        for index, transfer in enumerate(reversion_transfers):
-            if index == 0:
-                eth_price = yield from self._fetch_historical_eth_price(reversion_date)
-            else:
-                eth_price = yield from self._fetch_historical_eth_price(current_date)
-            if eth_price:
-                reversion_amount = transfer.get("amount", 0)
-                reversion_value += reversion_amount * eth_price
-
-        return reversion_value
-
-    def _fetch_outgoing_transfers_until_date_optimism(
-        self,
-        address: str,
-        current_date: str,
-    ) -> Generator[None, None, Dict]:
-        """Fetch outgoing ETH transfers from the safe address on Optimism, with persistence.
-
-        On failure (mid-pagination fetch error, exception, or
-        ``MAX_PAGINATION_PAGES`` cap-hit) the function returns the previously
-        persisted outgoing data ``raw_existing_outgoing`` instead of a sentinel
-        ``None``. This is intentional and asymmetric with
-        ``_track_erc20_transfers_optimism``: the caller uses this data to
-        compute a transfer count for the reversion-info cache, and serving the
-        stale-but-known count keeps the cached reversion-info valid across
-        transient blips. Returning ``None`` (collapsed to ``{}`` by the
-        caller's ``or {}`` guard) would force a count of zero and invalidate
-        the cache on every blip. The trade-off: callers cannot distinguish
-        "fetch failed, returned stale data" from "Safe legitimately has no
-        outgoing transfers" — both produce ``{}`` on a fresh Safe. New
-        callers that need this distinction should add an explicit success
-        flag rather than reading the return shape.
-
-        :param address: the Safe contract address.
-        :param current_date: ISO date string used as the upper bound for
-            ``executionDate`` filtering.
-        :yield: None.
-        :return: outgoing-transfers dict keyed by date. On failure, the
-            previously persisted shape (possibly ``{}``).
-        """
-        # Load persisted outgoing data. Migrate legacy entries into a local
-        # variable but do NOT commit the stripped shape to self.funding_events
-        # yet — on a mid-pagination fetch failure we want the previously
-        # persisted state preserved so the still-missing older pages are not
-        # silently dropped after the early-stop fires on the page-1 ids next
-        # cycle.
-        if not self.funding_events:
-            self.funding_events = self.read_funding_events() or {}
-        raw_existing_outgoing = self.funding_events.get("optimism_outgoing", {})
-        existing_outgoing, dropped = _drop_legacy_transfer_entries(
-            raw_existing_outgoing
-        )
-        if dropped:
-            self.context.logger.info(
-                f"Dropped {dropped} legacy optimism_outgoing transfer entries "
-                "without transfer_id; will be re-fetched if still within "
-                "Safe's pagination window."
-            )
-
-        all_transfers: Dict[str, List[Dict]] = {}
-        fetch_failed = False
-
-        if not address:
-            self.context.logger.warning(
-                "No address provided for fetching Optimism outgoing transfers"
-            )
-            return raw_existing_outgoing
-
-        try:
-            # Use SafeGlobal API for Optimism transfers. Paginate by offset
-            # (see _fetch_optimism_transfers_safeglobal for why we don't
-            # follow Safe's absolute ``next`` URL).
-            transfers_base_url = self._build_safe_api_url(
-                "optimism", "v1", f"safes/{address}/transfers/"
-            )
-
-            processed_count = 0
-            offset = 0
-            pages_processed = 0
-            # Seed in-cycle dedup from already-persisted transfers so a new
-            # transfer on an already-stored date is not silently dropped.
-            seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
-            while True:
-                if pages_processed >= MAX_PAGINATION_PAGES:
-                    # Error rather than warning: this fetcher returns stale
-                    # ``raw_existing_outgoing`` on failure (see docstring),
-                    # and the caller derives the reversion-cache key from
-                    # the transfer count. On a Safe that exceeds the cap,
-                    # the count is permanently pinned to the stale value
-                    # and the cached reversion serves indefinitely, so the
-                    # stuck state must be alarm-visible.
-                    self.context.logger.error(
-                        f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
-                        "Optimism outgoing-transfers; treating as a failed fetch "
-                        "so partial data is not persisted with a falsely "
-                        "complete seen-set"
-                    )
-                    fetch_failed = True
-                    break
-
-                transfers_url = (
-                    f"{transfers_base_url}?limit={SAFE_TRANSFERS_PAGE_LIMIT}"
-                    f"&offset={offset}"
-                )
-                success, response_json = yield from self._request_with_retries(
-                    endpoint=transfers_url,
-                    headers={"Accept": "application/json"},
-                    rate_limited_code=429,
-                    rate_limited_callback=_noop_rate_limit_callback,
-                    retry_wait=5,
-                    max_retries=2,
-                )
-
-                if not success:
-                    self.context.logger.error("Failed to fetch Optimism transfers")
-                    fetch_failed = True
-                    break
-
-                transfers = response_json.get("results", [])
-
-                if not transfers:
-                    break
-                pages_processed += 1
-
-                # Pre-pass: count the eligible (outgoing ETHER_TRANSFER) entries
-                # on this page so the early-stop is counted against the subset
-                # the seen-set actually receives. Unrelated entries (incoming,
-                # non-ETH outgoing) don't contribute to the counter, otherwise
-                # they would reset it on every mixed-traffic page and the stop
-                # would rarely fire.
-                eligible_in_page = 0
-                for t in transfers:
-                    if t.get("from", "").lower() != address.lower():
-                        continue
-                    if t.get("type", "") != "ETHER_TRANSFER":
-                        continue
-                    try:
-                        if int(t.get("value", "0") or "0") <= 0:
-                            continue
-                    except (ValueError, TypeError):
-                        continue
-                    eligible_in_page += 1
-                seen_eligible_in_page = 0
-                stop_pagination = False
-
-                for transfer in transfers:
-                    # Parse timestamp
-                    timestamp = transfer.get("executionDate")
-                    if not timestamp:
-                        continue
-
-                    # Handle ISO format timestamp
-                    try:
-                        tx_datetime = datetime.fromisoformat(
-                            timestamp.replace("Z", "+00:00")
-                        )
-                        tx_date = tx_datetime.strftime("%Y-%m-%d")
-                    except (ValueError, TypeError):
-                        self.context.logger.warning(
-                            f"Invalid timestamp format: {timestamp}"
-                        )
-                        continue
-
-                    if tx_date > current_date:
-                        continue
-
-                    # Per-transfer dedup against persisted + in-cycle seen IDs.
-                    unique_id = _transfer_unique_id(transfer)
-                    if unique_id and unique_id in seen_tx_ids:
-                        seen_eligible_in_page += 1
-                        if (
-                            eligible_in_page > 0
-                            and seen_eligible_in_page == eligible_in_page
-                        ):
-                            stop_pagination = True
-                        continue
-
-                    # Only process outgoing transfers (where from address is equal to our safe address)
-                    if transfer.get("from", "").lower() == address.lower():
-                        transfer_type = transfer.get("type", "")
-
-                        if unique_id:
-                            seen_tx_ids.add(unique_id)
-
-                        if transfer_type == "ETHER_TRANSFER":  # pragma: no branch
-                            try:
-                                value_wei = int(transfer.get("value", "0") or "0")
-                                amount_eth = value_wei / 10**18
-
-                                if amount_eth <= 0:
-                                    continue
-                            except (ValueError, TypeError):
-                                continue
-
-                            transfer_data = {
-                                "from_address": address,
-                                "to_address": transfer.get("to"),
-                                "amount": amount_eth,
-                                "token_address": ZERO_ADDRESS,
-                                "symbol": "ETH",
-                                "timestamp": timestamp,
-                                "tx_hash": transfer.get("transactionHash", ""),
-                                "type": "eth",
-                                "transfer_id": unique_id,
-                            }
-
-                            if tx_date not in all_transfers:  # pragma: no branch
-                                all_transfers[tx_date] = []
-                            all_transfers[tx_date].append(transfer_data)
-                            processed_count += 1
-                            continue
-                    else:
-                        continue
-
-                if stop_pagination:
-                    self.context.logger.info(
-                        "Outgoing transfers: entire page already stored — stopping pagination"
-                    )
-                    break
-
-                # Advance by len(transfers); see SAFE_TRANSFERS_PAGE_LIMIT note.
-                if response_json.get("next") is None:
-                    break
-                offset += len(transfers)
-
-            self.context.logger.info(
-                f"Completed Optimism outgoing transfers: {processed_count} found"
-            )
-
-            if fetch_failed:
-                self.context.logger.warning(
-                    "Optimism outgoing-transfers fetch failed mid-stream; "
-                    "skipping persist and returning previously-persisted data"
-                )
-                return raw_existing_outgoing
-
-            # Merge new transfers into persisted data: append per-date so that
-            # a same-day transfer added after an earlier one already stored
-            # under the same date does not overwrite the earlier entries.
-            for date, transfers in all_transfers.items():
-                existing_outgoing.setdefault(date, []).extend(transfers)
-
-            self.funding_events["optimism_outgoing"] = existing_outgoing
-            self.store_funding_events()
-
-            return existing_outgoing
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error fetching Optimism outgoing transfers: {e}"
-            )
-            return raw_existing_outgoing
 
     def _track_erc20_transfers_optimism(
         self,
@@ -5229,121 +4647,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error tracking Optimism ERC20 transfers: {e}")
             return None
 
-    def _track_eth_transfers_mode(
-        self,
-        safe_address: str,
-        current_date: str,
-    ) -> Dict[str, Dict[str, List[Dict]]]:
-        """Fetch and organize ETH transfers for Mode chain using the Mode explorer API."""
-        try:
-            all_transfers = {"incoming": {}, "outgoing": {}}
-
-            # Use Mode internal transactions API
-            base_url = self.params.mode_native_explorer_url
-            params = {
-                "module": "account",
-                "action": "txlistinternal",
-                "address": safe_address,
-                "startblock": 0,
-                "endblock": 99999999,
-                "sort": "asc",
-            }
-
-            response = requests.get(
-                base_url,
-                params=params,
-                headers={"Accept": "application/json"},
-                timeout=self.params.request_timeout,
-                verify=self.params.tls_verify,
-            )
-
-            if response.status_code != 200:
-                self.context.logger.error(
-                    f"Failed to fetch Mode ETH transfers: {response.status_code}"
-                )
-                return all_transfers
-
-            try:
-                response_data = response.json()
-            except (ValueError, TypeError) as e:
-                self.context.logger.error(
-                    f"Failed to parse Mode ETH transfers response: {e}"
-                )
-                return all_transfers
-            if response_data.get("status") != "1":
-                self.context.logger.error(
-                    f"Error in Mode API response: {response_data.get('message', 'Unknown error')}"
-                )
-                return all_transfers
-
-            transactions = response_data.get("result", [])
-            processed_count = 0
-
-            for tx in transactions:
-                # Skip if no timestamp or value is 0
-                if not tx.get("timeStamp") or int(tx.get("value", "0")) <= 0:
-                    continue
-
-                try:
-                    timestamp = tx.get("timeStamp")
-                    # Convert timestamp to date for comparison with current_date
-                    tx_datetime = datetime.fromtimestamp(int(timestamp))
-                    tx_date = tx_datetime.strftime("%Y-%m-%d")
-
-                    if tx_date > current_date:
-                        continue
-
-                    # Convert value from wei to ETH
-                    value_wei = int(tx.get("value", "0"))
-                    amount_eth = value_wei / 10**18
-
-                    # Check if safe_address is in 'to' or 'from' field
-                    to_address = tx.get("to", "").lower()
-                    from_address = tx.get("from", "").lower()
-                    safe_address_lower = safe_address.lower()
-
-                    transfer_data = {
-                        "from_address": from_address,
-                        "to_address": to_address,
-                        "amount": amount_eth,
-                        "token_address": ZERO_ADDRESS,
-                        "symbol": "ETH",
-                        "timestamp": timestamp,
-                        "tx_hash": tx.get("hash", ""),
-                        "type": "eth",
-                    }
-
-                    # Categorize transfer based on safe_address position
-                    if to_address == safe_address_lower:
-                        # Incoming transfer - safe_address is recipient
-                        if (
-                            timestamp not in all_transfers["incoming"]
-                        ):  # pragma: no branch
-                            all_transfers["incoming"][timestamp] = []
-                        all_transfers["incoming"][timestamp].append(transfer_data)
-                        processed_count += 1
-                    elif from_address == safe_address_lower:  # pragma: no branch
-                        # Outgoing transfer - safe_address is sender
-                        if (
-                            timestamp not in all_transfers["outgoing"]
-                        ):  # pragma: no branch
-                            all_transfers["outgoing"][timestamp] = []
-                        all_transfers["outgoing"][timestamp].append(transfer_data)
-                        processed_count += 1
-
-                except (ValueError, TypeError) as e:
-                    self.context.logger.warning(f"Error processing transaction: {e}")
-                    continue
-
-            self.context.logger.info(
-                f"Completed Mode ETH transfers: {processed_count} transactions processed"
-            )
-            return all_transfers
-
-        except Exception as e:
-            self.context.logger.error(f"Error tracking Mode ETH transfers: {e}")
-            return {"incoming": {}, "outgoing": {}}
-
     def _track_erc20_transfers_mode(
         self,
         safe_address: str,
@@ -5491,108 +4794,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error tracking Mode ERC20 transfers: {e}")
             return {"outgoing": {}}
-
-    def get_master_safe_address(self) -> Generator[None, None, Optional[str]]:
-        """Get the master safe address by checking service staking state."""
-        # Get service_id from params
-        service_id = self.params.on_chain_service_id
-        if service_id is None:
-            self.context.logger.error("No service ID configured")
-            return None
-
-        if not self.params.target_investment_chains:
-            self.context.logger.error("No target investment chains configured")
-            return None
-
-        operating_chain = self.params.target_investment_chains[0]
-
-        staking_token_address = self.params.staking_token_contract_address
-        staking_chain = self.params.staking_chain
-
-        if staking_token_address and staking_chain:
-            if self.service_staking_state == StakingState.UNSTAKED:
-                yield from self._get_service_staking_state(chain=staking_chain)
-
-            if self.service_staking_state != StakingState.UNSTAKED:
-                service_info = yield from self._get_service_info(staking_chain)
-                if service_info and len(service_info) >= 2:
-                    master_safe_address = service_info[
-                        1
-                    ]  # owner field from service info struct
-                    self.context.logger.info(
-                        f"Master safe address: {master_safe_address}"
-                    )
-                    is_valid_address = yield from self.check_is_valid_safe_address(
-                        master_safe_address, staking_chain
-                    )
-                    if is_valid_address:
-                        return master_safe_address
-                    else:
-                        return None
-                else:
-                    self.context.logger.error(
-                        "Failed to get service info from staking contract"
-                    )
-                    return None
-
-        service_registry_address = self.params.service_registry_contract_addresses.get(
-            operating_chain
-        )
-        if not service_registry_address:
-            self.context.logger.error(
-                f"No service registry address configured for operating chain {operating_chain}"
-            )
-            return None
-
-        # Get service owner from service registry
-        service_owner_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=service_registry_address,
-            contract_public_id=ServiceRegistryContract.contract_id,
-            contract_callable="get_service_owner",
-            data_key="service_owner",
-            service_id=service_id,
-            chain_id=operating_chain,
-        )
-
-        if service_owner_result:
-            master_safe_address = service_owner_result
-            self.context.logger.info(f"Master safe address: {master_safe_address}")
-            is_valid_address = yield from self.check_is_valid_safe_address(
-                master_safe_address, operating_chain
-            )
-            if is_valid_address:
-                return master_safe_address
-            else:
-                return None
-        else:
-            self.context.logger.error(
-                "Failed to get service owner from service registry"
-            )
-            return None
-
-    def check_is_valid_safe_address(
-        self, safe_address: str, operating_chain: str
-    ) -> Generator[None, None, bool]:
-        """Checks if an address is a GnosisSafe Contract"""
-        try:
-            res = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=safe_address,
-                contract_public_id=GnosisSafeContract.contract_id,
-                contract_callable="get_owners",
-                data_key="owners",
-                chain_id=operating_chain,
-            )
-
-            if res:
-                return True
-
-            return False
-
-        except Exception:
-            self.context.logger.info("Not a GnosisSafe")
-            return False
 
     def _get_velodrome_pending_rewards(
         self, position: Dict, chain: str, user_address: str

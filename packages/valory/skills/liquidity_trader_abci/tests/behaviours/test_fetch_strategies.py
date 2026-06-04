@@ -239,7 +239,6 @@ class TestFetchStrategiesWithdrawalGate:
                 obj._validate_velodrome_v2_pool_addresses = _gen_none
                 obj.update_position_amounts = _gen_none
                 obj.check_and_update_zero_liquidity_positions = MagicMock()
-                obj._check_and_create_eth_revert_transactions = _gen_none
                 obj.store_portfolio_data = MagicMock(
                     side_effect=lambda *a, **kw: call_order.append(
                         "store_portfolio_data"
@@ -1530,31 +1529,6 @@ class TestChainTotalInvestment:
         assert written["mode_total_investment"] == "42.0"
 
 
-class TestLoadFundingEventsData:
-    """TestLoadFundingEventsData."""
-
-    def test_found(self):
-        """Test found."""
-        obj = _mk()
-        obj._read_kv = _gen_return({"funding_events": json.dumps({"mode": {}})})
-        gen = obj._load_funding_events_data()
-        assert _drive(gen) == {"mode": {}}
-
-    def test_not_found(self):
-        """Test not found."""
-        obj = _mk()
-        obj._read_kv = _gen_return({})
-        gen = obj._load_funding_events_data()
-        assert _drive(gen) == {}
-
-    def test_invalid_json(self):
-        """Test invalid json."""
-        obj = _mk()
-        obj._read_kv = _gen_return({"funding_events": "{{bad"})
-        gen = obj._load_funding_events_data()
-        assert _drive(gen) == {}
-
-
 class TestSaveTransferData:
     """TestSaveTransferData."""
 
@@ -2341,37 +2315,6 @@ class TestReadInvestingPaused:
             _drive(obj._read_investing_paused())
 
 
-class TestCheckIsValidSafeAddress:
-    """TestCheckIsValidSafeAddress."""
-
-    def test_valid(self):
-        """Test valid."""
-        obj = _mk()
-        obj.contract_interact = _gen_return(["0xOwner"])
-        gen = obj.check_is_valid_safe_address("0xSafe", "optimism")
-        assert _drive(gen) is True
-
-    def test_invalid(self):
-        """Test invalid."""
-        obj = _mk()
-        obj.contract_interact = _gen_return(None)
-        gen = obj.check_is_valid_safe_address("0xSafe", "optimism")
-        assert _drive(gen) is False
-
-    def test_exception(self):
-        """Test exception."""
-        obj = _mk()
-
-        def boom(*a, **kw):
-            """Boom."""
-            raise RuntimeError("boom")
-            yield  # noqa
-
-        obj.contract_interact = boom
-        gen = obj.check_is_valid_safe_address("0xSafe", "optimism")
-        assert _drive(gen) is False
-
-
 class TestGetVelodromePendingRewards:
     """TestGetVelodromePendingRewards."""
 
@@ -2811,64 +2754,6 @@ class TestValidateVelodromeV2PoolAddress:
         assert _drive(gen) is False
 
 
-class TestCalculateTotalReversionValue:
-    """TestCalculateTotalReversionValue."""
-
-    def test_basic(self):
-        """Test basic."""
-        obj = _mk()
-        obj._fetch_historical_eth_price = _gen_return(2000.0)
-        eth_transfers = [
-            {"timestamp": "2024-01-01T00:00:00Z", "amount": 1.0},
-            {"timestamp": "2024-02-01T00:00:00Z", "amount": 0.5},
-        ]
-        reversion = [{"amount": 0.5}]
-        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
-        assert result == 0.5 * 2000.0
-
-    def test_multiple_reversions(self):
-        """Test multiple reversions."""
-        obj = _mk()
-        obj._fetch_historical_eth_price = _gen_return(1000.0)
-        eth_transfers = [
-            {"timestamp": "2024-01-01T00:00:00Z", "amount": 1.0},
-            {"timestamp": "2024-02-01T00:00:00Z", "amount": 0.5},
-        ]
-        reversion = [{"amount": 0.3}, {"amount": 0.2}]
-        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
-        assert result == (0.3 + 0.2) * 1000.0
-
-    def test_no_eth_price(self):
-        """Test no eth price."""
-        obj = _mk()
-        obj._fetch_historical_eth_price = _gen_return(None)
-        eth_transfers = [{"timestamp": "2024-01-01T00:00:00Z", "amount": 1.0}]
-        reversion = [{"amount": 0.5}]
-        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
-        assert result == 0.0
-
-    def test_unix_timestamp(self):
-        """Test unix timestamp."""
-        obj = _mk()
-        obj._fetch_historical_eth_price = _gen_return(500.0)
-        eth_transfers = [
-            {"timestamp": "1704067200", "amount": 1.0},
-        ]
-        reversion = [{"amount": 0.1}]
-        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
-        assert result == 0.1 * 500.0
-
-    def test_bad_timestamp(self):
-        """Test bad timestamp."""
-        obj = _mk()
-        obj._fetch_historical_eth_price = _gen_return(500.0)
-        eth_transfers = [{"timestamp": "bad", "amount": 1.0}]
-        reversion = [{"amount": 0.1}]
-        result = _drive(obj._calculate_total_reversion_value(eth_transfers, reversion))
-        # fallback to current date
-        assert result == 0.1 * 500.0
-
-
 class TestShouldIncludeTransferOptimism:
     """TestShouldIncludeTransferOptimism."""
 
@@ -3061,144 +2946,6 @@ class TestIsNotOtherContractOptimism:
         obj.params.sleep_time = 1
         gen = obj._is_not_other_contract_optimism("0xABC")
         assert _drive(gen) is False
-
-
-class TestGetMasterSafeAddress:
-    """TestGetMasterSafeAddress."""
-
-    def test_no_service_id(self):
-        """Test no service id."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = None
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) is None
-
-    def test_no_chains(self):
-        """Test no chains."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = []
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) is None
-
-    def test_staking_path_staked(self):
-        """Test staking path staked."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = "0xStaking"
-        obj.params.staking_chain = "optimism"
-        from packages.valory.skills.liquidity_trader_abci.states.base import (
-            StakingState,
-        )
-
-        obj.service_staking_state = StakingState.STAKED
-        obj._get_service_info = _gen_return([0, "0xMaster"])
-        obj.check_is_valid_safe_address = _gen_return(True)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) == "0xMaster"
-
-    def test_staking_path_unstaked_then_staked(self):
-        """Test staking path unstaked then staked."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = "0xStaking"
-        obj.params.staking_chain = "optimism"
-        from packages.valory.skills.liquidity_trader_abci.states.base import (
-            StakingState,
-        )
-
-        obj.service_staking_state = StakingState.UNSTAKED
-
-        def fake_get_state(*a, **kw):
-            """Fake get state."""
-            obj.service_staking_state = StakingState.STAKED
-            yield
-
-        obj._get_service_staking_state = fake_get_state
-        obj._get_service_info = _gen_return([0, "0xMaster"])
-        obj.check_is_valid_safe_address = _gen_return(True)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) == "0xMaster"
-
-    def test_staking_invalid_addr(self):
-        """Test staking invalid addr."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = "0xStaking"
-        obj.params.staking_chain = "optimism"
-        from packages.valory.skills.liquidity_trader_abci.states.base import (
-            StakingState,
-        )
-
-        obj.service_staking_state = StakingState.STAKED
-        obj._get_service_info = _gen_return([0, "0xMaster"])
-        obj.check_is_valid_safe_address = _gen_return(False)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) is None
-
-    def test_staking_no_info(self):
-        """Test staking no info."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = "0xStaking"
-        obj.params.staking_chain = "optimism"
-        from packages.valory.skills.liquidity_trader_abci.states.base import (
-            StakingState,
-        )
-
-        obj.service_staking_state = StakingState.STAKED
-        obj._get_service_info = _gen_return(None)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) is None
-
-    def test_no_staking_registry(self):
-        """Test no staking registry."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = None
-        obj.params.staking_chain = None
-        obj.params.service_registry_contract_addresses = {"optimism": "0xReg"}
-        obj.contract_interact = _gen_return("0xOwner")
-        obj.check_is_valid_safe_address = _gen_return(True)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) == "0xOwner"
-
-    def test_no_registry_addr(self):
-        """Test no registry addr."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = None
-        obj.params.staking_chain = None
-        obj.params.service_registry_contract_addresses = {}
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) is None
-
-    def test_registry_no_result(self):
-        """Test registry no result."""
-        obj = _mk()
-
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = None
-        obj.params.staking_chain = None
-        obj.params.service_registry_contract_addresses = {"optimism": "0xReg"}
-        obj.contract_interact = _gen_return(None)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) is None
 
 
 class TestShouldRecalculatePortfolio:
@@ -4345,67 +4092,6 @@ class TestCalculateTotalVolume:
         assert result is None
 
 
-class TestTrackEthTransfersMode:
-    """TestTrackEthTransfersMode."""
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
-    )
-    def test_api_error(self, mock_requests):
-        """Test api error."""
-        obj = _mk()
-        mock_requests.get.return_value = MagicMock(status_code=500)
-        result = obj._track_eth_transfers_mode("0xSafe", "2024-01-01")
-        assert result == {"incoming": {}, "outgoing": {}}
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
-    )
-    def test_api_bad_status(self, mock_requests):
-        """Test api bad status."""
-        obj = _mk()
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.json.return_value = {"status": "0", "message": "fail", "result": []}
-        mock_requests.get.return_value = resp
-        result = obj._track_eth_transfers_mode("0xSafe", "2024-01-01")
-        assert result == {"incoming": {}, "outgoing": {}}
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
-    )
-    def test_success_incoming(self, mock_requests):
-        """Test success incoming."""
-        obj = _mk()
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.json.return_value = {
-            "status": "1",
-            "result": [
-                {
-                    "timeStamp": "1704067200",
-                    "value": str(10**18),
-                    "to": "0xsafe",
-                    "from": "0xother",
-                    "hash": "0xTX",
-                }
-            ],
-        }
-        mock_requests.get.return_value = resp
-        result = obj._track_eth_transfers_mode("0xSafe", "2024-12-31")
-        assert "incoming" in result
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
-    )
-    def test_exception(self, mock_requests):
-        """Test exception."""
-        obj = _mk()
-        mock_requests.get.side_effect = RuntimeError("fail")
-        result = obj._track_eth_transfers_mode("0xSafe", "2024-01-01")
-        assert result == {"incoming": {}, "outgoing": {}}
-
-
 class TestTrackErc20TransfersMode:
     """TestTrackErc20TransfersMode."""
 
@@ -4572,75 +4258,6 @@ class TestFetchEthTransfersMode:
         transfers = {}
         result = obj._fetch_eth_transfers_mode("0xAddr", end_dt, transfers, True)
         assert result is True
-
-
-class TestCheckAndCreateEthRevertTransactions:
-    """TestCheckAndCreateEthRevertTransactions."""
-
-    def test_no_safe(self):
-        """Test no safe."""
-        obj = _mk()
-        gen = obj._check_and_create_eth_revert_transactions("optimism", None, "sender")
-        _drive(gen)
-
-    def test_zero_amount(self):
-        """Test zero amount."""
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {"to_address": None, "reversion_amount": 0, "master_safe_address": None}
-        )
-        gen = obj._check_and_create_eth_revert_transactions(
-            "optimism", "0xSafe", "sender"
-        )
-        _drive(gen)
-
-    def test_positive_amount_no_master(self):
-        """Test positive amount no master."""
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {"to_address": None, "reversion_amount": 0.5, "master_safe_address": None}
-        )
-        gen = obj._check_and_create_eth_revert_transactions(
-            "optimism", "0xSafe", "sender"
-        )
-        _drive(gen)
-
-    def test_positive_amount_with_tx(self):
-        """Test positive amount with tx."""
-        obj = _mk()
-        master_addr = "0x" + "aa" * 20  # 42 chars
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {
-                "to_address": master_addr,
-                "reversion_amount": 0.5,
-                "master_safe_address": master_addr,
-            }
-        )
-        obj.contract_interact = _gen_return("0x" + "ab" * 32)
-        obj.send_a2a_transaction = _gen_none
-        obj.wait_until_round_end = _gen_none
-        obj.set_done = MagicMock()
-        gen = obj._check_and_create_eth_revert_transactions(
-            "optimism", "0xSafe", "sender"
-        )
-        _drive(gen)
-        obj.set_done.assert_called_once()
-
-    def test_positive_amount_no_hash(self):
-        """Test positive amount no hash."""
-        obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            {
-                "to_address": "0xMaster",
-                "reversion_amount": 0.5,
-                "master_safe_address": "0xMaster",
-            }
-        )
-        obj.contract_interact = _gen_return(None)
-        gen = obj._check_and_create_eth_revert_transactions(
-            "optimism", "0xSafe", "sender"
-        )
-        _drive(gen)
 
 
 class TestTrackWhitelistedAssets:
@@ -5147,46 +4764,6 @@ class TestUpdateVelodromePositionWarning:
         }
         gen = obj._update_velodrome_position(pos)
         _drive(gen)
-
-
-class TestGetMasterSafeAddressRegistryInvalid:
-    """TestGetMasterSafeAddressRegistryInvalid."""
-
-    def test_registry_invalid_address(self):
-        """Cover line 4801: registry returns owner but address is invalid."""
-        obj = _mk()
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = None
-        obj.params.staking_chain = None
-        obj.params.service_registry_contract_addresses = {"optimism": "0xReg"}
-        obj.contract_interact = _gen_return("0xOwner")
-        obj.check_is_valid_safe_address = _gen_return(False)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) is None
-
-
-class TestGetMasterSafeAddressStakingStaysUnstaked:
-    """TestGetMasterSafeAddressStakingStaysUnstaked."""
-
-    def test_staking_stays_unstaked(self):
-        """Cover 4750->4772: after _get_service_staking_state, still UNSTAKED."""
-        obj = _mk()
-        obj.params.on_chain_service_id = 1
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.staking_token_contract_address = "0xStaking"
-        obj.params.staking_chain = "optimism"
-        from packages.valory.skills.liquidity_trader_abci.states.base import (
-            StakingState,
-        )
-
-        obj.service_staking_state = StakingState.UNSTAKED
-        obj._get_service_staking_state = _gen_none  # state stays UNSTAKED
-        obj.params.service_registry_contract_addresses = {"optimism": "0xReg"}
-        obj.contract_interact = _gen_return("0xOwner")
-        obj.check_is_valid_safe_address = _gen_return(True)
-        gen = obj.get_master_safe_address()
-        assert _drive(gen) == "0xOwner"
 
 
 class TestVelodromePendingRewardsFalsy:
@@ -5818,9 +5395,7 @@ class TestAsyncAct:
             obj._validate_velodrome_v2_pool_addresses = _gen_none
             obj.update_position_amounts = _gen_none
             obj.check_and_update_zero_liquidity_positions = MagicMock()
-            obj._get_native_balance = _gen_return(1.0)
             obj._detect_and_invalidate_on_inflow = _gen_none
-            obj._check_and_create_eth_revert_transactions = _gen_none
             obj._read_kv = _gen_return({})
             obj._write_kv = _gen_none
 
@@ -6171,194 +5746,113 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
             _drive(obj.calculate_initial_investment_value_from_funding_events()) is None
         )
 
+    def test_empty_fetch_still_values_persisted_history(self):
+        """An empty fetch must still value the chain's persisted history.
 
-class TestCalculateChainInvestmentValue:
-    """Tests for _calculate_chain_investment_value with per-transfer caching."""
-
-    NO_REVERSION = {
-        "reversion_amount": 0,
-        "historical_reversion_value": 0,
-        "reversion_date": None,
-    }
-
-    def _base(self, reversion=None):
-        """Create a base test object with common stubs."""
+        ``all_transfers == {}`` means no fresh transfers this cycle, but
+        ``funding_events[chain]`` still holds every row priced in earlier
+        cycles. The loop must reach ``_calculate_chain_investment_value`` so
+        the persisted rows are valued. A revert that re-adds ``continue``
+        after the empty-fetch log would skip the call entirely and drop the
+        persisted denominator to zero.
+        """
         obj = _mk()
-        obj._track_eth_transfers_and_reversions = _gen_return(
-            reversion or self.NO_REVERSION
-        )
-        obj._save_chain_total_investment = _gen_none
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_optimism = _gen_return({})
         obj._load_priced_transfers = _gen_return({})
         obj._save_priced_transfers = _gen_none
-        obj.params.airdrop_started = False
-        return obj
-
-    def test_eth_transfer_with_reversion(self):
-        """Test eth transfer with reversion."""
-        obj = self._base(
-            {
-                "reversion_amount": 0.5,
-                "historical_reversion_value": 100.0,
-                "reversion_date": "01-01-2025",
-            }
-        )
-        obj._fetch_historical_eth_price = _gen_return(2000.0)
-        assert (
-            _drive(
-                obj._calculate_chain_investment_value(
-                    {"2025-01-01": [{"symbol": "ETH", "delta": 1.0, "amount": 1.0}]},
-                    "optimism",
-                    "0xSafe",
-                )
-            )
-            == 900.0
-        )
-
-    def test_usdc_non_eth(self):
-        """Test usdc non eth."""
-        obj = self._base()
+        obj._save_chain_total_investment = _gen_none
         obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
         obj._fetch_historical_token_price = _gen_return(1.0)
-        assert (
-            _drive(
-                obj._calculate_chain_investment_value(
-                    {"2025-01-01": [{"symbol": "USDC", "amount": 100}]},
-                    "optimism",
-                    "0xS",
-                )
-            )
-            == 100.0
-        )
-
-    def test_airdrop_excluded(self):
-        """Test airdrop excluded."""
-        obj = self._base()
-        obj.params.airdrop_started = True
-        obj.params.airdrop_contract_address = "0xAirdrop"
-        assert (
-            _drive(
-                obj._calculate_chain_investment_value(
-                    {
-                        "2025-01-01": [
-                            {
-                                "symbol": "USDC",
-                                "amount": 50,
-                                "from_address": "0xairdrop",
-                            }
-                        ]
-                    },
-                    "mode",
-                    "0xS",
-                )
-            )
-            == 0.0
-        )
-
-    def test_no_coingecko_id(self):
-        """Test no coingecko id."""
-        obj = self._base()
-        obj.get_coin_id_from_symbol = lambda s, c: None
-        assert (
-            _drive(
-                obj._calculate_chain_investment_value(
-                    {"2025-01-01": [{"symbol": "WEIRD", "amount": 10}]},
-                    "optimism",
-                    "0xS",
-                )
-            )
-            == 0.0
-        )
-
-    def test_negative_amount(self):
-        """Test negative amount."""
-        obj = self._base()
-        assert (
-            _drive(
-                obj._calculate_chain_investment_value(
-                    {"2025-01-01": [{"symbol": "ETH", "amount": -5}]}, "optimism", "0xS"
-                )
-            )
-            == 0.0
-        )
-
-    def test_exception_in_transfer(self):
-        """Test exception in transfer."""
-        obj = self._base()
-        assert (
-            _drive(
-                obj._calculate_chain_investment_value(
-                    {"bad": [{"symbol": "ETH", "amount": 1}]}, "optimism", "0xS"
-                )
-            )
-            == 0.0
-        )
-
-    def test_reversion_no_date(self):
-        """Test reversion no date."""
-        obj = self._base(
-            {
-                "reversion_amount": 1.0,
-                "historical_reversion_value": 0,
-                "reversion_date": None,
+        obj._get_current_timestamp = lambda: 100
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [
+                    {"symbol": "USDC", "amount": 25, "tx_hash": "0xPERS"},
+                ]
             }
+        }
+        # Spy on the per-chain valuation so the test fails loudly if a
+        # regression skips it. A simple stub would mask the regression
+        # because the empty-fetch branch only differs in whether the call
+        # happens; the call's *return value* is identical.
+        real_calc = obj._calculate_chain_investment_value
+        calls = [0]
+
+        def spy(chain):
+            calls[0] += 1
+            result = yield from real_calc(chain)
+            return result
+
+        obj._calculate_chain_investment_value = spy
+
+        result = _drive(obj.calculate_initial_investment_value_from_funding_events())
+        assert calls[0] == 1
+        assert result == 25.0
+
+    def test_multi_chain_per_chain_total_saved_not_cross_chain_sum(self):
+        """Per-chain persisted totals must not leak the cross-chain sum.
+
+        For a multi-chain config, the last-iterated chain's persisted total
+        must reflect that chain's own value, not the cross-chain sum.
+        Regression guard: a trailing
+        ``_save_chain_total_investment(chain, total_investment)`` after the
+        for-loop would write the cross-chain sum to the last chain's key,
+        since ``chain`` holds the last loop value and ``total_investment``
+        is the running sum. The per-chain saves inside
+        ``_calculate_chain_investment_value`` are the only legitimate
+        writes — this asserts no post-loop overwrite happens.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism", "mode"]
+        obj.params.safe_contract_addresses = {
+            "optimism": "0xSafeOp",
+            "mode": "0xSafeMode",
+        }
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_optimism = _gen_return(
+            {"2025-01-01": [{"symbol": "USDC", "amount": 1}]}
         )
-        obj._fetch_historical_eth_price = _gen_return(3000.0)
+        obj._fetch_all_transfers_until_date_mode = _gen_return(
+            {"2025-01-01": [{"symbol": "USDC", "amount": 1}]}
+        )
+        obj._get_current_timestamp = lambda: 100
+
+        chain_calc_returns = {"optimism": 50.0, "mode": 25.0}
+
+        def fake_calc(chain):
+            yield
+            return chain_calc_returns[chain]
+
+        obj._calculate_chain_investment_value = fake_calc
+
+        saves: List[tuple] = []
+
+        def fake_save(chain, total):
+            saves.append((chain, total))
+            yield
+
+        obj._save_chain_total_investment = fake_save
+
+        result = _drive(obj.calculate_initial_investment_value_from_funding_events())
+        # The outer return is the cross-chain sum (50 + 25 = 75) for reporting.
+        assert result == 75.0
+        # But the only post-loop persistence calls (if any) must NOT carry the
+        # cross-chain sum onto a single per-chain key. The stub above replaces
+        # the inner per-chain saves with a no-op; what matters is that NO save
+        # records (chain="mode", total=75.0) — the bug-fix removed that line.
         assert (
-            _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS"))
-            == -3000.0
+            "mode",
+            75.0,
+        ) not in saves, (
+            f"post-loop cross-chain sum overwrites mode_total_investment; saves={saves}"
         )
-
-    def test_cached_transfer_skips_price_fetch(self):
-        """Previously priced transfers use cached value, no API call."""
-        obj = self._base()
-        # Pre-populate the priced cache with a known transfer key
-        obj._load_priced_transfers = _gen_return({"2025-01-01_0xTX1": 500.0})
-        # If price fetch were called it would return a different value
-        obj._fetch_historical_eth_price = _gen_return(9999.0)
-        result = _drive(
-            obj._calculate_chain_investment_value(
-                {"2025-01-01": [{"symbol": "ETH", "delta": 1.0, "tx_hash": "0xTX1"}]},
-                "optimism",
-                "0xS",
-            )
-        )
-        # Should use cached 500.0, not 9999.0
-        assert result == 500.0
-
-    def test_mix_cached_and_new_transfers(self):
-        """Cached + new transfers are summed correctly."""
-        obj = self._base()
-        obj._load_priced_transfers = _gen_return({"2025-01-01_0xOLD": 200.0})
-        obj._fetch_historical_eth_price = _gen_return(1000.0)
-        result = _drive(
-            obj._calculate_chain_investment_value(
-                {
-                    "2025-01-01": [
-                        {"symbol": "ETH", "delta": 1.0, "tx_hash": "0xOLD"},
-                        {"symbol": "ETH", "delta": 0.5, "tx_hash": "0xNEW"},
-                    ]
-                },
-                "optimism",
-                "0xS",
-            )
-        )
-        # cached=200, new=0.5*1000=500
-        assert result == 700.0
-
-    def test_price_fetch_failure_logs_warning(self):
-        """When price fetch fails, transfer is skipped with a warning (not silent)."""
-        obj = self._base()
-        obj._fetch_historical_eth_price = _gen_return(None)
-        result = _drive(
-            obj._calculate_chain_investment_value(
-                {"2025-01-01": [{"symbol": "ETH", "delta": 1.0}]},
-                "optimism",
-                "0xS",
-            )
-        )
-        assert result == 0.0
-        # Verify warning was logged (not silently skipped)
-        obj.context.logger.warning.assert_called()
 
 
 class TestFetchAllTransfersUntilDateMode:
@@ -7161,25 +6655,6 @@ class TestFetchOptimismSafeglobalBatch2:
         _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", t, {}))
         assert "2024-12-15" in t
 
-    def test_ether(self):
-        """Test ether."""
-        td = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "from": "0xS",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-            "transactionHash": "0xH",
-            "transferId": "t1",
-        }
-        obj = _mk()
-        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
-        obj._should_include_transfer_optimism = _gen_return(True)
-        obj.context.coingecko = MagicMock()
-        obj.params.sleep_time = 1
-        t = defaultdict(list)
-        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", t, {}))
-        assert len(t["2024-12-15"]) == 1
-
     def test_erc721(self):
         """Test erc721."""
         td = {
@@ -7333,428 +6808,6 @@ class TestFetchOptimismSafeglobalBatch2:
         )
 
 
-class TestTrackEthReversions:
-    """TestTrackEthReversions."""
-
-    def _s(self, ch="optimism"):
-        o = _mk()
-        o.params.target_investment_chains = [ch]
-        o.params.safe_contract_addresses = {ch: "0xSafe"}
-        return o
-
-    def test_no_incoming(self):
-        """Test no incoming."""
-        o = self._s()
-        o._fetch_all_transfers_until_date_optimism = _gen_return({})
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism")) == {}
-
-    def test_unsupported(self):
-        """Test unsupported."""
-        assert (
-            _drive(
-                self._s("polygon")._track_eth_transfers_and_reversions("0xS", "polygon")
-            )
-            == {}
-        )
-
-    def test_no_master(self):
-        """Test no master."""
-        o = self._s()
-        o._fetch_all_transfers_until_date_optimism = _gen_return(
-            {
-                "d": [
-                    {
-                        "symbol": "ETH",
-                        "timestamp": "t",
-                        "amount": 1.0,
-                        "from_address": "0xM",
-                    }
-                ]
-            }
-        )
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        o.get_master_safe_address = _gen_return(None)
-        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism")) == {}
-
-    def test_two_transfers(self):
-        """Test two transfers."""
-        o = self._s()
-        inc = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704067200Z",
-                    "amount": 1.0,
-                    "from_address": "0xmaster",
-                },
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704153600Z",
-                    "amount": 0.5,
-                    "from_address": "0xmaster",
-                },
-            ]
-        }
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        o.get_master_safe_address = _gen_return("0xMaster")
-        o._get_native_balance = _gen_return(2.0)
-        assert (
-            _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))[
-                "reversion_amount"
-            ]
-            == 0.5
-        )
-
-    def test_reversion_done(self):
-        """Test reversion done."""
-        o = self._s()
-        inc = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704067200Z",
-                    "amount": 1.0,
-                    "from_address": "0xmaster",
-                },
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704153600Z",
-                    "amount": 0.5,
-                    "from_address": "0xmaster",
-                },
-            ]
-        }
-        out = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704240000Z",
-                    "amount": 0.5,
-                    "to_address": "0xmaster",
-                    "from_address": "0xsafe",
-                }
-            ]
-        }
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return(out)
-        o.get_master_safe_address = _gen_return("0xMaster")
-        o._get_native_balance = _gen_return(1.0)
-        o._calculate_total_reversion_value = _gen_return(500.0)
-        r = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
-        assert r["reversion_amount"] == 0 and r["historical_reversion_value"] == 500.0
-
-    def test_mode(self):
-        """Test mode."""
-        o = self._s("mode")
-        o._track_eth_transfers_mode = MagicMock(
-            return_value={
-                "incoming": {
-                    "ts": [
-                        {
-                            "symbol": "ETH",
-                            "timestamp": "ts",
-                            "amount": 1.0,
-                            "from_address": "0xm",
-                        }
-                    ]
-                },
-                "outgoing": {},
-            }
-        )
-        o.get_master_safe_address = _gen_return("0xM")
-        o._get_native_balance = _gen_return(1.0)
-        assert (
-            _drive(o._track_eth_transfers_and_reversions("0xSafe", "mode"))[
-                "reversion_amount"
-            ]
-            == 0
-        )
-
-    def test_balance_cap(self):
-        """Test balance cap."""
-        o = self._s()
-        inc = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704067200Z",
-                    "amount": 1.0,
-                    "from_address": "0xmaster",
-                },
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704153600Z",
-                    "amount": 5.0,
-                    "from_address": "0xmaster",
-                },
-            ]
-        }
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        o.get_master_safe_address = _gen_return("0xMaster")
-        o._get_native_balance = _gen_return(0.1)
-        assert (
-            _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))[
-                "reversion_amount"
-            ]
-            == 0.1
-        )
-
-    def test_exception(self):
-        """Test exception."""
-        o = self._s()
-
-        def boom(*a, **kw):
-            """Boom."""
-            yield
-            raise RuntimeError("f")
-
-        o._fetch_all_transfers_until_date_optimism = boom
-        assert (
-            _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))[
-                "reversion_amount"
-            ]
-            == 0
-        )
-
-    def test_unix_ts(self):
-        """Test unix ts."""
-        o = self._s()
-        inc = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704067200",
-                    "amount": 1.0,
-                    "from_address": "0xmaster",
-                },
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704153600",
-                    "amount": 0.5,
-                    "from_address": "0xmaster",
-                },
-            ]
-        }
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        o.get_master_safe_address = _gen_return("0xMaster")
-        o._get_native_balance = _gen_return(2.0)
-        assert (
-            _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))[
-                "reversion_date"
-            ]
-            is not None
-        )
-
-    def test_bad_ts(self):
-        """Test bad ts."""
-        o = self._s()
-        inc = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "bad",
-                    "amount": 1.0,
-                    "from_address": "0xmaster",
-                },
-                {
-                    "symbol": "ETH",
-                    "timestamp": "bad",
-                    "amount": 0.5,
-                    "from_address": "0xmaster",
-                },
-            ]
-        }
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        o.get_master_safe_address = _gen_return("0xMaster")
-        o._get_native_balance = _gen_return(2.0)
-        assert (
-            _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))[
-                "reversion_date"
-            ]
-            is not None
-        )
-
-
-class TestCalcReversionValue:
-    """TestCalcReversionValue."""
-
-    def test_iso(self):
-        """Test iso."""
-        o = _mk()
-        o._fetch_historical_eth_price = _gen_return(2000.0)
-        assert (
-            _drive(
-                o._calculate_total_reversion_value(
-                    [{"timestamp": "2024-01-01T00:00:00Z"}],
-                    [{"amount": 0.5}, {"amount": 0.3}],
-                )
-            )
-            == 1600.0
-        )
-
-    def test_unix(self):
-        """Test unix."""
-        o = _mk()
-        o._fetch_historical_eth_price = _gen_return(1000.0)
-        assert (
-            _drive(
-                o._calculate_total_reversion_value(
-                    [{"timestamp": "1704067200"}], [{"amount": 1.0}]
-                )
-            )
-            == 1000.0
-        )
-
-    def test_bad(self):
-        """Test bad."""
-        o = _mk()
-        o._fetch_historical_eth_price = _gen_return(500.0)
-        assert (
-            _drive(
-                o._calculate_total_reversion_value(
-                    [{"timestamp": "bad"}], [{"amount": 2.0}]
-                )
-            )
-            == 1000.0
-        )
-
-    def test_no_price(self):
-        """Test no price."""
-        o = _mk()
-        o._fetch_historical_eth_price = _gen_return(None)
-        assert (
-            _drive(
-                o._calculate_total_reversion_value(
-                    [{"timestamp": "1704067200"}], [{"amount": 1.0}]
-                )
-            )
-            == 0.0
-        )
-
-
-class TestOutgoingOptimism:
-    """TestOutgoingOptimism."""
-
-    def test_no_addr(self):
-        """Test no addr."""
-        assert (
-            _drive(
-                _mk()._fetch_outgoing_transfers_until_date_optimism("", "2025-01-01")
-            )
-            == {}
-        )
-
-    def test_fail(self):
-        """Failed fetch returns previously-persisted data and does not store."""
-        o = _mk()
-        # Disk has a legacy entry the migration would strip — assert it
-        # survives a failed fetch because we don't persist the stripped shape.
-        o.read_funding_events = lambda: {
-            "optimism_outgoing": {"2024-01-01": [{"y": 1}]}
-        }
-        o.store_funding_events = MagicMock()
-        o._request_with_retries = _gen_return((False, {}))
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        result = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01")
-        )
-        # Returns the previously-persisted raw shape (legacy entry kept).
-        assert result == {"2024-01-01": [{"y": 1}]}
-        # store must NOT fire on fetch failure.
-        o.store_funding_events.assert_not_called()
-
-    def test_eth(self):
-        """Test eth."""
-        t = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-            "transactionHash": "0xH",
-        }
-        o = _mk()
-        o._request_with_retries = _gen_return((True, {"results": [t], "next": None}))
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        assert "2024-12-15" in _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01")
-        )
-
-    def test_zero(self):
-        """Test zero."""
-        t = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": "0",
-            "transactionHash": "0xH",
-        }
-        o = _mk()
-        o._request_with_retries = _gen_return((True, {"results": [t], "next": None}))
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        assert (
-            len(
-                _drive(
-                    o._fetch_outgoing_transfers_until_date_optimism(
-                        "0xAddr", "2025-01-01"
-                    )
-                )
-            )
-            == 0
-        )
-
-    def test_bad_val(self):
-        """Test bad val."""
-        t = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": "bad",
-            "transactionHash": "0xH",
-        }
-        o = _mk()
-        o._request_with_retries = _gen_return((True, {"results": [t], "next": None}))
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        assert (
-            len(
-                _drive(
-                    o._fetch_outgoing_transfers_until_date_optimism(
-                        "0xAddr", "2025-01-01"
-                    )
-                )
-            )
-            == 0
-        )
-
-    def test_exception(self):
-        """Test exception."""
-        o = _mk()
-
-        def boom(*a, **kw):
-            """Boom."""
-            yield
-            raise RuntimeError("f")
-
-        o._request_with_retries = boom
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        assert (
-            _drive(o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01"))
-            == {}
-        )
-
-
 class TestErc20Optimism:
     """TestErc20Optimism."""
 
@@ -7810,157 +6863,6 @@ class TestErc20Optimism:
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
         assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) is None
-
-
-class TestTrackEthMode:
-    """TestTrackEthMode."""
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_non_200(self, m):
-        """Test non 200."""
-        m.return_value = MagicMock(status_code=500)
-        assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {
-            "incoming": {},
-            "outgoing": {},
-        }
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_status_0(self, m):
-        """Test status 0."""
-        m.return_value = MagicMock(
-            status_code=200, json=lambda: {"status": "0", "message": "err"}
-        )
-        assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {
-            "incoming": {},
-            "outgoing": {},
-        }
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_ok(self, m):
-        """Test ok."""
-        txs = [
-            {
-                "timeStamp": "1704067200",
-                "value": str(10**18),
-                "to": "0xsafe",
-                "from": "0xs",
-                "hash": "0xH",
-            }
-        ]
-        m.return_value = MagicMock(
-            status_code=200, json=lambda: {"status": "1", "result": txs}
-        )
-        r = _mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")
-        assert len(r["incoming"]) > 0
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_outgoing(self, m):
-        """Test outgoing."""
-        txs = [
-            {
-                "timeStamp": "1704067200",
-                "value": str(10**18),
-                "from": "0xsafe",
-                "to": "0xr",
-                "hash": "0xH",
-            }
-        ]
-        m.return_value = MagicMock(
-            status_code=200, json=lambda: {"status": "1", "result": txs}
-        )
-        r = _mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")
-        assert len(r["outgoing"]) > 0
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_zero(self, m):
-        """Test zero."""
-        m.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {
-                "status": "1",
-                "result": [
-                    {
-                        "timeStamp": "1704067200",
-                        "value": "0",
-                        "to": "0xsafe",
-                        "from": "0xs",
-                    }
-                ],
-            },
-        )
-        assert (
-            len(_mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")["incoming"])
-            == 0
-        )
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_future(self, m):
-        """Test future."""
-        m.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {
-                "status": "1",
-                "result": [
-                    {
-                        "timeStamp": "1893456000",
-                        "value": str(10**18),
-                        "to": "0xsafe",
-                        "from": "0xs",
-                    }
-                ],
-            },
-        )
-        assert (
-            len(_mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")["incoming"])
-            == 0
-        )
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_bad_ts(self, m):
-        """Test bad ts."""
-        m.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {
-                "status": "1",
-                "result": [
-                    {
-                        "timeStamp": "bad",
-                        "value": str(10**18),
-                        "to": "0xsafe",
-                        "from": "0xs",
-                    }
-                ],
-            },
-        )
-        assert (
-            len(_mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")["incoming"])
-            == 0
-        )
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get"
-    )
-    def test_exception(self, m):
-        """Test exception."""
-        m.side_effect = RuntimeError("f")
-        assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {
-            "incoming": {},
-            "outgoing": {},
-        }
 
 
 class TestTrackErc20Mode:
@@ -8434,8 +7336,10 @@ class TestOptimismSafeglobalBranches:
         td = {
             "executionDate": "2024-12-15T10:00:00Z",
             "from": "0xS",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
+            "type": "ERC20_TRANSFER",
+            "value": str(10**6),
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xUSDC",
             "transactionHash": "0xH",
             "transferId": "t1",
         }
@@ -8455,122 +7359,6 @@ class TestOptimismSafeglobalBranches:
         t = defaultdict(list)
         _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", t, {}))
         assert len(t["2024-12-15"]) == 1
-
-
-class TestOutgoingOptimismBranches:
-    """Tests for internal loop branches in _fetch_outgoing_transfers_until_date_optimism."""
-
-    def _obj(self):
-        o = _mk()
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        return o
-
-    def test_empty_results(self):
-        """Empty results → break at line 4275."""
-        o = self._obj()
-        o._request_with_retries = _gen_return((True, {"results": []}))
-        assert (
-            _drive(o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01"))
-            == {}
-        )
-
-    def test_no_execution_date(self):
-        """No executionDate → continue at line 4281."""
-        td = {
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-        }
-        o = self._obj()
-        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
-        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
-
-    def test_bad_timestamp(self):
-        """Invalid timestamp → continue at lines 4289-4293."""
-        td = {
-            "executionDate": "not-valid",
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-        }
-        o = self._obj()
-        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
-        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
-
-    def test_future_date(self):
-        """Transfer after current_date → continue at line 4296."""
-        td = {
-            "executionDate": "2026-01-01T10:00:00Z",
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-        }
-        o = self._obj()
-        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
-        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
-
-    def test_not_from_us(self):
-        """Transfer from different address → continue at line 4335."""
-        td = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "from": "0xOther",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-            "transactionHash": "0xH",
-        }
-        o = self._obj()
-        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
-        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
-
-    def test_duplicate(self):
-        """Duplicate transaction → continue at line 4305."""
-        td = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-            "transactionHash": "0xH",
-        }
-        o = self._obj()
-        o._request_with_retries = _gen_return(
-            (True, {"results": [td, td], "next": None})
-        )
-        r = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01")
-        )
-        assert len(r.get("2024-12-15", [])) == 1
-
-    def test_pagination(self):
-        """Pagination → line 4345."""
-        td = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "from": "0xaddr",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-            "transactionHash": "0xH",
-        }
-        o = self._obj()
-        ci = [0]
-
-        def fr(*a, **kw):
-            """Fr."""
-            ci[0] += 1
-            yield
-            if ci[0] == 1:
-                return (True, {"results": [td], "next": "http://next-page"})
-            return (True, {"results": []})
-
-        o._request_with_retries = fr
-        r = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01")
-        )
-        assert "2024-12-15" in r
 
 
 class TestErc20OptimismBranches:
@@ -8748,39 +7536,6 @@ class TestErc20OptimismBranches:
         assert "2024-01-01" in r["outgoing"]
 
 
-class TestReversionDateIso:
-    """Test ISO timestamp format for reversion_date (line 4152)."""
-
-    def test_iso_z_timestamp(self):
-        """Test iso z timestamp."""
-        o = _mk()
-        o.params.target_investment_chains = ["optimism"]
-        o.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        # Two transfers from master, second has ISO-Z timestamp
-        inc = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "2024-01-01T00:00:00Z",
-                    "amount": 1.0,
-                    "from_address": "0xmaster",
-                },
-                {
-                    "symbol": "ETH",
-                    "timestamp": "2024-01-02T00:00:00Z",
-                    "amount": 0.5,
-                    "from_address": "0xmaster",
-                },
-            ]
-        }
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        o.get_master_safe_address = _gen_return("0xMaster")
-        o._get_native_balance = _gen_return(2.0)
-        r = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
-        assert r["reversion_date"] == "02-01-2024"
-
-
 class TestIncrementalOptimismFetching:
     """Tests for early-stop pagination and caching in Optimism transfer fetching."""
 
@@ -8831,139 +7586,28 @@ class TestIncrementalOptimismFetching:
         # No new transfers should be added (every uid in the page was seen)
         assert len(all_transfers) == 0
 
-    def test_outgoing_persists_new_transfers(self):
-        """New outgoing transfers are persisted to funding_events."""
-        o = _mk()
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        o.funding_events = {}
-
-        transfer = {
-            "executionDate": "2024-12-20T10:00:00Z",
-            "from": "0xsafe",
-            "to": "0xRecipient",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-            "transactionHash": "0xH1",
-        }
-        o._request_with_retries = _gen_return(
-            (True, {"results": [transfer], "next": None})
-        )
-        result = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xSafe", "2025-01-01")
-        )
-        assert "2024-12-20" in result
-        # Verify persisted
-        assert "optimism_outgoing" in o.funding_events
-        assert "2024-12-20" in o.funding_events["optimism_outgoing"]
-        o.store_funding_events.assert_called()
-
-    def test_outgoing_returns_existing_on_no_address(self):
-        """When no address is provided, returns existing persisted data.
-
-        The persisted entry carries ``transfer_id`` so the on-load legacy
-        migration does not drop it.
-        """
-        o = _mk()
-        o.funding_events = {
-            "optimism_outgoing": {
-                "2024-01-01": [{"symbol": "ETH", "transfer_id": "tid-1"}]
-            }
-        }
-        result = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("", "2025-01-01")
-        )
-        assert "2024-01-01" in result
-
-    def test_reversion_cache_hit(self):
-        """Cached reversion info is returned when transfer count is unchanged."""
-        o = _mk()
-        o.params.target_investment_chains = ["optimism"]
-        o.params.safe_contract_addresses = {"optimism": "0xSafe"}
-
-        cached_result = {
-            "reversion_amount": 0.5,
-            "master_safe_address": "0xMaster",
-            "historical_reversion_value": 100.0,
-            "reversion_date": "01-01-2025",
-        }
-        # incoming has 2 transfers, outgoing has 1 => count=3
-        inc = {
-            "d": [
-                {"symbol": "ETH", "timestamp": "t"},
-                {"symbol": "ETH", "timestamp": "t2"},
-            ]
-        }
-        out = {"d": [{"symbol": "ETH", "timestamp": "t3"}]}
-
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return(out)
-        o.funding_events = {
-            "optimism_reversion_info": cached_result,
-            "optimism_reversion_transfer_count": 3,  # matches 2+1
-        }
-
-        result = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
-        assert result == cached_result
-
-    def test_reversion_cache_miss_on_new_transfers(self):
-        """Reversion is recomputed when transfer count changes."""
-        o = _mk()
-        o.params.target_investment_chains = ["optimism"]
-        o.params.safe_contract_addresses = {"optimism": "0xSafe"}
-
-        stale_cache = {
-            "reversion_amount": 999,
-            "master_safe_address": "0xOld",
-            "historical_reversion_value": 0.0,
-            "reversion_date": None,
-        }
-        inc = {
-            "d": [
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704067200Z",
-                    "amount": 1.0,
-                    "from_address": "0xmaster",
-                },
-                {
-                    "symbol": "ETH",
-                    "timestamp": "1704153600Z",
-                    "amount": 0.5,
-                    "from_address": "0xmaster",
-                },
-            ]
-        }
-        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
-        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
-        o.get_master_safe_address = _gen_return("0xMaster")
-        o._get_native_balance = _gen_return(2.0)
-        o.funding_events = {
-            "optimism_reversion_info": stale_cache,
-            "optimism_reversion_transfer_count": 1,  # stale: was 1, now 2
-        }
-
-        result = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
-        # Should NOT return stale cache — reversion_amount should be 0.5, not 999
-        assert result["reversion_amount"] == 0.5
-
 
 class TestCoverageGaps:
     """Tests for uncovered lines/branches in new code."""
 
     def test_get_transfer_key_no_tx_hash(self):
-        """Fallback key when tx_hash is missing."""
+        """Fallback key when tx_hash is missing — namespaced by leg."""
         o = _mk()
         key = o._get_transfer_key(
-            "2025-01-01", {"symbol": "ETH", "delta": 1.5, "from_address": "0xF"}, 3
+            "in",
+            "2025-01-01",
+            {"symbol": "ETH", "delta": 1.5, "from_address": "0xF"},
+            3,
         )
-        assert key == "2025-01-01_ETH_1.5_0xF_3"
+        assert key == "in_2025-01-01_ETH_1.5_0xF_3"
 
     def test_get_transfer_key_empty_tx_hash(self):
-        """Fallback key when tx_hash is empty string."""
+        """Fallback key when tx_hash is empty string — namespaced by leg."""
         o = _mk()
-        key = o._get_transfer_key("2025-01-01", {"tx_hash": "", "symbol": "USDC"}, 0)
-        assert key == "2025-01-01_USDC_0__0"
+        key = o._get_transfer_key(
+            "out", "2025-01-01", {"tx_hash": "", "symbol": "USDC"}, 0
+        )
+        assert key == "out_2025-01-01_USDC_0__0"
 
     def test_load_priced_transfers_valid(self):
         """Load valid JSON from KV store."""
@@ -9002,13 +7646,6 @@ class TestCoverageGaps:
         _drive(o._save_priced_transfers("optimism", {"k": 42.0}))
         assert "optimism_priced_transfers" in written
         assert json.loads(written["optimism_priced_transfers"]) == {"k": 42.0}
-
-    def test_count_transfers(self):
-        """Verify transfer counting across dates."""
-        o = _mk()
-        transfers = {"d1": [{"a": 1}, {"b": 2}], "d2": [{"c": 3}]}
-        assert o._count_transfers(transfers) == 3
-        assert o._count_transfers({}) == 0
 
     def test_fetch_historical_eth_price_fallback_cache(self):
         """When API fails but fallback cache has a price, return it."""
@@ -9071,98 +7708,6 @@ class TestCoverageGaps:
         result = _drive(o._load_priced_transfers("optimism"))
         assert result == {}
         o.context.logger.warning.assert_called()
-
-    def test_outgoing_early_stop(self):
-        """Outgoing pagination stops when entire page is on stored dates."""
-        o = _mk()
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        o.funding_events = {
-            "optimism_outgoing": {
-                "2024-12-15": [{"symbol": "ETH", "amount": 1.0}],
-            }
-        }
-        page_data = {
-            "results": [
-                {
-                    "executionDate": "2024-12-15T10:00:00Z",
-                    "from": "0xsafe",
-                    "to": "0xR",
-                    "type": "ETHER_TRANSFER",
-                    "value": str(10**18),
-                    "transactionHash": "0xH1",
-                },
-                {
-                    "executionDate": "2024-12-15T11:00:00Z",
-                    "from": "0xsafe",
-                    "to": "0xR",
-                    "type": "ETHER_TRANSFER",
-                    "value": str(10**18),
-                    "transactionHash": "0xH2",
-                },
-            ],
-            "next": "http://next-page-url",
-        }
-        o._request_with_retries = _gen_return((True, page_data))
-
-        result = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xSafe", "2025-01-01")
-        )
-        assert "2024-12-15" in result
-        o.store_funding_events.assert_called()
-
-    def test_outgoing_merge_preserves_existing_when_dates_overlap(self):
-        """Page entries on a stored date are appended, not replacing the list."""
-        o = _mk()
-        o.context.coingecko = MagicMock()
-        o.params.sleep_time = 1
-        o.funding_events = {
-            "optimism_outgoing": {
-                "2024-12-15": [
-                    {
-                        "transfer_id": "tid-old",
-                        "symbol": "ETH",
-                        "amount": 0.5,
-                        "tx_hash": "0xOLD",
-                    }
-                ],
-            }
-        }
-        # Page has one transfer on an existing date and one on a new date
-        page_data = {
-            "results": [
-                {
-                    "transferId": "tid-new",
-                    "executionDate": "2024-12-20T10:00:00Z",
-                    "from": "0xsafe",
-                    "to": "0xR",
-                    "type": "ETHER_TRANSFER",
-                    "value": str(10**18),
-                    "transactionHash": "0xNEW",
-                },
-                {
-                    "transferId": "tid-dup",
-                    "executionDate": "2024-12-15T12:00:00Z",
-                    "from": "0xsafe",
-                    "to": "0xR",
-                    "type": "ETHER_TRANSFER",
-                    "value": str(10**18),
-                    "transactionHash": "0xDUP",
-                },
-            ],
-            "next": None,
-        }
-        o._request_with_retries = _gen_return((True, page_data))
-
-        result = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xSafe", "2025-01-01")
-        )
-        # New date added.
-        assert "2024-12-20" in result
-        # Existing entry on 2024-12-15 is preserved alongside the new entry.
-        tx_hashes_on_dec_15 = {t.get("tx_hash") for t in result["2024-12-15"]}
-        assert "0xOLD" in tx_hashes_on_dec_15
-        assert "0xDUP" in tx_hashes_on_dec_15
 
 
 class TestClosedPositionsBranch:
@@ -9399,22 +7944,6 @@ class TestFetchEthTransfersModeNetworkErrors:
         assert result is True
 
 
-class TestTrackEthTransfersModeJsonError:
-    """Test _track_eth_transfers_mode handles JSON parse errors."""
-
-    @patch(
-        "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests"
-    )
-    def test_json_decode_error(self, mock_requests):
-        """Test that JSONDecodeError from response.json() is caught."""
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.json.side_effect = ValueError("No JSON")
-        mock_requests.get.return_value = resp
-        result = _mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")
-        assert result == {"incoming": {}, "outgoing": {}}
-
-
 class TestTrackErc20TransfersModeJsonError:
     """Test _track_erc20_transfers_mode handles JSON parse errors."""
 
@@ -9439,23 +7968,6 @@ class TestTransferMissingFromKey:
         o.context.coingecko = MagicMock()
         o.params.sleep_time = 1
         return o
-
-    def test_outgoing_transfer_missing_from_key(self):
-        """Transfer dict without 'from' key should not raise AttributeError."""
-        td = {
-            "executionDate": "2024-12-15T10:00:00Z",
-            "to": "0xR",
-            "type": "ETHER_TRANSFER",
-            "value": str(10**18),
-            "transactionHash": "0xH",
-        }
-        o = self._obj()
-        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
-        result = _drive(
-            o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01")
-        )
-        # Transfer without "from" should be silently skipped, no crash
-        assert isinstance(result, dict)
 
     def test_erc20_transfer_missing_from_key(self):
         """ERC20 transfer dict without 'from' key should not raise."""
@@ -10045,31 +8557,6 @@ class TestDropLegacyTransferEntries:
         assert _drop_legacy_transfer_entries({}) == ({}, 0)
         assert _drop_legacy_transfer_entries(None) == (None, 0)
 
-    def test_applied_when_loading_optimism_outgoing(self):
-        """Loading optimism_outgoing strips legacy entries lacking transfer_id."""
-        obj = _mk()
-        obj.read_funding_events = lambda: {
-            "optimism_outgoing": {
-                "2024-01-01": [
-                    {"tx_hash": "0xA", "type": "eth", "amount": "1.0"},  # legacy
-                    {"transfer_id": "tid-1", "tx_hash": "0xB"},  # new
-                ]
-            }
-        }
-        obj.store_funding_events = MagicMock()
-        obj.funding_events = {}
-        obj._request_with_retries = _gen_return((True, {"results": [], "next": None}))
-        obj.context.coingecko = MagicMock()
-        obj.params.sleep_time = 1
-
-        _drive(
-            obj._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2024-12-31")
-        )
-        # Legacy entry dropped, only the transfer_id-carrying entry remains.
-        kept = obj.funding_events["optimism_outgoing"]["2024-01-01"]
-        assert len(kept) == 1
-        assert kept[0]["transfer_id"] == "tid-1"
-
 
 class TestProxySafePagination:
     """Pagination uses the configured safe_api_url + slug for every page, not the absolute next URL (PR 1.4)."""
@@ -10255,54 +8742,6 @@ class TestProxySafePagination:
         # Page limit also pinned so a constant change would be caught.
         assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
 
-    def test_outgoing_eth_fetcher_paginates_via_proxy_base_url(self):
-        """Same proxy-URL guarantee for the outgoing-ETH fetcher."""
-        obj = _mk()
-        obj.read_funding_events = lambda: {}
-        obj.store_funding_events = MagicMock()
-        obj.funding_events = {}
-        obj.params.safe_api_url = "https://safe-proxy.example.com"
-        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
-
-        captured: List[str] = []
-        call_count = [0]
-
-        def req(*a, **kw):
-            captured.append(kw.get("endpoint", a[0] if a else ""))
-            call_count[0] += 1
-            yield
-            if call_count[0] == 1:
-                return (
-                    True,
-                    {
-                        "results": [self._outgoing_eth(f"tid-{call_count[0]}")],
-                        "next": "https://safe-transaction-optimism.safe.global/api/v1/safes/0xaddr/transfers/?offset=100",
-                    },
-                )
-            return (True, {"results": [], "next": None})
-
-        obj._request_with_retries = req
-        obj.context.coingecko = MagicMock()
-        obj.params.sleep_time = 1
-
-        _drive(
-            obj._fetch_outgoing_transfers_until_date_optimism("0xaddr", "2099-01-01")
-        )
-
-        assert call_count[0] == 2
-        assert all(
-            url.startswith("https://safe-proxy.example.com/oeth/api/v1")
-            for url in captured
-        ), captured
-        assert all("safe.global" not in url for url in captured), captured
-        # Offset advances by ``len(transfers)`` (1), not by ``limit`` (100).
-        # Anchored with ``endswith`` because ``"offset=1"`` is a substring of
-        # ``"offset=100"``.
-        assert captured[0].endswith("&offset=0"), captured[0]
-        assert captured[1].endswith("&offset=1"), captured[1]
-        # Page limit also pinned so a constant change would be caught.
-        assert "limit=100" in captured[0] and "limit=100" in captured[1], captured
-
     def test_incoming_fetcher_max_pagination_cap(self):
         """MAX_PAGINATION_PAGES cap on incoming fetcher signals fetch failure."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
@@ -10344,46 +8783,6 @@ class TestProxySafePagination:
         assert call_count[0] == MAX_PAGINATION_PAGES
         # Cap-hit signals failure so the caller skips persistence.
         assert success is False
-
-    def test_outgoing_eth_fetcher_max_pagination_cap(self):
-        """MAX_PAGINATION_PAGES cap on outgoing-ETH fetcher skips persistence."""
-        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
-            MAX_PAGINATION_PAGES,
-        )
-
-        obj = _mk()
-        obj.read_funding_events = lambda: {}
-        obj.store_funding_events = MagicMock()
-        obj.funding_events = {}
-        obj.params.safe_api_url = "https://safe-proxy.example.com"
-        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
-
-        call_count = [0]
-
-        def req(*a, **kw):
-            call_count[0] += 1
-            yield
-            return (
-                True,
-                {
-                    "results": [self._outgoing_eth(f"tid-{call_count[0]}")],
-                    "next": "x",
-                },
-            )
-
-        obj._request_with_retries = req
-        obj.context.coingecko = MagicMock()
-        obj.params.sleep_time = 1
-
-        result = _drive(
-            obj._fetch_outgoing_transfers_until_date_optimism("0xaddr", "2099-01-01")
-        )
-        assert call_count[0] == MAX_PAGINATION_PAGES
-        # Real invariant: cap-hit skips persistence. The ``{}`` return is
-        # incidental — it's the previously persisted shape, which is empty
-        # here because ``funding_events`` was seeded empty.
-        obj.store_funding_events.assert_not_called()
-        assert result == {}
 
     def test_short_non_final_page_does_not_skip_records(self):
         """Regression: short non-final page must not skip records.
@@ -10491,54 +8890,6 @@ class TestProxySafePagination:
             obj._fetch_optimism_transfers_safeglobal(
                 "0xAddr", "2099-01-01", all_transfers_by_date, existing
             )
-        )
-
-        assert call_count[0] == 2
-        assert captured[0].endswith("&offset=0"), captured[0]
-        assert captured[1].endswith("&offset=50"), captured[1]
-
-    def test_short_non_final_page_outgoing_eth_fetcher_does_not_skip_records(self):
-        """Same short-page regression test, for the outgoing-ETH fetcher.
-
-        Symmetric with the withdrawal and incoming versions; pins
-        ``offset += len(transfers)`` in
-        ``_fetch_outgoing_transfers_until_date_optimism`` against a
-        revert to ``offset += SAFE_TRANSFERS_PAGE_LIMIT``.
-        """
-        obj = _mk()
-        obj.read_funding_events = lambda: {}
-        obj.store_funding_events = MagicMock()
-        obj.funding_events = {}
-        obj.params.safe_api_url = "https://safe-proxy.example.com"
-        obj.params.safe_api_chain_slugs = {"optimism": "oeth"}
-
-        captured: List[str] = []
-        call_count = [0]
-        page_one = [self._outgoing_eth(f"tid-eth-{i}") for i in range(50)]
-
-        def req(*a, **kw):
-            captured.append(kw.get("endpoint", a[0] if a else ""))
-            call_count[0] += 1
-            yield
-            if call_count[0] == 1:
-                return (
-                    True,
-                    {
-                        "results": page_one,
-                        "next": (
-                            "https://safe-transaction-optimism.safe.global/api/v1/"
-                            "safes/0xS/transfers/?offset=100"
-                        ),
-                    },
-                )
-            return (True, {"results": [], "next": None})
-
-        obj._request_with_retries = req
-        obj.context.coingecko = MagicMock()
-        obj.params.sleep_time = 1
-
-        _drive(
-            obj._fetch_outgoing_transfers_until_date_optimism("0xaddr", "2099-01-01")
         )
 
         assert call_count[0] == 2
@@ -11001,3 +9352,421 @@ class TestKvCacheTtlBoundaries:
         # else-wrap fix, fetch_till_date was overwritten back to False by
         # the (now-explicit) expired branch.
         assert captured["fetch_till_date"] is True
+
+
+class TestDirectReadInvestment:
+    """Direct-read initial investment: sum(priced incoming) - sum(priced reverted ETH)."""
+
+    def _obj(self):
+        obj = _mk()
+        obj.params.airdrop_started = False
+        obj._load_priced_transfers = _gen_return({})
+        obj._save_priced_transfers = _gen_none
+        obj._save_chain_total_investment = _gen_none
+        obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
+        obj._fetch_historical_token_price = _gen_return(1.0)
+        obj._fetch_historical_eth_price = _gen_return(2600.0)
+        return obj
+
+    def test_reverted_agent_net(self):
+        """0xE4EA-style: incoming USDC+ETH minus reverted ETH-out is the net denominator."""
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [
+                    {"symbol": "USDC", "amount": 16, "tx_hash": "0xu"},
+                    {"symbol": "ETH", "amount": 0.0057, "tx_hash": "0xa"},
+                ],
+                "2025-06-11": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xb"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xc"}],
+            },
+        }
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        # Show the reversion subtraction explicitly: the 0.005 ETH revert appears
+        # in BOTH the incoming (2025-06-11) and outgoing (2025-06-20) ledgers and
+        # must cancel, leaving USDC + the genuinely-retained 0.0057 ETH.
+        incoming_total = 16 + (0.0057 + 0.005) * 2600
+        outgoing_total = 0.005 * 2600
+        expected = incoming_total - outgoing_total
+        assert abs(result - expected) < 1e-6
+        assert abs(expected - (16 + 0.0057 * 2600)) < 1e-6
+
+    def test_usdc_only_no_outgoing(self):
+        """Base/Basius: USDC only, no reverted ETH -> initial = sum(USDC)."""
+        obj = self._obj()
+        obj.funding_events = {
+            "base": {"2026-01-01": [{"symbol": "USDC", "amount": 50, "tx_hash": "0x1"}]}
+        }
+        result = _drive(obj._calculate_chain_investment_value("base"))
+        assert result == 50.0
+
+    def test_cached_price_not_refetched(self):
+        """A row already in the price cache uses the cached value, no fetch."""
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [{"symbol": "USDC", "amount": 9, "tx_hash": "0xT"}]
+            }
+        }
+        obj._load_priced_transfers = _gen_return({"in_2025-01-01_0xT": 500.0})
+        obj._fetch_historical_token_price = _gen_return(9999.0)
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 500.0
+
+    def test_delta_field_fallback(self):
+        """Transfers using `delta` (not `amount`) are summed."""
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [{"symbol": "USDC", "delta": 7, "tx_hash": "0xD"}]
+            }
+        }
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 7.0
+
+    def test_airdrop_usdc_excluded(self):
+        """Airdropped USDC on mode is excluded from the basis."""
+        obj = self._obj()
+        obj.params.airdrop_started = True
+        obj.params.airdrop_contract_address = "0xair"
+        obj.funding_events = {
+            "mode": {
+                "2025-01-01": [
+                    {
+                        "symbol": "USDC",
+                        "amount": 10,
+                        "tx_hash": "0xA",
+                        "from_address": "0xAIR",
+                    }
+                ]
+            }
+        }
+        result = _drive(obj._calculate_chain_investment_value("mode"))
+        assert result == 0.0
+
+    def test_negative_amount_skipped(self):
+        """Non-positive amounts are skipped."""
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [{"symbol": "USDC", "amount": -5, "tx_hash": "0xN"}]
+            }
+        }
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 0.0
+
+    def test_no_coingecko_id_skipped(self):
+        """A token with no coingecko id is skipped (price None)."""
+        obj = self._obj()
+        obj.get_coin_id_from_symbol = lambda s, c: None
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [{"symbol": "WEIRD", "amount": 3, "tx_hash": "0xW"}]
+            }
+        }
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 0.0
+
+    def test_price_fetch_failure_warns(self):
+        """Failed price fetch skips the row with a warning (not silent)."""
+        obj = self._obj()
+        obj._fetch_historical_token_price = _gen_return(None)
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [{"symbol": "USDC", "amount": 3, "tx_hash": "0xP"}]
+            }
+        }
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 0.0
+        obj.context.logger.warning.assert_called()
+
+    def test_exception_caught(self):
+        """A bad date raises inside the loop, is caught, and the row is skipped."""
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {"bad-date": [{"symbol": "USDC", "amount": 3}]}
+        }
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 0.0
+
+    def test_reads_funding_events_when_empty(self):
+        """Empty in-memory funding_events is loaded from disk, then valued.
+
+        Asserts the disk-load path actually feeds the calculation (not just that an
+        empty record yields 0): read_funding_events populates the record and the
+        loaded USDC row is what produces the result.
+        """
+        obj = self._obj()
+        obj.funding_events = {}
+
+        def _load_from_disk():
+            obj.funding_events = {
+                "optimism": {
+                    "2025-01-01": [{"symbol": "USDC", "amount": 12, "tx_hash": "0xR"}]
+                }
+            }
+
+        obj.read_funding_events = _load_from_disk
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 12.0
+
+    def test_save_called_when_only_outgoing_updates(self):
+        """OR-isolation: incoming fully cached, outgoing uncached -> cache still saved.
+
+        Guards the ``inc_updated or out_updated`` save condition: pricing only the
+        reverted-ETH leg must still persist the cache, otherwise the newly-priced
+        outgoing row would be re-fetched every cycle.
+        """
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [{"symbol": "USDC", "amount": 16, "tx_hash": "0xINC"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xOUT"}],
+            },
+        }
+        # Incoming row is already in the cache; only the outgoing ETH row is new.
+        obj._load_priced_transfers = _gen_return({"in_2025-06-05_0xINC": 16.0})
+        saved = []
+
+        def _save(chain, priced):
+            saved.append((chain, dict(priced)))
+            yield
+
+        obj._save_priced_transfers = _save
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert abs(result - (16 - 0.005 * 2600)) < 1e-6
+        # The outgoing leg updated the cache, so the save fired despite a cached incoming.
+        assert len(saved) == 1
+        assert "out_2025-06-20_0xOUT" in saved[0][1]
+
+    def test_save_called_when_only_incoming_updates(self):
+        """OR-isolation: outgoing fully cached, incoming uncached -> cache still saved.
+
+        Symmetric to ``test_save_called_when_only_outgoing_updates``: pricing only the
+        incoming leg must still persist the cache. Together with the outgoing-only and
+        both-cached siblings, the three cover the full truth table of the
+        ``inc_updated or out_updated`` save condition.
+        """
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [{"symbol": "USDC", "amount": 16, "tx_hash": "0xINC"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xOUT"}],
+            },
+        }
+        # Outgoing row already in the cache; only the incoming USDC row is new.
+        obj._load_priced_transfers = _gen_return({"out_2025-06-20_0xOUT": 13.0})
+        saved = []
+
+        def _save(chain, priced):
+            saved.append((chain, dict(priced)))
+            yield
+
+        obj._save_priced_transfers = _save
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert abs(result - (16.0 - 13.0)) < 1e-6
+        # The incoming leg updated the cache, so the save fired despite a cached outgoing.
+        assert len(saved) == 1
+        assert "in_2025-06-05_0xINC" in saved[0][1]
+
+    def test_leg_namespaced_keys_prevent_in_out_collision(self):
+        """A tx_hash that appears on both ledger sides is priced per-leg, not once.
+
+        Regression guard for the shared-cache collision: ``_get_transfer_key`` now
+        prefixes the key with ``in_`` / ``out_`` so the same ``(date, tx_hash)`` cannot
+        cache one leg's USD value and have the other leg short-circuit on the hit.
+        If the prefix is dropped, the second leg would silently use the first leg's
+        cached value.
+        """
+        obj = self._obj()
+        # Same date + tx_hash on both ledger sides, different amounts.
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [
+                    {"symbol": "USDC", "amount": 10, "tx_hash": "0xCOLLIDE"}
+                ],
+            },
+            "optimism_outgoing": {
+                "2025-06-05": [
+                    {"symbol": "ETH", "amount": 0.01, "tx_hash": "0xCOLLIDE"}
+                ],
+            },
+        }
+        captured: Dict[str, float] = {}
+
+        def _load(chain):
+            yield
+            return captured
+
+        obj._save_priced_transfers = _gen_none
+        obj._load_priced_transfers = _load
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        # Both legs were priced from their own rows: 10 USDC - 0.01 ETH * 2600 = -16.
+        assert abs(result - (10.0 - 0.01 * 2600)) < 1e-6
+        # Both leg-namespaced keys are present and distinct.
+        assert "in_2025-06-05_0xCOLLIDE" in captured
+        assert "out_2025-06-05_0xCOLLIDE" in captured
+        assert captured["in_2025-06-05_0xCOLLIDE"] == 10.0
+        assert captured["out_2025-06-05_0xCOLLIDE"] == 0.01 * 2600
+
+    def test_save_skipped_when_both_legs_cached(self):
+        """Fully-cached cycle must not write the cache.
+
+        Sibling to ``test_save_called_when_only_outgoing_updates``: when both
+        legs short-circuit on cache hits, ``inc_updated`` and ``out_updated``
+        are both False and the save must be skipped. Removing the
+        ``if inc_updated or out_updated:`` guard would turn the warm-cycle
+        path into an unconditional KV write.
+        """
+        obj = self._obj()
+        obj.funding_events = {
+            "optimism": {
+                "2025-06-05": [{"symbol": "USDC", "amount": 16, "tx_hash": "0xINC"}],
+            },
+            "optimism_outgoing": {
+                "2025-06-20": [{"symbol": "ETH", "amount": 0.005, "tx_hash": "0xOUT"}],
+            },
+        }
+        obj._load_priced_transfers = _gen_return(
+            {"in_2025-06-05_0xINC": 16.0, "out_2025-06-20_0xOUT": 13.0}
+        )
+        saved = []
+
+        def _save(chain, priced):
+            saved.append((chain, dict(priced)))
+            yield
+
+        obj._save_priced_transfers = _save
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert abs(result - (16.0 - 13.0)) < 1e-6
+        assert saved == []
+
+    def test_failed_price_not_cached(self):
+        """A failed price fetch must leave the row uncached.
+
+        Pricing failure is transient (rate limit, upstream outage). Caching
+        any sentinel value would make the failure permanent, since the
+        ``if transfer_key in priced_transfers`` short-circuit would skip the
+        re-fetch once the price endpoint recovers.
+        """
+        obj = self._obj()
+        obj._fetch_historical_token_price = _gen_return(None)
+        obj.funding_events = {
+            "optimism": {
+                "2025-01-01": [{"symbol": "USDC", "amount": 3, "tx_hash": "0xP"}]
+            }
+        }
+        # Custom loader so we can inspect the mutated cache dict directly.
+        captured_cache: Dict[str, float] = {}
+
+        def _load(chain):
+            yield
+            return captured_cache
+
+        obj._load_priced_transfers = _load
+        result = _drive(obj._calculate_chain_investment_value("optimism"))
+        assert result == 0.0
+        assert "in_2025-01-01_0xP" not in captured_cache
+        obj.context.logger.warning.assert_called()
+
+
+class TestDirectReadWs1EdgeCoverage:
+    """Cover WS1 dedup helper/branch edges the removed outgoing tests used to hit."""
+
+    def _obj(self):
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        return o
+
+    def test_collect_seen_non_list_and_uidless(self):
+        """Non-list date value skipped; a transfer without a uid is not added."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _collect_seen_transfer_ids,
+        )
+
+        assert _collect_seen_transfer_ids({"bad": "x", "good": [{"no": "id"}]}) == set()
+
+    def test_drop_legacy_non_list_value_skipped(self):
+        """A non-list date value is skipped by the legacy-drop migration."""
+        from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+            _drop_legacy_transfer_entries,
+        )
+
+        migrated, dropped = _drop_legacy_transfer_entries({"bad": "x"})
+        assert dropped == 0 and migrated == {}
+
+    def test_safeglobal_transfer_without_unique_id(self):
+        """ID-less incoming transfer is appended but skips the dedup set.
+
+        ``_transfer_unique_id`` returns ``""`` when no ``transferId``,
+        ``transactionHash``, or fallback identifier is present. The dedup
+        guards short-circuit on an empty id (``if unique_id and ...`` /
+        ``if unique_id:``), so the transfer flows through to the appended
+        list with ``transfer_id == ""`` and the seen-set stays empty.
+        """
+        td = {
+            "executionDate": "2024-12-15T10:00:00Z",
+            "from": "0xS",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xUSDC",
+            "value": str(10**6),
+        }
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o._should_include_transfer_optimism = _gen_return(True)
+        all_transfers: Dict[str, List[Dict]] = defaultdict(list)
+        _drive(
+            o._fetch_optimism_transfers_safeglobal(
+                "0xA", "2025-01-01", all_transfers, {}
+            )
+        )
+        # The transfer is appended (no silent drop) and carries an empty
+        # transfer_id, signalling it was not registered with the dedup set.
+        assert "2024-12-15" in all_transfers
+        appended = all_transfers["2024-12-15"]
+        assert len(appended) == 1
+        assert appended[0]["transfer_id"] == ""
+
+    def test_erc20_existing_funding_events_skips_read(self):
+        """funding_events already in memory -> skip the read branch."""
+        o = self._obj()
+        o.funding_events = {"optimism_withdrawals": {}}
+        o._request_with_retries = _gen_return((True, {"results": []}))
+        _drive(o._track_erc20_transfers_optimism("0xA", 1704067200))
+
+    def test_erc20_outgoing_usdc_without_unique_id(self):
+        """ID-less outgoing USDC transfer is persisted but skips the dedup set.
+
+        Mirror of ``test_safeglobal_transfer_without_unique_id`` for the
+        outgoing path: an empty ``unique_id`` skips the seen-set add but
+        does NOT skip the persist into ``funding_events["optimism_withdrawals"]``.
+        """
+        td = {
+            "executionDate": "2023-06-01T00:00:00Z",
+            "from": "0xs",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xUSDC",
+            "value": str(10**6),
+            "to": "0xR",
+        }
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o.funding_events = {}
+        o.read_funding_events = lambda: {}
+        o.store_funding_events = MagicMock()
+        _drive(o._track_erc20_transfers_optimism("0xS", 1704067200))
+        # Persisted with an empty transfer_id (no dedup-set entry).
+        withdrawals = o.funding_events.get("optimism_withdrawals", {})
+        assert "2023-06-01" in withdrawals
+        assert len(withdrawals["2023-06-01"]) == 1
+        assert withdrawals["2023-06-01"][0]["transfer_id"] == ""
+        o.store_funding_events.assert_called()

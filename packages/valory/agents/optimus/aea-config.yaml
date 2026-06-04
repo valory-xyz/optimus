@@ -51,8 +51,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
-- valory/liquidity_trader_abci:0.1.0:bafybeid7yc5nbp4cygeqh2om4dj2hhuur6crrjmvmcy6wk6xl2cgbbbb5e
-- valory/optimus_abci:0.1.0:bafybeihsa32yoaaqfmjjyn7udtr5xsvcegnglpvdtothsc7oigpt566sse
+- valory/liquidity_trader_abci:0.1.0:bafybeibqnz7leo7hruh2rlkhzdfgu67nswjruh4dzknql32utsb7pmg56y
+- valory/optimus_abci:0.1.0:bafybeihcaljjbe4m7a5ooqht6jwdeerib6xccuno5s46in6rfd7l2eobuy
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
@@ -311,6 +311,7 @@ models:
       min_investment_amount: ${int:1}
       max_fee_percentage: ${float:0.02}
       max_gas_percentage: ${float:0.25}
+      max_slippage_percentage: ${float:0.1}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["optimism"]}
       staking_chain: ${str:optimism}

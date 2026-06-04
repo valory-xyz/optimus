@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiemu3hhap2ob3m3iopelqe5rctaojdyuoo3p3nt4ithze6mjdc22a
+agent: valory/optimus:0.1.0:bafybeig3gjypd7tl7trdrxw54mqdhawp7mbbuipo6sabfvy3ys6b4hdpxa
 number_of_agents: 1
 deployment:
   agent:
@@ -93,6 +93,7 @@ models:
       min_investment_amount: ${MIN_INVESTMENT_AMOUNT:int:1}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}
       max_gas_percentage: ${MAX_GAS_PERCENTAGE:float:0.25}
+      max_slippage_percentage: ${MAX_SLIPPAGE_PERCENTAGE:float:0.1}
       balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism","mode"]}
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
@@ -111,7 +112,7 @@ models:
       genai_api_key: ${GENAI_API_KEY:str:""}
       airdrop_started: ${AIRDROP_STARTED:bool:false}
       airdrop_contract_address: ${AIRDROP_CONTRACT_ADDRESS:str:""}
-      slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:1.0}
+      slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:0.01}
       genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
       slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.005}
       use_x402: ${USE_X402:bool:true}

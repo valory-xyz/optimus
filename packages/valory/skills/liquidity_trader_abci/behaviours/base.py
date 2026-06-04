@@ -740,10 +740,11 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.info(
                 f"Fetching {chain} balances from SafeApi for safe: {safe_address}"
             )
-            api_success, all_balances = (
-                yield from self._fetch_safe_balances_with_pagination(
-                    chain, safe_address
-                )
+            (
+                api_success,
+                all_balances,
+            ) = yield from self._fetch_safe_balances_with_pagination(
+                chain, safe_address
             )
 
             if api_success:
@@ -2019,28 +2020,42 @@ class LiquidityTraderBaseBehaviour(
         )
         return response == KvStoreMessage.Performative.SUCCESS
 
-    def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, None]:
+    def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, bool]:
         """Invalidate (delete) the cached CL pool data for a chain.
 
-        Called when enter pool succeeds so we don't keep retrying the same pool.
+        Called both after a successful pool entry (so we don't retry the same pool) and
+        when a stale cross-period cache is dropped (so a failed invest isn't retried).
+
+        Returns True on a successful invalidation write, False on a caught exception
+        so the caller can surface the failure. A False return means the stale entry
+        is still on disk and the next cycle will hit the same path again; the
+        caller should not pretend the cache was cleared.
 
         :param chain: the chain to invalidate the cache for
         :yield: None: Generator yield for async operations
+        :return: True if the invalidation marker was written, False otherwise.
         """
         try:
             kv_key = f"velodrome_cl_pool_{chain}"
 
-            # Delete the cache by writing an invalidation marker
-            yield from self._write_kv(
+            # Delete the cache by writing an invalidation marker. ``_write_kv``
+            # returns False on a soft KV failure (non-SUCCESS performative)
+            # without raising, so capture the result and propagate it rather
+            # than reporting success unconditionally.
+            success = yield from self._write_kv(
                 {kv_key: json.dumps({"invalidated": True}, ensure_ascii=True)}
             )
-
-            self.context.logger.info(
-                f"Invalidated CL pool cache for chain {chain} after successful pool entry"
-            )
+            if success:
+                self.context.logger.info(f"Invalidated CL pool cache for chain {chain}")
+            else:
+                self.context.logger.error(
+                    f"KV write failed invalidating CL pool cache for chain {chain}"
+                )
+            return success
 
         except Exception as e:
             self.context.logger.error(f"Error invalidating CL pool cache: {str(e)}")
+            return False
 
     def _fetch_token_prices(
         self, token_balances: List[Dict[str, Any]]
@@ -3195,10 +3210,11 @@ class LiquidityTraderBaseBehaviour(
             )
             return self._build_unstake_lp_tokens_action(position)
 
-        staked_token_ids, verification_failed = (
-            yield from self._filter_staked_token_ids(
-                pool, safe_address, token_ids, chain, gauge_address
-            )
+        (
+            staked_token_ids,
+            verification_failed,
+        ) = yield from self._filter_staked_token_ids(
+            pool, safe_address, token_ids, chain, gauge_address
         )
 
         if verification_failed:

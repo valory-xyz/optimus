@@ -420,9 +420,14 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
-@lru_cache(maxsize=8)
 def get_web3_connection(rpc_url):
-    """Get or create a Web3 connection with caching."""
+    """Get a fresh Web3 connection per call.
+
+    Intentionally uncached. Tests in the customs package assume a fresh
+    Web3 instance per call (see autouse reset_state fixture); adding an
+    lru_cache would break test isolation as the same URL across tests
+    would resolve to a Web3 instance bound to a previously-patched mock.
+    """
     return Web3(
         Web3.HTTPProvider(
             rpc_url,

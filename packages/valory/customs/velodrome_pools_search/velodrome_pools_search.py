@@ -56,31 +56,48 @@ REQUIRED_FIELDS = (
     "whitelisted_assets",
 )
 VELODROME = "velodrome"
+AERODROME = "aerodrome"
 
 # Chain-specific constants
 OPTIMISM_CHAIN_ID = 10
 MODE_CHAIN_ID = 34443
+BASE_CHAIN_ID = 8453
 CHAIN_NAMES = {
     OPTIMISM_CHAIN_ID: "optimism",
     MODE_CHAIN_ID: "mode",
+    BASE_CHAIN_ID: "base",
 }
 
 # Sugar contract addresses
+# Base value bumped 2026-06-04 to the LpSugar deployment listed in
+# velodrome-finance/sugar/deployments/base.env. LP_SUGAR_ABI's ``all``
+# signature and field order match the current Vyper source, so the
+# bump is ABI-compatible.
 SUGAR_CONTRACT_ADDRESSES = {
-    MODE_CHAIN_ID: "0x280AC155a06e2aDB0718179C2f916BA90C32FEAB",  # Mode Sugar contract address
-    OPTIMISM_CHAIN_ID: "0x1d5E1893fCfb62CAaCE48eB2BAF7a6E134a8a27c",  # Optimism Sugar contract address
+    MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
+    OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
+    BASE_CHAIN_ID: "0x69dD9db6d8f8E7d83887A704f447b1a584b599A1",  # Base LpSugar (V3)
 }
 
 # RewardsSugar contract addresses
+# Base value left on the older deployment 0xD4aD2... pending a struct
+# migration: the latest RewardsSugar V3 returns ``LpEpoch`` (ts, lp,
+# votes, emissions, bribes, fees) — not the ``EpochData`` shape
+# (timestamp, totalLiquidity, votes, emissions, emissionsToken, fees,
+# volume) that the consumer below decodes by index. Bumping without
+# rewriting the consumer would mis-decode index 1 (was totalLiquidity,
+# would be the lp address) and crash on float().
 REWARDS_SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0xD5d3ABAcB8CF075636792658EE0be8B03AF517B8",  # Mode RewardsSugar contract address (placeholder)
-    OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address (same as LpSugar for now)
+    OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address
+    BASE_CHAIN_ID: "0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E",  # Base RewardsSugar (older deployment; see note above)
 }
 
 # RPC endpoints
 RPC_ENDPOINTS = {
     MODE_CHAIN_ID: "https://mainnet.mode.network",
     OPTIMISM_CHAIN_ID: "https://mainnet.optimism.io",
+    BASE_CHAIN_ID: "https://mainnet.base.org",
 }
 
 # Configurable filter thresholds
@@ -403,9 +420,14 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
-@lru_cache(maxsize=8)
 def get_web3_connection(rpc_url):
-    """Get or create a Web3 connection with caching."""
+    """Get a fresh Web3 connection per call.
+
+    Intentionally uncached. Tests in the customs package assume a fresh
+    Web3 instance per call (see autouse reset_state fixture); adding an
+    lru_cache would break test isolation as the same URL across tests
+    would resolve to a Web3 instance bound to a previously-patched mock.
+    """
     return Web3(
         Web3.HTTPProvider(
             rpc_url,
@@ -1256,7 +1278,7 @@ def get_velodrome_pools_via_sugar(
                 ),
                 "inputTokenBalances": [str(pool["reserve0"]), str(pool["reserve1"])],
                 "cumulativeVolumeUSD": "0",  # Not available directly
-                "sugar_data": pool,  # Store the original data,
+                "sugar_data": {**pool, "chain": CHAIN_NAMES.get(chain_id, "unknown")},
                 "pool_fee": pool["pool_fee"],
             }
 
@@ -1423,7 +1445,7 @@ def calculate_position_details_for_velodrome(
             # Get chain ID from pool data or context
             try:
                 tick_bands = calculate_tick_lower_and_upper_velodrome(
-                    chain="optimism",  # Should be passed as parameter
+                    chain=pool_data.get("chain", "optimism"),
                     pool_address=pool_data.get("id"),
                     is_stable=(pool_type == 0),
                     coingecko_api_key=coingecko_api_key,
@@ -2736,9 +2758,13 @@ def format_velodrome_pool_data(
         # Determine if it's a concentrated liquidity pool based on type
         is_cl_pool = pool_type not in [0, -1]
 
-        # Prepare base data including all required fields
+        # Prepare base data including all required fields.
+        # Use "aerodrome" on Base (the Base-specific brand of the
+        # Velodrome protocol) and "velodrome" elsewhere. The agent
+        # dispatch accepts both as the same family.
+        dex_type = AERODROME if chain_name == "base" else VELODROME
         formatted_pool = {
-            "dex_type": VELODROME,
+            "dex_type": dex_type,
             "pool_address": pool["id"],
             "pool_id": pool["id"],
             "tvl": float(pool.get("totalValueLockedUSD", 0)),
@@ -3289,6 +3315,47 @@ def run(
 
     Returns:
         Dict containing either error messages or result data
+    """
+    # Apply caller-provided per-chain RPC overrides so the strategy talks
+    # to the same endpoints as the agent's ledger connection, then restore
+    # the original mapping on the way out. ``RPC_ENDPOINTS`` is read from
+    # many downstream sites in this module, so a leaked override from one
+    # ``run()`` would silently bleed into the next cycle (or the next
+    # test) — which is exactly what the snapshot here protects against.
+    chain_to_rpc = kwargs.pop("chain_to_rpc", None) or {}
+    rpc_overrides_snapshot: Dict[int, Optional[str]] = {}
+    if chain_to_rpc:
+        name_to_id = {cname: cid for cid, cname in CHAIN_NAMES.items()}
+        for chain_name, rpc_url in chain_to_rpc.items():
+            cid = name_to_id.get(chain_name.lower())
+            if cid is not None and rpc_url:
+                # ``None`` here means "the key was absent" so we know to
+                # delete on restore rather than write a sentinel back.
+                rpc_overrides_snapshot[cid] = RPC_ENDPOINTS.get(cid)
+                RPC_ENDPOINTS[cid] = rpc_url
+
+    try:
+        return _run_impl(force_refresh=force_refresh, **kwargs)
+    finally:
+        for cid, prior in rpc_overrides_snapshot.items():
+            if prior is None:
+                RPC_ENDPOINTS.pop(cid, None)
+            else:
+                RPC_ENDPOINTS[cid] = prior
+
+
+def _run_impl(
+    force_refresh: bool = False, **kwargs: Any
+) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
+    """Run the Velodrome pool analysis.
+
+    Helper for :func:`run`. ``RPC_ENDPOINTS`` overrides have already been
+    applied (and will be restored by the wrapper), so this body can treat
+    the module-level mapping as the source of truth.
+
+    :param force_refresh: When True, invalidate the price cache before running.
+    :param kwargs: Strategy-specific kwargs (see :func:`run`).
+    :return: Dict containing either error messages or result data.
     """
     # Clear previous errors
     get_errors().clear()

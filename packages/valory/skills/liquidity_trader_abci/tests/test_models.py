@@ -588,6 +588,7 @@ class TestParams:
             "min_investment_amount": 100,
             "max_fee_percentage": 0.1,
             "max_gas_percentage": 0.05,
+            "max_slippage_percentage": 0.1,
             "balancer_graphql_endpoints": json.dumps({}),
             "target_investment_chains": ["ethereum"],
             "staking_chain": "ethereum",
@@ -615,7 +616,8 @@ class TestParams:
             "velodrome_voter_contract_addresses": json.dumps({}),
             "velodrome_rewards_sugar_contract_addresses": json.dumps({}),
             "velo_token_contract_addresses": json.dumps({}),
-            "safe_api_base_url": "https://safe.example.com",
+            "safe_api_url": "https://safe.example.com",
+            "safe_api_chain_slugs": json.dumps({"optimism": "oeth", "base": "base"}),
             "safe_api_timeout": 30,
             "mode_explorer_api_base_url": "https://mode.example.com",
             "mode_api_timeout": 30,
@@ -624,11 +626,11 @@ class TestParams:
             "use_x402": False,
             "x402_payment_requirements": json.dumps({}),
             "optimism_ledger_rpc": "https://optimism.rpc.example.com",
+            "base_ledger_rpc": "https://base.rpc.example.com",
             "lifi_quote_to_amount_url": "https://lifi.example.com/quote",
             "request_timeout": 20.0,
             "tls_verify": True,
             "mode_conduit_explorer_url": "https://conduit.example.com/api/v2",
-            "safe_api_v1_url": "https://safe.example.com/api/v1",
             "mode_native_explorer_url": "https://explorer.example.com/api",
             "skill_context": MagicMock(),
         }
@@ -649,6 +651,36 @@ class TestParams:
             assert params.genai_api_key == "test_key"
             assert params.genai_model == "test_model"
             assert params.use_x402 is False
+
+    def test_safe_api_chain_slugs_non_dict_raises(self) -> None:
+        """Non-dict ``safe_api_chain_slugs`` (e.g. JSON list) fails at startup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["safe_api_chain_slugs"] = json.dumps([])
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(ValueError, match="must be a JSON object"):
+                    params.__init__(**kwargs)  # type: ignore[misc]
+
+    def test_safe_api_chain_slugs_empty_string_raises(self) -> None:
+        """Empty-string slug fails at startup with a chain-naming message."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["safe_api_chain_slugs"] = json.dumps({"optimism": ""})
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(ValueError, match="non-empty"):
+                    params.__init__(**kwargs)  # type: ignore[misc]
+
+    def test_safe_api_chain_slugs_non_string_value_raises(self) -> None:
+        """Non-string slug value (e.g. int) fails at startup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["safe_api_chain_slugs"] = json.dumps({"optimism": 1})
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(ValueError, match="non-empty"):
+                    params.__init__(**kwargs)  # type: ignore[misc]
 
     def test_initialization_with_stoploss_multiplier(self) -> None:
         """Test Params initialization with custom stoploss_threshold_multiplier."""

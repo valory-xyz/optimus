@@ -10,9 +10,9 @@ fingerprint:
   __init__.py: bafybeici6ewm4ejxreykrcqqq3sj4fziv3yh6f2djec2nsxtfuh642wdkq
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/conftest.py: bafybeif24a2wrul7gh44bsxmwcw2asdxkx4rtgfeijnr3snpo2gtfywhfy
-  tests/test_velodrome_pools_search.py: bafybeibytkbqrlbquoyptcngpbwoq3m2gvnimhllp6ecjizz4h7lpbeooq
+  tests/test_velodrome_pools_search.py: bafybeiepmnholup4ijnhlohzjavjtbx5nqtp7txptaa6ihx2sirode5fwy
   velodrome_lp_sugar.json: bafybeiamf3gev3vfeikh2mjmrhaqmyrsuzl6bt34gcilgz375z4o4uap2q
-  velodrome_pools_search.py: bafybeidvraxptn2cchknj5mh5gfym567bvcf3txwqhszn77pd5mzjhdeuy
+  velodrome_pools_search.py: bafybeidp7im2l6z6lmwrtp32u2pv7ojecxmjojhu3wpl7qcnhqso3lrg7e
 fingerprint_ignore_patterns: []
 entry_point: velodrome_pools_search.py
 callable: run

@@ -90,7 +90,8 @@ def reset_state() -> Generator[Any, Any, Any]:
     """
     if hasattr(vel_mod._thread_local, "errors"):
         vel_mod._thread_local.errors = []
-    vel_mod.get_web3_connection.cache_clear()
+    # get_web3_connection is intentionally uncached (fresh connection per call),
+    # so it has no cache to clear.
     vel_mod.fetch_token_name_from_contract.cache_clear()
     invalidate_cache()
     # Reset cache metrics
@@ -208,7 +209,6 @@ class TestGetWeb3Connection:
         mock_instance = MagicMock()
         mock_web3.return_value = mock_instance
         mock_web3.HTTPProvider = MagicMock()
-        vel_mod.get_web3_connection.cache_clear()
         result = get_web3_connection("https://rpc.example.com")
         assert result == mock_instance
 
@@ -218,7 +218,6 @@ class TestGetWeb3Connection:
         mock_instance = MagicMock()
         mock_web3.return_value = mock_instance
         mock_web3.HTTPProvider = MagicMock()
-        vel_mod.get_web3_connection.cache_clear()
         get_web3_connection("https://rpc.example.com")
         provider_call = mock_web3.HTTPProvider.call_args
         assert provider_call.kwargs["request_kwargs"] == {
@@ -4613,3 +4612,54 @@ class TestRunWithPriceCacheVelodrome:
         """Test that run() accepts a non-None price_cache without error."""
         result = run(price_cache={}, price_cache_ttl=600)
         assert "error" in result
+
+
+class TestRunRpcOverrideSnapshotRestore:
+    """run() must not leak ``chain_to_rpc`` overrides into ``RPC_ENDPOINTS``.
+
+    ``RPC_ENDPOINTS`` is module-global and read from many downstream
+    sites in this file. A leaked override from one ``run()`` would
+    silently bleed into the next cycle's RPC selection (or the next
+    test), so the snapshot+restore contract is worth pinning.
+    """
+
+    def test_overrides_are_reverted_after_run(self) -> None:
+        """Pre-call snapshot of RPC_ENDPOINTS equals the post-call mapping."""
+        snapshot_before = dict(RPC_ENDPOINTS)
+
+        # ``run()`` fails fast on missing required fields, but the override
+        # apply + finally restore both fire before the early-return path.
+        run(
+            chain_to_rpc={
+                "optimism": "https://override-optimism.example",
+                "base": "https://override-base.example",
+            },
+        )
+
+        assert dict(RPC_ENDPOINTS) == snapshot_before, (
+            "chain_to_rpc override leaked into RPC_ENDPOINTS; the "
+            "snapshot+restore contract in run() must restore the original "
+            "mapping exactly so a later cycle does not reuse stale URLs."
+        )
+
+    def test_overrides_are_reverted_after_run_exception(self) -> None:
+        """A crash mid-``run()`` still restores the original mapping.
+
+        Forces ``_run_impl`` to raise so the ``finally`` branch of the
+        snapshot+restore is exercised. Without the ``finally``, a
+        crashing test would leak its override into the next test in the
+        same pytest session.
+        """
+        snapshot_before = dict(RPC_ENDPOINTS)
+
+        with patch.object(
+            vel_mod, "_run_impl", side_effect=RuntimeError("boom")
+        ):
+            with pytest.raises(RuntimeError):
+                run(
+                    chain_to_rpc={
+                        "optimism": "https://override-after-crash.example"
+                    },
+                )
+
+        assert dict(RPC_ENDPOINTS) == snapshot_before

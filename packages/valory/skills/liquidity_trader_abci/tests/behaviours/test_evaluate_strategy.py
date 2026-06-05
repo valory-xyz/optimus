@@ -2716,6 +2716,52 @@ class TestCalculateVelodromeTokenRatios:
         assert result is not None
         assert result["position_requirements"][0]["status"] == "IN_RANGE"
 
+    def test_in_range_mixed_decimals_not_skewed(self):
+        """In-range split must be value-based, not raw.
+
+        With USDC(6)/eUSD(18) the raw token1 amount dwarfs token0, but weighting
+        amount0 by the raw pool price recovers the ~0.22/0.78 value split instead
+        of 0.0/1.0.
+        """
+        b = _mk()
+        # raw price 1e12 (sqrt = 1e6 * 2**96): a 6/18-decimal pair at ~$1
+        sqrt_price = int(1_000_000 * (2**96))
+        validated_data = {
+            "validated_bands": [
+                {"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}
+            ],
+            "current_price": 1.0,
+            "current_tick": 0,
+            "warnings": [],
+            "sqrt_price_x96": sqrt_price,
+        }
+        call_count = [0]
+
+        def _sqrt_at_tick(*a, **kw):
+            call_count[0] += 1
+            if call_count[0] % 2 == 1:
+                yield
+                return sqrt_price // 2  # lower
+            else:
+                yield
+                return sqrt_price * 2  # upper
+
+        b.get_velodrome_sqrt_ratio_at_tick = _sqrt_at_tick
+        # raw amounts a unit-liquidity position needs at this price/range
+        b.get_velodrome_amounts_for_liquidity = _gen_return(
+            (11005348906325127357, 39010576145415569723946513555837)
+        )
+        result = _drive(
+            b.calculate_velodrome_token_ratios(validated_data, "base"),
+            sends=[None] * 10,
+        )
+        assert result is not None
+        pr = result["position_requirements"][0]
+        assert pr["status"] == "IN_RANGE"
+        # value split ~0.22 / 0.78, NOT the raw-skewed 0.0 / 1.0
+        assert 0.20 < pr["token0_ratio"] < 0.24
+        assert 0.76 < pr["token1_ratio"] < 0.80
+
     def test_with_sqrt_price_x96_provided(self):
         """Test with sqrt price x96 provided."""
         b = _mk()
@@ -3676,19 +3722,19 @@ class TestCheckAndUseCachedClOpportunity:
         assert result is None
 
     def test_cache_expired(self):
-        """Test cache expired."""
-        b = _mk()
+        """Test cache expired (current period, but past the time window)."""
+        b = _mk()  # synchronized_data.period_count == 1
         b.current_positions = []
-        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1"})
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1", "period": 1})
         b._should_use_cached_cl_data = MagicMock(return_value=False)
         result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 5)
         assert result is None
 
     def test_cache_valid_with_actions(self):
         """Test cache valid with actions."""
-        b = _mk()
+        b = _mk()  # synchronized_data.period_count == 1
         b.current_positions = []
-        cached = {"pool_address": "0x1"}
+        cached = {"pool_address": "0x1", "period": 1}
         b._get_cached_cl_pool_data = _gen_return(cached)
         b._should_use_cached_cl_data = MagicMock(return_value=True)
         b._update_cl_pool_round_tracking = _gen_none
@@ -3712,6 +3758,99 @@ class TestCheckAndUseCachedClOpportunity:
         # Actually _check_and_use_cached_cl_opportunity catches the exception
         result = _drive(b._check_and_use_cached_cl_opportunity())
         assert result is None
+
+    def test_cache_invalidated_on_period_rollover(self):
+        """A cache from a previous period is invalidated and skipped (failed invest)."""
+        b = _mk()  # synchronized_data.period_count == 1
+        b.current_positions = []
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1", "period": 0})
+        invalidated = []
+
+        def _inv(chain):
+            invalidated.append(chain)
+            yield
+
+        b._invalidate_cl_pool_cache = _inv
+        result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 10)
+        assert result is None
+        assert invalidated  # stale cross-period cache was invalidated
+
+    def test_cache_used_when_period_matches(self):
+        """A cache from the current period is used normally (no invalidation)."""
+        b = _mk()  # synchronized_data.period_count == 1
+        b.current_positions = []
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1", "period": 1})
+        b._should_use_cached_cl_data = MagicMock(return_value=True)
+        b._update_cl_pool_round_tracking = _gen_none
+        b._reconstruct_actions_from_cached_cl_pool = _gen_return(
+            [{"action": "EnterPool"}]
+        )
+        result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 10)
+        assert result == [{"action": "EnterPool"}]
+
+    def test_cache_without_period_field_invalidated(self):
+        """A legacy cache with no `period` field is treated as stale and invalidated."""
+        b = _mk()  # synchronized_data.period_count == 1
+        b.current_positions = []
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1"})  # no period
+        invalidated = []
+
+        def _inv(chain):
+            invalidated.append(chain)
+            yield
+
+        b._invalidate_cl_pool_cache = _inv
+        result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 10)
+        assert result is None
+        # absent period -> None != current_period -> invalidated (not left to time-expiry)
+        assert invalidated
+
+    def test_cache_used_when_period_zero(self):
+        """period_count == 0 with a period-0 cache is valid (``!=``, not truthiness).
+
+        Pins the docstring promise: a truthiness mutation (``not cached_period``)
+        would treat the valid period-0 cache as stale and break first-period agents.
+        """
+        b = _mk()
+        b.synchronized_data.period_count = 0
+        b.current_positions = []
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1", "period": 0})
+        b._should_use_cached_cl_data = MagicMock(return_value=True)
+        b._update_cl_pool_round_tracking = _gen_none
+        b._reconstruct_actions_from_cached_cl_pool = _gen_return(
+            [{"action": "EnterPool"}]
+        )
+        invalidated = []
+
+        def _inv(chain):
+            invalidated.append(chain)
+            yield
+
+        b._invalidate_cl_pool_cache = _inv
+        result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 10)
+        assert result == [{"action": "EnterPool"}]
+        assert not invalidated  # period 0 == period 0 -> not stale
+
+    def test_cache_invalidated_non_adjacent_period(self):
+        """A cache two periods stale (period=2, current=3) is still invalidated.
+
+        ``period=0, current=1`` alone can't distinguish ``!=`` from ``<`` or
+        ``current - 1``; a non-adjacent rollover proves the check is membership-based.
+        """
+        b = _mk()
+        b.synchronized_data.period_count = 3
+        b.current_positions = []
+        b._get_cached_cl_pool_data = _gen_return({"pool_address": "0x1", "period": 2})
+        invalidated = []
+
+        def _inv(chain):
+            invalidated.append(chain)
+            yield
+
+        b._invalidate_cl_pool_cache = _inv
+        result = _drive(b._check_and_use_cached_cl_opportunity(), sends=[None] * 10)
+        assert result is None
+        assert invalidated
 
 
 class TestReconstructActionsFromCachedClPool:
@@ -3895,16 +4034,24 @@ class TestUpdateClPoolRoundTracking:
     """Tests for _update_cl_pool_round_tracking."""
 
     def test_timestamp_increased(self):
-        """Test timestamp increased."""
+        """Round tracking bumps count/timestamp and preserves the `period` field."""
         b = _mk()
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 2000
         b.context.state.round_sequence.last_round_transition_timestamp = mock_ts
-        b._write_kv = _gen_none
-        cached = {"last_round_timestamp": 1000, "round_count": 1}
+        writes = {}
+
+        def _wk(d):
+            writes.update(d)
+            yield
+
+        b._write_kv = _wk
+        cached = {"last_round_timestamp": 1000, "round_count": 1, "period": 3}
         _drive(b._update_cl_pool_round_tracking("optimism", cached), sends=[None])
         assert cached["round_count"] == 2
         assert cached["last_round_timestamp"] == 2000
+        # within-period reuse depends on `period` surviving the round-tracking rewrite
+        assert json.loads(writes["velodrome_cl_pool_optimism"])["period"] == 3
 
     def test_timestamp_not_increased(self):
         """Test timestamp not increased."""
@@ -3921,12 +4068,18 @@ class TestCacheClPoolData:
     """Tests for _cache_cl_pool_data."""
 
     def test_basic_cache(self):
-        """Test basic cache."""
-        b = _mk()
+        """Cache write records the current period (the rollover guard depends on it)."""
+        b = _mk()  # synchronized_data.period_count == 1
         mock_ts = MagicMock()
         mock_ts.timestamp.return_value = 1000
         b.context.state.round_sequence.last_round_transition_timestamp = mock_ts
-        b._write_kv = _gen_none
+        writes = {}
+
+        def _wk(d):
+            writes.update(d)
+            yield
+
+        b._write_kv = _wk
         _drive(
             b._cache_cl_pool_data(
                 chain="optimism",
@@ -3938,6 +4091,7 @@ class TestCacheClPoolData:
             ),
             sends=[None],
         )
+        assert json.loads(writes["velodrome_cl_pool_optimism"])["period"] == 1
 
     def test_cache_with_all_optional(self):
         """Test cache with all optional."""
@@ -5988,9 +6142,13 @@ class TestCheckAndUseCachedClOpportunityBranches:
 
     def test_cache_valid_actions_returned(self):
         """Cover line 3950->3927: valid cache with actions."""
-        b = _mk()
+        b = _mk()  # synchronized_data.period_count == 1
         b.current_positions = []  # no open positions
-        cached = {"pool_address": "0x1", "pool_finalization_timestamp": time.time()}
+        cached = {
+            "pool_address": "0x1",
+            "pool_finalization_timestamp": time.time(),
+            "period": 1,
+        }
         b._get_cached_cl_pool_data = _gen_return(cached)
         b._should_use_cached_cl_data = MagicMock(return_value=True)
         b._update_cl_pool_round_tracking = _gen_none
@@ -6002,9 +6160,13 @@ class TestCheckAndUseCachedClOpportunityBranches:
 
     def test_cache_valid_actions_none(self):
         """Cover line 3950: actions is None from reconstruction."""
-        b = _mk()
+        b = _mk()  # synchronized_data.period_count == 1
         b.current_positions = []
-        cached = {"pool_address": "0x1", "pool_finalization_timestamp": time.time()}
+        cached = {
+            "pool_address": "0x1",
+            "pool_finalization_timestamp": time.time(),
+            "period": 1,
+        }
         b._get_cached_cl_pool_data = _gen_return(cached)
         b._should_use_cached_cl_data = MagicMock(return_value=True)
         b._update_cl_pool_round_tracking = _gen_none

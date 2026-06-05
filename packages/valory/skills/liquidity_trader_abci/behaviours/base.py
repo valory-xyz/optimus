@@ -22,6 +22,7 @@
 import json
 import logging
 import math
+import random
 import time
 import types
 from abc import ABC
@@ -29,7 +30,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Generator, List, Literal, Optional, Tuple, cast
 
 from aea.protocols.base import Message
 from eth_utils import to_checksum_address
@@ -82,6 +83,65 @@ MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
 MAX_RETRIES_FOR_STATUS_CHECK = 5
 MAX_SWAP_CONFIRMATION_RETRIES = 60
+
+# Upper bound for any single sleep on a 429 response, whether the wait
+# came from the Retry-After header or from the backoff schedule. Sized
+# to stay well inside FSM round budgets.
+MAX_RATE_LIMIT_WAIT_SECONDS = 30
+
+# Backoff schedule used when the rate-limit response has no Retry-After
+# header. Sleep on attempt ``i`` is
+# ``RATE_LIMIT_BACKOFF_SCHEDULE[min(i, len-1)] + uniform(0, jitter)``;
+# ``attempt`` values past the last index saturate at the final entry.
+RATE_LIMIT_BACKOFF_SCHEDULE = (5, 10, 15)
+
+# Time-to-live for the kv-side cache around the Safe API balances fetch.
+# Set to 3 hours so the cache survives between FetchStrategies cycles in
+# the common idle case while still bounding how stale balances can get
+# in the absence of any inflow signal. Per-cycle RPC change-detection
+# and the PostTxSettlement hook both invalidate the cache eagerly, so
+# the TTL is a safety floor, not the primary freshness mechanism.
+SAFE_BALANCES_CACHE_TTL_SECONDS = 3 * 3600
+
+
+# Single source of truth for the chain-scoped kv keys this skill uses.
+# Producers and consumers live in different modules (base.py +
+# fetch_strategies.py + post_tx_settlement.py); centralising the format
+# string here means a rename only happens in one place. A grep for any
+# of these builder names finds every read and write site for the
+# corresponding key, which is the point — raw kv strings scattered
+# across modules were the pre-PR shape and easy to miss on rename.
+def safe_balances_kv_key(chain: str) -> str:
+    """KV key for the persisted Safe API balances payload, per chain."""
+    return f"safe_balances_{chain}"
+
+
+def safe_balances_ts_kv_key(chain: str) -> str:
+    """KV key for the Safe API balances cache timestamp, per chain."""
+    return f"last_safe_balances_calculated_timestamp_{chain}"
+
+
+def last_known_safe_balances_kv_key(chain: str) -> str:
+    """KV key for the per-token balance snapshot used by inflow detection."""
+    return f"last_known_safe_balances_{chain}"
+
+
+def withdrawals_ts_kv_key(chain: str) -> str:
+    """KV key for the withdrawal-value cache timestamp, per chain."""
+    return f"last_withdrawals_calculated_timestamp_{chain}"
+
+
+def total_withdrawals_kv_key(chain: str) -> str:
+    """KV key for the cached total-withdrawals USD value, per chain."""
+    return f"total_withdrawals_{chain}"
+
+
+def initial_value_ts_kv_key(chain: str) -> str:
+    """KV key for the initial-investment cache timestamp, per chain."""
+    return f"last_initial_value_calculated_timestamp_{chain}"
+
+
+RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
 CAMPAIGN_TYPES = [1, 2]
@@ -108,6 +168,7 @@ LAST_EPOCH_KEY_PREFIX = "last_processed_epoch_"
 OLAS_ADDRESSES = {
     "mode": "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9",
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
+    "base": "0x54330d28ca3357F294334BDC454a032e7f353416",
 }
 
 # Airdrop reward tracking constants
@@ -138,6 +199,17 @@ class DexType(Enum):
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
     VELODROME = "velodrome"
+    AERODROME = "aerodrome"
+
+
+# Aerodrome is the Base-specific deployment of the Velodrome protocol
+# (same router / NFPM / voter / sugar / slipstream-helper ABI), so
+# entry, exit, position-valuation and metrics paths route through the
+# same VelodromePoolBehaviour. Anywhere in the FSM that branches on
+# dex_type for "velodrome" semantics should accept either string.
+VELODROME_FAMILY_DEX_TYPES: frozenset = frozenset(
+    {DexType.VELODROME.value, DexType.AERODROME.value}
+)
 
 
 class Action(Enum):
@@ -198,6 +270,7 @@ class Chain(Enum):
 
     OPTIMISM = "optimism"
     MODE = "mode"
+    BASE = "base"
 
 
 THRESHOLDS = {TradingType.BALANCED.value: 0.3374, TradingType.RISKY.value: 0.2892}
@@ -234,6 +307,27 @@ WHITELISTED_ASSETS = {
         "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+    },
+    "base": {
+        # Base tokens - stablecoins
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
+        "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
+        "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
+        # Tier-1 stablecoin additions from the Base/Aerodrome LpSugar whitelist
+        # sweep: each is $1-pegged, has a CoinGecko coin id for pricing, and pairs
+        # with a whitelisted anchor (USDC; eUSD also pairs frxUSD). A pool is only
+        # investable when every token in it is whitelisted, so each unlocks real
+        # Aerodrome depth. Ordered by safety x liquidity.
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
+        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
+        "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
+        "0x4621b7a9c75199271f773ebd9a499dbd165c3191": "DOLA",
+        "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186": "MUSD",
+        "0x35e5db674d8e93a03d814fa0ada70731efe8a4b9": "USR",
+        "0x04d5ddf5f3a8939889f11e97f8c4bb48317f1938": "USDz",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     },
 }
 
@@ -277,6 +371,19 @@ COIN_ID_MAPPING = {
         "iusdc": "ironclad-usd",
         "velo": "velodrome-finance",
     },
+    "base": {
+        "usdc": "usd-coin",
+        "aero": "aerodrome-finance",
+        "usdt": "l2-standard-bridged-usdt-base",
+        "ousdt": "openusdt",
+        "usde": "ethena-usde",
+        "eusd": "electronic-usd",
+        "dola": "dola-usd",
+        "musd": "mezo-usd",
+        "usr": "resolv-usr",
+        "usdz": "anzen-usdz",
+        "bold": "liquity-bold-2",
+    },
 }
 
 # Reward tokens that should be excluded from investment consideration
@@ -289,6 +396,10 @@ REWARD_TOKEN_ADDRESSES = {
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
         "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "VELO",  # VELO on Optimism
+    },
+    "base": {
+        "0x54330d28ca3357F294334BDC454a032e7f353416": "OLAS",  # OLAS on Base
+        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # AERO on Base
     },
 }
 
@@ -329,6 +440,12 @@ class LiquidityTraderBaseBehaviour(
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
         self.pools[DexType.VELODROME.value] = VelodromePoolBehaviour
+        # Aerodrome is the Base-specific deployment of the Velodrome
+        # protocol; same router/NFPM/voter ABI shape, same pool entry
+        # and exit code paths. The velodrome customs strategy emits
+        # dex_type="aerodrome" for Base pools, so register the same
+        # handler under that alias.
+        self.pools[DexType.AERODROME.value] = VelodromePoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
@@ -421,16 +538,23 @@ class LiquidityTraderBaseBehaviour(
         return data
 
     def get_positions(self) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get positions using SafeApi for Optimism, Mode Explorer for Mode"""
+        """Get positions using SafeApi for chains with a slug, Mode Explorer for Mode"""
         all_balances = defaultdict(list)
 
         for chain in self.params.target_investment_chains:
-            if chain == Chain.OPTIMISM.value:
-                # Use SafeApi for Optimism
-                balances = yield from self._get_optimism_balances_from_safe_api()
-            elif chain == Chain.MODE.value:  # pragma: no branch
-                # Use Mode Explorer API for Mode
+            balances: List[Dict[str, Any]] = []
+            if chain in self.params.safe_api_chain_slugs:
+                # Use SafeApi for any chain wired into ``safe_api_chain_slugs``.
+                balances = yield from self._get_safe_balances_from_safe_api(chain)
+            elif chain == Chain.MODE.value:
+                # Mode is not on the Safe Transaction Service; use Mode Explorer.
                 balances = yield from self._get_mode_balances_from_explorer_api()
+            else:
+                self.context.logger.warning(
+                    f"No balances dispatch for {chain}: not in "
+                    "safe_api_chain_slugs and not Mode; skipping"
+                )
+                continue
 
             if balances:
                 all_balances[chain].extend(balances)
@@ -441,51 +565,280 @@ class LiquidityTraderBaseBehaviour(
 
         return positions
 
-    def _get_optimism_balances_from_safe_api(
-        self,
+    def _detect_and_invalidate_on_inflow(
+        self, chain: str, safe_address: str
+    ) -> Generator[None, None, None]:
+        """Invalidate the safe-balances cache if a whitelisted balance went up.
+
+        Reads the agent safe's on-chain balances for native ETH plus the
+        whitelisted tokens on ``chain``, compares to the per-token snapshot
+        persisted in ``last_known_safe_balances_{chain}``, and if any
+        token's on-chain balance is strictly greater than what we last
+        saw, invalidates the safe-balances cache by resetting
+        ``last_safe_balances_calculated_timestamp_{chain}`` so the next
+        cycle re-fetches Safe API.
+
+        The increase signal cannot distinguish an external deposit from
+        the agent's own activity (a swap output, a pool exit, an OLAS
+        reward), so this method intentionally does **not** invalidate
+        the initial-investment cache here — that path has its own TTL
+        and is driven by incoming-transfer records, which are not
+        produced by agent-internal token movement. The current readings
+        are merged into the persisted baseline rather than replacing
+        it so a single timed-out RPC read doesn't drop a token from the
+        snapshot and trigger a spurious inflow on the next cycle.
+        Sequential RPC reads are intentional here: at ~5 whitelisted
+        tokens per chain the per-cycle cost is small, and using the
+        existing helpers keeps this change contained to base.py.
+
+        :param chain: chain identifier (e.g. ``"optimism"``).
+        :param safe_address: the Safe contract address on that chain.
+        :yield: None
+        """
+        current: Dict[str, int] = {}
+        native_balance = yield from self._get_native_balance(chain, safe_address)
+        if native_balance is not None:
+            current[ZERO_ADDRESS.lower()] = int(native_balance)
+
+        for token_addr, _symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+            token_balance = yield from self._get_token_balance(
+                chain, safe_address, token_addr
+            )
+            if token_balance is not None:
+                current[token_addr.lower()] = int(token_balance)
+
+        last_known_key = last_known_safe_balances_kv_key(chain)
+        last_known_blob = yield from self._read_kv((last_known_key,))
+        last_known: Dict[str, int] = {}
+        last_known_raw = (
+            last_known_blob.get(last_known_key) if last_known_blob else None
+        )
+        if last_known_raw:
+            try:
+                parsed = json.loads(last_known_raw)
+                if isinstance(parsed, dict):
+                    for key, val in parsed.items():
+                        try:
+                            last_known[key.lower()] = int(val)
+                        except (ValueError, TypeError):
+                            continue
+            except (json.JSONDecodeError, TypeError):
+                self.context.logger.warning(
+                    f"Unparseable {last_known_key}; treating as empty"
+                )
+
+        inflow_token: Optional[str] = None
+        for addr, current_balance in current.items():
+            previous = last_known.get(addr, 0)
+            if current_balance > previous:
+                inflow_token = addr
+                # "Balance increase" rather than "external inflow": the
+                # signal can't distinguish an external deposit from the
+                # agent's own swap output / pool exit / reward.
+                self.context.logger.info(
+                    f"Balance increase detected on {chain}: token {addr} "
+                    f"{previous} -> {current_balance}; refreshing safe "
+                    "balances cache"
+                )
+                break
+
+        # Merge, don't replace: ``current`` only holds tokens whose RPC
+        # reads succeeded this cycle. A wholesale overwrite would drop
+        # any timed-out key and the next cycle would mistake the real
+        # balance for an inflow against the missing-=>-0 default.
+        merged_snapshot = {**last_known, **current}
+
+        # Atomic write: timestamp reset and baseline-snapshot update go in
+        # the same kv payload. If the write raises, NEITHER lands — the
+        # next cycle re-detects the same delta and re-tries. Splitting the
+        # writes would let the baseline advance on a half-failed cycle and
+        # silently lose the inflow signal for the rest of the TTL.
+        payload: Dict[str, str] = {last_known_key: json.dumps(merged_snapshot)}
+        if inflow_token is not None:
+            payload[safe_balances_ts_kv_key(chain)] = "0"
+        # ``_write_kv`` returns ``False`` on a non-SUCCESS response
+        # rather than raising, so check the bool too: a silently-dropped
+        # invalidation write would let the cache serve stale balances
+        # for up to the full TTL with no operator log.
+        try:
+            ok = yield from self._write_kv(payload)
+        except Exception:
+            ok = False
+        if not ok:
+            self.context.logger.warning(
+                f"Failed to persist balance snapshot / invalidate cache for "
+                f"{chain} after balance-increase detection; the next cycle "
+                "will re-detect the same delta"
+            )
+
+    def _invalidate_caches_after_tx(self, chain: str) -> Generator[None, None, None]:
+        """Reset cache timestamps after a successful agent transaction.
+
+        The agent has just submitted a tx (swap, enter pool, exit pool,
+        withdrawal, etc.) on ``chain``, so the kv-cached safe balances
+        and withdrawal value for that chain are stale. Setting both
+        ``last_safe_balances_calculated_timestamp_{chain}`` and
+        ``last_withdrawals_calculated_timestamp_{chain}`` to ``"0"``
+        forces the next FetchStrategies cycle to re-fetch instead of
+        serving cached data.
+
+        :param chain: chain identifier of the just-settled tx.
+        :yield: None
+        """
+        try:
+            ok = yield from self._write_kv(
+                {
+                    safe_balances_ts_kv_key(chain): "0",
+                    withdrawals_ts_kv_key(chain): "0",
+                }
+            )
+        except Exception:
+            ok = False
+        if not ok:
+            self.context.logger.warning(
+                f"Failed to invalidate cache timestamps for {chain} after tx "
+                "settlement; cached balances may be served as fresh within the TTL"
+            )
+
+    def _get_safe_balances_from_safe_api(
+        self, chain: str
     ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get Optimism balances using SafeApi with pagination"""
-        safe_address = self.params.safe_contract_addresses.get("optimism")
+        """Get balances for ``chain`` using SafeApi with pagination.
+
+        Reads from the kv cache if the last successful fetch is within
+        ``SAFE_BALANCES_CACHE_TTL_SECONDS`` and no other code path has
+        invalidated it. Invalidation happens once per period upstream
+        in ``FetchStrategiesBehaviour.async_act`` via
+        ``_detect_and_invalidate_on_inflow`` and after each settled tx
+        via ``_invalidate_caches_after_tx``. On a cache miss, hits
+        SafeApi, persists the result, then returns it. On API failure
+        with no usable cache, falls back to the persisted cached
+        payload if there is one. The on-chain backstop in
+        ``_supplement_with_onchain_whitelisted_balances`` runs
+        unconditionally after this stage as a supplement: it covers
+        whitelisted tokens that SafeApi may omit even on a successful
+        response.
+
+        :param chain: chain identifier as used in
+            ``target_investment_chains`` (e.g. ``"optimism"``, ``"base"``).
+        :yield: None
+        :return: normalised list of balance entries.
+        """
+        safe_address = self.params.safe_contract_addresses.get(chain)
         if not safe_address:
-            self.context.logger.error("No safe address set for Optimism chain")
+            self.context.logger.error(f"No safe address set for {chain} chain")
             return []
 
-        self.context.logger.info(
-            f"Fetching Optimism balances from SafeApi for safe: {safe_address}"
-        )
-
-        # Fetch all balances with pagination
-        api_success, all_balances = (
-            yield from self._fetch_safe_balances_with_pagination(safe_address)
-        )
-
-        if api_success:
-            # Cache fresh data on successful API fetch (including empty — clears stale cache)
+        # TTL cache: skip the SafeApi fetch if a recent result is on disk.
+        balances_key = safe_balances_kv_key(chain)
+        ts_key = safe_balances_ts_kv_key(chain)
+        cached_blob: Dict[str, Any] = {}
+        try:
+            read = yield from self._read_kv((balances_key, ts_key))
+            cached_blob = read or {}
+        except Exception:
+            self.context.logger.warning(
+                "Failed to read safe balances cache from KV store; "
+                "will fetch from SafeApi"
+            )
+        now_ts = int(self._get_current_timestamp())
+        last_ts_raw = cached_blob.get(ts_key)
+        cache_age: Optional[int] = None
+        if last_ts_raw:
             try:
-                yield from self._write_kv(
-                    {"safe_balances_optimism": json.dumps(all_balances)}
-                )
-            except Exception:  # nosec B110
-                self.context.logger.debug("Failed to cache safe balances to KV store")
-        else:
-            # API failed — fall back to cached balances
-            try:
-                cached = yield from self._read_kv(("safe_balances_optimism",))
-                if cached and cached.get("safe_balances_optimism"):
-                    self.context.logger.warning(
-                        "SafeGlobal API failed, using cached balances"
-                    )
-                    all_balances = json.loads(cached["safe_balances_optimism"])
-            except Exception:
+                cache_age = now_ts - int(last_ts_raw)
+            except (ValueError, TypeError):
                 self.context.logger.warning(
-                    "Failed to read cached balances from KV store"
+                    f"Unparseable {ts_key} {last_ts_raw!r}; "
+                    "treating cache as expired"
                 )
+                cache_age = SAFE_BALANCES_CACHE_TTL_SECONDS
+
+        cached_payload = cached_blob.get(balances_key)
+        use_cache = (
+            cache_age is not None
+            and 0 <= cache_age < SAFE_BALANCES_CACHE_TTL_SECONDS
+            and cached_payload
+        )
+        if use_cache:
+            try:
+                all_balances = json.loads(cached_payload)
+                self.context.logger.info(
+                    f"Safe balances cache hit for {chain} "
+                    f"({cache_age}s old, ttl {SAFE_BALANCES_CACHE_TTL_SECONDS}s)"
+                )
+            except (json.JSONDecodeError, TypeError):
+                self.context.logger.warning(
+                    "Failed to parse cached safe balances; refetching"
+                )
+                use_cache = False
+
+        if not use_cache:
+            self.context.logger.info(
+                f"Fetching {chain} balances from SafeApi for safe: {safe_address}"
+            )
+            (
+                api_success,
+                all_balances,
+            ) = yield from self._fetch_safe_balances_with_pagination(
+                chain, safe_address
+            )
+
+            if api_success:
+                # Persist the raw response plus the timestamp so future
+                # cycles can hit the cache instead of refetching.
+                try:
+                    persisted = yield from self._write_kv(
+                        {
+                            balances_key: json.dumps(all_balances),
+                            ts_key: str(now_ts),
+                        }
+                    )
+                except Exception:
+                    persisted = False
+                if not persisted:
+                    self.context.logger.warning(
+                        "Failed to cache safe balances to KV store; "
+                        "next cycle will refetch from SafeApi"
+                    )
+            else:
+                # API failed AND the TTL cache wasn't usable; reach for the
+                # last-known persisted payload before the on-chain backstop.
+                if cached_payload:
+                    try:
+                        self.context.logger.warning(
+                            "SafeApi failed, using stale cached balances"
+                        )
+                        all_balances = json.loads(cached_payload)
+                    except (json.JSONDecodeError, TypeError):
+                        all_balances = []
+                else:
+                    all_balances = []
 
         balances = []
         for balance_data in all_balances:
             token_address = balance_data.get("tokenAddress")
             token_info = balance_data.get("token")
-            balance = balance_data.get("balance", "0")
+            raw_balance = balance_data.get("balance", "0")
+            # ``raw_balance`` defaults to ``"0"`` only when the key is
+            # absent; a present JSON ``null`` (reachable via a corrupt
+            # cached payload) would otherwise crash ``int(None)`` and
+            # propagate out of ``get_positions``.
+            try:
+                balance_int = int(raw_balance)
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    f"Skipping safe balance entry with unparseable balance "
+                    f"{raw_balance!r} for token {token_address!r}"
+                )
+                continue
+            # ``fiatBalance`` / ``fiatConversion`` come straight from the
+            # Safe Transaction Service; using them avoids a paid CoinGecko
+            # lookup per token for the whitelisted tokens Safe already
+            # prices. Missing/null is fine: the downstream consumer falls
+            # back to ``_fetch_token_price`` when the field is absent.
+            fiat_balance = balance_data.get("fiatBalance")
+            fiat_conversion = balance_data.get("fiatConversion")
 
             if token_address is None:
                 # Native ETH
@@ -494,7 +847,9 @@ class LiquidityTraderBaseBehaviour(
                         "asset_symbol": "ETH",
                         "asset_type": "native",
                         "address": to_checksum_address(ZERO_ADDRESS),
-                        "balance": int(balance),
+                        "balance": balance_int,
+                        "fiat_balance": fiat_balance,
+                        "fiat_conversion": fiat_conversion,
                     }
                 )
             else:
@@ -511,7 +866,9 @@ class LiquidityTraderBaseBehaviour(
                             "asset_symbol": token_info.get("symbol", "UNKNOWN"),
                             "asset_type": "erc_20",
                             "address": to_checksum_address(token_address),
-                            "balance": int(balance),
+                            "balance": balance_int,
+                            "fiat_balance": fiat_balance,
+                            "fiat_conversion": fiat_conversion,
                         }
                     )
 
@@ -522,11 +879,11 @@ class LiquidityTraderBaseBehaviour(
         # separately. Reward tokens (OLAS, VELO) are disjoint from the
         # whitelist and handled by _fetch_reward_balances below.
         yield from self._supplement_with_onchain_whitelisted_balances(
-            "optimism", safe_address, balances
+            chain, safe_address, balances
         )
 
-        # Add separate reward token balance fetch for Optimism
-        reward_balances = yield from self._fetch_reward_balances("optimism")
+        # Add separate reward token balance fetch
+        reward_balances = yield from self._fetch_reward_balances(chain)
         if reward_balances:
             balances.extend(reward_balances)
 
@@ -535,11 +892,39 @@ class LiquidityTraderBaseBehaviour(
         )
         return balances
 
+    def _build_safe_api_url(
+        self, chain: str, version: Literal["v1", "v2"], path: str
+    ) -> str:
+        """Build a Safe API URL from the configured root + chain slug.
+
+        Every Safe API call (across pages and versions) is built from the
+        same configured root, so changing where the agent talks to Safe
+        is one config flip rather than touching every call site.
+
+        :param chain: chain identifier as used in ``target_investment_chains``
+            (e.g. ``"optimism"``, ``"base"``).
+        :param version: API version segment, ``"v1"`` or ``"v2"``.
+        :param path: trailing path after ``/api/{version}/``, with no
+            leading slash (e.g. ``"safes/0x.../transfers/"``).
+        :raises KeyError: if ``chain`` has no entry in
+            ``safe_api_chain_slugs``.
+        :return: fully-qualified URL.
+        """
+        try:
+            slug = self.params.safe_api_chain_slugs[chain]
+        except KeyError as exc:
+            raise KeyError(
+                f"No Safe API slug configured for chain {chain!r}; "
+                f"check safe_api_chain_slugs"
+            ) from exc
+        return f"{self.params.safe_api_url}/{slug}/api/{version}/{path}"
+
     def _fetch_safe_balances_with_pagination(
-        self, safe_address: str
+        self, chain: str, safe_address: str
     ) -> Generator[None, None, Tuple[bool, List[Dict]]]:
         """Fetch all balances from SafeApi with pagination support.
 
+        :param chain: chain identifier (e.g. ``"optimism"``).
         :param safe_address: the Safe contract address.
         :yield: None
         :return: (api_success, balances) tuple. api_success is False only
@@ -551,7 +936,9 @@ class LiquidityTraderBaseBehaviour(
         api_success = True
 
         while True:
-            url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
+            url = self._build_safe_api_url(
+                chain, "v2", f"safes/{safe_address}/balances/"
+            )
             params = f"?exclude_spam=true&trusted=true&limit={limit}&offset={offset}"
             endpoint = url + params
 
@@ -1452,6 +1839,51 @@ class LiquidityTraderBaseBehaviour(
 
         return 0
 
+    def _compute_rate_limit_wait(self, response: Message, attempt: int) -> int:
+        """Decide how long to sleep before retrying a rate-limited request.
+
+        Honours ``Retry-After`` if the upstream sets it (only the
+        integer-seconds form is parsed; an HTTP-date form falls
+        through to the backoff schedule). Otherwise uses
+        ``RATE_LIMIT_BACKOFF_SCHEDULE`` indexed by ``attempt``, plus
+        a small uniform jitter so two retries from the same starting
+        second don't land at exactly the same later second. Always
+        clamped to ``MAX_RATE_LIMIT_WAIT_SECONDS``.
+
+        :param response: the rate-limited HTTP response.
+        :param attempt: zero-indexed retry attempt counter.
+        :return: sleep duration in seconds.
+        """
+        headers_blob = getattr(response, "headers", None)
+        if not headers_blob:
+            self.context.logger.debug(
+                "Rate-limit response had no headers; using backoff schedule"
+            )
+            headers_blob = ""
+        for line in headers_blob.splitlines():
+            name, _, value = line.partition(":")
+            if name.strip().lower() == "retry-after":
+                try:
+                    # Floor at 0: spec says Retry-After is non-negative, but
+                    # a malformed ``-N`` header would otherwise pass through
+                    # to ``self.sleep(-N)``.
+                    return max(
+                        0,
+                        min(int(value.strip()), MAX_RATE_LIMIT_WAIT_SECONDS),
+                    )
+                except ValueError:
+                    self.context.logger.debug(
+                        f"Retry-After value {value.strip()!r} is not an "
+                        "integer; using backoff schedule"
+                    )
+                    break
+        idx = min(attempt, len(RATE_LIMIT_BACKOFF_SCHEDULE) - 1)
+        base = RATE_LIMIT_BACKOFF_SCHEDULE[idx]
+        # Non-cryptographic randomness is correct here: jitter only needs to
+        # vary retry timings slightly, not be unguessable.
+        jitter = random.uniform(0, RATE_LIMIT_BACKOFF_JITTER_SECONDS)  # nosec B311
+        return min(int(base + jitter), MAX_RATE_LIMIT_WAIT_SECONDS)
+
     def _request_with_retries(
         self,
         endpoint: str,
@@ -1504,10 +1936,9 @@ class LiquidityTraderBaseBehaviour(
                     )
                     return False, response_json
 
-                # Wait before retrying rate-limited request
-                wait_time = retry_wait if retry_wait > 0 else 60
+                wait_time = self._compute_rate_limit_wait(response, retries - 1)
                 self.context.logger.info(
-                    f"Waiting {wait_time} seconds before retrying rate-limited request"
+                    f"Waiting {wait_time}s before retrying rate-limited request"
                 )
                 yield from self.sleep(wait_time)
                 continue
@@ -1624,30 +2055,44 @@ class LiquidityTraderBaseBehaviour(
         response = yield from self._do_connection_request(
             kv_store_message, kv_store_dialogue  # type: ignore
         )
-        return response == KvStoreMessage.Performative.SUCCESS
+        return response.performative == KvStoreMessage.Performative.SUCCESS
 
-    def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, None]:
+    def _invalidate_cl_pool_cache(self, chain: str) -> Generator[None, None, bool]:
         """Invalidate (delete) the cached CL pool data for a chain.
 
-        Called when enter pool succeeds so we don't keep retrying the same pool.
+        Called both after a successful pool entry (so we don't retry the same pool) and
+        when a stale cross-period cache is dropped (so a failed invest isn't retried).
+
+        Returns True on a successful invalidation write, False on a caught exception
+        so the caller can surface the failure. A False return means the stale entry
+        is still on disk and the next cycle will hit the same path again; the
+        caller should not pretend the cache was cleared.
 
         :param chain: the chain to invalidate the cache for
         :yield: None: Generator yield for async operations
+        :return: True if the invalidation marker was written, False otherwise.
         """
         try:
             kv_key = f"velodrome_cl_pool_{chain}"
 
-            # Delete the cache by writing an invalidation marker
-            yield from self._write_kv(
+            # Delete the cache by writing an invalidation marker. ``_write_kv``
+            # returns False on a soft KV failure (non-SUCCESS performative)
+            # without raising, so capture the result and propagate it rather
+            # than reporting success unconditionally.
+            success = yield from self._write_kv(
                 {kv_key: json.dumps({"invalidated": True}, ensure_ascii=True)}
             )
-
-            self.context.logger.info(
-                f"Invalidated CL pool cache for chain {chain} after successful pool entry"
-            )
+            if success:
+                self.context.logger.info(f"Invalidated CL pool cache for chain {chain}")
+            else:
+                self.context.logger.error(
+                    f"KV write failed invalidating CL pool cache for chain {chain}"
+                )
+            return success
 
         except Exception as e:
             self.context.logger.error(f"Error invalidating CL pool cache: {str(e)}")
+            return False
 
     def _fetch_token_prices(
         self, token_balances: List[Dict[str, Any]]
@@ -2363,7 +2808,7 @@ class LiquidityTraderBaseBehaviour(
 
         # Handle Velodrome CL pools with multiple positions
         if (
-            dex_type == DexType.VELODROME.value
+            dex_type in VELODROME_FAMILY_DEX_TYPES
             and is_cl_pool
             and "positions" in position
         ):
@@ -2468,6 +2913,7 @@ class LiquidityTraderBaseBehaviour(
             usdc_addresses = {
                 "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
                 "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                "base": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
             }
 
             usdc_address = usdc_addresses.get(chain.lower())
@@ -2613,7 +3059,7 @@ class LiquidityTraderBaseBehaviour(
             gauge_address = position.get("gauge_address")
 
             # Only create unstaking actions for Velodrome pools
-            if dex_type != "velodrome":
+            if dex_type not in VELODROME_FAMILY_DEX_TYPES:
                 self.context.logger.info(
                     f"Skipping unstaking for non-Velodrome pool: {dex_type}"
                 )
@@ -2754,7 +3200,7 @@ class LiquidityTraderBaseBehaviour(
         pool_address = position.get("pool_address")
         chain = position.get("chain")
 
-        if dex_type != "velodrome" or not is_cl_pool:
+        if dex_type not in VELODROME_FAMILY_DEX_TYPES or not is_cl_pool:
             return self._build_unstake_lp_tokens_action(position)
 
         safe_address = self.params.safe_contract_addresses.get(chain)
@@ -2802,10 +3248,11 @@ class LiquidityTraderBaseBehaviour(
             )
             return self._build_unstake_lp_tokens_action(position)
 
-        staked_token_ids, verification_failed = (
-            yield from self._filter_staked_token_ids(
-                pool, safe_address, token_ids, chain, gauge_address
-            )
+        (
+            staked_token_ids,
+            verification_failed,
+        ) = yield from self._filter_staked_token_ids(
+            pool, safe_address, token_ids, chain, gauge_address
         )
 
         if verification_failed:

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Optimus is an autonomous agent service built on the **Open Autonomy** framework that manages liquidity provision on the Optimism network. It uses finite state machines (FSMs) to coordinate multi-agent actions across DeFi protocols: Balancer, Uniswap V3, Velodrome, and Merkl.
+Optimus is an autonomous agent service built on the **Open Autonomy** framework that manages liquidity provision on Layer 2 networks (Optimism and Base, with Mode as a legacy target). The agent runs against one chain at a time, selected via `TARGET_INVESTMENT_CHAINS`. It uses finite state machines (FSMs) to coordinate multi-agent actions across DeFi protocols: Balancer, Uniswap V3, Velodrome (Optimism), Aerodrome (Base, shares the Velodrome code path), and Merkl.
 
 ## Common Commands
 
@@ -60,8 +60,8 @@ The system uses two composed FSMs:
 
 ### Package Layout under `packages/valory/`
 - **skills/** — ABCI skill FSMs (the core logic). Each skill has `rounds.py`, `behaviours.py`, `payloads.py`, `models.py`, and an `fsm_specification.yaml`.
-- **contracts/** — Python wrappers around smart contract ABIs for each protocol (balancer_*, uniswap_v3_*, velodrome_*, merkl_*).
-- **customs/** — Standalone utility libraries for pool searching (balancer, uniswap, velodrome, merkl), asset lending, and APR selection. Tests are collocated inside each package under `packages/valory/customs/*/tests/`.
+- **contracts/** — Python wrappers around smart contract ABIs for each protocol (balancer_*, uniswap_v3_*, velodrome_* — also used for Aerodrome on Base, merkl_*).
+- **customs/** — Standalone utility libraries for pool searching (balancer, uniswap, velodrome — also covers Aerodrome on Base, merkl), asset lending, and APR selection. Tests are collocated inside each package under `packages/valory/customs/*/tests/`.
 - **agents/optimus/** and **services/optimus/** — Agent and service configuration (aea-config.yaml, service.yaml).
 
 ### Key Conventions

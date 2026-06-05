@@ -23,7 +23,7 @@ import json
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from decimal import Context, Decimal, getcontext
+from decimal import Context, Decimal, InvalidOperation, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
 import requests
@@ -34,11 +34,6 @@ from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
 from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
-from packages.valory.contracts.gnosis_safe.contract import (
-    GnosisSafeContract,
-    SafeOperation,
-)
-from packages.valory.contracts.service_registry.contract import ServiceRegistryContract
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
@@ -47,10 +42,12 @@ from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract
 )
 from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
 from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
+from packages.valory.contracts.velodrome_gauge.contract import VelodromeGaugeContract
 from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
     VelodromeNonFungiblePositionManagerContract,
 )
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
+from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -60,13 +57,15 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     OLAS_ADDRESSES,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
-    SAFE_TX_GAS,
     TradingType,
+    VELODROME_FAMILY_DEX_TYPES,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     _noop_rate_limit_callback,
+    initial_value_ts_kv_key,
+    total_withdrawals_kv_key,
+    withdrawals_ts_kv_key,
 )
-from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     Event,
     FetchStrategiesPayload,
@@ -79,11 +78,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
 )
-from packages.valory.skills.transaction_settlement_abci.payload_tools import (
-    hash_payload_to_hex,
-)
 
-# Add these constants to the class or base file
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
 TRANSFER_EVENT_SIGNATURE = (
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -91,10 +86,125 @@ TRANSFER_EVENT_SIGNATURE = (
 ZERO_ADDRESS_PADDED = (
     "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
-# Hard cap on pagination loops against external APIs. The round timeout is
-# the primary protection; this is a backstop against an API that returns a
-# non-empty next-page cursor indefinitely.
+# Hard cap on pagination loops against external APIs. Plays two roles:
+# in the three Safe transfer fetchers the cap-hit is treated as a fetch
+# failure (sets ``fetch_failed``, persistence is skipped) so a misbehaving
+# API can't seed next cycle's seen-set with partial data; in the Mode
+# fetchers it's a soft backstop only. The round timeout is the primary
+# protection in both cases.
 MAX_PAGINATION_PAGES = 100
+
+# Page size for offset-based pagination against Safe Transaction Service.
+# Matches Safe's default limit. The pagination loop terminates on
+# ``next == null``, so the loop is robust to Safe changing this cap.
+#
+# Pagination contract for all three Safe transfer fetchers: advance
+# ``offset`` by ``len(transfers)`` (the records actually returned), not
+# by ``SAFE_TRANSFERS_PAGE_LIMIT``. Safe's DRF can return a short
+# non-final page (server-side clamp or partial filter) with
+# ``next != null``; advancing by ``limit`` would silently skip the
+# un-returned records. Dedup via the per-fetcher ``seen_*`` set
+# absorbs any overlap when Safe in fact returns a full page.
+# Termination still consults ``next is None``; empty results are
+# handled earlier in each loop.
+SAFE_TRANSFERS_PAGE_LIMIT = 100
+
+# Time-to-live for the kv-side caches around the expensive ROI math. Set
+# to 30 minutes so each computation stays valid for up to 30 minutes after
+# it ran. Bigger means fewer Safe API calls per hour, smaller means
+# fresher ROI numbers. The two values are kept as separate constants so
+# the two caches can be tuned independently if one path turns out to need
+# a different cadence.
+INITIAL_INVESTMENT_CACHE_TTL_SECONDS = 30 * 60
+WITHDRAWAL_CACHE_TTL_SECONDS = 30 * 60
+
+
+def _transfer_unique_id(transfer: Dict[str, Any]) -> str:
+    """Stable unique ID for a Safe transfer.
+
+    Safe's transferId is preferred. Falls back to (tx_hash, log_index) for
+    API responses, then to (tx_hash, value/amount, type) for persisted
+    entries that pre-date this dedup scheme. Returns "" when nothing
+    identifying is present.
+
+    :param transfer: API or persisted transfer dict.
+    :return: a stable unique ID, or "" if nothing identifying is present.
+    """
+    tid = transfer.get("transferId") or transfer.get("transfer_id")
+    if tid:
+        return str(tid)
+    tx_hash = transfer.get("transactionHash") or transfer.get("tx_hash") or ""
+    log_idx = transfer.get("logIndex")
+    if log_idx is None:
+        log_idx = transfer.get("log_index")
+    if tx_hash and log_idx is not None:
+        return f"{tx_hash}:{log_idx}"
+    if not tx_hash:
+        return ""
+    transfer_type = transfer.get("type", "")
+    raw_value = transfer.get("value")
+    if raw_value is None:
+        raw_value = transfer.get("amount", "")
+    return f"{tx_hash}:{transfer_type}:{raw_value}"
+
+
+def _collect_seen_transfer_ids(date_keyed_data: Dict[str, Any]) -> set:
+    """Build a set of unique IDs from a persisted date-keyed transfer dict."""
+    seen: set = set()
+    if not date_keyed_data:
+        return seen
+    for date_transfers in date_keyed_data.values():
+        if not isinstance(date_transfers, list):
+            continue
+        for t in date_transfers:
+            if not isinstance(t, dict):
+                continue
+            uid = _transfer_unique_id(t)
+            if uid:
+                seen.add(uid)
+    return seen
+
+
+def _drop_legacy_transfer_entries(
+    date_keyed_data: Dict[str, Any],
+) -> Tuple[Dict[str, Any], int]:
+    """Drop persisted transfer dicts that lack a ``transfer_id`` field.
+
+    Legacy entries (persisted before this PR) lack the explicit ``transfer_id``
+    field, so their derived uid uses the ``tx_hash:type:amount`` fallback while
+    the same Safe API response uses Safe's ``transferId``. The two never match,
+    which would cause every historical transfer to be re-processed and appended
+    a second time on the first warm cycle after upgrade. Dropping them forces
+    one re-fetch that repopulates the date with proper ``transfer_id`` entries;
+    the fetcher's early-stop keeps the cost bounded.
+
+    Returns a count of dropped entries so the caller can log it. The expected
+    case is "drop N, refetch fills them back in within MAX_PAGINATION_PAGES",
+    but for very old safes some entries may be beyond Safe's pagination
+    window or pruned server-side and therefore unrecoverable. Logging the
+    drop count makes that loss observable instead of silent.
+
+    :param date_keyed_data: a ``{date: [transfer_dict, ...]}`` mapping.
+    :return: ``(migrated, dropped_count)`` where ``migrated`` has the same
+        shape with legacy entries removed (dates that end up empty are
+        dropped) and ``dropped_count`` is the number of removed entries.
+    """
+    if not date_keyed_data:
+        return date_keyed_data, 0
+    migrated: Dict[str, Any] = {}
+    dropped = 0
+    for date, transfers in date_keyed_data.items():
+        if not isinstance(transfers, list):
+            continue
+        kept: List[Dict[str, Any]] = []
+        for t in transfers:
+            if isinstance(t, dict) and t.get("transfer_id"):
+                kept.append(t)
+            else:
+                dropped += 1
+        if kept:
+            migrated[date] = kept
+    return migrated, dropped
 
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
@@ -137,17 +247,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.context.logger.info(f"Current Positions: {self.current_positions}")
 
-                chain = self.params.target_investment_chains[0]
-                safe_address = self.params.safe_contract_addresses.get(chain)
-
-                # update locally stored eth balance in-case it's incorrect
-                eth_balance = yield from self._get_native_balance(chain, safe_address)
-                self.context.logger.info(f"Current ETH balance: {eth_balance}")
-
-                if self.synchronized_data.period_count == 0:
-                    yield from self._check_and_create_eth_revert_transactions(
-                        chain, safe_address, sender
-                    )
+                for inflow_chain in self.params.target_investment_chains:
+                    # Only chains that flow through ``_get_safe_balances_from_safe_api``
+                    # have a cache for this loop to invalidate. Mode (and any
+                    # other explorer-routed chain) reads no kv cache key
+                    # this loop touches, so running it would just burn RPC
+                    # reads and write orphaned kv entries.
+                    if inflow_chain not in self.params.safe_api_chain_slugs:
+                        continue
+                    inflow_safe = self.params.safe_contract_addresses.get(inflow_chain)
+                    if inflow_safe:
+                        yield from self._detect_and_invalidate_on_inflow(
+                            inflow_chain, inflow_safe
+                        )
 
                 db_data = yield from self._read_kv(
                     keys=("selected_protocols", "trading_type")
@@ -377,83 +489,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             "Completed price-based filtering of whitelisted assets"
         )
 
-    def _check_and_create_eth_revert_transactions(
-        self, chain, safe_address, sender
-    ) -> Generator[None, None, None]:
-        """Check if there are any ETH revert transactions and create them if there are."""
-
-        if not safe_address:
-            self.context.logger.error(f"No safe address found for chain {chain}")
-            return
-
-        res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
-
-        to_address = res.get("master_safe_address")
-        eth_amount = int(res.get("reversion_amount", 0) * 10**18)
-
-        if eth_amount > 0:
-            if not to_address:
-                self.context.logger.error(
-                    f"No master safe address found for chain {chain}"
-                )
-                # Continue with normal flow
-            else:
-                self.context.logger.info(
-                    f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}"
-                )
-
-                # Create ETH transfer transaction
-                safe_tx_hash = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=safe_address,
-                    contract_public_id=GnosisSafeContract.contract_id,
-                    contract_callable="get_raw_safe_transaction_hash",
-                    data_key="tx_hash",
-                    to_address=to_address,
-                    value=eth_amount,
-                    data=b"",
-                    operation=SafeOperation.CALL.value,
-                    safe_tx_gas=SAFE_TX_GAS,
-                    chain_id=chain,
-                )
-
-                if safe_tx_hash:
-                    safe_tx_hash = safe_tx_hash[2:]
-                    payload_string = hash_payload_to_hex(
-                        safe_tx_hash=safe_tx_hash,
-                        ether_value=eth_amount,
-                        safe_tx_gas=SAFE_TX_GAS,
-                        operation=SafeOperation.CALL.value,
-                        to_address=to_address,
-                        data=b"",
-                    )
-
-                    # Create settlement payload
-                    payload = FetchStrategiesPayload(
-                        sender=sender,
-                        content=json.dumps(
-                            {
-                                "event": "settle",
-                                "updates": {
-                                    "tx_submitter": FetchStrategiesRound.auto_round_id(),
-                                    "most_voted_tx_hash": payload_string,
-                                    "chain_id": chain,
-                                    "safe_contract_address": safe_address,
-                                },
-                            },
-                            sort_keys=True,
-                        ),
-                    )
-
-                    with self.context.benchmark_tool.measure(
-                        self.behaviour_id
-                    ).consensus():
-                        yield from self.send_a2a_transaction(payload)
-                        yield from self.wait_until_round_end()
-
-                    self.set_done()
-                    return
-
     def _get_historical_price_for_date(
         self, token_address: str, token_symbol: str, date_str: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
@@ -627,12 +662,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         individual_shares = []
         portfolio_breakdown = []
 
-        # Map DEX types to their handler functions
+        # Map DEX types to their handler functions. Aerodrome on Base shares
+        # the Velodrome code path (same protocol fork, see
+        # VELODROME_FAMILY_DEX_TYPES), so it routes through the same handler.
         dex_handlers = {
             DexType.BALANCER.value: self._handle_balancer_position,
             DexType.UNISWAP_V3.value: self._handle_uniswap_position,
             DexType.STURDY.value: self._handle_sturdy_position,
             DexType.VELODROME.value: self._handle_velodrome_position,
+            DexType.AERODROME.value: self._handle_velodrome_position,
         }
 
         # Process open positions
@@ -686,8 +724,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     )
 
-            except Exception as e:
-                self.context.logger.error(f"Error processing position: {str(e)}")
+            except Exception:
+                # ``logger.exception`` keeps the traceback so a position
+                # that consistently throws is debuggable from the agent
+                # log. ``continue`` quietly drops the position's value
+                # from the share total, so without the traceback this is
+                # a silent shrink of the portfolio.
+                self.context.logger.exception(
+                    f"Error processing position {position.get('pool_address')!r}"
+                )
                 continue
 
         self.store_current_positions()
@@ -835,7 +880,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return []
 
         # For Velodrome positions, we only get tick ranges if it's a CL pool
-        if position.get("dex_type") == DexType.VELODROME.value and not position.get(
+        if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES and not position.get(
             "is_cl_pool"
         ):
             return []
@@ -847,7 +892,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get current tick from pool
         contract_id = (
             VelodromeCLPoolContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else UniswapV3PoolContract.contract_id
         )
 
@@ -873,7 +918,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
             )
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
 
@@ -886,7 +931,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get contract ID for position manager
         contract_id = (
             VelodromeNonFungiblePositionManagerContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else UniswapV3NonfungiblePositionManagerContract.contract_id
         )
 
@@ -984,6 +1029,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 DexType.UNISWAP_V3.value: "uniswapV3",
                 DexType.STURDY.value: "sturdy",
                 DexType.VELODROME.value: "velodrome",
+                DexType.AERODROME.value: "aerodrome",
                 DexType.BALANCER.value: "balancerPool",
             }
 
@@ -1010,13 +1056,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_safe_value: Decimal,
         staking_rewards_value: Decimal,
         airdrop_rewards_value: Decimal,
-        withdrawals_value: Decimal,
+        withdrawals_value: Optional[Decimal],
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
         portfolio_breakdown: List[Dict],
-    ) -> Dict:
-        """Create the final portfolio data structure."""
+    ) -> Optional[Dict]:
+        """Build the portfolio snapshot dict.
+
+        Returns ``None`` (rather than ``{}``) on an unexpected exception so
+        the caller can tell "errored" from "empty" and preserve the last
+        known portfolio rather than overwrite it with a partial state.
+
+        :param total_pools_value: USD value held in open pool positions.
+        :param total_safe_value: USD value held directly in the safe.
+        :param staking_rewards_value: USD value of accrued staking rewards.
+        :param airdrop_rewards_value: USD value of airdropped rewards.
+        :param withdrawals_value: USD value of cumulative outflows, or
+            ``None`` when the fetcher failed and the caller should skip
+            ROI math to avoid treating a transient blip as zero.
+        :param initial_investment: USD value of initial funding inflows.
+        :param volume: USD value of all positions ever opened.
+        :param allocations: List of open allocations.
+        :param portfolio_breakdown: Per-asset balance/price/value rows.
+        :return: The portfolio dict, or ``None`` on exception.
+        """
 
         # Get agent_hash from environment
         try:
@@ -1031,7 +1095,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Convert to percentage by multiplying by 100
             total_roi = None
             partial_roi = None
-            if initial_investment is not None and initial_investment > 0:
+            if (
+                initial_investment is not None
+                and initial_investment > 0
+                and withdrawals_value is not None
+            ):
                 try:
                     # Total ROI includes staking rewards + airdrop rewards
                     total_roi_decimal = (
@@ -1060,6 +1128,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")
                     total_roi = None
                     partial_roi = None
+            elif withdrawals_value is None:
+                self.context.logger.info(
+                    "ROI not calculated - withdrawals fetch failed this cycle; "
+                    "preserving last-known ROI by skipping the recompute."
+                )
             else:
                 self.context.logger.info(
                     f"ROI not calculated - initial_investment: {initial_investment}"
@@ -1136,7 +1209,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "portfolio_value": float(total_portfolio_value),
                 "value_in_pools": float(total_pools_value),
                 "value_in_safe": float(total_safe_value),
-                "value_in_withdrawals": float(withdrawals_value),
+                "value_in_withdrawals": (
+                    float(withdrawals_value) if withdrawals_value is not None else None
+                ),
                 "initial_investment": (
                     float(initial_investment)
                     if initial_investment is not None
@@ -1152,9 +1227,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "address": safe_address,
                 "last_updated": int(self._get_current_timestamp()),
             }
-        except Exception as e:
-            self.context.logger.error(f"Error creating portfolio data: {str(e)}")
-            return {}
+        except Exception:
+            # ``logger.exception`` captures the traceback so a recurring
+            # portfolio-build crash is debuggable from the log. Returning
+            # ``None`` (not ``{}``) lets the caller's ``if portfolio_data:``
+            # guard distinguish "errored — preserve last known" from
+            # legitimately empty.
+            self.context.logger.exception("Error creating portfolio data")
+            return None
 
     def _handle_balancer_position(
         self, position: Dict, chain: str
@@ -1233,19 +1313,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             user_address, pool_address, token_id, chain, position
         )
 
-        # Add VELO rewards to user balances if position is staked
+        # Add gauge reward token (VELO / AERO) to user balances if position is staked
         if position.get("staked", False):
             velo_rewards = yield from self._get_velodrome_pending_rewards(
                 position, chain, user_address
             )
             if velo_rewards > 0:
-                # Get VELO token address for the chain
+                # Get VELO/AERO token address for the chain
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
                     # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
                     user_balances[velo_token_address] = velo_rewards
+                    reward_symbol = self._get_velo_family_reward_symbol(chain)
                     self.context.logger.info(
-                        f"Added VELO rewards to position: {velo_rewards}"
+                        f"Added {reward_symbol} rewards to position: {velo_rewards}"
                     )
 
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
@@ -1254,10 +1335,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             position.get("token1"): position.get("token1_symbol"),
         }
 
-        # Add VELO to token_info if rewards exist
+        # Add the gauge reward token (VELO / AERO) to token_info if rewards exist
         velo_token_address = self._get_velo_token_address(chain)
         if velo_token_address and velo_token_address in user_balances:
-            token_info[velo_token_address] = "VELO"
+            token_info[velo_token_address] = self._get_velo_family_reward_symbol(chain)
 
         return user_balances, details, token_info
 
@@ -1376,27 +1457,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     token_prices,
                 )
 
-                # Check cost recovery using actual yield
-                entry_cost = position.get("entry_cost", 0)
-                if yield_usd >= entry_cost:
-                    position["cost_recovered"] = True
-                    position["yield_usd"] = float(yield_usd)
+                if yield_usd is None:
+                    # The reward-price fetch failed mid-computation. Leave
+                    # the last-known ``yield_usd`` and ``cost_recovered``
+                    # in place rather than overwriting them with an
+                    # undercount that would misreport recovery progress.
                     self.context.logger.info(
-                        f"Position {position.get('pool_address')} has recovered costs: "
-                        f"yield=${yield_usd:.2f} >= entry_cost=${entry_cost:.2f}"
+                        f"Yield recompute skipped for "
+                        f"{position.get('pool_address')}; preserving last-known "
+                        f"yield={position.get('yield_usd')}"
                     )
                 else:
-                    position["cost_recovered"] = False
-                    position["yield_usd"] = float(yield_usd)
-                    recovery_percentage = (
-                        (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
-                    )
-                    remaining_yield_needed = entry_cost - yield_usd
-                    self.context.logger.info(
-                        f"Position {position.get('pool_address')} cost recovery progress: "
-                        f"{recovery_percentage:.1f}% (${yield_usd:.2f}/${entry_cost:.2f}), "
-                        f"need ${remaining_yield_needed:.2f} more"
-                    )
+                    # Check cost recovery using actual yield
+                    entry_cost = position.get("entry_cost", 0)
+                    if yield_usd >= entry_cost:
+                        position["cost_recovered"] = True
+                        position["yield_usd"] = float(yield_usd)
+                        self.context.logger.info(
+                            f"Position {position.get('pool_address')} has recovered costs: "
+                            f"yield=${yield_usd:.2f} >= entry_cost=${entry_cost:.2f}"
+                        )
+                    else:
+                        position["cost_recovered"] = False
+                        position["yield_usd"] = float(yield_usd)
+                        recovery_percentage = (
+                            (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
+                        )
+                        remaining_yield_needed = entry_cost - yield_usd
+                        self.context.logger.info(
+                            f"Position {position.get('pool_address')} cost recovery progress: "
+                            f"{recovery_percentage:.1f}% (${yield_usd:.2f}/${entry_cost:.2f}), "
+                            f"need ${remaining_yield_needed:.2f} more"
+                        )
             else:
                 # Fallback for positions without complete initial data
                 position["cost_recovered"] = False
@@ -1417,8 +1509,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         current_balances: Dict,
         chain: str,
         token_prices: Dict = None,
-    ) -> Generator[Decimal, None, None]:
-        """Calculate yield as token quantity increases priced at current prices"""
+    ) -> Generator[None, None, Optional[Decimal]]:
+        """Calculate yield as token quantity increases priced at current prices.
+
+        :param position: position record under valuation.
+        :param initial_amount0: raw initial deposit of token0.
+        :param initial_amount1: raw initial deposit of token1.
+        :param current_balances: per-token decimal balances on chain now.
+        :param chain: chain name used for token-metadata + reward lookups.
+        :param token_prices: optional pre-fetched price map.
+        :yield: None.
+        :return: Yield in USD, or ``None`` when a required reward-token
+            price could not be fetched. The caller preserves the
+            position's last-known ``yield_usd`` on ``None`` rather than
+            overwriting it with an undercount.
+        """
 
         token0_address = position.get("token0")
         token1_address = position.get("token1")
@@ -1476,27 +1581,39 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             token1_increase * token1_price
         )
 
-        # Add VELO rewards if position is staked
+        # Add VELO/AERO rewards if position is staked
         velo_rewards_usd = Decimal(0)
-        if position.get("staked", False) and position.get("dex_type") == "velodrome":
-            # Get VELO token address and check if it's in current_balances
+        if (
+            position.get("staked", False)
+            and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
+        ):
+            # Get reward-token address and check if it's in current_balances
             velo_token_address = self._get_velo_token_address(chain)
             if velo_token_address and velo_token_address in current_balances:
                 velo_balance = current_balances[velo_token_address]
                 if velo_balance > 0:
-                    # Get VELO price
+                    # Get reward-token price
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        reward_symbol = self._get_velo_family_reward_symbol(chain)
+                        velo_coin_id = self.get_coin_id_from_symbol(
+                            reward_symbol, chain
+                        )
                         velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
+                            # Returning ``None`` signals "could not compute"
+                            # to the caller so the position's last-known
+                            # ``yield_usd`` is preserved rather than over-
+                            # written with an undercount (which would mis-
+                            # report cost-recovery progress).
                             self.context.logger.warning(
-                                "Could not fetch VELO price for yield calculation"
+                                f"Could not fetch {reward_symbol} price; "
+                                "skipping yield recompute to preserve last-known "
+                                "yield rather than undercount"
                             )
-                            velo_price = Decimal(0)
-                        else:
-                            velo_price = Decimal(str(velo_price))
+                            return None
+                        velo_price = Decimal(str(velo_price))
 
                     velo_rewards_usd = velo_balance * velo_price
 
@@ -1551,7 +1668,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 pool_address, token_id, chain, position
             )
 
-        elif dex_type == DexType.VELODROME.value:
+        elif dex_type in VELODROME_FAMILY_DEX_TYPES:
             user_address = self.params.safe_contract_addresses.get(chain)
             pool_address = position.get("pool_address")
             token_id = position.get("token_id")
@@ -1763,7 +1880,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         # Use DEX-specific calculation methods
-        if dex_type == DexType.VELODROME.value and token_id:
+        if dex_type in VELODROME_FAMILY_DEX_TYPES and token_id:
             # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
             position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
@@ -1865,15 +1982,48 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address,
     ):
         """Calculate the user's share value and token balances in a Velodrome non-CL pool."""
-        user_balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="check_balance",
-            data_key="token",
-            account=user_address,
-            chain_id=chain,
-        )
+        # Staked positions hold their LP tokens at the gauge, not at the safe.
+        # The pool's balanceOf(safe) returns 0 in that case and the share
+        # calculation collapses to zero, leaving the position out of
+        # value_in_pools. Resolve the gauge via the Voter and read the
+        # staked balance there when the position is marked staked.
+        user_balance = None
+        if position.get("staked"):
+            resolved, gauge_address = yield from self._resolve_velodrome_gauge_address(
+                pool_address, chain
+            )
+            if not resolved or gauge_address is None:
+                # pool.balanceOf(safe) is 0 for a staked LP because the
+                # tokens are at the gauge, so falling through to the pool
+                # read below would contribute $0 from this position to
+                # value_in_pools — a known-wrong portfolio value. Surface
+                # the failure and skip instead.
+                self.context.logger.error(
+                    f"Could not resolve gauge for staked Velodrome/Aerodrome "
+                    f"position on {chain} (pool={pool_address}); skipping share "
+                    f"calculation to avoid contributing a wrong zero."
+                )
+                return {}
+            user_balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeGaugeContract.contract_id,
+                contract_callable="balance_of",
+                data_key="balance",
+                account=user_address,
+                chain_id=chain,
+            )
+
+        if user_balance is None:
+            user_balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=ERC20.contract_id,
+                contract_callable="check_balance",
+                data_key="token",
+                account=user_address,
+                chain_id=chain,
+            )
         if user_balance is None:
             self.context.logger.error(
                 f"Failed to get user balance for pool: {pool_address}"
@@ -2164,11 +2314,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             balances = []
 
             # Get current balances dynamically instead of using static assets
-            if chain == Chain.OPTIMISM.value:
-                balances = yield from self._get_optimism_balances_from_safe_api()
-
-            if chain == Chain.MODE.value:
+            if chain in self.params.safe_api_chain_slugs:
+                balances = yield from self._get_safe_balances_from_safe_api(chain)
+            elif chain == Chain.MODE.value:
                 balances = yield from self._get_mode_balances_from_explorer_api()
+            else:
+                self.context.logger.warning(
+                    f"No balances dispatch for {chain}: not in "
+                    "safe_api_chain_slugs and not Mode; skipping"
+                )
+                continue
 
             if not balances:
                 self.context.logger.warning(f"No balances found for chain {chain}")
@@ -2212,17 +2367,57 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if adjusted_balance <= 0:  # pragma: no cover
                     continue
 
-                velo_token_address = self._get_velo_token_address(chain)
-                # Get token price
-                if token_address == ZERO_ADDRESS:
-                    token_price = yield from self._fetch_zero_address_price()
-                elif token_address.lower() == velo_token_address:
-                    velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
-                    token_price = yield from self._fetch_coin_price(velo_coin_id)
-                else:
-                    token_price = yield from self._fetch_token_price(
-                        token_address, chain
-                    )
+                # Prefer Safe's own USD valuation when it ships one in the
+                # response: it covers the whitelisted-token path for free
+                # and avoids a paid CoinGecko call per token per cycle.
+                # ``_get_safe_balances_from_safe_api`` carries forward
+                # ``fiat_balance`` and ``fiat_conversion`` from the API
+                # response. Reward-token entries (OLAS/VELO) and on-chain
+                # backstop entries don't have these fields, so we still
+                # fall back to ``_fetch_token_price`` for those.
+                token_price = None
+                safe_fiat_conversion = balance.get("fiat_conversion")
+                if safe_fiat_conversion is not None:
+                    try:
+                        token_price = Decimal(str(safe_fiat_conversion))
+                        # Safe Transaction Service returns
+                        # ``fiatConversion: "0.0"`` for trusted tokens it
+                        # has no live price feed for. Treat non-positive
+                        # as "no Safe price" so the CoinGecko fallback
+                        # runs instead of valuing the token at
+                        # ``balance * 0``.
+                        if token_price <= 0:
+                            token_price = None
+                    except (InvalidOperation, ValueError, TypeError):
+                        token_price = None
+
+                # Prefer Safe's precomputed ``fiat_balance`` for the total:
+                # equal to ``adjusted_balance * token_price`` but skips the
+                # decimals-divide round-trip we already did above. Only
+                # trust it when the Safe price was usable (non-null,
+                # positive) so we don't carry forward a stale or zeroed
+                # total.
+                token_value_usd: Optional[Decimal] = None
+                safe_fiat_balance = balance.get("fiat_balance")
+                if token_price is not None and safe_fiat_balance is not None:
+                    try:
+                        token_value_usd = Decimal(str(safe_fiat_balance))
+                    except (InvalidOperation, ValueError, TypeError):
+                        token_value_usd = None
+
+                if token_price is None:
+                    velo_token_address = self._get_velo_token_address(chain)
+                    if token_address == ZERO_ADDRESS:
+                        token_price = yield from self._fetch_zero_address_price()
+                    elif token_address.lower() == velo_token_address:
+                        velo_coin_id = self.get_coin_id_from_symbol(
+                            self._get_velo_family_reward_symbol(chain), chain
+                        )
+                        token_price = yield from self._fetch_coin_price(velo_coin_id)
+                    else:
+                        token_price = yield from self._fetch_token_price(
+                            token_address, chain
+                        )
 
                 if token_price is None:
                     self.context.logger.warning(
@@ -2231,7 +2426,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 token_price = Decimal(str(token_price))
-                token_value_usd = adjusted_balance * token_price
+                if token_value_usd is None:
+                    token_value_usd = adjusted_balance * token_price
                 total_safe_value += token_value_usd
 
                 self.context.logger.info(
@@ -2317,58 +2513,167 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return Decimal(0)
 
-    def calculate_withdrawals_value(self) -> Generator[None, None, Decimal]:
-        """Calculate the value of withdrawals."""
-        chain = self.params.target_investment_chains[0]
+    def calculate_withdrawals_value(self) -> Generator[None, None, Optional[Decimal]]:
+        """Aggregate USD withdrawal value across all target investment chains.
 
-        if chain == "mode":
+        Returns ``None`` if any chain's fetcher fails so the caller can
+        preserve the last-known ROI rather than treating a transient API
+        blip as zero withdrawals (which would inflate Total ROI).
+
+        :yield: None.
+        :return: Total withdrawals in USD across configured chains, or
+            ``None`` if at least one chain's fetch could not complete.
+        """
+        total_withdrawal_value = Decimal(0)
+        any_fetch_failed = False
+        for chain in self.params.target_investment_chains:
+            chain_value = yield from self._calculate_chain_withdrawal_value(chain)
+            if chain_value is None:
+                # Keep iterating so other chains' TTL caches still refresh,
+                # but flag for the caller so ROI math is skipped this cycle.
+                any_fetch_failed = True
+                continue
+            total_withdrawal_value += chain_value
+
+        if any_fetch_failed:
+            self.context.logger.warning(
+                "Withdrawal fetch failed for at least one chain; returning "
+                "None so the caller preserves the last-known ROI rather than "
+                "assuming zero withdrawals."
+            )
+            return None
+
+        return total_withdrawal_value
+
+    def _calculate_chain_withdrawal_value(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Decimal]]:
+        """Compute withdrawals for one chain.
+
+        ``None`` signals a transient fetcher failure that the aggregator
+        must treat as "do not skew the total." A determined zero (no
+        outgoing transfers, unsupported chain, missing safe) is returned
+        as ``Decimal(0)`` so a configured but-quiet chain does not poison
+        the multi-chain total.
+
+        :param chain: chain name from ``target_investment_chains``.
+        :yield: None.
+        :return: Per-chain withdrawal value, or ``None`` on fetch failure.
+        """
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        if not safe_address:
+            self.context.logger.warning(
+                f"No safe configured for chain {chain}; treating withdrawal as 0"
+            )
+            return Decimal(0)
+
+        if chain == Chain.MODE.value:
             all_erc20_transfers_mode = self._track_erc20_transfers_mode(
-                self.params.safe_contract_addresses.get(chain),
+                safe_address,
                 datetime.now().timestamp(),
             )
             if all_erc20_transfers_mode is None:
                 self.context.logger.warning(
-                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                    f"Failed to fetch {chain} ERC20 transfers; "
+                    "returning None so the aggregator preserves last-known ROI"
                 )
-                return Decimal(0)
+                return None
             outgoing_erc20_transfers_mode = all_erc20_transfers_mode["outgoing"]
             self.context.logger.info(
-                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_mode}"
+                f"Outgoing {chain} ERC20 transfers: {outgoing_erc20_transfers_mode}"
             )
             withdrawal_value = (
                 yield from self._track_and_calculate_withdrawal_value_mode(
                     outgoing_erc20_transfers_mode,
                 )
             )
-            self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+            self.context.logger.info(f"{chain} withdrawal value: ${withdrawal_value}")
             return withdrawal_value
-        elif chain == "optimism":
-            all_erc20_transfers_optimism = (
-                yield from self._track_erc20_transfers_optimism(
-                    self.params.safe_contract_addresses.get(chain),
-                    int(datetime.now().timestamp()),
-                )
+
+        if chain in (Chain.OPTIMISM.value, Chain.BASE.value):
+            # Both Optimism and Base are served by SafeGlobal and share the
+            # same pagination + classification path. Persistence keys are
+            # chain-scoped (``{chain}_withdrawals`` plus the per-chain TTL
+            # kv keys below) so the two never share state.
+
+            # TTL-based cache: skip Safe API + revaluation if the last
+            # calculation was within WITHDRAWAL_CACHE_TTL_SECONDS. Negative
+            # ages (clock skew, malformed timestamp) are treated as expired
+            # so we recompute rather than serve a possibly-stale value.
+            ts_key = withdrawals_ts_kv_key(chain)
+            total_key = total_withdrawals_kv_key(chain)
+            now_ts = int(self._get_current_timestamp())
+            last_calc = yield from self._read_kv(keys=(ts_key,))
+            if last_calc and (ts := last_calc.get(ts_key)):
+                try:
+                    age_seconds = now_ts - int(ts)
+                except (ValueError, TypeError):
+                    self.context.logger.warning(
+                        f"Unparseable {ts_key} {ts!r}; treating cache as expired"
+                    )
+                    # Negative age is documented as "expired" in the guard
+                    # below and is independent of the strict < TTL boundary,
+                    # so a future <→<= regression on the bound can't flip
+                    # this fallback into a spurious cache hit.
+                    age_seconds = -1
+                if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
+                    cached = yield from self._read_kv(keys=(total_key,))
+                    cached_val = cached.get(total_key) if cached else None
+                    if cached_val is not None:
+                        try:
+                            self.context.logger.info(
+                                f"{chain} withdrawal cache hit ({age_seconds}s "
+                                f"old, ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
+                            )
+                            return Decimal(str(cached_val))
+                        except (InvalidOperation, ValueError, TypeError):
+                            self.context.logger.warning(
+                                "Failed to parse cached withdrawal value; recomputing"
+                            )
+
+            all_erc20_transfers = yield from self._track_erc20_transfers_optimism(
+                safe_address,
+                int(datetime.now().timestamp()),
+                chain=chain,
             )
-            if not all_erc20_transfers_optimism:
+            if all_erc20_transfers is None:
+                # ``None`` signals fetcher failure (exception or
+                # mid-pagination error). Skip the kv cache write so a
+                # transient blip doesn't pin ``withdrawal=0`` until the
+                # next TTL boundary, and surface ``None`` to the aggregator.
                 self.context.logger.warning(
-                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                    f"Failed to fetch {chain} ERC20 transfers; returning None "
+                    "without caching so the aggregator preserves last-known ROI"
                 )
-                return Decimal(0)
-            outgoing_erc20_transfers_optimism = all_erc20_transfers_optimism.get(
-                "outgoing", {}
-            )
+                return None
+            outgoing_erc20_transfers = all_erc20_transfers.get("outgoing", {})
             self.context.logger.info(
-                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_optimism}"
+                f"Outgoing {chain} ERC20 transfers: {outgoing_erc20_transfers}"
             )
             withdrawal_value = (
                 yield from self._track_and_calculate_withdrawal_value_optimism(
-                    outgoing_erc20_transfers_optimism,
+                    outgoing_erc20_transfers,
+                    chain=chain,
                 )
             )
-            self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+            self.context.logger.info(f"{chain} withdrawal value: ${withdrawal_value}")
+
+            yield from self._write_kv(
+                {
+                    total_key: str(withdrawal_value),
+                    ts_key: str(int(self._get_current_timestamp())),
+                }
+            )
             return withdrawal_value
-        else:
-            return Decimal(0)
+
+        # A new Safe-backed L2 added to ``target_investment_chains`` without
+        # updating this dispatch would silently treat its withdrawals as 0.
+        # Log loudly so the gap is visible rather than swallowed.
+        self.context.logger.error(
+            f"_calculate_chain_withdrawal_value: unsupported chain {chain!r}; "
+            "returning 0 (withdrawal accounting is missing for this chain)"
+        )
+        return Decimal(0)
 
     def _track_and_calculate_withdrawal_value_mode(
         self,
@@ -2417,12 +2722,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _track_and_calculate_withdrawal_value_optimism(
         self,
         outgoing_erc20_transfers: Dict,
+        chain: str = "optimism",
     ) -> Generator[None, None, Decimal]:
-        """Track USDC transfers from safe address and handle withdrawal logic for Optimism."""
+        """Filter USDC outgoing transfers and price them against ``chain``.
+
+        Works for any SafeGlobal-served chain that ``calculate_withdrawals_value``
+        dispatches into this path (Optimism today, Base after the dispatcher
+        was widened). ``_is_not_other_contract_optimism`` is called with the
+        same ``chain`` so the eth_getCode probe, the Safe Transaction Service
+        lookup, and the cache key are all scoped to the chain the transfer
+        happened on.
+
+        :param outgoing_erc20_transfers: date-keyed outgoing transfers from
+            ``_track_erc20_transfers_optimism``.
+        :param chain: chain name used to filter contract recipients and to
+            select the USDC coin id for historical pricing.
+        :yield: None.
+        :return: the total USD value of withdrawals.
+        """
         try:
             if not outgoing_erc20_transfers:
                 self.context.logger.warning(
-                    "No outgoing transfers found for Optimism chain"
+                    f"No outgoing transfers found for {chain} chain"
                 )
                 return Decimal(0)
 
@@ -2451,7 +2772,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 to_address = transfer.get("to_address")
                 if to_address:  # pragma: no branch
                     is_not_other_contract = (
-                        yield from self._is_not_other_contract_optimism(to_address)
+                        yield from self._is_not_other_contract_optimism(
+                            to_address, chain=chain
+                        )
                     )
                     if is_not_other_contract:
                         withdrawal_transfers.append(transfer)
@@ -2459,7 +2782,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"USDC transfers: {usdc_transfers}")
             self.context.logger.info(f"Withdrawal transfers: {withdrawal_transfers}")
             withdrawal_value = yield from self._calculate_total_withdrawal_value(
-                withdrawal_transfers, chain="optimism"
+                withdrawal_transfers, chain=chain
             )
             return withdrawal_value
         except Exception as e:
@@ -2673,7 +2996,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             dex_type = position.get("dex_type")
 
-            if dex_type == DexType.VELODROME.value and position.get("is_cl_pool"):
+            if dex_type in VELODROME_FAMILY_DEX_TYPES and position.get("is_cl_pool"):
                 # For Velodrome CL pools, check all sub-positions
                 all_positions_zero = True
                 for pos in position.get("positions", []):
@@ -2736,7 +3059,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._update_balancer_position(position)
             elif dex_type == DexType.UNISWAP_V3.value:
                 yield from self._update_uniswap_position(position)
-            elif dex_type == DexType.VELODROME.value:
+            elif dex_type in VELODROME_FAMILY_DEX_TYPES:
                 yield from self._update_velodrome_position(position)
             elif dex_type == DexType.STURDY.value:
                 yield from self._update_sturdy_position(position)
@@ -2878,7 +3201,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Failed to get liquidity for Velodrome CL position: {pos}"
                     )
         else:
-            # Handle Velodrome stable/volatile pool
+            # Handle Velodrome stable/volatile pool. Staked positions hold
+            # their LP tokens at the gauge, not at the safe, so the pool's
+            # balanceOf(safe) returns 0 for them. Resolve the gauge via the
+            # Voter and read the staked balance there in that case.
             pool_address = position.get("pool_address")
             safe_address = self.params.safe_contract_addresses.get(
                 position.get("chain")
@@ -2890,16 +3216,43 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return
 
-            # Get the current balance of LP tokens
-            balance = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=pool_address,
-                contract_public_id=VelodromePoolContract.contract_id,
-                contract_callable="get_balance",
-                data_key="balance",
-                account=safe_address,
-                chain_id=chain,
-            )
+            balance = None
+            if position.get("staked"):
+                resolved, gauge_address = (
+                    yield from self._resolve_velodrome_gauge_address(
+                        pool_address, chain
+                    )
+                )
+                if not resolved or gauge_address is None:
+                    # pool.balanceOf is 0 for a staked LP because the tokens
+                    # are at the gauge, so the pool-fallback below would
+                    # write a known-wrong 0. Skip and surface the failure.
+                    self.context.logger.error(
+                        f"Could not resolve gauge for staked Velodrome/Aerodrome "
+                        f"position on {chain} (pool={pool_address}); skipping "
+                        f"balance update to avoid writing a wrong zero."
+                    )
+                    return
+                balance = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=gauge_address,
+                    contract_public_id=VelodromeGaugeContract.contract_id,
+                    contract_callable="balance_of",
+                    data_key="balance",
+                    account=safe_address,
+                    chain_id=chain,
+                )
+
+            if balance is None:
+                balance = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=pool_address,
+                    contract_public_id=VelodromePoolContract.contract_id,
+                    contract_callable="get_balance",
+                    data_key="balance",
+                    account=safe_address,
+                    chain_id=chain,
+                )
 
             if balance is not None:
                 # Update the position with the current amount
@@ -2911,6 +3264,52 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(
                     f"Failed to get balance for Velodrome pool position: {position}"
                 )
+
+    def _resolve_velodrome_gauge_address(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Tuple[bool, Optional[str]]]:
+        """Look up the Velodrome / Aerodrome gauge address for a pool.
+
+        Returns a (resolved, gauge_address) pair so callers can tell a
+        transient Voter RPC failure (``resolved=False``) apart from a
+        determined "no gauge" answer (``resolved=True, gauge_address=None``
+        — voter not configured for the chain, or ``gauges(pool)`` returned
+        the zero address). The former should not silently fall back to
+        ``pool.balanceOf`` on a staked position, because that read is 0
+        and would write a known-wrong portfolio value.
+
+        :param pool_address: the LP pool address whose gauge to look up.
+        :param chain: chain name used to pick the Voter contract address.
+        :yield: None.
+        :return: ``(True, gauge_address)`` on a successful lookup,
+            ``(True, None)`` when the chain has no configured Voter or
+            the pool has no gauge, and ``(False, None)`` when the Voter
+            RPC call itself fails.
+        """
+        voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
+        if not voter_address:
+            self.context.logger.warning(
+                f"No Velodrome voter contract address configured for chain {chain}"
+            )
+            return True, None
+
+        gauge_address = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=voter_address,
+            contract_public_id=VelodromeVoterContract.contract_id,
+            contract_callable="gauges",
+            data_key="gauge",
+            pool_address=pool_address,
+            chain_id=chain,
+        )
+
+        if gauge_address is None:
+            return False, None
+
+        if gauge_address == ZERO_ADDRESS:
+            return True, None
+
+        return True, gauge_address
 
     def _update_sturdy_position(
         self, position: Dict[str, Any]
@@ -2992,49 +3391,54 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 # Normal logic when airdrop is not started
                 # Check when we last calculated initial value
-                last_calculated_timestamp = yield from self._read_kv(
-                    keys=("last_initial_value_calculated_timestamp",)
-                )
+                ii_ts_key = initial_value_ts_kv_key(chain)
+                last_calculated_timestamp = yield from self._read_kv(keys=(ii_ts_key,))
 
-                if (
-                    last_calculated_timestamp
-                    and (
-                        timestamp := last_calculated_timestamp.get(
-                            "last_initial_value_calculated_timestamp"
-                        )
-                    )
-                    and timestamp is not None
+                # The walrus already short-circuits on a falsy value
+                # (None included), so no extra ``is not None`` is needed.
+                if last_calculated_timestamp and (
+                    timestamp := last_calculated_timestamp.get(ii_ts_key)
                 ):
                     self.context.logger.info(
                         f"Found last calculation timestamp: {timestamp}"
                     )
                     try:
-                        last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
-                            "%Y-%m-%d"
+                        age_seconds = int(self._get_current_timestamp()) - int(
+                            timestamp
                         )
-                        self.context.logger.info(f"Last calculation date: {last_date}")
                     except (ValueError, TypeError):
                         self.context.logger.warning(
-                            "Invalid timestamp format, defaulting to 1970-01-01"
+                            f"Unparseable {ii_ts_key} {timestamp!r}; "
+                            "treating cache as expired"
                         )
-                        last_date = "1970-01-01"
+                        # Negative age is documented as "expired" in the
+                        # guard below and is independent of the strict <
+                        # TTL boundary, so a future <→<= regression on the
+                        # bound can't flip this into a spurious cache hit.
+                        age_seconds = -1
 
-                    # If last calculation was today, return cached value
-                    if last_date == current_date:
+                    # TTL-based cache: return cached value if the last
+                    # calculation was within INITIAL_INVESTMENT_CACHE_TTL_SECONDS.
+                    # Negative ages (clock skew) treated as expired.
+                    if 0 <= age_seconds < INITIAL_INVESTMENT_CACHE_TTL_SECONDS:
                         self.context.logger.info(
-                            "Last calculation was today, using cached value"
+                            f"Initial-investment cache hit ({age_seconds}s old, "
+                            f"ttl {INITIAL_INVESTMENT_CACHE_TTL_SECONDS}s)"
                         )
                         investment = yield from self._load_chain_total_investment(chain)
                         if investment:
                             return investment
-                        else:
-                            fetch_till_date = True
-
-                    # Otherwise need to calculate new value but not full history
-                    self.context.logger.info(
-                        "Last calculation was not today, calculating new value without full history"
-                    )
-                    fetch_till_date = False
+                        # In-window hit but stored value is falsy (0 or
+                        # missing) — load full history to repopulate rather
+                        # than the incremental path the expired branch uses.
+                        fetch_till_date = True
+                    else:
+                        # Cache expired: recompute incrementally (not full history)
+                        self.context.logger.info(
+                            f"Initial-investment cache expired ({age_seconds}s old); "
+                            "recomputing without full history"
+                        )
+                        fetch_till_date = False
 
                 # No previous calculation, need to fetch full history
                 else:
@@ -3050,33 +3454,43 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 all_transfers = yield from self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
-            elif chain == Chain.OPTIMISM.value:
-                self.context.logger.info("Using Optimism-specific transfer fetching")
+            elif chain in (Chain.OPTIMISM.value, Chain.BASE.value):
+                self.context.logger.info(
+                    f"Using SafeGlobal transfer fetching for {chain}"
+                )
                 all_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
-                        safe_address, current_date
+                        safe_address, current_date, chain=chain
                     )
                 )
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
                 continue
 
+            # ``all_transfers`` is only this cycle's freshly-fetched delta (it merges into
+            # funding_events as a side effect). The valuation reads the full persisted
+            # funding_events directly, so recompute even when nothing new was fetched —
+            # historical rows still count.
             if not all_transfers:
-                self.context.logger.warning(f"No transfers found for {chain} chain")
-                continue
+                self.context.logger.info(
+                    f"No new {chain} transfers this cycle; valuing persisted history"
+                )
 
             # Calculate investment value for this chain
-            chain_investment = yield from self._calculate_chain_investment_value(
-                all_transfers, chain, safe_address
-            )
+            chain_investment = yield from self._calculate_chain_investment_value(chain)
             total_investment += chain_investment
 
-        yield from self._save_chain_total_investment(chain, total_investment)
+            # Per-chain timestamp write must live inside the loop: ``chain``
+            # outside the loop is whichever value happened to be last, so a
+            # post-loop write would only refresh that one chain's TTL key
+            # and the others would look permanently expired — re-fetching
+            # full SafeGlobal history every cycle.
+            timestamp = int(self._get_current_timestamp())
+            yield from self._write_kv({initial_value_ts_kv_key(chain): str(timestamp)})
 
-        timestamp = int(self._get_current_timestamp())
-        yield from self._write_kv(
-            {"last_initial_value_calculated_timestamp": str(timestamp)}
-        )
+        # Per-chain totals are written inside ``_calculate_chain_investment_value``;
+        # a single post-loop write would target only the last-iterated chain with
+        # the cross-chain sum and over-count it on the next cache-hit read.
 
         self.context.logger.info(
             f"Total initial investment from all chains: ${total_investment}"
@@ -3084,15 +3498,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return total_investment if total_investment > 0 else None
 
-    def _get_transfer_key(self, date: str, transfer: Dict, index: int) -> str:
-        """Build a unique key for a transfer using tx_hash or fallback fields."""
+    def _get_transfer_key(self, leg: str, date: str, transfer: Dict, index: int) -> str:
+        """Build a unique key for a transfer using tx_hash or fallback fields.
+
+        ``leg`` ("in" / "out") is prefixed so the incoming-funding and
+        reverted-ETH legs cannot collide on the same shared cache when a
+        single tx_hash appears on both sides of the ledger (multisend,
+        internal-transfer scenarios, or legacy on-disk data from prior
+        bugs). Without the prefix, whichever leg ran first would write
+        its USD value to the shared key and the second leg would
+        short-circuit on the cache hit and silently use the wrong value.
+
+        :param leg: ``"in"`` for incoming-funding entries, ``"out"`` for
+            reverted-ETH / outgoing entries.
+        :param date: ISO-8601 ``YYYY-MM-DD`` bucket the transfer belongs to.
+        :param transfer: the transfer record being keyed.
+        :param index: stable per-bucket index used as a tie-breaker when
+            no ``tx_hash`` is available.
+        :return: the cache key string.
+        """
         tx_hash = transfer.get("tx_hash", "")
         if tx_hash:
-            return f"{date}_{tx_hash}"
+            return f"{leg}_{date}_{tx_hash}"
         symbol = transfer.get("symbol", "")
         amount = transfer.get("delta", transfer.get("amount", 0))
         from_addr = transfer.get("from_address", "")
-        return f"{date}_{symbol}_{amount}_{from_addr}_{index}"
+        return f"{leg}_{date}_{symbol}_{amount}_{from_addr}_{index}"
 
     def _load_priced_transfers(
         self, chain: str
@@ -3117,83 +3548,118 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         yield from self._write_kv({key: json.dumps(priced, ensure_ascii=True)})
 
     def _calculate_chain_investment_value(
-        self, all_transfers: Dict, chain: str, safe_address: str
+        self, chain: str
     ) -> Generator[None, None, float]:
-        """Calculate investment value for a specific chain and update stored total."""
-        new_investment = 0.0
-        total_reversion = 0.0
+        """Compute a chain's initial investment directly from funding_events.
 
-        # Track ETH transfers and reversions first
-        reversion_info = yield from self._track_eth_transfers_and_reversions(
-            safe_address, chain
-        )
-        reversion_amount = reversion_info.get("reversion_amount", 0)
-        historical_reversion_value = reversion_info.get(
-            "historical_reversion_value", 0.0
-        )
-        reversion_date = reversion_info.get("reversion_date")
+        funding_events is the canonical record. Incoming funding lives under ``chain``;
+        reverted (outgoing) ETH under ``{chain}_outgoing``::
 
-        if historical_reversion_value > 0:
-            total_reversion += historical_reversion_value
-            self.context.logger.info(
-                f"{chain.upper()} REVERSION: {historical_reversion_value} ETH (from {reversion_date})"
+            initial = sum(priced incoming) - sum(priced outgoing ETH)
+
+        Each row is priced once and cached in ``{chain}_priced_transfers`` (one-time per
+        row, not per cycle); the full persisted record is read so the total reflects all
+        history.
+
+        Going forward only USDC is recorded as incoming funding for Optimism (the incoming
+        ETHER_TRANSFER-recording branch was removed with the reversion logic), so a
+        freshly-deployed agent is effectively USDC-only. Incoming ETH and the reverted-ETH
+        subtraction are therefore **historical-only**: they apply solely to rows the old
+        code already persisted. Nothing writes ``{chain}_outgoing`` anymore, so Optimism
+        reversions are subtracted from legacy on-disk data only, and Mode (which never
+        persisted a ``mode_outgoing`` key) gets no reversion subtraction — accepted because
+        Mode ETH is gas-dust and no new reversions occur once the revert-tx path is gone.
+
+        :param chain: the chain to value.
+        :yield: None: generator yield for async operations.
+        :return: the chain's initial investment in USD.
+        """
+        if not self.funding_events:
+            self.read_funding_events()  # side-effects self.funding_events
+        if not self.funding_events:
+            # Either a fresh agent with no history yet, or the on-disk read
+            # failed (``_read_data`` logs ERROR and leaves the attribute
+            # unchanged on JSON-decode / PermissionError / OSError). Surface
+            # the empty state explicitly so an operator hitting a ROI of $0
+            # can grep for this warning and check the upstream error log to
+            # distinguish "no history" from "disk failed".
+            self.context.logger.warning(
+                f"funding_events empty for chain {chain} after disk read; "
+                "treating as fresh agent. Check for prior _read_data errors "
+                "if a non-empty history was expected."
             )
-
-        if reversion_amount > 0:
-            date_str = (
-                reversion_date
-                if reversion_date
-                else datetime.now().strftime("%d-%m-%Y")
-            )
-            eth_price = yield from self._fetch_historical_eth_price(date_str)
-            if eth_price:  # pragma: no branch
-                reversion_value = reversion_amount * eth_price
-                total_reversion += reversion_value
-                self.context.logger.info(
-                    f"{chain.upper()} REVERSION: {reversion_amount} ETH @ ${eth_price} = ${reversion_value} (from {reversion_date})"
-                )
-
-        # Load previously priced transfers so we never re-fetch their prices
+            self.funding_events = {}
         priced_transfers = yield from self._load_priced_transfers(chain)
-        cached_investment = 0.0
-        priced_updated = False
 
-        for date, transfers in all_transfers.items():
+        incoming = self.funding_events.get(chain, {}) or {}
+        incoming_value, inc_updated = yield from self._sum_priced_chain_transfers(
+            incoming, chain, priced_transfers, leg="in"
+        )
+        # Reverted ETH that left the safe is a fixed historical record on disk; subtract it.
+        outgoing = self.funding_events.get(f"{chain}_outgoing", {}) or {}
+        reverted_value, out_updated = yield from self._sum_priced_chain_transfers(
+            outgoing, chain, priced_transfers, leg="out"
+        )
+
+        if inc_updated or out_updated:
+            yield from self._save_priced_transfers(chain, priced_transfers)
+
+        total = incoming_value - reverted_value
+        yield from self._save_chain_total_investment(chain, total)
+        self.context.logger.info(
+            f"Total {chain} investment: ${total} "
+            f"(incoming: ${incoming_value}, reverted ETH: ${reverted_value})"
+        )
+        return total
+
+    def _sum_priced_chain_transfers(
+        self,
+        date_keyed: Dict,
+        chain: str,
+        priced_transfers: Dict[str, float],
+        leg: str,
+    ) -> Generator[None, None, Tuple[float, bool]]:
+        """Price (once, cached) and sum a date-keyed transfer dict.
+
+        Shared by the incoming-funding and reverted-ETH legs of the investment
+        calculation. Counts positive amounts only. Airdropped USDC on Mode is excluded; the
+        filter is gated on ``symbol == USDC`` so it is a no-op on the ETH-only outgoing leg.
+        Prices are cached per transfer key in ``priced_transfers`` (mutated in place) so
+        each row is priced at most once.
+
+        :param date_keyed: a ``{date: [transfer, ...]}`` mapping from funding_events.
+        :param chain: the chain (for token-id lookup and pricing).
+        :param priced_transfers: the per-row USD price cache, mutated in place.
+        :param leg: "in" or "out" — namespaces the cache key so a tx_hash that
+            appears on both ledger sides cannot be priced once and re-used by
+            the other leg.
+        :yield: None: generator yield for async operations.
+        :return: a ``(summed_value, cache_updated)`` tuple.
+        """
+        total = 0.0
+        updated = False
+        for date, transfers in date_keyed.items():
             for idx, transfer in enumerate(transfers):
                 try:
                     token_symbol = transfer.get("symbol", "Unknown")
                     amount = transfer.get("delta", transfer.get("amount", 0))
-
                     if amount <= 0:
                         continue
-
-                    # Check if this is an airdropped USDC transfer and exclude it from initial investment
+                    # Exclude airdropped USDC on mode (no-op on the ETH-only outgoing leg).
                     if (
                         chain == "mode"
                         and token_symbol.upper() == "USDC"
                         and self.params.airdrop_started
                         and self.params.airdrop_contract_address
+                        and str(transfer.get("from_address", "")).lower()
+                        == self.params.airdrop_contract_address.lower()
                     ):
-                        from_address = transfer.get("from_address", "")
-                        if (  # pragma: no branch
-                            from_address.lower()
-                            == self.params.airdrop_contract_address.lower()
-                        ):
-                            self.context.logger.info(
-                                f"Excluding airdropped USDC transfer from initial investment: {amount} USDC from {from_address}"
-                            )
-                            continue
-
-                    transfer_key = self._get_transfer_key(date, transfer, idx)
-
-                    # If this transfer was already priced, use the cached value
-                    if transfer_key in priced_transfers:
-                        cached_investment += priced_transfers[transfer_key]
                         continue
-
-                    # Get historical price for the transfer date
+                    transfer_key = self._get_transfer_key(leg, date, transfer, idx)
+                    if transfer_key in priced_transfers:
+                        total += priced_transfers[transfer_key]
+                        continue
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
-
                     if token_symbol == "ETH":  # nosec B105
                         price = yield from self._fetch_historical_eth_price(date_str)
                     else:
@@ -3204,41 +3670,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             )
                         else:
                             price = None
-
                     if price:
-                        transfer_value = amount * price
-                        new_investment += transfer_value
-                        # Persist the priced value so it is never re-fetched
-                        priced_transfers[transfer_key] = transfer_value
-                        priced_updated = True
+                        value = amount * price
+                        total += value
+                        priced_transfers[transfer_key] = value
+                        updated = True
                         self.context.logger.info(
-                            f"{chain.upper()} NEW transfer on {date}: {amount} {token_symbol} @ ${price} = ${transfer_value}"
+                            f"{chain.upper()} priced {date}: {amount} {token_symbol} @ ${price} = ${value}"
                         )
                     else:
                         self.context.logger.warning(
-                            f"{chain.upper()} SKIPPED transfer on {date}: {amount} {token_symbol} — price fetch failed"
+                            f"{chain.upper()} SKIPPED {date}: {amount} {token_symbol} — price fetch failed"
                         )
-
-                except Exception as e:
-                    self.context.logger.error(
-                        f"Error processing {chain} transfer: {str(e)}"
+                except (ValueError, TypeError, KeyError) as e:
+                    # Narrow catch + .exception() so the traceback is preserved.
+                    # An unexpected exception (e.g. a schema change that breaks
+                    # ``transfer.get("symbol")`` on every row) now propagates
+                    # rather than being silently swallowed into a zero basis.
+                    self.context.logger.exception(
+                        f"Skipping {chain} transfer due to {type(e).__name__}: {e}"
                     )
                     continue
-
-        # Persist priced transfers if any new ones were added
-        if priced_updated:
-            yield from self._save_priced_transfers(chain, priced_transfers)
-
-        # Total = previously priced + newly priced - reversions
-        updated_total = cached_investment + new_investment - total_reversion
-        yield from self._save_chain_total_investment(chain, updated_total)
-
-        self.context.logger.info(
-            f"Total {chain} investment (updated): ${updated_total} "
-            f"(cached: ${cached_investment}, new: ${new_investment}, reversions: ${total_reversion})"
-        )
-
-        return updated_total
+        return total, updated
 
     def _fetch_all_transfers_until_date_mode(
         self, address: str, end_date: str, fetch_till_date: bool
@@ -3333,39 +3786,81 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return all_transfers_by_date
 
     def _fetch_all_transfers_until_date_optimism(
-        self, address: str, end_date: str
+        self, address: str, end_date: str, chain: str = "optimism"
     ) -> Generator[None, None, Dict]:
-        """Fetch all Optimism transfers from the beginning until a specific date, organized by date."""
+        """Fetch all SafeGlobal-backed transfers (Optimism, Base) until end_date.
+
+        ``chain`` defaults to ``"optimism"`` so the existing callers and
+        tests keep working unchanged. The Base dispatcher passes
+        ``chain="base"`` which only changes the Safe API slug, the log
+        labels, and the per-chain dict key in funding_events.
+
+        :param address: the Safe contract address.
+        :param end_date: ISO date string used as the upper bound for transfer
+            filtering.
+        :param chain: chain name used for the Safe API slug and the per-chain
+            dict key in funding_events.
+        :yield: None.
+        :return: the freshly fetched transfers keyed by date. On a mid-stream
+            failure the persisted dataset is returned instead so the caller
+            can fall back to historical rows.
+        """
+        chain_label = chain.capitalize()
+
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
         if self.funding_events:
-            existing_optimism_data = self.funding_events.get("optimism", {})
+            raw_chain_data = self.funding_events.get(chain, {})
+            existing_chain_data, dropped = _drop_legacy_transfer_entries(raw_chain_data)
+            if dropped:
+                self.context.logger.info(
+                    f"Dropped {dropped} legacy {chain} transfer entries "
+                    "without transfer_id; will be re-fetched if still within "
+                    "Safe's pagination window."
+                )
         else:
-            existing_optimism_data = {}
+            raw_chain_data = {}
+            existing_chain_data = {}
 
         all_transfers_by_date = defaultdict(list)
 
         try:
             self.context.logger.info(
-                f"Fetching all Optimism transfers until {end_date}..."
+                f"Fetching all {chain_label} transfers until {end_date}..."
             )
 
-            # Use SafeGlobal API for Optimism
-            yield from self._fetch_optimism_transfers_safeglobal(
-                address, end_date, all_transfers_by_date, existing_optimism_data
+            # Capture the success flag so we don't persist a stripped-then-
+            # partial dataset on mid-pagination failure: doing so would
+            # silently drop the still-missing older pages because the
+            # early-stop next cycle would fire on the already-seen page-1
+            # ids.
+            fetch_succeeded = yield from self._fetch_optimism_transfers_safeglobal(
+                address,
+                end_date,
+                all_transfers_by_date,
+                existing_chain_data,
+                chain=chain,
             )
 
-            # Merge with existing data and save
+            if not fetch_succeeded:
+                self.context.logger.warning(
+                    f"{chain_label} incoming-transfers fetch failed mid-stream; "
+                    "skipping persist and returning previously-persisted data"
+                )
+                return dict(raw_chain_data)
+
+            # Merge new transfers into persisted data: append per-date so that
+            # a same-day transfer added after an earlier one already stored
+            # under the same date does not overwrite the earlier entries.
             for date, transfers in all_transfers_by_date.items():
-                if (
-                    date not in existing_optimism_data
-                ):  # Only store new dates  # pragma: no branch
-                    existing_optimism_data[date] = transfers
+                existing_chain_data.setdefault(date, []).extend(transfers)
 
-            # Update unified data structure
+            # Update unified data structure (only after a successful fetch so
+            # the on-disk migration commits atomically with the refetched
+            # transfers it depends on).
             if not self.funding_events:
                 self.funding_events = {}
-            self.funding_events["optimism"] = existing_optimism_data
+            self.funding_events[chain] = existing_chain_data
             self.store_funding_events()
 
             # Print summary
@@ -3375,13 +3870,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             self.context.logger.info(
-                f"Optimism Summary: {total_dates} dates with transfers, {total_transfers} total transfers"
+                f"{chain_label} Summary: {total_dates} dates with transfers, "
+                f"{total_transfers} total transfers"
             )
 
             return dict(all_transfers_by_date)
 
         except Exception as e:
-            self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            self.context.logger.error(f"Error fetching {chain_label} transfers: {e}")
             return {}
 
     def _fetch_token_transfers(
@@ -3837,21 +4333,69 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         end_date: str,
         all_transfers_by_date: dict,
         existing_data: dict,
-    ) -> Generator[None, None, None]:
-        """Fetch Optimism transfers using SafeGlobal API."""
-        base_url = self.params.safe_api_v1_url
+        chain: str = "optimism",
+    ) -> Generator[None, None, bool]:
+        """Fetch incoming USDC transfers for a Safe via the SafeGlobal API.
+
+        Works the same way on Optimism and Base. The Safe Transaction Service
+        record shape is identical across chains, so only the chain slug at URL
+        build time differs. ``chain`` defaults to ``"optimism"`` so existing
+        callers and tests keep working unchanged.
+
+        :param address: the Safe contract address.
+        :param end_date: ISO date string used as the upper bound for transfer
+            filtering.
+        :param all_transfers_by_date: mutated in place with newly fetched
+            transfers, keyed by date.
+        :param existing_data: persisted date-keyed transfers, used to seed
+            the in-cycle dedup set.
+        :param chain: chain name used to pick the Safe API slug and the
+            chain identifier passed to per-chain token RPC lookups.
+        :yield: None.
+        :return: ``True`` on a fully-successful pagination, ``False`` on any
+            mid-stream page fetch failure or exception. The caller must skip
+            persistence on ``False`` because the partial data, combined with
+            the early-stop seeded from it next cycle, would permanently drop
+            the still-missing older pages.
+        """
+        fetch_failed = False
+        chain_label = chain.capitalize()
 
         try:
             self.context.logger.info(
-                "Fetching Optimism transfers using SafeGlobal API..."
+                f"Fetching {chain_label} transfers using SafeGlobal API..."
             )
 
-            # Fetch incoming transfers
-            transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
+            # Fetch incoming transfers. We paginate by offset rather than
+            # following Safe's response ``next`` URL so every page request
+            # uses the URL we construct from the configured params; the
+            # response ``next`` is absolute and can drop the agent off the
+            # endpoint it was configured to talk to.
+            transfers_base_url = self._build_safe_api_url(
+                chain, "v1", f"safes/{address}/incoming-transfers/"
+            )
 
             processed_count = 0
-            seen_transfer_ids = set()
+            offset = 0
+            pages_processed = 0
+            # Seed in-cycle dedup from already-persisted transfers so a new
+            # transfer on an already-stored date is not silently dropped.
+            seen_transfer_ids = _collect_seen_transfer_ids(existing_data)
             while True:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
+                        f"{chain_label} incoming-transfers; treating as a failed fetch "
+                        "so partial data is not persisted with a falsely "
+                        "complete seen-set"
+                    )
+                    fetch_failed = True
+                    break
+
+                transfers_url = (
+                    f"{transfers_base_url}?limit={SAFE_TRANSFERS_PAGE_LIMIT}"
+                    f"&offset={offset}"
+                )
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
@@ -3862,14 +4406,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not success:
-                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    self.context.logger.error(
+                        f"Failed to fetch {chain_label} transfers"
+                    )
+                    fetch_failed = True
                     break
 
                 transfers = response_json.get("results", [])
                 if not transfers:
                     break
+                pages_processed += 1
 
-                # Track how many transfers in this page are on already-stored dates.
+                # Track how many transfers in this page have already-seen IDs.
                 # The API returns newest-first, so once an entire page is old we can stop.
                 consecutive_existing = 0
                 stop_pagination = False
@@ -3886,26 +4434,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if not tx_date:
                         continue
 
-                    # Skip if date already exists in stored data
-                    if tx_date in existing_data:
+                    # Per-transfer dedup against persisted + in-cycle seen IDs.
+                    unique_id = _transfer_unique_id(transfer)
+                    if unique_id and unique_id in seen_transfer_ids:
                         consecutive_existing += 1
                         if consecutive_existing >= len(transfers):
                             stop_pagination = True
                         continue
-                    else:
-                        consecutive_existing = 0
+                    consecutive_existing = 0
 
                     # Only process transfers until end_date
                     if tx_date > end_date:
                         continue
 
-                    # Deduplicate by transferId if present, otherwise transactionHash
-                    unique_id = transfer.get("transferId") or transfer.get(
-                        "transactionHash", ""
-                    )
-                    if unique_id in seen_transfer_ids:
-                        continue
-                    seen_transfer_ids.add(unique_id)
+                    if unique_id:
+                        seen_transfer_ids.add(unique_id)
 
                     # Process the transfer
                     from_address = transfer.get("from", address)
@@ -3914,9 +4457,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if from_address.lower() == address.lower():
                         continue
 
-                    # Filter from address - only include EOAs and GnosisSafe contracts
+                    # Filter from address - only include EOAs and GnosisSafe
+                    # contracts on the chain the transfer happened on.
                     should_include = yield from self._should_include_transfer_optimism(
-                        from_address
+                        from_address, chain=chain
                     )
                     if not should_include:
                         continue
@@ -3929,10 +4473,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         if not token_info:
                             if token_address:
                                 decimals = yield from self._get_token_decimals(
-                                    "optimism", token_address
+                                    chain, token_address
                                 )
                                 symbol = yield from self._get_token_symbol(
-                                    "optimism", token_address
+                                    chain, token_address
                                 )
                             else:
                                 continue
@@ -3954,31 +4498,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "timestamp": timestamp,
                             "tx_hash": transfer.get("transactionHash", ""),
                             "type": "token",
-                        }
-
-                    elif transfer_type == "ETHER_TRANSFER":
-                        # ETH transfer
-                        try:
-                            value_wei = int(transfer.get("value", "0") or "0")
-                            amount_eth = value_wei / 10**18
-
-                            # Skip zero-value ETH transfers
-                            if amount_eth <= 0:
-                                continue
-                        except (ValueError, TypeError):
-                            self.context.logger.warning(
-                                f"Skipping transfer with invalid value: {transfer.get('value')}"
-                            )
-                            continue
-
-                        transfer_data = {
-                            "from_address": from_address,
-                            "amount": amount_eth,
-                            "token_address": "",  # nosec B105
-                            "symbol": "ETH",
-                            "timestamp": timestamp,
-                            "tx_hash": transfer.get("transactionHash", ""),
-                            "type": "eth",
+                            "transfer_id": unique_id,
                         }
 
                     elif transfer_type == "ERC721_TRANSFER":
@@ -3995,7 +4515,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Show progress
                 if processed_count % 100 == 0:
                     self.context.logger.info(
-                        f"Processed {processed_count} Optimism transfers..."
+                        f"Processed {processed_count} {chain_label} transfers..."
                     )
 
                 # Stop early if the entire page was on already-stored dates
@@ -4005,23 +4525,39 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     break
 
-                # Check for next page and advance the URL
-                cursor = response_json.get("next")
-                if not cursor:
+                # Advance by len(transfers); see SAFE_TRANSFERS_PAGE_LIMIT note.
+                if response_json.get("next") is None:
                     break
-                transfers_url = cursor
+                offset += len(transfers)
 
             self.context.logger.info(
-                f"Completed Optimism transfers: {processed_count} found"
+                f"Completed {chain_label} transfers: {processed_count} found"
             )
 
         except Exception as e:
-            self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            self.context.logger.error(f"Error fetching {chain_label} transfers: {e}")
+            fetch_failed = True
+
+        return not fetch_failed
 
     def _should_include_transfer_optimism(
-        self, from_address: str
+        self, from_address: str, chain: str = "optimism"
     ) -> Generator[None, None, bool]:
-        """Determine if an Optimism transfer should be included based on from address type."""
+        """Decide whether to include a transfer based on the from-address type.
+
+        EOAs and Gnosis Safes are real funders; smart contracts are not (e.g.
+        a pool returning tokens on exit is part of position settlement, not
+        new external capital). The code check must run against the chain the
+        transfer happened on: an address can be a contract on one L2 and an
+        EOA on another.
+
+        :param from_address: the transfer's sender address.
+        :param chain: chain name used to pick the ledger RPC, the Safe API
+            slug, and the per-chain cache key.
+        :yield: None.
+        :return: True if the from-address resolves to an EOA on ``chain`` or
+            to a Gnosis Safe on the Safe Transaction Service for ``chain``.
+        """
         if not from_address:
             return False
 
@@ -4033,8 +4569,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             return False
 
-        # Check cache first
-        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{from_address.lower()}"
+        # Per-chain cache key — an address can be a contract on one chain and
+        # an EOA on another, so the cached answer must be chain-scoped.
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}{chain}_{from_address.lower()}"
         cached_result = yield from self._read_kv((cache_key,))
 
         if cached_result and cached_result.get(cache_key):
@@ -4044,8 +4581,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             except (json.JSONDecodeError, KeyError):
                 pass
 
+        chain_to_rpc = {
+            Chain.OPTIMISM.value: self.params.optimism_ledger_rpc,
+            Chain.BASE.value: self.params.base_ledger_rpc,
+        }
+        rpc_url = chain_to_rpc.get(chain)
+        if not rpc_url:
+            # A new Safe-backed L2 added upstream without updating this map
+            # would silently exclude every funding event on that chain and
+            # understate initial investment. Log loudly so the gap is visible.
+            self.context.logger.error(
+                f"No ledger RPC configured for chain {chain}; cannot classify "
+                f"transfer from {from_address}"
+            )
+            return False
+
         try:
-            # Use Optimism RPC to check if address is a contract
             payload = {
                 "jsonrpc": "2.0",
                 "method": "eth_getCode",
@@ -4054,7 +4605,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint=self.params.optimism_ledger_rpc,
+                endpoint=rpc_url,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4064,17 +4615,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not success:
-                self.context.logger.error("Failed to check contract code")
+                self.context.logger.error(
+                    f"Failed to check contract code on {chain} for {from_address}"
+                )
                 return False
 
             code = result.get("result", "0x")
 
-            # If code is '0x', it's an EOA
+            # If code is '0x', it's an EOA on this chain
             if code == "0x":
                 is_eoa = True
             else:
-                # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{from_address}/"
+                # Has code on this chain — check the Safe Transaction Service
+                # for the same chain to see if it's a Gnosis Safe.
+                safe_check_url = self._build_safe_api_url(
+                    chain, "v1", f"safes/{from_address}/"
+                )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4085,24 +4641,39 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 is_eoa = success
 
-            # Cache the result permanently (no TTL)
+            # Cache the result permanently (no TTL) under the per-chain key.
             cache_data = {"is_eoa": is_eoa}
             yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
             if not is_eoa:
                 self.context.logger.info(
-                    f"Excluding transfer from contract: {from_address}"
+                    f"Excluding {chain} transfer from contract: {from_address}"
                 )
             return is_eoa
 
         except Exception as e:
-            self.context.logger.error(f"Error checking address {from_address}: {e}")
+            self.context.logger.error(
+                f"Error checking address {from_address} on {chain}: {e}"
+            )
             return False
 
     def _is_not_other_contract_optimism(
-        self, to_address: str
+        self, to_address: str, chain: str = "optimism"
     ) -> Generator[None, None, bool]:
-        """Check if to_address is EOA or GnosisSafe (i.e., NOT OtherContract)."""
+        """Check if to_address is EOA or GnosisSafe on ``chain``.
+
+        Mirrors the chain-aware classification used on the from-side: an
+        address can be a contract on one L2 and an EOA on another, so the
+        code check, the Safe Transaction Service lookup, and the cached
+        verdict must all be scoped to the chain the transfer happened on.
+
+        :param to_address: the transfer's recipient address.
+        :param chain: chain name used to pick the ledger RPC, the Safe API
+            slug, and the per-chain cache key.
+        :yield: None.
+        :return: True if ``to_address`` resolves to an EOA on ``chain`` or
+            to a Gnosis Safe on the Safe Transaction Service for ``chain``.
+        """
         if not to_address:
             return False
 
@@ -4114,8 +4685,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             return False
 
-        # Check cache first
-        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{to_address.lower()}"
+        # Per-chain cache key — an address can be a contract on one chain
+        # and an EOA on another, so the cached verdict must be chain-scoped.
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}{chain}_{to_address.lower()}"
         cached_result = yield from self._read_kv((cache_key,))
 
         if cached_result and cached_result.get(cache_key):
@@ -4125,8 +4697,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             except (json.JSONDecodeError, KeyError):
                 pass
 
+        chain_to_rpc = {
+            Chain.OPTIMISM.value: self.params.optimism_ledger_rpc,
+            Chain.BASE.value: self.params.base_ledger_rpc,
+        }
+        rpc_url = chain_to_rpc.get(chain)
+        if not rpc_url:
+            # A new Safe-backed L2 added upstream without updating this map
+            # would silently exclude every withdrawal target on that chain
+            # and understate realised value. Log loudly so the gap is visible.
+            self.context.logger.error(
+                f"No ledger RPC configured for chain {chain}; cannot classify "
+                f"transfer to {to_address}"
+            )
+            return False
+
         try:
-            # Use Optimism RPC to check if address is a contract
             payload = {
                 "jsonrpc": "2.0",
                 "method": "eth_getCode",
@@ -4135,7 +4721,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint=self.params.optimism_ledger_rpc,
+                endpoint=rpc_url,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4145,17 +4731,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not success:
-                self.context.logger.error("Failed to check contract code")
+                self.context.logger.error(
+                    f"Failed to check contract code on {chain} for {to_address}"
+                )
                 return False
 
             code = result.get("result", "0x")
 
-            # If code is '0x', it's an EOA
+            # If code is '0x', it's an EOA on this chain
             if code == "0x":
                 is_eoa = True
             else:
-                # If it has code, check if it's a GnosisSafe
-                safe_check_url = f"{self.params.safe_api_v1_url}/safes/{to_address}/"
+                # Has code on this chain — check the Safe Transaction Service
+                # for the same chain to see if it's a Gnosis Safe.
+                safe_check_url = self._build_safe_api_url(
+                    chain, "v1", f"safes/{to_address}/"
+                )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
                     headers={"Accept": "application/json"},
@@ -4166,18 +4757,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 is_eoa = success
 
-            # Cache the result permanently (no TTL)
+            # Cache the result permanently (no TTL) under the per-chain key.
             cache_data = {"is_eoa": is_eoa}
             yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
             if not is_eoa:
                 self.context.logger.info(
-                    f"Excluding transfer to contract: {to_address}"
+                    f"Excluding {chain} transfer to contract: {to_address}"
                 )
             return is_eoa
 
         except Exception as e:
-            self.context.logger.error(f"Error checking address {to_address}: {e}")
+            self.context.logger.error(
+                f"Error checking address {to_address} on {chain}: {e}"
+            )
             return False
 
     def _save_transfer_data_optimism(self, data: Dict) -> Generator[None, None, None]:
@@ -4205,438 +4798,80 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         key = f"{chain}_total_investment"
         yield from self._write_kv({key: str(total)})
 
-    def _load_funding_events_data(self) -> Generator[None, None, Dict]:
-        """Load unified transfer data from kv_store."""
-        cached_data = yield from self._read_kv(keys=("funding_events",))
-        if cached_data and cached_data.get("funding_events"):
-            try:
-                return json.loads(cached_data.get("funding_events"))
-            except json.JSONDecodeError:
-                self.context.logger.warning(
-                    "Failed to parse cached unified transfer data"
-                )
-                return {}
-        return {}
-
-    def _count_transfers(self, transfers_dict: Dict) -> int:
-        """Count total number of individual transfers across all dates."""
-        return sum(len(v) for v in transfers_dict.values())
-
-    def _track_eth_transfers_and_reversions(
-        self,
-        safe_address: str,
-        chain: str,
-    ) -> Generator[None, None, Dict[str, Any]]:
-        """Track ETH transfers to safe address and handle reversion logic."""
-        try:
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            # Get all transfers until date
-            all_incoming_transfers = {}
-            all_outgoing_transfers = {}
-            if chain == Chain.OPTIMISM.value:
-                all_incoming_transfers = (
-                    yield from self._fetch_all_transfers_until_date_optimism(
-                        safe_address, current_date
-                    )
-                ) or {}
-                all_outgoing_transfers = (
-                    yield from self._fetch_outgoing_transfers_until_date_optimism(
-                        safe_address, current_date
-                    )
-                ) or {}
-
-                # Check if reversion result is cached and still valid
-                total_count = self._count_transfers(
-                    all_incoming_transfers
-                ) + self._count_transfers(all_outgoing_transfers)
-                cached_reversion = self.funding_events.get("optimism_reversion_info")
-                cached_count = self.funding_events.get(
-                    "optimism_reversion_transfer_count", -1
-                )
-                if (
-                    cached_reversion
-                    and isinstance(cached_reversion, dict)
-                    and cached_count == total_count
-                ):
-                    self.context.logger.info(
-                        f"Using cached reversion info (transfer count unchanged: {total_count})"
-                    )
-                    return cached_reversion
-
-            elif chain == Chain.MODE.value:
-                # Use new Mode-specific tracking function
-                transfers = self._track_eth_transfers_mode(safe_address, current_date)
-                all_incoming_transfers = transfers.get("incoming", {})
-                all_outgoing_transfers = transfers.get("outgoing", {})
-            else:
-                self.context.logger.warning(f"Unsupported chain: {chain}")
-                return {}
-
-            if not all_incoming_transfers:
-                self.context.logger.warning(f"No transfers found for {chain} chain")
-                return {}
-
-            master_safe_address = yield from self.get_master_safe_address()
-            if not master_safe_address:
-                self.context.logger.error("No master safe address found")
-                return {}
-
-            self.context.logger.info(f"Master safe address: {master_safe_address}")
-
-            # Track ETH transfers
-            eth_transfers = []
-            initial_funding = None
-            reversion_transfers = []
-            historical_reversion_value = 0.0
-            reversion_date = None
-
-            # Sort transfers by timestamp
-            sorted_incoming_transfers = []
-            for _, transfers in all_incoming_transfers.items():
-                for transfer in transfers:
-                    if (
-                        isinstance(transfer, dict) and "timestamp" in transfer
-                    ):  # pragma: no branch
-                        sorted_incoming_transfers.append(transfer)
-
-            sorted_incoming_transfers.sort(key=lambda x: x["timestamp"])
-
-            sorted_outgoing_transfers = []
-            for _, transfers in all_outgoing_transfers.items():
-                for transfer in transfers:
-                    if (
-                        isinstance(transfer, dict) and "timestamp" in transfer
-                    ):  # pragma: no branch
-                        sorted_outgoing_transfers.append(transfer)
-
-            sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
-
-            # Process transfers
-            for transfer in sorted_incoming_transfers:
-                # Check if it's an ETH transfer
-                if transfer.get("symbol") == "ETH":  # pragma: no branch
-                    # If this is the first transfer, store it as initial funding
-                    if not initial_funding:
-                        initial_funding = {
-                            "amount": transfer.get("amount", 0),
-                            "from_address": transfer.get("from_address"),
-                            "timestamp": transfer.get("timestamp"),
-                        }
-                        eth_transfers.append(transfer)
-                    # If it's from the same address as initial funding
-                    elif (  # pragma: no branch
-                        transfer.get("from_address", "").lower()
-                        == master_safe_address.lower()
-                    ):
-                        eth_transfers.append(transfer)
-
-            for transfer in sorted_outgoing_transfers:
-                if transfer.get("symbol") == "ETH":  # pragma: no branch
-                    if (  # pragma: no branch
-                        transfer.get("to_address", "").lower()
-                        == master_safe_address.lower()
-                        and transfer.get("from_address", "").lower()
-                        == safe_address.lower()
-                    ):
-                        reversion_transfers.append(transfer)
-
-            # Get current ETH balance
-            chain = self.params.target_investment_chains[0]
-            account = self.params.safe_contract_addresses.get(chain)
-            current_eth_balance = yield from self._get_native_balance(chain, account)
-
-            # Determine if reversion is needed
-            reversion_amount = 0
-
-            if initial_funding and len(eth_transfers) > 1:
-                # If there are additional transfers after initial funding
-                if len(reversion_transfers) == 0:
-                    # No reversion has happened yet, revert the last transfer amount
-                    last_transfer = eth_transfers[-1]
-                    reversion_amount = float(last_transfer.get("amount", 0))
-
-                    # Get the date of the last transfer that needs reversion
-                    try:
-                        # Handle ISO format timestamp
-                        timestamp = last_transfer.get("timestamp", "")
-                        if timestamp.endswith("Z"):
-                            # Convert ISO format to datetime
-                            tx_datetime = datetime.fromisoformat(
-                                timestamp.replace("Z", "+00:00")
-                            )
-                            reversion_date = tx_datetime.strftime("%d-%m-%Y")
-                        else:
-                            # Try parsing as Unix timestamp
-                            reversion_date = datetime.fromtimestamp(
-                                int(timestamp)
-                            ).strftime("%d-%m-%Y")
-                    except (ValueError, TypeError) as e:
-                        self.context.logger.warning(f"Error parsing timestamp: {e}")
-                        # Use current date as fallback
-                        reversion_date = current_date
-
-                    if current_eth_balance < reversion_amount:
-                        reversion_amount = current_eth_balance
-                        self.context.logger.info(
-                            f"Current ETH balance is {current_eth_balance} which is less than the reversion amount {reversion_amount} indicating that some ETH has already been used"
-                        )
-
-                    self.context.logger.info(
-                        f"Found additional ETH transfer of {reversion_amount} that needs reversion from date: {reversion_date}"
-                    )
-                else:
-                    # Reversion has already happened, set amount to 0
-                    reversion_amount = 0
-                    self.context.logger.info(
-                        "Additional ETH transfer has already been reverted"
-                    )
-
-            if len(reversion_transfers) > 0:
-                historical_reversion_value = (
-                    yield from self._calculate_total_reversion_value(
-                        eth_transfers, reversion_transfers
-                    )
-                )
-
-            result = {
-                "reversion_amount": reversion_amount,
-                "master_safe_address": master_safe_address,
-                "historical_reversion_value": historical_reversion_value,
-                "reversion_date": reversion_date,
-            }
-
-            # Cache the reversion result for Optimism so we skip recomputation
-            # when no new transfers have arrived
-            if chain == Chain.OPTIMISM.value:
-                self.funding_events["optimism_reversion_info"] = result
-                self.funding_events["optimism_reversion_transfer_count"] = (
-                    self._count_transfers(all_incoming_transfers)
-                    + self._count_transfers(all_outgoing_transfers)
-                )
-                self.store_funding_events()
-
-            return result
-
-        except Exception as e:
-            self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
-            return {
-                "reversion_amount": 0,
-                "master_safe_address": None,
-                "historical_reversion_value": 0.0,
-                "reversion_date": None,
-            }
-
-    def _calculate_total_reversion_value(
-        self, eth_transfers: List[Dict], reversion_transfers: List[Dict]
-    ) -> Generator[None, None, Optional[float]]:
-        """Calculate the total reversion value from the reversion transfers."""
-        reversion_amount = 0.0
-        reversion_date = None
-        reversion_value = 0.0
-        last_transfer = eth_transfers[-1]
-        current_date = datetime.now().strftime("%d-%m-%Y")
-
-        try:
-            # Handle ISO format timestamp
-            timestamp = last_transfer.get("timestamp", "")
-            if timestamp.endswith("Z"):
-                # Convert ISO format to datetime
-                tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                reversion_date = tx_datetime.strftime("%d-%m-%Y")
-            else:
-                # Try parsing as Unix timestamp
-                reversion_date = datetime.fromtimestamp(int(timestamp)).strftime(
-                    "%d-%m-%Y"
-                )
-        except (ValueError, TypeError) as e:
-            self.context.logger.warning(f"Error parsing timestamp: {e}")
-            # Use current date as fallback
-            reversion_date = current_date
-
-        for index, transfer in enumerate(reversion_transfers):
-            if index == 0:
-                eth_price = yield from self._fetch_historical_eth_price(reversion_date)
-            else:
-                eth_price = yield from self._fetch_historical_eth_price(current_date)
-            if eth_price:
-                reversion_amount = transfer.get("amount", 0)
-                reversion_value += reversion_amount * eth_price
-
-        return reversion_value
-
-    def _fetch_outgoing_transfers_until_date_optimism(
-        self,
-        address: str,
-        current_date: str,
-    ) -> Generator[None, None, Dict]:
-        """Fetch outgoing ETH transfers from the safe address on Optimism, with persistence."""
-        # Load persisted outgoing data
-        if not self.funding_events:
-            self.funding_events = self.read_funding_events() or {}
-        existing_outgoing = self.funding_events.get("optimism_outgoing", {})
-
-        all_transfers = {}
-
-        if not address:
-            self.context.logger.warning(
-                "No address provided for fetching Optimism outgoing transfers"
-            )
-            return existing_outgoing
-
-        try:
-            # Use SafeGlobal API for Optimism transfers
-            base_url = self.params.safe_api_v1_url
-            transfers_url = f"{base_url}/safes/{address}/transfers/"
-
-            processed_count = 0
-            seen_tx_ids = set()
-            while True:
-                success, response_json = yield from self._request_with_retries(
-                    endpoint=transfers_url,
-                    headers={"Accept": "application/json"},
-                    rate_limited_code=429,
-                    rate_limited_callback=_noop_rate_limit_callback,
-                    retry_wait=5,
-                    max_retries=2,
-                )
-
-                if not success:
-                    self.context.logger.error("Failed to fetch Optimism transfers")
-                    break
-
-                transfers = response_json.get("results", [])
-
-                if not transfers:
-                    break
-
-                consecutive_existing = 0
-                stop_pagination = False
-
-                for transfer in transfers:
-                    # Parse timestamp
-                    timestamp = transfer.get("executionDate")
-                    if not timestamp:
-                        continue
-
-                    # Handle ISO format timestamp
-                    try:
-                        tx_datetime = datetime.fromisoformat(
-                            timestamp.replace("Z", "+00:00")
-                        )
-                        tx_date = tx_datetime.strftime("%Y-%m-%d")
-                    except (ValueError, TypeError):
-                        self.context.logger.warning(
-                            f"Invalid timestamp format: {timestamp}"
-                        )
-                        continue
-
-                    if tx_date > current_date:
-                        continue
-
-                    # Skip dates already persisted
-                    if tx_date in existing_outgoing:
-                        consecutive_existing += 1
-                        if consecutive_existing >= len(transfers):
-                            stop_pagination = True
-                        continue
-                    else:
-                        consecutive_existing = 0
-
-                    # Only process outgoing transfers (where from address is equal to our safe address)
-                    if transfer.get("from", "").lower() == address.lower():
-                        transfer_type = transfer.get("type", "")
-
-                        # Deduplicate per tx hash + type
-                        unique_id = f"{transfer.get('transactionHash', '')}:{transfer_type}:{transfer.get('value', '')}"
-                        if unique_id in seen_tx_ids:
-                            continue
-                        seen_tx_ids.add(unique_id)
-
-                        if transfer_type == "ETHER_TRANSFER":  # pragma: no branch
-                            try:
-                                value_wei = int(transfer.get("value", "0") or "0")
-                                amount_eth = value_wei / 10**18
-
-                                if amount_eth <= 0:
-                                    continue
-                            except (ValueError, TypeError):
-                                continue
-
-                            transfer_data = {
-                                "from_address": address,
-                                "to_address": transfer.get("to"),
-                                "amount": amount_eth,
-                                "token_address": ZERO_ADDRESS,
-                                "symbol": "ETH",
-                                "timestamp": timestamp,
-                                "tx_hash": transfer.get("transactionHash", ""),
-                                "type": "eth",
-                            }
-
-                            if tx_date not in all_transfers:  # pragma: no branch
-                                all_transfers[tx_date] = []
-                            all_transfers[tx_date].append(transfer_data)
-                            processed_count += 1
-                            continue
-                    else:
-                        continue
-
-                self.context.logger.info(
-                    f"Completed Optimism outgoing transfers: {processed_count} found"
-                )
-
-                if stop_pagination:
-                    self.context.logger.info(
-                        "Outgoing transfers: entire page already stored — stopping pagination"
-                    )
-                    break
-
-                # Advance pagination if available
-                cursor = response_json.get("next")
-                if not cursor:
-                    break
-                transfers_url = cursor
-
-            # Merge new dates into persisted data and save
-            # (all_transfers only contains dates not already in existing_outgoing,
-            # because the fetch loop skips existing dates)
-            existing_outgoing.update(all_transfers)
-
-            self.funding_events["optimism_outgoing"] = existing_outgoing
-            self.store_funding_events()
-
-            return existing_outgoing
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error fetching Optimism outgoing transfers: {e}"
-            )
-            return existing_outgoing
-
     def _track_erc20_transfers_optimism(
         self,
         safe_address: str,
         final_timestamp: int,
-    ) -> Generator[None, None, Dict[str, Dict[str, List[Dict]]]]:
-        """Fetch and organize ERC20 token transfers for Optimism chain using Safe API."""
+        chain: str = "optimism",
+    ) -> Generator[None, None, Optional[Dict[str, Dict[str, List[Dict]]]]]:
+        """Fetch and organize ERC20 token transfers for a SafeGlobal-served chain.
+
+        Persists outgoing USDC transfers to funding_events.json under the
+        ``{chain}_withdrawals`` key so subsequent cycles early-stop after one
+        page when no new outgoing activity has occurred. Dedup is per-transfer
+        (transferId, falling back to txHash + log_index) so a same-day
+        withdrawal added after one already stored on the same date is not
+        silently dropped.
+
+        Returns ``None`` on exception or on a mid-pagination fetch failure so
+        the caller can skip the kv TTL cache write and retry on the next
+        cycle. Returning ``None`` (rather than an empty dict) prevents a single
+        transient API blip from caching ``withdrawal=0`` until the next TTL
+        boundary, and prevents partial-pagination data from being persisted
+        with a falsely complete seen-set seeded into the next cycle.
+
+        :param safe_address: the Safe contract address.
+        :param final_timestamp: unix timestamp used as the upper bound for
+            ``executionDate`` filtering.
+        :param chain: chain name used to pick the Safe API slug, the
+            per-chain persistence key, and the token-metadata RPC.
+        :yield: None.
+        :return: ``{"outgoing": <date-keyed transfers dict>}`` on success, or
+            ``None`` when the fetch failed.
+        """
+        withdrawals_key = f"{chain}_withdrawals"
         try:
-            all_transfers = {"outgoing": {}}
+            if not self.funding_events:
+                self.funding_events = self.read_funding_events() or {}
+            existing_outgoing = self.funding_events.get(withdrawals_key, {})
 
             if not safe_address:
                 self.context.logger.warning(
-                    "No address provided for fetching Optimism ERC20 transfers"
+                    f"No address provided for fetching {chain} ERC20 transfers"
                 )
-                return all_transfers
+                return {"outgoing": existing_outgoing}
 
-            # Use SafeGlobal API for Optimism transfers
-            base_url = self.params.safe_api_v1_url
-            transfers_url = f"{base_url}/safes/{safe_address}/transfers/"
+            # Paginate by offset rather than following Safe's absolute ``next``
+            # URL — see _fetch_optimism_transfers_safeglobal for why.
+            transfers_base_url = self._build_safe_api_url(
+                chain, "v1", f"safes/{safe_address}/transfers/"
+            )
 
             processed_count = 0
-            seen_tx_ids = set()
+            offset = 0
+            pages_processed = 0
+            # Seed in-cycle dedup from already-persisted withdrawals so a new
+            # transfer on an already-stored date is not silently dropped.
+            seen_tx_ids = _collect_seen_transfer_ids(existing_outgoing)
+            new_by_date: Dict[str, List[Dict]] = {}
             current_date = datetime.fromtimestamp(final_timestamp).strftime("%Y-%m-%d")
+            fetch_failed = False
 
             while True:
+                if pages_processed >= MAX_PAGINATION_PAGES:
+                    self.context.logger.warning(
+                        f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
+                        f"{chain} withdrawals; treating as a failed fetch so "
+                        "partial data is not persisted with a falsely complete "
+                        "seen-set"
+                    )
+                    fetch_failed = True
+                    break
+
+                transfers_url = (
+                    f"{transfers_base_url}?limit={SAFE_TRANSFERS_PAGE_LIMIT}"
+                    f"&offset={offset}"
+                )
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
@@ -4647,21 +4882,49 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not success:
-                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    self.context.logger.error(f"Failed to fetch {chain} transfers")
+                    fetch_failed = True
                     break
 
                 transfers = response_json.get("results", [])
 
                 if not transfers:
                     break
+                pages_processed += 1
+
+                # Pre-pass: identify the eligible transfers on this page so the
+                # consecutive-existing early-stop is counted against the
+                # outgoing-USDC subset only. The seen-set inside the main loop
+                # only ever receives outgoing-USDC uids (the .add fires after
+                # the symbol == USDC and amount > 0 checks), so the eligibility
+                # count here must match: any outgoing-ERC20 whose token is not
+                # USDC would otherwise be counted as eligible but never seen,
+                # preventing the early-stop from tripping.
+                #
+                # When tokenInfo is absent on the API response we cannot tell
+                # the symbol cheaply, so we count the entry as eligible — that
+                # errs on the side of "don't stop early" and is safe because
+                # the seen-set will also include it once it's been processed
+                # downstream.
+                eligible_in_page = 0
+                for t in transfers:
+                    if t.get("from", "").lower() != safe_address.lower():
+                        continue
+                    if t.get("type", "") != "ERC20_TRANSFER":
+                        continue
+                    token_info = t.get("tokenInfo") or {}
+                    symbol = token_info.get("symbol", "") if token_info else ""
+                    if symbol and symbol.upper() != "USDC":
+                        continue
+                    eligible_in_page += 1
+                seen_eligible_in_page = 0
+                stop_pagination = False
 
                 for transfer in transfers:
-                    # Parse timestamp
                     timestamp = transfer.get("executionDate")
                     if not timestamp:
                         continue
 
-                    # Handle ISO format timestamp
                     try:
                         tx_datetime = datetime.fromisoformat(
                             timestamp.replace("Z", "+00:00")
@@ -4676,32 +4939,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if tx_date > current_date:
                         continue
 
-                    # Only process outgoing transfers (where from address is equal to our safe address)
+                    # Skip transfers that aren't outgoing ERC20s. These don't
+                    # contribute to the early-stop counter either way.
                     if transfer.get("from", "").lower() != safe_address.lower():
                         continue
-
                     transfer_type = transfer.get("type", "")
-
-                    # Only process ERC20 transfers
                     if transfer_type != "ERC20_TRANSFER":
                         continue
 
-                    # Deduplicate per tx hash + type
-                    unique_id = f"{transfer.get('transactionHash', '')}:{transfer_type}:{transfer.get('value', '')}"
-                    if unique_id in seen_tx_ids:
+                    # Per-transfer dedup against persisted + in-cycle seen IDs.
+                    unique_id = _transfer_unique_id(transfer)
+                    if unique_id and unique_id in seen_tx_ids:
+                        seen_eligible_in_page += 1
+                        if (
+                            eligible_in_page > 0
+                            and seen_eligible_in_page == eligible_in_page
+                        ):
+                            stop_pagination = True
                         continue
-                    seen_tx_ids.add(unique_id)
 
-                    # Token transfer
                     token_info = transfer.get("tokenInfo", {})
                     token_address = transfer.get("tokenAddress", "")
                     if not token_info:
                         if token_address:
                             decimals = yield from self._get_token_decimals(
-                                "optimism", token_address
+                                chain, token_address
                             )
                             symbol = yield from self._get_token_symbol(
-                                "optimism", token_address
+                                chain, token_address
                             )
                         else:
                             continue
@@ -4709,15 +4974,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         symbol = token_info.get("symbol", "Unknown")
                         decimals = int(token_info.get("decimals", 18) or 18)
 
-                    # Only process USDC transfers
                     if symbol.upper() != "USDC":
                         continue
 
                     value_raw = int(transfer.get("value", "0") or "0")
                     amount = value_raw / (10**decimals)
-
                     if amount <= 0:
                         continue
+
+                    if unique_id:
+                        seen_tx_ids.add(unique_id)
 
                     transfer_data = {
                         "from_address": safe_address,
@@ -4728,143 +4994,46 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         "timestamp": timestamp,
                         "tx_hash": transfer.get("transactionHash", ""),
                         "type": "token",
+                        "transfer_id": unique_id,
                     }
 
-                    if tx_date not in all_transfers["outgoing"]:  # pragma: no branch
-                        all_transfers["outgoing"][tx_date] = []
-                    all_transfers["outgoing"][tx_date].append(transfer_data)
+                    new_by_date.setdefault(tx_date, []).append(transfer_data)
                     processed_count += 1
 
-                self.context.logger.info(
-                    f"Completed Optimism ERC20 transfers: {processed_count} outgoing transfers found"
-                )
-
-                # Advance pagination if available
-                cursor = response_json.get("next")
-                if not cursor:
+                if stop_pagination:
+                    self.context.logger.info(
+                        "Withdrawals: every outgoing ERC20 on this page is already stored — stopping pagination"
+                    )
                     break
-                transfers_url = cursor
 
-            return all_transfers
-
-        except Exception as e:
-            self.context.logger.error(f"Error tracking Optimism ERC20 transfers: {e}")
-            return {"outgoing": {}}
-
-    def _track_eth_transfers_mode(
-        self,
-        safe_address: str,
-        current_date: str,
-    ) -> Dict[str, Dict[str, List[Dict]]]:
-        """Fetch and organize ETH transfers for Mode chain using the Mode explorer API."""
-        try:
-            all_transfers = {"incoming": {}, "outgoing": {}}
-
-            # Use Mode internal transactions API
-            base_url = self.params.mode_native_explorer_url
-            params = {
-                "module": "account",
-                "action": "txlistinternal",
-                "address": safe_address,
-                "startblock": 0,
-                "endblock": 99999999,
-                "sort": "asc",
-            }
-
-            response = requests.get(
-                base_url,
-                params=params,
-                headers={"Accept": "application/json"},
-                timeout=self.params.request_timeout,
-                verify=self.params.tls_verify,
-            )
-
-            if response.status_code != 200:
-                self.context.logger.error(
-                    f"Failed to fetch Mode ETH transfers: {response.status_code}"
-                )
-                return all_transfers
-
-            try:
-                response_data = response.json()
-            except (ValueError, TypeError) as e:
-                self.context.logger.error(
-                    f"Failed to parse Mode ETH transfers response: {e}"
-                )
-                return all_transfers
-            if response_data.get("status") != "1":
-                self.context.logger.error(
-                    f"Error in Mode API response: {response_data.get('message', 'Unknown error')}"
-                )
-                return all_transfers
-
-            transactions = response_data.get("result", [])
-            processed_count = 0
-
-            for tx in transactions:
-                # Skip if no timestamp or value is 0
-                if not tx.get("timeStamp") or int(tx.get("value", "0")) <= 0:
-                    continue
-
-                try:
-                    timestamp = tx.get("timeStamp")
-                    # Convert timestamp to date for comparison with current_date
-                    tx_datetime = datetime.fromtimestamp(int(timestamp))
-                    tx_date = tx_datetime.strftime("%Y-%m-%d")
-
-                    if tx_date > current_date:
-                        continue
-
-                    # Convert value from wei to ETH
-                    value_wei = int(tx.get("value", "0"))
-                    amount_eth = value_wei / 10**18
-
-                    # Check if safe_address is in 'to' or 'from' field
-                    to_address = tx.get("to", "").lower()
-                    from_address = tx.get("from", "").lower()
-                    safe_address_lower = safe_address.lower()
-
-                    transfer_data = {
-                        "from_address": from_address,
-                        "to_address": to_address,
-                        "amount": amount_eth,
-                        "token_address": ZERO_ADDRESS,
-                        "symbol": "ETH",
-                        "timestamp": timestamp,
-                        "tx_hash": tx.get("hash", ""),
-                        "type": "eth",
-                    }
-
-                    # Categorize transfer based on safe_address position
-                    if to_address == safe_address_lower:
-                        # Incoming transfer - safe_address is recipient
-                        if (
-                            timestamp not in all_transfers["incoming"]
-                        ):  # pragma: no branch
-                            all_transfers["incoming"][timestamp] = []
-                        all_transfers["incoming"][timestamp].append(transfer_data)
-                        processed_count += 1
-                    elif from_address == safe_address_lower:  # pragma: no branch
-                        # Outgoing transfer - safe_address is sender
-                        if (
-                            timestamp not in all_transfers["outgoing"]
-                        ):  # pragma: no branch
-                            all_transfers["outgoing"][timestamp] = []
-                        all_transfers["outgoing"][timestamp].append(transfer_data)
-                        processed_count += 1
-
-                except (ValueError, TypeError) as e:
-                    self.context.logger.warning(f"Error processing transaction: {e}")
-                    continue
+                # Advance by len(transfers); see SAFE_TRANSFERS_PAGE_LIMIT note.
+                if response_json.get("next") is None:
+                    break
+                offset += len(transfers)
 
             self.context.logger.info(
-                f"Completed Mode ETH transfers: {processed_count} transactions processed"
+                f"Completed {chain} ERC20 transfers: {processed_count} outgoing transfers found"
             )
-            return all_transfers
+
+            if fetch_failed:
+                # Discard partial data so a single-page failure doesn't
+                # persist a partial history with a falsely-complete
+                # seen-set that would trip the early-stop next cycle and
+                # permanently drop the still-missing older pages.
+                return None
+
+            # Merge new transfers into persisted data and save
+            for date, transfers_list in new_by_date.items():
+                existing_outgoing.setdefault(date, []).extend(transfers_list)
+
+            self.funding_events[withdrawals_key] = existing_outgoing
+            self.store_funding_events()
+
+            return {"outgoing": existing_outgoing}
 
         except Exception as e:
-            self.context.logger.error(f"Error tracking Mode ETH transfers: {e}")
-            return {"incoming": {}, "outgoing": {}}
+            self.context.logger.error(f"Error tracking {chain} ERC20 transfers: {e}")
+            return None
 
     def _track_erc20_transfers_mode(
         self,
@@ -5014,108 +5183,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error tracking Mode ERC20 transfers: {e}")
             return {"outgoing": {}}
 
-    def get_master_safe_address(self) -> Generator[None, None, Optional[str]]:
-        """Get the master safe address by checking service staking state."""
-        # Get service_id from params
-        service_id = self.params.on_chain_service_id
-        if service_id is None:
-            self.context.logger.error("No service ID configured")
-            return None
-
-        if not self.params.target_investment_chains:
-            self.context.logger.error("No target investment chains configured")
-            return None
-
-        operating_chain = self.params.target_investment_chains[0]
-
-        staking_token_address = self.params.staking_token_contract_address
-        staking_chain = self.params.staking_chain
-
-        if staking_token_address and staking_chain:
-            if self.service_staking_state == StakingState.UNSTAKED:
-                yield from self._get_service_staking_state(chain=staking_chain)
-
-            if self.service_staking_state != StakingState.UNSTAKED:
-                service_info = yield from self._get_service_info(staking_chain)
-                if service_info and len(service_info) >= 2:
-                    master_safe_address = service_info[
-                        1
-                    ]  # owner field from service info struct
-                    self.context.logger.info(
-                        f"Master safe address: {master_safe_address}"
-                    )
-                    is_valid_address = yield from self.check_is_valid_safe_address(
-                        master_safe_address, staking_chain
-                    )
-                    if is_valid_address:
-                        return master_safe_address
-                    else:
-                        return None
-                else:
-                    self.context.logger.error(
-                        "Failed to get service info from staking contract"
-                    )
-                    return None
-
-        service_registry_address = self.params.service_registry_contract_addresses.get(
-            operating_chain
-        )
-        if not service_registry_address:
-            self.context.logger.error(
-                f"No service registry address configured for operating chain {operating_chain}"
-            )
-            return None
-
-        # Get service owner from service registry
-        service_owner_result = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=service_registry_address,
-            contract_public_id=ServiceRegistryContract.contract_id,
-            contract_callable="get_service_owner",
-            data_key="service_owner",
-            service_id=service_id,
-            chain_id=operating_chain,
-        )
-
-        if service_owner_result:
-            master_safe_address = service_owner_result
-            self.context.logger.info(f"Master safe address: {master_safe_address}")
-            is_valid_address = yield from self.check_is_valid_safe_address(
-                master_safe_address, operating_chain
-            )
-            if is_valid_address:
-                return master_safe_address
-            else:
-                return None
-        else:
-            self.context.logger.error(
-                "Failed to get service owner from service registry"
-            )
-            return None
-
-    def check_is_valid_safe_address(
-        self, safe_address: str, operating_chain: str
-    ) -> Generator[None, None, bool]:
-        """Checks if an address is a GnosisSafe Contract"""
-        try:
-            res = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=safe_address,
-                contract_public_id=GnosisSafeContract.contract_id,
-                contract_callable="get_owners",
-                data_key="owners",
-                chain_id=operating_chain,
-            )
-
-            if res:
-                return True
-
-            return False
-
-        except Exception:
-            self.context.logger.info("Not a GnosisSafe")
-            return False
-
     def _get_velodrome_pending_rewards(
         self, position: Dict, chain: str, user_address: str
     ) -> Generator[None, None, Decimal]:
@@ -5187,11 +5254,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         velo_addresses = self.params.velo_token_contract_addresses
         return velo_addresses.get(chain)
 
+    def _get_velo_family_reward_symbol(self, chain: str) -> str:
+        """Return the LP-gauge reward token symbol for the chain.
+
+        Aerodrome on Base distributes AERO; Velodrome on Optimism and Mode
+        distributes VELO. ``_get_velo_token_address`` already returns the
+        correct contract per chain, but a few sites still need the symbol
+        for UI labels and CoinGecko price lookups.
+
+        :param chain: chain name used to pick the reward token symbol.
+        :return: ``"AERO"`` on Base, ``"VELO"`` on every other chain.
+        """
+        return "AERO" if chain == Chain.BASE.value else "VELO"
+
     def _validate_velodrome_v2_pool_addresses(self) -> Generator[None, None, None]:
         """Validate Velodrome v2 pool addresses for all positions."""
         for position in self.current_positions:
             if (
-                position.get("dex_type") == "velodrome"
+                position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
                 and not position.get("is_cl_pool", False)
                 and position.get("is_stable", False)
             ):  # Only validate if isStable is true
@@ -5327,10 +5407,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.portfolio_data.get("portfolio_value", 0.0)
                 )
 
-                # Use pre-calculated ROI percentages from portfolio data
-                total_roi_percentage = float(self.portfolio_data.get("total_roi", 0.0))
-                partial_roi_percentage = float(
-                    self.portfolio_data.get("partial_roi", 0.0)
+                # Use pre-calculated ROI percentages from portfolio data.
+                # ``total_roi`` / ``partial_roi`` are present in the dict but
+                # may be ``None`` (e.g. when the withdrawal fetch failed and
+                # ``_create_portfolio_data`` skipped the ROI recompute).
+                # ``dict.get(k, default)`` only returns the default when the
+                # key is absent, so ``None`` would otherwise reach
+                # ``float(None)`` and raise ``TypeError`` — silently breaking
+                # this whole update inside the surrounding try/except.
+                raw_total_roi = self.portfolio_data.get("total_roi")
+                total_roi_percentage = (
+                    float(raw_total_roi) if raw_total_roi is not None else 0.0
+                )
+                raw_partial_roi = self.portfolio_data.get("partial_roi")
+                partial_roi_percentage = (
+                    float(raw_partial_roi) if raw_partial_roi is not None else 0.0
                 )
 
             # Update metrics

@@ -90,7 +90,8 @@ def reset_state() -> Generator[Any, Any, Any]:
     """
     if hasattr(vel_mod._thread_local, "errors"):
         vel_mod._thread_local.errors = []
-    vel_mod.get_web3_connection.cache_clear()
+    # get_web3_connection is intentionally uncached (fresh connection per call),
+    # so it has no cache to clear.
     vel_mod.fetch_token_name_from_contract.cache_clear()
     invalidate_cache()
     # Reset cache metrics
@@ -208,7 +209,6 @@ class TestGetWeb3Connection:
         mock_instance = MagicMock()
         mock_web3.return_value = mock_instance
         mock_web3.HTTPProvider = MagicMock()
-        vel_mod.get_web3_connection.cache_clear()
         result = get_web3_connection("https://rpc.example.com")
         assert result == mock_instance
 
@@ -218,7 +218,6 @@ class TestGetWeb3Connection:
         mock_instance = MagicMock()
         mock_web3.return_value = mock_instance
         mock_web3.HTTPProvider = MagicMock()
-        vel_mod.get_web3_connection.cache_clear()
         get_web3_connection("https://rpc.example.com")
         provider_call = mock_web3.HTTPProvider.call_args
         assert provider_call.kwargs["request_kwargs"] == {

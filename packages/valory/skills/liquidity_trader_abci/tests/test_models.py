@@ -626,6 +626,7 @@ class TestParams:
             "use_x402": False,
             "x402_payment_requirements": json.dumps({}),
             "optimism_ledger_rpc": "https://optimism.rpc.example.com",
+            "base_ledger_rpc": "https://base.rpc.example.com",
             "lifi_quote_to_amount_url": "https://lifi.example.com/quote",
             "request_timeout": 20.0,
             "tls_verify": True,

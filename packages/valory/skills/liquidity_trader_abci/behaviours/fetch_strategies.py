@@ -56,6 +56,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
     TradingType,
+    VELODROME_FAMILY_DEX_TYPES,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     _noop_rate_limit_callback,
@@ -867,7 +868,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return []
 
         # For Velodrome positions, we only get tick ranges if it's a CL pool
-        if position.get("dex_type") == DexType.VELODROME.value and not position.get(
+        if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES and not position.get(
             "is_cl_pool"
         ):
             return []
@@ -879,7 +880,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get current tick from pool
         contract_id = (
             VelodromeCLPoolContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else UniswapV3PoolContract.contract_id
         )
 
@@ -905,7 +906,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
             )
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
 
@@ -918,7 +919,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get contract ID for position manager
         contract_id = (
             VelodromeNonFungiblePositionManagerContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else UniswapV3NonfungiblePositionManagerContract.contract_id
         )
 
@@ -1510,7 +1511,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Add VELO rewards if position is staked
         velo_rewards_usd = Decimal(0)
-        if position.get("staked", False) and position.get("dex_type") == "velodrome":
+        if (
+            position.get("staked", False)
+            and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
+        ):
             # Get VELO token address and check if it's in current_balances
             velo_token_address = self._get_velo_token_address(chain)
             if velo_token_address and velo_token_address in current_balances:
@@ -1583,7 +1587,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 pool_address, token_id, chain, position
             )
 
-        elif dex_type == DexType.VELODROME.value:
+        elif dex_type in VELODROME_FAMILY_DEX_TYPES:
             user_address = self.params.safe_contract_addresses.get(chain)
             pool_address = position.get("pool_address")
             token_id = position.get("token_id")
@@ -1795,7 +1799,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         # Use DEX-specific calculation methods
-        if dex_type == DexType.VELODROME.value and token_id:
+        if dex_type in VELODROME_FAMILY_DEX_TYPES and token_id:
             # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
             position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
@@ -2795,7 +2799,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             dex_type = position.get("dex_type")
 
-            if dex_type == DexType.VELODROME.value and position.get("is_cl_pool"):
+            if dex_type in VELODROME_FAMILY_DEX_TYPES and position.get("is_cl_pool"):
                 # For Velodrome CL pools, check all sub-positions
                 all_positions_zero = True
                 for pos in position.get("positions", []):
@@ -2858,7 +2862,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._update_balancer_position(position)
             elif dex_type == DexType.UNISWAP_V3.value:
                 yield from self._update_uniswap_position(position)
-            elif dex_type == DexType.VELODROME.value:
+            elif dex_type in VELODROME_FAMILY_DEX_TYPES:
                 yield from self._update_velodrome_position(position)
             elif dex_type == DexType.STURDY.value:
                 yield from self._update_sturdy_position(position)
@@ -3177,11 +3181,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 all_transfers = yield from self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
-            elif chain == Chain.OPTIMISM.value:
-                self.context.logger.info("Using Optimism-specific transfer fetching")
+            elif chain in (Chain.OPTIMISM.value, Chain.BASE.value):
+                self.context.logger.info(
+                    f"Using SafeGlobal transfer fetching for {chain}"
+                )
                 all_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
-                        safe_address, current_date
+                        safe_address, current_date, chain=chain
                     )
                 )
             else:
@@ -3502,61 +3508,81 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return all_transfers_by_date
 
     def _fetch_all_transfers_until_date_optimism(
-        self, address: str, end_date: str
+        self, address: str, end_date: str, chain: str = "optimism"
     ) -> Generator[None, None, Dict]:
-        """Fetch all Optimism transfers from the beginning until a specific date, organized by date."""
+        """Fetch all SafeGlobal-backed transfers (Optimism, Base) until end_date.
+
+        ``chain`` defaults to ``"optimism"`` so the existing callers and
+        tests keep working unchanged. The Base dispatcher passes
+        ``chain="base"`` which only changes the Safe API slug, the log
+        labels, and the per-chain dict key in funding_events.
+
+        :param address: the Safe contract address.
+        :param end_date: ISO date string used as the upper bound for transfer
+            filtering.
+        :param chain: chain name used for the Safe API slug and the per-chain
+            dict key in funding_events.
+        :yield: None.
+        :return: the freshly fetched transfers keyed by date. On a mid-stream
+            failure the persisted dataset is returned instead so the caller
+            can fall back to historical rows.
+        """
+        chain_label = chain.capitalize()
+
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
         if self.funding_events:
-            raw_optimism_data = self.funding_events.get("optimism", {})
-            existing_optimism_data, dropped = _drop_legacy_transfer_entries(
-                raw_optimism_data
-            )
+            raw_chain_data = self.funding_events.get(chain, {})
+            existing_chain_data, dropped = _drop_legacy_transfer_entries(raw_chain_data)
             if dropped:
                 self.context.logger.info(
-                    f"Dropped {dropped} legacy optimism transfer entries "
+                    f"Dropped {dropped} legacy {chain} transfer entries "
                     "without transfer_id; will be re-fetched if still within "
                     "Safe's pagination window."
                 )
         else:
-            raw_optimism_data = {}
-            existing_optimism_data = {}
+            raw_chain_data = {}
+            existing_chain_data = {}
 
         all_transfers_by_date = defaultdict(list)
 
         try:
             self.context.logger.info(
-                f"Fetching all Optimism transfers until {end_date}..."
+                f"Fetching all {chain_label} transfers until {end_date}..."
             )
 
-            # Use SafeGlobal API for Optimism. Capture the success flag so we
-            # don't persist a stripped-then-partial dataset on mid-pagination
-            # failure: doing so would silently drop the still-missing older
-            # pages because the early-stop next cycle would fire on the
-            # already-seen page-1 ids.
+            # Capture the success flag so we don't persist a stripped-then-
+            # partial dataset on mid-pagination failure: doing so would
+            # silently drop the still-missing older pages because the
+            # early-stop next cycle would fire on the already-seen page-1
+            # ids.
             fetch_succeeded = yield from self._fetch_optimism_transfers_safeglobal(
-                address, end_date, all_transfers_by_date, existing_optimism_data
+                address,
+                end_date,
+                all_transfers_by_date,
+                existing_chain_data,
+                chain=chain,
             )
 
             if not fetch_succeeded:
                 self.context.logger.warning(
-                    "Optimism incoming-transfers fetch failed mid-stream; "
+                    f"{chain_label} incoming-transfers fetch failed mid-stream; "
                     "skipping persist and returning previously-persisted data"
                 )
-                return dict(raw_optimism_data)
+                return dict(raw_chain_data)
 
             # Merge new transfers into persisted data: append per-date so that
             # a same-day transfer added after an earlier one already stored
             # under the same date does not overwrite the earlier entries.
             for date, transfers in all_transfers_by_date.items():
-                existing_optimism_data.setdefault(date, []).extend(transfers)
+                existing_chain_data.setdefault(date, []).extend(transfers)
 
             # Update unified data structure (only after a successful fetch so
             # the on-disk migration commits atomically with the refetched
             # transfers it depends on).
             if not self.funding_events:
                 self.funding_events = {}
-            self.funding_events["optimism"] = existing_optimism_data
+            self.funding_events[chain] = existing_chain_data
             self.store_funding_events()
 
             # Print summary
@@ -3566,13 +3592,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             self.context.logger.info(
-                f"Optimism Summary: {total_dates} dates with transfers, {total_transfers} total transfers"
+                f"{chain_label} Summary: {total_dates} dates with transfers, "
+                f"{total_transfers} total transfers"
             )
 
             return dict(all_transfers_by_date)
 
         except Exception as e:
-            self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            self.context.logger.error(f"Error fetching {chain_label} transfers: {e}")
             return {}
 
     def _fetch_token_transfers(
@@ -4028,8 +4055,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         end_date: str,
         all_transfers_by_date: dict,
         existing_data: dict,
+        chain: str = "optimism",
     ) -> Generator[None, None, bool]:
-        """Fetch Optimism transfers using SafeGlobal API.
+        """Fetch incoming USDC transfers for a Safe via the SafeGlobal API.
+
+        Works the same way on Optimism and Base. The Safe Transaction Service
+        record shape is identical across chains, so only the chain slug at URL
+        build time differs. ``chain`` defaults to ``"optimism"`` so existing
+        callers and tests keep working unchanged.
 
         :param address: the Safe contract address.
         :param end_date: ISO date string used as the upper bound for transfer
@@ -4038,6 +4071,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers, keyed by date.
         :param existing_data: persisted date-keyed transfers, used to seed
             the in-cycle dedup set.
+        :param chain: chain name used to pick the Safe API slug and the
+            chain identifier passed to per-chain token RPC lookups.
         :yield: None.
         :return: ``True`` on a fully-successful pagination, ``False`` on any
             mid-stream page fetch failure or exception. The caller must skip
@@ -4046,10 +4081,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             the still-missing older pages.
         """
         fetch_failed = False
+        chain_label = chain.capitalize()
 
         try:
             self.context.logger.info(
-                "Fetching Optimism transfers using SafeGlobal API..."
+                f"Fetching {chain_label} transfers using SafeGlobal API..."
             )
 
             # Fetch incoming transfers. We paginate by offset rather than
@@ -4058,7 +4094,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # response ``next`` is absolute and can drop the agent off the
             # endpoint it was configured to talk to.
             transfers_base_url = self._build_safe_api_url(
-                "optimism", "v1", f"safes/{address}/incoming-transfers/"
+                chain, "v1", f"safes/{address}/incoming-transfers/"
             )
 
             processed_count = 0
@@ -4071,7 +4107,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if pages_processed >= MAX_PAGINATION_PAGES:
                     self.context.logger.warning(
                         f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
-                        "Optimism incoming-transfers; treating as a failed fetch "
+                        f"{chain_label} incoming-transfers; treating as a failed fetch "
                         "so partial data is not persisted with a falsely "
                         "complete seen-set"
                     )
@@ -4092,7 +4128,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not success:
-                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    self.context.logger.error(
+                        f"Failed to fetch {chain_label} transfers"
+                    )
                     fetch_failed = True
                     break
 
@@ -4156,10 +4194,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         if not token_info:
                             if token_address:
                                 decimals = yield from self._get_token_decimals(
-                                    "optimism", token_address
+                                    chain, token_address
                                 )
                                 symbol = yield from self._get_token_symbol(
-                                    "optimism", token_address
+                                    chain, token_address
                                 )
                             else:
                                 continue
@@ -4198,7 +4236,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Show progress
                 if processed_count % 100 == 0:
                     self.context.logger.info(
-                        f"Processed {processed_count} Optimism transfers..."
+                        f"Processed {processed_count} {chain_label} transfers..."
                     )
 
                 # Stop early if the entire page was on already-stored dates
@@ -4214,11 +4252,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 offset += len(transfers)
 
             self.context.logger.info(
-                f"Completed Optimism transfers: {processed_count} found"
+                f"Completed {chain_label} transfers: {processed_count} found"
             )
 
         except Exception as e:
-            self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            self.context.logger.error(f"Error fetching {chain_label} transfers: {e}")
             fetch_failed = True
 
         return not fetch_failed
@@ -4870,7 +4908,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Validate Velodrome v2 pool addresses for all positions."""
         for position in self.current_positions:
             if (
-                position.get("dex_type") == "velodrome"
+                position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
                 and not position.get("is_cl_pool", False)
                 and position.get("is_stable", False)
             ):  # Only validate if isStable is true

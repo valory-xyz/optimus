@@ -200,6 +200,7 @@ def _call_with_web3_retries(
 
 USDC_ADDRESSES = {
     "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+    "base": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 }
 
 
@@ -569,7 +570,11 @@ class HttpHandler(BaseHttpHandler):
     def _get_web3_instance(self, chain: str) -> Optional[Web3]:
         """Get Web3 instance for the specified chain."""
         try:
-            rpc_url = self.context.params.optimism_ledger_rpc
+            chain_to_rpc = {
+                "base": self.context.params.base_ledger_rpc,
+                "optimism": self.context.params.optimism_ledger_rpc,
+            }
+            rpc_url = chain_to_rpc.get(chain.lower())
 
             if not rpc_url:
                 self.context.logger.warning(f"No RPC URL for {chain}")

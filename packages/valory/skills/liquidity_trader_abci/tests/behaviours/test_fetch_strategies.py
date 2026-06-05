@@ -5952,6 +5952,86 @@ class TestFetchAllTransfersUntilDateOptimism:
         )
 
 
+class TestFetchAllTransfersUntilDateBase:
+    """TestFetchAllTransfersUntilDateBase exercises the chain="base" path.
+
+    The Base dispatcher routes through the same SafeGlobal wrapper used for
+    Optimism with ``chain="base"``. Same fetch-succeeded / persist contract,
+    so a regression that persists partial data on a failed safeglobal
+    pagination would be caught the same way the Optimism case catches it.
+    """
+
+    def test_success(self):
+        """Successful fetch returns a dict of date -> transfers."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+
+        def fake_safeglobal(
+            address, end_date, all_transfers_by_date, existing_data, chain="optimism"
+        ):
+            """Fake safeglobal returning True (success) without mutating state."""
+            yield
+            return True
+
+        obj._fetch_optimism_transfers_safeglobal = fake_safeglobal
+        result = _drive(
+            obj._fetch_all_transfers_until_date_optimism(
+                "0xA", "2025-01-01", chain="base"
+            )
+        )
+        assert isinstance(result, dict)
+        assert obj.funding_events == {"base": {}}
+        obj.store_funding_events.assert_called_once()
+
+    def test_fetch_failed_skips_persist_and_returns_prior(self):
+        """A failed safeglobal pagination must NOT persist.
+
+        Must return the previously-persisted raw data so a partial overwrite
+        doesn't poison the next cycle's seen-set.
+        """
+        obj = _mk()
+        prior = {"2025-01-01": [{"transfer_id": "x"}]}
+        obj.read_funding_events = lambda: {"base": prior}
+        obj.store_funding_events = MagicMock()
+
+        def failing_safeglobal(
+            address, end_date, all_transfers_by_date, existing_data, chain="optimism"
+        ):
+            """Return False to signal mid-stream failure."""
+            yield
+            return False
+
+        obj._fetch_optimism_transfers_safeglobal = failing_safeglobal
+        result = _drive(
+            obj._fetch_all_transfers_until_date_optimism(
+                "0xA", "2025-01-01", chain="base"
+            )
+        )
+        assert result == prior
+        obj.store_funding_events.assert_not_called()
+
+    def test_exception(self):
+        """An exception inside the safeglobal call returns an empty dict."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+
+        def boom(*a, **kw):
+            """Boom."""
+            yield
+            raise RuntimeError("fail")
+
+        obj._fetch_optimism_transfers_safeglobal = boom
+        assert (
+            _drive(
+                obj._fetch_all_transfers_until_date_optimism(
+                    "0xA", "2025-01-01", chain="base"
+                )
+            )
+            == {}
+        )
+
+
 class TestFetchTokenTransfersBatch2:
     """TestFetchTokenTransfersBatch2."""
 

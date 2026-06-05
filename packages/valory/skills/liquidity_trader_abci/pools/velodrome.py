@@ -64,7 +64,6 @@ API_CACHE_SIZE = 128
 WAITING_PERIOD = 5  # 5 seconds waiting period
 MAX_WAIT_TIME = 600  # 10 minutes maximum wait time
 PRICE_CHECK_INTERVAL = 5  # Check price every 5 seconds
-TICK_TO_PERCENTAGE_FACTOR = 10000
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272
@@ -132,17 +131,25 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             tick_range = narrowest_range["tick_upper"] - narrowest_range["tick_lower"]
 
-            # Using the formula: [(current_price-prev_price)/(tick_range/normalization_factor)]*100
-            if tick_range > 0:
-                price_change_pct = (
-                    abs(current_price - price_at_selection)
-                    / (tick_range / TICK_TO_PERCENTAGE_FACTOR)
-                ) * 100
-            else:
+            # A zero-width band is a degenerate position; reject it.
+            if tick_range <= 0:
                 self.context.logger.error(
                     "[PRICE_MONITORING] Zero tick spacing position detected - not allowed"
                 )
                 return None
+
+            # Percentage change of the pool price since opportunity selection.
+            # current_price and price_at_selection are both raw sqrt-price values
+            # (token1/token0 with decimals embedded) from _get_current_pool_price,
+            # so their relative change is dimensionless. Express it as a percentage
+            # to compare against slippage_tolerance, which the rest of the codebase
+            # treats as a fraction of price.
+            if price_at_selection:
+                price_change_pct = (
+                    abs(current_price - price_at_selection) / price_at_selection
+                ) * 100
+            else:
+                price_change_pct = 0.0
 
             slippage_tolerance_pct = self.params.slippage_tolerance * 100
 
@@ -341,7 +348,17 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 )
             )
         else:
-            # Handle Stable or Volatile pools
+            # Handle Stable or Volatile pools. The pool-search strategy does not
+            # always classify is_stable (e.g. some Base v2 pools come back with
+            # is_stable=None), and the router's quote/addLiquidity need a real
+            # bool, so resolve it on-chain when missing.
+            if is_stable is None:
+                is_stable = yield from self._get_pool_is_stable(pool_address, chain)
+                if is_stable is None:
+                    self.context.logger.error(
+                        f"Could not resolve stable/volatile type for pool {pool_address}"
+                    )
+                    return None, None
             return (
                 yield from self._enter_stable_volatile_pool(
                     pool_address=pool_address,
@@ -398,6 +415,16 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 )
                 return None, None, None
 
+            # Resolve the stable/volatile flag on-chain when the strategy left
+            # it unset (mirrors the enter path).
+            if is_stable is None:
+                is_stable = yield from self._get_pool_is_stable(pool_address, chain)
+                if is_stable is None:
+                    self.context.logger.error(
+                        f"Could not resolve stable/volatile type for pool {pool_address}"
+                    )
+                    return None, None, None
+
             return (
                 yield from self._exit_stable_volatile_pool(
                     pool_address=pool_address,
@@ -429,10 +456,10 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         adjusted_amounts = max_amounts_in
 
-        # TEMP (Basius MVP): Aerodrome slippage protection bypassed, re-enable
-        # per workstream 3 PR 3.3 by restoring the _query_add_liquidity_velodrome
-        # call here against (router_address, assets, is_stable, adjusted_amounts).
-        expected_amounts = {"amount_a": 0, "amount_b": 0}
+        # Query expected amounts and apply slippage protection
+        expected_amounts = yield from self._query_add_liquidity_velodrome(
+            router_address, assets[0], assets[1], is_stable, adjusted_amounts, chain
+        )
 
         if expected_amounts:
             slippage_tolerance = self.params.slippage_tolerance
@@ -828,22 +855,35 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             total_allocated_0 > max_amounts_in[0]
             or total_allocated_1 > max_amounts_in[1]
         ):
-            # Scale down proportionally
-            scale_factor_0 = max_amounts_in[0] / max(1, total_allocated_0)
-            scale_factor_1 = max_amounts_in[1] / max(1, total_allocated_1)
-            scale_factor = min(scale_factor_0, scale_factor_1)
+            # Scale down proportionally, but only by tokens that actually
+            # exceed their max. A single-sided position has max_amounts_in == 0
+            # on the unused token; that token is not "over" its max, so it must
+            # impose no constraint. Including it would force the factor to 0 and
+            # zero out the whole position — e.g. a 1-tick Aerodrome band on Base
+            # that is 100% token1 (token0 max is 0).
+            scale_factors = []
+            if total_allocated_0 > max_amounts_in[0]:
+                scale_factors.append(max_amounts_in[0] / total_allocated_0)
+            if total_allocated_1 > max_amounts_in[1]:
+                scale_factors.append(max_amounts_in[1] / total_allocated_1)
+            scale_factor = min(scale_factors)
 
             self.context.logger.info(
                 f"Scaling down allocations by factor {scale_factor:.4f}"
             )
 
-            # Apply scaling
+            # Apply scaling, clamping to max_amounts_in. scale_factor can round
+            # to 1.0 in float64 when the overshoot is tiny relative to the
+            # amount (e.g. a 227-wei overshoot on a ~1.6e19 balance), so the
+            # clamp guarantees we never request more than the available max.
             for position in tick_ranges[0]:
-                position["amount0_desired"] = int(
-                    position["amount0_desired"] * scale_factor
+                position["amount0_desired"] = min(
+                    int(position["amount0_desired"] * scale_factor),
+                    max_amounts_in[0],
                 )
-                position["amount1_desired"] = int(
-                    position["amount1_desired"] * scale_factor
+                position["amount1_desired"] = min(
+                    int(position["amount1_desired"] * scale_factor),
+                    max_amounts_in[1],
                 )
 
         # Process each position and collect individual transaction hashes
@@ -911,6 +951,28 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         # Return the list of transaction hashes
         return tx_hashes, position_manager_address
+
+    def _get_pool_is_stable(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[bool]]:
+        """Resolve a Velodrome/Aerodrome v2 pool's stable flag on-chain."""
+        if not pool_address:
+            self.context.logger.error("No pool address provided")
+            return None
+        is_stable = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromePoolContract.contract_id,
+            contract_callable="get_stable",
+            data_key="stable",
+            chain_id=chain,
+        )
+        if is_stable is None:
+            self.context.logger.error(
+                f"Could not read stable() for pool {pool_address}"
+            )
+            return None
+        return bool(is_stable)
 
     def _get_sqrt_price_x96(
         self, chain: str, pool_address: str
@@ -2429,14 +2491,18 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             token0_decimals, token1_decimals = token_decimals
 
-            # Get pool's price ratio (price of token1 in terms of token0)
+            # Pool price = raw token1 per raw token0. Convert to the human price
+            # (token1 per token0 in human units) so a cross-decimal pair converts
+            # by value, not by raw magnitude. Equals price_ratio when both tokens
+            # share decimals.
             price_ratio = (sqrt_price_x96 / (2**96)) ** 2
+            human_price = price_ratio * (10 ** (token0_decimals - token1_decimals))
 
             amount0 = max_amounts_in[0] / (10**token0_decimals)
             amount1 = max_amounts_in[1] / (10**token1_decimals)
 
-            # Convert token1 to token0 equivalent using pool's price ratio
-            amount1_in_token0_terms = amount1 * price_ratio
+            # Express token1 as its token0-equivalent value (token0 human units).
+            amount1_in_token0_terms = amount1 / human_price
             total_token0_equivalent = amount0 + amount1_in_token0_terms
             allocated_token0_equivalent = total_token0_equivalent * allocation
             total_band_investment = int(
@@ -2473,8 +2539,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             token0_decimals, token1_decimals = token_decimals
 
-            # Get pool's price ratio (price of token1 in terms of token0)
+            # Pool price = raw token1 per raw token0; use the decimal-adjusted
+            # human price so a token0-equivalent value converts to token1 by
+            # value. Equals price_ratio when both tokens share decimals.
             price_ratio = (sqrt_price_x96 / (2**96)) ** 2
+            human_price = price_ratio * (10 ** (token0_decimals - token1_decimals))
 
             # Convert total investment to amount (token0 equivalent)
             total_token0_equivalent = total_band_investment / (10**token0_decimals)
@@ -2482,12 +2551,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Calculate token0 amount directly (in token0 units)
             token0_amount = total_token0_equivalent * token0_ratio
 
-            # Calculate token1 amount using pool price conversion
-            # First get token1 equivalent in token0 terms, then convert to token1 units
+            # token1 share is a token0-equivalent value; convert to token1 units.
             token1_equivalent_in_token0 = total_token0_equivalent * token1_ratio
-            token1_amount = (
-                token1_equivalent_in_token0 / price_ratio
-            )  # Convert to token1 units
+            token1_amount = token1_equivalent_in_token0 * human_price
 
             # Convert back to raw units
             amount0_desired = int(token0_amount * (10**token0_decimals))

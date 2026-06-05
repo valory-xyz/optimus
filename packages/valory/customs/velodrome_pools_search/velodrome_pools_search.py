@@ -69,17 +69,28 @@ CHAIN_NAMES = {
 }
 
 # Sugar contract addresses
+# Base value bumped 2026-06-04 to the LpSugar deployment listed in
+# velodrome-finance/sugar/deployments/base.env. LP_SUGAR_ABI's ``all``
+# signature and field order match the current Vyper source, so the
+# bump is ABI-compatible.
 SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
     OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
-    BASE_CHAIN_ID: "0x27fc745390d1f4BaF8D184FBd97748340f786634",  # Base Sugar contract address
+    BASE_CHAIN_ID: "0x69dD9db6d8f8E7d83887A704f447b1a584b599A1",  # Base LpSugar (V3)
 }
 
 # RewardsSugar contract addresses
+# Base value left on the older deployment 0xD4aD2... pending a struct
+# migration: the latest RewardsSugar V3 returns ``LpEpoch`` (ts, lp,
+# votes, emissions, bribes, fees) — not the ``EpochData`` shape
+# (timestamp, totalLiquidity, votes, emissions, emissionsToken, fees,
+# volume) that the consumer below decodes by index. Bumping without
+# rewriting the consumer would mis-decode index 1 (was totalLiquidity,
+# would be the lp address) and crash on float().
 REWARDS_SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0xD5d3ABAcB8CF075636792658EE0be8B03AF517B8",  # Mode RewardsSugar contract address (placeholder)
-    OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address (same as LpSugar for now)
-    BASE_CHAIN_ID: "0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E",  # Base RewardsSugar contract address (same as LpSugar for now)
+    OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address
+    BASE_CHAIN_ID: "0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E",  # Base RewardsSugar (older deployment; see note above)
 }
 
 # RPC endpoints
@@ -409,9 +420,14 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
-@lru_cache(maxsize=8)
 def get_web3_connection(rpc_url):
-    """Get or create a Web3 connection with caching."""
+    """Get a fresh Web3 connection per call.
+
+    Intentionally uncached. Tests in the customs package assume a fresh
+    Web3 instance per call (see autouse reset_state fixture); adding an
+    lru_cache would break test isolation as the same URL across tests
+    would resolve to a Web3 instance bound to a previously-patched mock.
+    """
     return Web3(
         Web3.HTTPProvider(
             rpc_url,
@@ -1262,7 +1278,7 @@ def get_velodrome_pools_via_sugar(
                 ),
                 "inputTokenBalances": [str(pool["reserve0"]), str(pool["reserve1"])],
                 "cumulativeVolumeUSD": "0",  # Not available directly
-                "sugar_data": pool,  # Store the original data,
+                "sugar_data": {**pool, "chain": CHAIN_NAMES.get(chain_id, "unknown")},
                 "pool_fee": pool["pool_fee"],
             }
 
@@ -1429,7 +1445,7 @@ def calculate_position_details_for_velodrome(
             # Get chain ID from pool data or context
             try:
                 tick_bands = calculate_tick_lower_and_upper_velodrome(
-                    chain="optimism",  # Should be passed as parameter
+                    chain=pool_data.get("chain", "optimism"),
                     pool_address=pool_data.get("id"),
                     is_stable=(pool_type == 0),
                     coingecko_api_key=coingecko_api_key,
@@ -2742,8 +2758,10 @@ def format_velodrome_pool_data(
         # Determine if it's a concentrated liquidity pool based on type
         is_cl_pool = pool_type not in [0, -1]
 
-        # Prepare base data including all required fields
-        # Use "aerodrome" for Base chain, "velodrome" for others
+        # Prepare base data including all required fields.
+        # Use "aerodrome" on Base (the Base-specific brand of the
+        # Velodrome protocol) and "velodrome" elsewhere. The agent
+        # dispatch accepts both as the same family.
         dex_type = AERODROME if chain_name == "base" else VELODROME
         formatted_pool = {
             "dex_type": dex_type,
@@ -3300,6 +3318,17 @@ def run(
     """
     # Clear previous errors
     get_errors().clear()
+
+    # Apply caller-provided per-chain RPC overrides so the strategy talks to
+    # the same endpoints as the agent's ledger connection. Falls back to the
+    # hardcoded defaults when a chain is not supplied.
+    chain_to_rpc = kwargs.pop("chain_to_rpc", None) or {}
+    if chain_to_rpc:
+        name_to_id = {cname: cid for cid, cname in CHAIN_NAMES.items()}
+        for chain_name, rpc_url in chain_to_rpc.items():
+            cid = name_to_id.get(chain_name.lower())
+            if cid is not None and rpc_url:
+                RPC_ENDPOINTS[cid] = rpc_url
 
     # Apply configurable price cache TTL and shared cache dict
     price_cache_ttl_val = int(kwargs.pop("price_cache_ttl", 1800))

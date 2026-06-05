@@ -39,6 +39,7 @@ def validate_and_fix_protocols(
         "balancerPool": "balancer_pools_search",
         "uniswapV3": "uniswap_pools_search",  # Deprecated for new users, kept for grandfathering
         "velodrome": "velodrome_pools_search",
+        "aerodrome": "velodrome_pools_search",
         "sturdy": "asset_lending",
     }
 

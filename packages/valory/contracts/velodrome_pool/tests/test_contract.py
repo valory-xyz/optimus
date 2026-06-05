@@ -109,11 +109,28 @@ class TestGetReserves:
         assert result == {"data": [5000, 10000]}
 
 
+class TestGetStable:
+    """Tests for the get_stable method."""
+
+    def test_get_stable_returns_flag(self) -> None:
+        """Test that get_stable returns the pool's stable flag."""
+        mock_ledger_api = MagicMock()
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.stable.return_value.call.return_value = True
+
+        with patch.object(
+            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
+        ):
+            result = VelodromePoolContract.get_stable(mock_ledger_api, MOCK_ADDRESS)
+
+        assert result == {"stable": True}
+
+
 class TestAbiIntegrity:
     """Verify that every function used in contract.py exists in the ABI."""
 
     ABI_FILE = "VelodromePool.json"
-    EXPECTED_FUNCTIONS = ["approve", "balanceOf", "reserve0", "reserve1"]
+    EXPECTED_FUNCTIONS = ["approve", "balanceOf", "reserve0", "reserve1", "stable"]
 
     @classmethod
     def _load_abi_function_names(cls) -> set:

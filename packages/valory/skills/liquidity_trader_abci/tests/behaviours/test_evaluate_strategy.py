@@ -2716,6 +2716,52 @@ class TestCalculateVelodromeTokenRatios:
         assert result is not None
         assert result["position_requirements"][0]["status"] == "IN_RANGE"
 
+    def test_in_range_mixed_decimals_not_skewed(self):
+        """In-range split must be value-based, not raw.
+
+        With USDC(6)/eUSD(18) the raw token1 amount dwarfs token0, but weighting
+        amount0 by the raw pool price recovers the ~0.22/0.78 value split instead
+        of 0.0/1.0.
+        """
+        b = _mk()
+        # raw price 1e12 (sqrt = 1e6 * 2**96): a 6/18-decimal pair at ~$1
+        sqrt_price = int(1_000_000 * (2**96))
+        validated_data = {
+            "validated_bands": [
+                {"tick_lower": -100, "tick_upper": 100, "allocation": 1.0}
+            ],
+            "current_price": 1.0,
+            "current_tick": 0,
+            "warnings": [],
+            "sqrt_price_x96": sqrt_price,
+        }
+        call_count = [0]
+
+        def _sqrt_at_tick(*a, **kw):
+            call_count[0] += 1
+            if call_count[0] % 2 == 1:
+                yield
+                return sqrt_price // 2  # lower
+            else:
+                yield
+                return sqrt_price * 2  # upper
+
+        b.get_velodrome_sqrt_ratio_at_tick = _sqrt_at_tick
+        # raw amounts a unit-liquidity position needs at this price/range
+        b.get_velodrome_amounts_for_liquidity = _gen_return(
+            (11005348906325127357, 39010576145415569723946513555837)
+        )
+        result = _drive(
+            b.calculate_velodrome_token_ratios(validated_data, "base"),
+            sends=[None] * 10,
+        )
+        assert result is not None
+        pr = result["position_requirements"][0]
+        assert pr["status"] == "IN_RANGE"
+        # value split ~0.22 / 0.78, NOT the raw-skewed 0.0 / 1.0
+        assert 0.20 < pr["token0_ratio"] < 0.24
+        assert 0.76 < pr["token1_ratio"] < 0.80
+
     def test_with_sqrt_price_x96_provided(self):
         """Test with sqrt price x96 provided."""
         b = _mk()

@@ -58,6 +58,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PositionStatus,
     REWARD_TOKEN_ADDRESSES,
     THRESHOLDS,
+    VELODROME_FAMILY_DEX_TYPES,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
@@ -328,11 +329,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         sqrt_ratio_b_x96,
                         unit_liquidity,
                     )
-                    # Calculate from actual amounts
-                    total_amount = amount0 + amount1
+                    # amount0/amount1 are raw (token base units). Weight amount0
+                    # by the raw pool price (raw token1 per raw token0) so both
+                    # legs share units before forming the value ratio. Without
+                    # this, a token1 with more decimals than token0 dominates the
+                    # raw sum and forces token1_ratio to 1.0 — e.g. USDC (6) /
+                    # eUSD (18) on Base. Reduces to amount0/total when the pool
+                    # price is ~1 (same-decimal stable pairs).
+                    raw_price = (sqrt_price_x96 / (2**96)) ** 2
+                    amount0_in_token1 = amount0 * raw_price
+                    total_amount = amount0_in_token1 + amount1
                     if total_amount > 0:
                         # Round to 5 decimal places for precision
-                        token0_ratio = round(amount0 / total_amount, 5)
+                        token0_ratio = round(amount0_in_token1 / total_amount, 5)
                         token1_ratio = round(amount1 / total_amount, 5)
                     else:
                         # Fallback if calculation fails
@@ -446,9 +455,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         results = {}
         max_ration = 1.0
         for opportunity in self.selected_opportunities:  # type: ignore[attr-defined]
-            if opportunity.get("dex_type") == "velodrome" and opportunity.get(
-                "is_cl_pool"
-            ):
+            if opportunity.get(
+                "dex_type"
+            ) in VELODROME_FAMILY_DEX_TYPES and opportunity.get("is_cl_pool"):
                 try:
                     chain = opportunity["chain"]
                     pool_address = opportunity["pool_address"]
@@ -893,7 +902,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             result = stored_balances.copy()
             if (
                 position.get("staked", False)
-                and position.get("dex_type") == "velodrome"
+                and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             ):
                 if hasattr(self, "_get_velodrome_pending_rewards"):  # pragma: no branch
                     user_address = self.params.safe_contract_addresses.get(chain)
@@ -1640,6 +1649,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     ),
                     "price_cache_ttl": self.params.strategy_price_cache_ttl,
                     "price_cache": self.shared_state.strategy_coingecko_price_cache,
+                    "chain_to_rpc": {
+                        "base": self.params.base_ledger_rpc,
+                        "optimism": self.params.optimism_ledger_rpc,
+                    },
                 }
             )
             strategy_kwargs_list.append((next_strategy, kwargs))
@@ -2003,7 +2016,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Only process if it's a Velodrome position with token requirements
         self.context.logger.info(f"action inside the velodrome: {actions}")
         if (
-            enter_pool_action.get("dex_type") == "velodrome"
+            enter_pool_action.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             and "token_requirements" in enter_pool_action
         ):
             token_requirements = enter_pool_action.get("token_requirements", {})
@@ -2228,7 +2241,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return actions
 
         for opportunity in self.selected_opportunities:
-            if opportunity.get("dex_type") == "velodrome":
+            if opportunity.get("dex_type") in VELODROME_FAMILY_DEX_TYPES:
                 result2 = yield from self.get_velodrome_position_requirements()
                 self.context.logger.info(f"result2: {result2}")
 
@@ -2281,9 +2294,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
             # Cache the enter pool action if this is a Velodrome CL pool
-            if opportunity.get("dex_type") == "velodrome" and opportunity.get(
-                "is_cl_pool"
-            ):
+            if opportunity.get(
+                "dex_type"
+            ) in VELODROME_FAMILY_DEX_TYPES and opportunity.get("is_cl_pool"):
                 yield from self._cache_enter_pool_action_for_cl_pool(
                     opportunity, enter_pool_action
                 )
@@ -2304,7 +2317,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Check for Velodrome positions with 100% allocation to one token
         if (
-            enter_pool_action.get("dex_type") == "velodrome"  # type: ignore[union-attr]
+            enter_pool_action.get("dex_type") in VELODROME_FAMILY_DEX_TYPES  # type: ignore[union-attr]
             and "token_requirements" in enter_pool_action  # type: ignore[operator]
         ):
             # After building all enter_pool_action and bridge_swap_actions
@@ -3317,7 +3330,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             is_cl_pool = opportunity.get("is_cl_pool", False)
 
             # Only create staking actions for Velodrome pools
-            if dex_type != "velodrome":
+            if dex_type not in VELODROME_FAMILY_DEX_TYPES:
                 self.context.logger.info(
                     f"Skipping staking for non-Velodrome pool: {dex_type}"
                 )
@@ -3380,7 +3393,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             gauge_address = position.get("gauge_address")
 
             # Only create claim actions for Velodrome pools with staking metadata
-            if dex_type != "velodrome":
+            if dex_type not in VELODROME_FAMILY_DEX_TYPES:
                 self.context.logger.info(
                     f"Skipping reward claim for non-Velodrome pool: {dex_type}"
                 )
@@ -3475,7 +3488,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         dex_type = opportunity.get("dex_type")
 
         # Only add staking for Velodrome pools
-        if dex_type != "velodrome":
+        if dex_type not in VELODROME_FAMILY_DEX_TYPES:
             return False
 
         # Check if chain has voter contract configured
@@ -3793,7 +3806,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "pool_address": cached_data.get("pool_address"),
                 "token0": token0,
                 "token1": token1,
-                "dex_type": "velodrome",
+                "dex_type": (
+                    DexType.AERODROME.value
+                    if chain == "base"
+                    else DexType.VELODROME.value
+                ),
                 "is_cl_pool": True,
             }
 

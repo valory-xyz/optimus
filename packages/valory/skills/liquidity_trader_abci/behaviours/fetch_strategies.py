@@ -1293,10 +1293,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             position.get("token1"): position.get("token1_symbol"),
         }
 
-        # Add VELO to token_info if rewards exist
+        # Add the gauge reward token (VELO / AERO) to token_info if rewards exist
         velo_token_address = self._get_velo_token_address(chain)
         if velo_token_address and velo_token_address in user_balances:
-            token_info[velo_token_address] = "VELO"
+            token_info[velo_token_address] = self._get_velo_family_reward_symbol(chain)
 
         return user_balances, details, token_info
 
@@ -1530,11 +1530,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        reward_symbol = self._get_velo_family_reward_symbol(chain)
+                        velo_coin_id = self.get_coin_id_from_symbol(
+                            reward_symbol, chain
+                        )
                         velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
                             self.context.logger.warning(
-                                "Could not fetch VELO price for yield calculation"
+                                f"Could not fetch {reward_symbol} price for "
+                                "yield calculation"
                             )
                             velo_price = Decimal(0)
                         else:
@@ -2324,7 +2328,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_address == ZERO_ADDRESS:
                         token_price = yield from self._fetch_zero_address_price()
                     elif token_address.lower() == velo_token_address:
-                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        velo_coin_id = self.get_coin_id_from_symbol(
+                            self._get_velo_family_reward_symbol(chain), chain
+                        )
                         token_price = yield from self._fetch_coin_price(velo_coin_id)
                     else:
                         token_price = yield from self._fetch_token_price(
@@ -4983,6 +4989,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Get the VELO token address for the specified chain from params."""
         velo_addresses = self.params.velo_token_contract_addresses
         return velo_addresses.get(chain)
+
+    def _get_velo_family_reward_symbol(self, chain: str) -> str:
+        """Return the LP-gauge reward token symbol for the chain.
+
+        Aerodrome on Base distributes AERO; Velodrome on Optimism and Mode
+        distributes VELO. ``_get_velo_token_address`` already returns the
+        correct contract per chain, but a few sites still need the symbol
+        for UI labels and CoinGecko price lookups.
+        """
+        return "AERO" if chain == "base" else "VELO"
 
     def _validate_velodrome_v2_pool_addresses(self) -> Generator[None, None, None]:
         """Validate Velodrome v2 pool addresses for all positions."""

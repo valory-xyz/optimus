@@ -28,7 +28,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
 import requests
 from eth_utils import to_checksum_address
-
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
@@ -51,16 +50,16 @@ from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterCon
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    OLAS_ADDRESSES,
-    PORTFOLIO_UPDATE_INTERVAL,
-    VELODROME_FAMILY_DEX_TYPES,
-    WHITELISTED_ASSETS,
-    ZERO_ADDRESS,
     Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
+    OLAS_ADDRESSES,
+    PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
     TradingType,
+    VELODROME_FAMILY_DEX_TYPES,
+    WHITELISTED_ASSETS,
+    ZERO_ADDRESS,
     _noop_rate_limit_callback,
     initial_value_ts_kv_key,
     total_withdrawals_kv_key,

@@ -4265,9 +4265,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if from_address.lower() == address.lower():
                         continue
 
-                    # Filter from address - only include EOAs and GnosisSafe contracts
+                    # Filter from address - only include EOAs and GnosisSafe
+                    # contracts on the chain the transfer happened on.
                     should_include = yield from self._should_include_transfer_optimism(
-                        from_address
+                        from_address, chain=chain
                     )
                     if not should_include:
                         continue
@@ -4348,9 +4349,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         return not fetch_failed
 
     def _should_include_transfer_optimism(
-        self, from_address: str
+        self, from_address: str, chain: str = "optimism"
     ) -> Generator[None, None, bool]:
-        """Determine if an Optimism transfer should be included based on from address type."""
+        """Decide whether to include a transfer based on the from-address type.
+
+        EOAs and Gnosis Safes are real funders; smart contracts are not (e.g.
+        a pool returning tokens on exit is part of position settlement, not
+        new external capital). The code check must run against the chain the
+        transfer happened on: an address can be a contract on one L2 and an
+        EOA on another. ``chain`` defaults to "optimism" so the old call
+        sites keep working unchanged.
+
+        :param from_address: the transfer's sender address.
+        :param chain: chain name used to pick the ledger RPC, the Safe API
+            slug, and the per-chain cache key.
+        :yield: None.
+        :return: True if the from-address resolves to an EOA on ``chain`` or
+            to a Gnosis Safe on the Safe Transaction Service for ``chain``.
+        """
         if not from_address:
             return False
 
@@ -4362,8 +4378,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             return False
 
-        # Check cache first
-        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{from_address.lower()}"
+        # Per-chain cache key — an address can be a contract on one chain and
+        # an EOA on another, so the cached answer must be chain-scoped.
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}{chain}_{from_address.lower()}"
         cached_result = yield from self._read_kv((cache_key,))
 
         if cached_result and cached_result.get(cache_key):
@@ -4373,8 +4390,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             except (json.JSONDecodeError, KeyError):
                 pass
 
+        chain_to_rpc = {
+            "optimism": self.params.optimism_ledger_rpc,
+            "base": self.params.base_ledger_rpc,
+        }
+        rpc_url = chain_to_rpc.get(chain)
+        if not rpc_url:
+            self.context.logger.warning(
+                f"No ledger RPC configured for chain {chain}; cannot classify "
+                f"transfer from {from_address}"
+            )
+            return False
+
         try:
-            # Use Optimism RPC to check if address is a contract
             payload = {
                 "jsonrpc": "2.0",
                 "method": "eth_getCode",
@@ -4383,7 +4411,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint=self.params.optimism_ledger_rpc,
+                endpoint=rpc_url,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4393,18 +4421,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not success:
-                self.context.logger.error("Failed to check contract code")
+                self.context.logger.error(
+                    f"Failed to check contract code on {chain} for {from_address}"
+                )
                 return False
 
             code = result.get("result", "0x")
 
-            # If code is '0x', it's an EOA
+            # If code is '0x', it's an EOA on this chain
             if code == "0x":
                 is_eoa = True
             else:
-                # If it has code, check if it's a GnosisSafe
+                # Has code on this chain — check the Safe Transaction Service
+                # for the same chain to see if it's a Gnosis Safe.
                 safe_check_url = self._build_safe_api_url(
-                    "optimism", "v1", f"safes/{from_address}/"
+                    chain, "v1", f"safes/{from_address}/"
                 )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
@@ -4416,18 +4447,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 is_eoa = success
 
-            # Cache the result permanently (no TTL)
+            # Cache the result permanently (no TTL) under the per-chain key.
             cache_data = {"is_eoa": is_eoa}
             yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
             if not is_eoa:
                 self.context.logger.info(
-                    f"Excluding transfer from contract: {from_address}"
+                    f"Excluding {chain} transfer from contract: {from_address}"
                 )
             return is_eoa
 
         except Exception as e:
-            self.context.logger.error(f"Error checking address {from_address}: {e}")
+            self.context.logger.error(
+                f"Error checking address {from_address} on {chain}: {e}"
+            )
             return False
 
     def _is_not_other_contract_optimism(

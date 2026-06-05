@@ -10594,3 +10594,134 @@ class TestCalculateInitialInvestmentTimestampPerChain:
         assert (
             "last_initial_value_calculated_timestamp_optimism" in written_keys
         ), written_keys
+
+
+class TestCalculateWithdrawalsValueMultiChainSum:
+    """Multi-chain aggregation must sum every configured chain.
+
+    Before this branch was rewritten, ``calculate_withdrawals_value``
+    hard-indexed ``target_investment_chains[0]`` and silently dropped
+    every other chain's withdrawal. A single-chain test cannot catch
+    that — only a two-chain config can.
+    """
+
+    def test_two_chain_config_sums_both_chains(self):
+        """A Mode+Optimism config returns the sum of both per-chain values.
+
+        Captures the chains that the per-chain helper saw so a future
+        regression that re-indexes ``[0]`` (or breaks the loop) fails
+        this test rather than silently passing under single-chain
+        coverage.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["mode", "optimism"]
+        obj.params.safe_contract_addresses = {"mode": "0xM", "optimism": "0xO"}
+
+        seen_chains: List[str] = []
+
+        def fake_chain_value(chain: str):
+            seen_chains.append(chain)
+            yield
+            return Decimal("10") if chain == "mode" else Decimal("25")
+
+        obj._calculate_chain_withdrawal_value = fake_chain_value
+
+        result = _drive(obj.calculate_withdrawals_value())
+        assert result == Decimal("35")
+        assert seen_chains == ["mode", "optimism"]
+
+    def test_one_chain_failure_returns_none_even_if_others_succeed(self):
+        """A None from any chain surfaces None at the aggregator.
+
+        A partial sum would understate Total ROI silently; surfacing
+        None lets ``_create_portfolio_data`` preserve the last-known
+        ROI for the cycle instead.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["mode", "optimism"]
+        obj.params.safe_contract_addresses = {"mode": "0xM", "optimism": "0xO"}
+
+        def fake_chain_value(chain: str):
+            yield
+            return Decimal("10") if chain == "mode" else None
+
+        obj._calculate_chain_withdrawal_value = fake_chain_value
+
+        assert _drive(obj.calculate_withdrawals_value()) is None
+
+
+class TestCreatePortfolioDataSkipsRoiWhenWithdrawalsNone:
+    """When withdrawals can't be fetched, ROI must be skipped, not zeroed."""
+
+    def test_withdrawals_none_yields_roi_none(self):
+        """A None withdrawals_value leaves total_roi and partial_roi at None.
+
+        Without this branch, the ROI math would treat the missing
+        withdrawals as ``Decimal(0)`` and overstate the cycle's Total
+        ROI by the amount of any pending withdrawals.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj._get_current_timestamp = lambda: 1000
+
+        result = obj._create_portfolio_data(
+            Decimal("100"),  # total_pools_value
+            Decimal("50"),  # total_safe_value
+            Decimal("5"),  # staking_rewards_value
+            Decimal("2"),  # airdrop_rewards_value
+            None,  # withdrawals_value — fetch failed this cycle
+            200.0,  # initial_investment
+            300.0,  # volume
+            [],
+            [],
+        )
+        assert result is not None
+        assert result["total_roi"] is None
+        assert result["partial_roi"] is None
+        # ``value_in_withdrawals`` is serialised as None so downstream
+        # consumers can distinguish "no withdrawals fetched" from "0".
+        assert result["value_in_withdrawals"] is None
+
+
+class TestUpdatePositionPreservesYieldOnPriceMiss:
+    """A None from _calculate_corrected_yield must preserve the prior yield_usd."""
+
+    def test_prior_yield_usd_survives_corrected_yield_returning_none(self):
+        """Last-known yield/cost_recovered are kept when the recompute can't run.
+
+        Drives ``_update_position_with_current_value`` through a
+        ``_calculate_corrected_yield`` that returns None (the new
+        sentinel for a missing VELO/AERO price). The position's prior
+        fields must remain intact — overwriting them with an undercount
+        would misreport cost-recovery progress to the operator.
+        """
+        obj = _mk()
+        obj._calculate_corrected_yield = _gen_return(None)
+        obj._get_current_token_balances = _gen_return(
+            {"0xT0": Decimal("1"), "0xT1": Decimal("1")}
+        )
+
+        prior_yield = 3.5
+        position: Dict[str, Any] = {
+            "pool_address": "0xPool",
+            "chain": "optimism",
+            "dex_type": "velodrome",
+            "token0": "0xT0",
+            "token1": "0xT1",
+            "initial_amount0": 10**18,
+            "initial_amount1": 10**18,
+            "amount0": 10**18,
+            "amount1": 10**18,
+            "yield_usd": prior_yield,
+            "cost_recovered": True,
+            "entry_cost": 10.0,
+        }
+
+        _drive(
+            obj._update_position_with_current_value(position, Decimal("0"), "optimism")
+        )
+
+        # Both the cached yield and cost_recovered must be untouched.
+        assert position["yield_usd"] == prior_yield
+        assert position["cost_recovered"] is True

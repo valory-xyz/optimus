@@ -1509,8 +1509,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         current_balances: Dict,
         chain: str,
         token_prices: Dict = None,
-    ) -> Generator[Decimal, None, None]:
-        """Calculate yield as token quantity increases priced at current prices"""
+    ) -> Generator[None, None, Optional[Decimal]]:
+        """Calculate yield as token quantity increases priced at current prices.
+
+        :param position: position record under valuation.
+        :param initial_amount0: raw initial deposit of token0.
+        :param initial_amount1: raw initial deposit of token1.
+        :param current_balances: per-token decimal balances on chain now.
+        :param chain: chain name used for token-metadata + reward lookups.
+        :param token_prices: optional pre-fetched price map.
+        :yield: None.
+        :return: Yield in USD, or ``None`` when a required reward-token
+            price could not be fetched. The caller preserves the
+            position's last-known ``yield_usd`` on ``None`` rather than
+            overwriting it with an undercount.
+        """
 
         token0_address = position.get("token0")
         token1_address = position.get("token1")
@@ -5394,10 +5407,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.portfolio_data.get("portfolio_value", 0.0)
                 )
 
-                # Use pre-calculated ROI percentages from portfolio data
-                total_roi_percentage = float(self.portfolio_data.get("total_roi", 0.0))
-                partial_roi_percentage = float(
-                    self.portfolio_data.get("partial_roi", 0.0)
+                # Use pre-calculated ROI percentages from portfolio data.
+                # ``total_roi`` / ``partial_roi`` are present in the dict but
+                # may be ``None`` (e.g. when the withdrawal fetch failed and
+                # ``_create_portfolio_data`` skipped the ROI recompute).
+                # ``dict.get(k, default)`` only returns the default when the
+                # key is absent, so ``None`` would otherwise reach
+                # ``float(None)`` and raise ``TypeError`` — silently breaking
+                # this whole update inside the surrounding try/except.
+                raw_total_roi = self.portfolio_data.get("total_roi")
+                total_roi_percentage = (
+                    float(raw_total_roi) if raw_total_roi is not None else 0.0
+                )
+                raw_partial_roi = self.portfolio_data.get("partial_roi")
+                partial_roi_percentage = (
+                    float(raw_partial_roi) if raw_partial_roi is not None else 0.0
                 )
 
             # Update metrics

@@ -4612,3 +4612,54 @@ class TestRunWithPriceCacheVelodrome:
         """Test that run() accepts a non-None price_cache without error."""
         result = run(price_cache={}, price_cache_ttl=600)
         assert "error" in result
+
+
+class TestRunRpcOverrideSnapshotRestore:
+    """run() must not leak ``chain_to_rpc`` overrides into ``RPC_ENDPOINTS``.
+
+    ``RPC_ENDPOINTS`` is module-global and read from many downstream
+    sites in this file. A leaked override from one ``run()`` would
+    silently bleed into the next cycle's RPC selection (or the next
+    test), so the snapshot+restore contract is worth pinning.
+    """
+
+    def test_overrides_are_reverted_after_run(self) -> None:
+        """Pre-call snapshot of RPC_ENDPOINTS equals the post-call mapping."""
+        snapshot_before = dict(RPC_ENDPOINTS)
+
+        # ``run()`` fails fast on missing required fields, but the override
+        # apply + finally restore both fire before the early-return path.
+        run(
+            chain_to_rpc={
+                "optimism": "https://override-optimism.example",
+                "base": "https://override-base.example",
+            },
+        )
+
+        assert dict(RPC_ENDPOINTS) == snapshot_before, (
+            "chain_to_rpc override leaked into RPC_ENDPOINTS; the "
+            "snapshot+restore contract in run() must restore the original "
+            "mapping exactly so a later cycle does not reuse stale URLs."
+        )
+
+    def test_overrides_are_reverted_after_run_exception(self) -> None:
+        """A crash mid-``run()`` still restores the original mapping.
+
+        Forces ``_run_impl`` to raise so the ``finally`` branch of the
+        snapshot+restore is exercised. Without the ``finally``, a
+        crashing test would leak its override into the next test in the
+        same pytest session.
+        """
+        snapshot_before = dict(RPC_ENDPOINTS)
+
+        with patch.object(
+            vel_mod, "_run_impl", side_effect=RuntimeError("boom")
+        ):
+            with pytest.raises(RuntimeError):
+                run(
+                    chain_to_rpc={
+                        "optimism": "https://override-after-crash.example"
+                    },
+                )
+
+        assert dict(RPC_ENDPOINTS) == snapshot_before

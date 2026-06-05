@@ -1511,7 +1511,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Add VELO rewards if position is staked
         velo_rewards_usd = Decimal(0)
-        if position.get("staked", False) and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES:
+        if (
+            position.get("staked", False)
+            and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
+        ):
             # Get VELO token address and check if it's in current_balances
             velo_token_address = self._get_velo_token_address(chain)
             if velo_token_address and velo_token_address in current_balances:
@@ -3517,6 +3520,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :param address: the Safe contract address.
         :param end_date: ISO date string used as the upper bound for transfer
             filtering.
+        :param chain: chain name used for the Safe API slug and the per-chain
+            dict key in funding_events.
         :yield: None.
         :return: the freshly fetched transfers keyed by date. On a mid-stream
             failure the persisted dataset is returned instead so the caller
@@ -3528,9 +3533,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self.funding_events = self.read_funding_events()
         if self.funding_events:
             raw_chain_data = self.funding_events.get(chain, {})
-            existing_chain_data, dropped = _drop_legacy_transfer_entries(
-                raw_chain_data
-            )
+            existing_chain_data, dropped = _drop_legacy_transfer_entries(raw_chain_data)
             if dropped:
                 self.context.logger.info(
                     f"Dropped {dropped} legacy {chain} transfer entries "
@@ -3596,9 +3599,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return dict(all_transfers_by_date)
 
         except Exception as e:
-            self.context.logger.error(
-                f"Error fetching {chain_label} transfers: {e}"
-            )
+            self.context.logger.error(f"Error fetching {chain_label} transfers: {e}")
             return {}
 
     def _fetch_token_transfers(
@@ -4070,6 +4071,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers, keyed by date.
         :param existing_data: persisted date-keyed transfers, used to seed
             the in-cycle dedup set.
+        :param chain: chain name used to pick the Safe API slug and the
+            chain identifier passed to per-chain token RPC lookups.
         :yield: None.
         :return: ``True`` on a fully-successful pagination, ``False`` on any
             mid-stream page fetch failure or exception. The caller must skip
@@ -4253,9 +4256,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
         except Exception as e:
-            self.context.logger.error(
-                f"Error fetching {chain_label} transfers: {e}"
-            )
+            self.context.logger.error(f"Error fetching {chain_label} transfers: {e}")
             fetch_failed = True
 
         return not fetch_failed

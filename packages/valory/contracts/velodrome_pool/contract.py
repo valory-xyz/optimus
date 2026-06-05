@@ -70,3 +70,14 @@ class VelodromePoolContract(Contract):
         reserve0 = contract_instance.functions.reserve0().call()
         reserve1 = contract_instance.functions.reserve1().call()
         return dict(data=[reserve0, reserve1])
+
+    @classmethod
+    def get_stable(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get whether this is a stable (vs volatile) v2 pool."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        stable = contract_instance.functions.stable().call()
+        return dict(stable=stable)

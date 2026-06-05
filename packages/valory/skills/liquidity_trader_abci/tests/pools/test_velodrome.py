@@ -591,6 +591,64 @@ class TestEnter:
         assert called_with["pool_address"] == "0xpool"
         assert called_with["is_stable"] is True
 
+    def test_stable_pool_resolves_is_stable_when_none(self) -> None:
+        """is_stable=None is resolved on-chain before delegating."""
+        b = make_behaviour()
+        called_with = {}
+
+        def fake_enter_sv(**kwargs):
+            """Fake enter sv."""
+            called_with.update(kwargs)
+            yield
+            return ("tx_hash", "router_addr")
+
+        def fake_get_is_stable(addr, ch):
+            """Fake on-chain stable() read."""
+            yield
+            return False
+
+        b._enter_stable_volatile_pool = fake_enter_sv
+        b._get_pool_is_stable = fake_get_is_stable
+
+        gen = b.enter(**self._base_kwargs(is_stable=None))
+        result = exhaust_generator(gen)
+        assert result == ("tx_hash", "router_addr")
+        assert called_with["is_stable"] is False
+
+    def test_stable_pool_unresolvable_is_stable_returns_none(self) -> None:
+        """When is_stable cannot be resolved on-chain, enter aborts."""
+        b = make_behaviour()
+
+        def fake_get_is_stable(addr, ch):
+            """Fake on-chain stable() read that fails."""
+            yield
+            return None
+
+        b._get_pool_is_stable = fake_get_is_stable
+        gen = b.enter(**self._base_kwargs(is_stable=None))
+        result = exhaust_generator(gen)
+        assert result == (None, None)
+
+    def test_get_pool_is_stable_success(self) -> None:
+        """_get_pool_is_stable returns the on-chain stable flag as a bool."""
+        b = make_behaviour()
+        b.contract_interact = _mock_gen(True)
+        result = exhaust_generator(b._get_pool_is_stable("0xpool", "base"))
+        assert result is True
+
+    def test_get_pool_is_stable_no_address(self) -> None:
+        """_get_pool_is_stable returns None when no pool address is given."""
+        b = make_behaviour()
+        result = exhaust_generator(b._get_pool_is_stable("", "base"))
+        assert result is None
+
+    def test_get_pool_is_stable_contract_none(self) -> None:
+        """_get_pool_is_stable returns None when the contract read fails."""
+        b = make_behaviour()
+        b.contract_interact = _mock_gen(None)
+        result = exhaust_generator(b._get_pool_is_stable("0xpool", "base"))
+        assert result is None
+
     def test_cl_pool_delegates_to_enter_cl_pool(self) -> None:
         """CL pool calls _enter_cl_pool."""
         b = make_behaviour()
@@ -741,6 +799,43 @@ class TestExit:
         assert result == (b"txdata", "multisend_addr", True)
         assert called_with["pool_address"] == "0xpool"
         assert called_with["is_stable"] is True
+
+    def test_stable_exit_resolves_is_stable_when_none(self) -> None:
+        """Exit resolves is_stable on-chain when the strategy left it unset."""
+        b = make_behaviour()
+        called_with = {}
+
+        def fake_exit_sv(**kwargs):
+            """Fake exit sv."""
+            called_with.update(kwargs)
+            yield
+            return (b"txdata", "multisend_addr", True)
+
+        def fake_get_is_stable(addr, ch):
+            """Fake on-chain stable() read."""
+            yield
+            return True
+
+        b._exit_stable_volatile_pool = fake_exit_sv
+        b._get_pool_is_stable = fake_get_is_stable
+        gen = b.exit(**self._base_kwargs(is_stable=None))
+        result = exhaust_generator(gen)
+        assert result == (b"txdata", "multisend_addr", True)
+        assert called_with["is_stable"] is True
+
+    def test_stable_exit_unresolvable_is_stable_returns_none(self) -> None:
+        """Exit aborts (triple None) when is_stable cannot be resolved."""
+        b = make_behaviour()
+
+        def fake_get_is_stable(addr, ch):
+            """Fake on-chain stable() read that fails."""
+            yield
+            return None
+
+        b._get_pool_is_stable = fake_get_is_stable
+        gen = b.exit(**self._base_kwargs(is_stable=None))
+        result = exhaust_generator(gen)
+        assert result == (None, None, None)
 
     def test_cl_pool_delegates_to_exit_cl_pool(self) -> None:
         """CL pool exit delegates correctly."""

@@ -348,7 +348,17 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 )
             )
         else:
-            # Handle Stable or Volatile pools
+            # Handle Stable or Volatile pools. The pool-search strategy does not
+            # always classify is_stable (e.g. some Base v2 pools come back with
+            # is_stable=None), and the router's quote/addLiquidity need a real
+            # bool, so resolve it on-chain when missing.
+            if is_stable is None:
+                is_stable = yield from self._get_pool_is_stable(pool_address, chain)
+                if is_stable is None:
+                    self.context.logger.error(
+                        f"Could not resolve stable/volatile type for pool {pool_address}"
+                    )
+                    return None, None
             return (
                 yield from self._enter_stable_volatile_pool(
                     pool_address=pool_address,
@@ -404,6 +414,16 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     "Missing assets for exiting stable/volatile pool"
                 )
                 return None, None, None
+
+            # Resolve the stable/volatile flag on-chain when the strategy left
+            # it unset (mirrors the enter path).
+            if is_stable is None:
+                is_stable = yield from self._get_pool_is_stable(pool_address, chain)
+                if is_stable is None:
+                    self.context.logger.error(
+                        f"Could not resolve stable/volatile type for pool {pool_address}"
+                    )
+                    return None, None, None
 
             return (
                 yield from self._exit_stable_volatile_pool(
@@ -931,6 +951,28 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         # Return the list of transaction hashes
         return tx_hashes, position_manager_address
+
+    def _get_pool_is_stable(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[bool]]:
+        """Resolve a Velodrome/Aerodrome v2 pool's stable flag on-chain."""
+        if not pool_address:
+            self.context.logger.error("No pool address provided")
+            return None
+        is_stable = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromePoolContract.contract_id,
+            contract_callable="get_stable",
+            data_key="stable",
+            chain_id=chain,
+        )
+        if is_stable is None:
+            self.context.logger.error(
+                f"Could not read stable() for pool {pool_address}"
+            )
+            return None
+        return bool(is_stable)
 
     def _get_sqrt_price_x96(
         self, chain: str, pool_address: str

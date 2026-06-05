@@ -29,7 +29,7 @@ fingerprint:
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
   pools/balancer.py: bafybeicmjq7itdf6hnsmbhxktb42ghzbdwmll56o66ex2ids6oiiql56ki
   pools/uniswap.py: bafybeihoegxrjsq6al3coxtrf5ljhewjz5m2py6nwwzefyoo7molc2fdsi
-  pools/velodrome.py: bafybeidf27tyllidw343vpbdnkzffi2gasgrp26j3kt5hplxnpswkmncii
+  pools/velodrome.py: bafybeieoqyngor3opje35oqv2arcnjsdeaysa6agvo2djbegminj7y7lxi
   rounds.py: bafybeigoksavvtjjlg5abp3wdhjq6kinvdhgnb5kqqh5vdoworuebn5kcy
   rounds_info.py: bafybeihskwrowuwyvjko626txllfqkkq5kunrgdw6he5f2fec3ggyp7uxm
   states/__init__.py: bafybeie5h3g3ndkq4c7tnv6c25tp64fn3jwyaatsm4buwyz2qiakpecgoy
@@ -61,7 +61,7 @@ fingerprint:
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/pools/test_balancer.py: bafybeidj3dmmzkjc32dznwdqnuvdsvlwa27jsoazvjvvikbu57bhlze3qq
   tests/pools/test_uniswap.py: bafybeib5rnfzaya4an2t4odvca23ee5id7ejwbsjrfjnuy22jytg76b5qi
-  tests/pools/test_velodrome.py: bafybeigkbn6h4izzlvryvhvthtswdb6brcu4v7artrqbaei5vlqymdtgku
+  tests/pools/test_velodrome.py: bafybeifvjnytm3kr7kqp7o5t5nwajd6x2wjkkexix7ifsolr3wewkf23ea
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/states/test_base.py: bafybeiecccniqny55e2cbkstd5fcwkd2zru2zra7qf6al2knjhx2tv27ry
   tests/states/test_call_checkpoint.py: bafybeihsjabiftgu4hikk3igo2roewspk6cscyy6cukaao254ntc6osmkm
@@ -109,7 +109,7 @@ contracts:
 - valory/velodrome_router:0.1.0:bafybeifuulfzd7ixxsluqz6hd6cavbtj6z35zc34ho3zgqgaem4txuvxta
 - valory/velodrome_cl_pool:0.1.0:bafybeihlkgpjycu26ncolkeqp3tatkvecimsj3ikmvjimpwc7rbwmm7oru
 - valory/velodrome_non_fungible_position_manager:0.1.0:bafybeih5swx6k3rc3ky4w6lf7fhmwwqenc2pz6fnx2im2ui2bdarj4niwu
-- valory/velodrome_pool:0.1.0:bafybeid6wlv6sgm3y7f63j7ehvoajr6bjn37s4cck4xonuuwbzwypzfxki
+- valory/velodrome_pool:0.1.0:bafybeibvpuycgywdqh4n2bvetgjf3jkqfwdeqpv6l6zfr6hdejelecs3qu
 - valory/velodrome_gauge:0.1.0:bafybeia5rqa5q5f7jfb7lrcn6ot2jjk5nfmqqt4kfsvn3gmawubl3dpbgm
 - valory/velodrome_voter:0.1.0:bafybeieawpdivhzrbjk6ivsrncxah5y5gbb32qxmrcb2dxmw55ev7gowda
 - valory/velodrome_cl_gauge:0.1.0:bafybeicqjs5styv3qubfd7askc6nnd2hrwqlawd6b7rvzyvp2ycbenensm

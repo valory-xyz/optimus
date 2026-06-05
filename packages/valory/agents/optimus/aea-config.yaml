@@ -30,7 +30,7 @@ contracts:
 - valory/velodrome_router:0.1.0:bafybeifuulfzd7ixxsluqz6hd6cavbtj6z35zc34ho3zgqgaem4txuvxta
 - valory/velodrome_cl_pool:0.1.0:bafybeihlkgpjycu26ncolkeqp3tatkvecimsj3ikmvjimpwc7rbwmm7oru
 - valory/velodrome_non_fungible_position_manager:0.1.0:bafybeih5swx6k3rc3ky4w6lf7fhmwwqenc2pz6fnx2im2ui2bdarj4niwu
-- valory/velodrome_pool:0.1.0:bafybeid6wlv6sgm3y7f63j7ehvoajr6bjn37s4cck4xonuuwbzwypzfxki
+- valory/velodrome_pool:0.1.0:bafybeibvpuycgywdqh4n2bvetgjf3jkqfwdeqpv6l6zfr6hdejelecs3qu
 - valory/velodrome_sugar:0.1.0:bafybeih2oublvea2qxy7clrutgbep27n7lmi72alemanutmuv5rrsevo2a
 - valory/velodrome_gauge:0.1.0:bafybeia5rqa5q5f7jfb7lrcn6ot2jjk5nfmqqt4kfsvn3gmawubl3dpbgm
 - valory/velodrome_voter:0.1.0:bafybeieawpdivhzrbjk6ivsrncxah5y5gbb32qxmrcb2dxmw55ev7gowda
@@ -51,8 +51,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
-- valory/liquidity_trader_abci:0.1.0:bafybeierjtztrii63symwqw3mp36mbyzohdeoon3h7bdea4h6oys7mnbtm
-- valory/optimus_abci:0.1.0:bafybeibw2t4mvxz4tdb5vfzmfch76336jxms7dy373vqdmn4ocn6r2u6ci
+- valory/liquidity_trader_abci:0.1.0:bafybeigoko2ehlaa6zztawh2nbr6hoxfoqvpr6pmafu4wws3pevtxu44oq
+- valory/optimus_abci:0.1.0:bafybeidleakje3mfelugwxzeanl3iyohliqn2hpgfibj5arfkci7gtt4va
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq

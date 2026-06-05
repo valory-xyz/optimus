@@ -1796,11 +1796,16 @@ class TestCalculateStakingRewardsValue:
 class TestCalculateWithdrawalsValue:
     """TestCalculateWithdrawalsValue."""
 
-    def test_unsupported_chain(self):
-        """Test unsupported chain."""
+    def test_unsupported_chain_returns_zero(self):
+        """A chain with no withdrawal-accounting branch returns 0.
+
+        Mode, Optimism, and Base are wired up; anything else falls through
+        the else branch and logs an error so the gap is visible rather than
+        silently inflating Total ROI on that chain.
+        """
         obj = _mk()
 
-        obj.params.target_investment_chains = ["base"]
+        obj.params.target_investment_chains = ["arbitrum"]
         gen = obj.calculate_withdrawals_value()
         assert _drive(gen) == Decimal(0)
 
@@ -10210,3 +10215,240 @@ class TestIsNotOtherContractOptimismChain:
 
         gen = obj._is_not_other_contract_optimism("0xABC", chain="arbitrum")
         assert _drive(gen) is False
+
+
+class TestCalculateWithdrawalsValueBaseDispatch:
+    """Base goes through the same SafeGlobal path as Optimism.
+
+    Before this branch was widened, ``calculate_withdrawals_value`` only
+    dispatched on Mode and Optimism. With the default service config of
+    ``["base","optimism","mode"]``, ``target_investment_chains[0]`` is
+    Base, so the function silently returned 0 and inflated Total ROI on
+    Base. These tests pin the new shape: Base now runs the full
+    SafeGlobal flow, persists under base-scoped keys, and never reads
+    or writes the optimism keys.
+    """
+
+    def test_base_runs_safeglobal_flow_with_base_chain(self):
+        """Base dispatches into the SafeGlobal helpers with chain=base.
+
+        Captures the chain kwarg passed to both helpers so a future
+        refactor that drops the chain plumbing would fail this test.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["base"]
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj._get_current_timestamp = lambda: 1704067200
+
+        captured_track_kwargs = {}
+
+        def fake_track(safe_address, final_timestamp, chain="optimism"):
+            captured_track_kwargs["chain"] = chain
+            yield
+            return {"outgoing": {"2024-01-01": []}}
+
+        captured_value_kwargs = {}
+
+        def fake_value(outgoing, chain="optimism"):
+            captured_value_kwargs["chain"] = chain
+            yield
+            return Decimal("12.34")
+
+        obj._track_erc20_transfers_optimism = fake_track
+        obj._track_and_calculate_withdrawal_value_optimism = fake_value
+
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal("12.34")
+        assert captured_track_kwargs["chain"] == Chain.BASE.value
+        assert captured_value_kwargs["chain"] == Chain.BASE.value
+
+    def test_base_writes_base_scoped_ttl_keys(self):
+        """The TTL cache write targets the base kv keys, never the optimism ones.
+
+        A regression here (e.g. someone hardcoding ``"optimism"`` for the kv
+        keys again) would let an Optimism rebound poison the Base cached
+        value, or worse, vice versa.
+        """
+        obj = _mk()
+        obj.params.target_investment_chains = ["base"]
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj._read_kv = _gen_return({})
+        obj._track_erc20_transfers_optimism = _gen_return({"outgoing": {}})
+        obj._track_and_calculate_withdrawal_value_optimism = _gen_return(Decimal("7"))
+        obj._get_current_timestamp = lambda: 1704067200
+
+        written_keys = []
+
+        def fake_write(payload):
+            written_keys.extend(payload.keys())
+            yield
+
+        obj._write_kv = fake_write
+
+        _drive(obj.calculate_withdrawals_value())
+
+        # The base TTL keys must be written; the optimism ones must not.
+        assert any("_base" in k for k in written_keys), written_keys
+        assert not any("_optimism" in k for k in written_keys), written_keys
+
+    def test_base_honors_ttl_cache_hit(self):
+        """A fresh base TTL cache value is returned without re-fetching."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["base"]
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj._get_current_timestamp = lambda: 1704067200
+
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            total_withdrawals_kv_key,
+            withdrawals_ts_kv_key,
+        )
+
+        # Cache age 60s is well within any sane TTL window.
+        cache = {
+            withdrawals_ts_kv_key("base"): "1704067140",
+            total_withdrawals_kv_key("base"): "99.5",
+        }
+
+        def fake_read(keys):
+            yield
+            return {k: cache.get(k) for k in keys}
+
+        obj._read_kv = fake_read
+
+        def fail_track(*a, **kw):
+            raise AssertionError("fetcher must not be called on a fresh cache hit")
+            yield  # noqa
+
+        obj._track_erc20_transfers_optimism = fail_track
+
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal("99.5")
+
+    def test_base_skips_kv_write_on_fetcher_failure(self):
+        """A None return from the fetcher must not pin withdrawal=0 in the cache."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["base"]
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj._read_kv = _gen_return({})
+        obj._get_current_timestamp = lambda: 1704067200
+        obj._track_erc20_transfers_optimism = _gen_return(None)
+
+        def fail_write(payload):
+            raise AssertionError("kv write must not happen on fetcher failure")
+            yield  # noqa
+
+        obj._write_kv = fail_write
+
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal(0)
+
+
+class TestTrackErc20TransfersBaseRouting:
+    """``_track_erc20_transfers_optimism`` parametrized for Base."""
+
+    def test_base_persistence_key_isolation(self):
+        """Base outgoing transfers persist under ``base_withdrawals``.
+
+        Replays a single outgoing USDC transfer and asserts the in-memory
+        funding_events dict gains a ``base_withdrawals`` entry without
+        touching ``optimism_withdrawals``.
+        """
+        obj = _mk()
+        obj.funding_events = {}
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        td = {
+            "executionDate": "2024-02-01T00:00:00Z",
+            "from": "0xSafe",
+            "type": "ERC20_TRANSFER",
+            "tokenInfo": {"symbol": "USDC", "decimals": 6},
+            "tokenAddress": "0xUSDC",
+            "value": str(7 * 10**6),
+            "to": "0xRecipient",
+        }
+        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+
+        _drive(obj._track_erc20_transfers_optimism("0xSafe", 1707091200, chain="base"))
+
+        assert "base_withdrawals" in obj.funding_events
+        assert "optimism_withdrawals" not in obj.funding_events
+        assert obj.funding_events["base_withdrawals"]["2024-02-01"][0]["amount"] == 7
+
+    def test_base_uses_base_safe_api_slug(self):
+        """The HTTP request targets the Safe API endpoint built for ``chain=base``.
+
+        A regression that hardcodes the optimism slug again would leak
+        Optimism's transfer list into the Base withdrawal calculation.
+        """
+        obj = _mk()
+        obj.funding_events = {}
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj.params.safe_api_url = "https://safe.api"
+        obj.params.safe_api_chain_slugs = {"optimism": "oeth", "base": "base"}
+
+        captured_endpoints = []
+
+        def fake_req(*a, **kw):
+            captured_endpoints.append(kw.get("endpoint"))
+            yield
+            return (True, {"results": [], "next": None})
+
+        obj._request_with_retries = fake_req
+
+        _drive(obj._track_erc20_transfers_optimism("0xSafe", 1707091200, chain="base"))
+
+        assert captured_endpoints, "expected at least one Safe API request"
+        # ``/base/api/v1/`` proves the base slug was rendered; ``/oeth/``
+        # would mean we leaked the optimism slug.
+        assert "/base/api/v1/" in captured_endpoints[0]
+        assert "/oeth/" not in captured_endpoints[0]
+
+
+class TestTrackAndCalculateWithdrawalValueBaseRouting:
+    """``_track_and_calculate_withdrawal_value_optimism`` parametrized for Base."""
+
+    def test_chain_flows_to_classifier_and_pricer(self):
+        """Both ``_is_not_other_contract_optimism`` and ``_calculate_total_withdrawal_value`` see chain=base.
+
+        A regression that lets either site fall back to the default
+        ``optimism`` would route Base recipients against Optimism state
+        and price withdrawals against the wrong chain's USDC quote.
+        """
+        obj = _mk()
+
+        captured_classifier = {}
+
+        def fake_classify(to_address, chain="optimism"):
+            captured_classifier["chain"] = chain
+            yield
+            return True
+
+        obj._is_not_other_contract_optimism = fake_classify
+
+        captured_pricer = {}
+
+        def fake_price(withdrawal_transfers, chain="mode"):
+            captured_pricer["chain"] = chain
+            yield
+            return Decimal("4")
+
+        obj._calculate_total_withdrawal_value = fake_price
+
+        transfers = {
+            "2024-02-01": [
+                {
+                    "symbol": "USDC",
+                    "amount": 4,
+                    "timestamp": "2024-02-01T00:00:00Z",
+                    "to_address": "0xRecipient",
+                }
+            ]
+        }
+
+        result = _drive(
+            obj._track_and_calculate_withdrawal_value_optimism(transfers, chain="base")
+        )
+
+        assert result == Decimal("4")
+        assert captured_classifier["chain"] == Chain.BASE.value
+        assert captured_pricer["chain"] == Chain.BASE.value

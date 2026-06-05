@@ -2447,7 +2447,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Calculate the value of withdrawals."""
         chain = self.params.target_investment_chains[0]
 
-        if chain == "mode":
+        if chain == Chain.MODE.value:
             all_erc20_transfers_mode = self._track_erc20_transfers_mode(
                 self.params.safe_contract_addresses.get(chain),
                 datetime.now().timestamp(),
@@ -2468,7 +2468,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
             return withdrawal_value
-        elif chain == "optimism":
+        elif chain in (Chain.OPTIMISM.value, Chain.BASE.value):
+            # Both Optimism and Base are served by SafeGlobal and share the
+            # same pagination + classification path. Persistence keys are
+            # chain-scoped (``{chain}_withdrawals`` plus the per-chain TTL
+            # kv keys below) so the two never share state.
+
             # TTL-based cache: skip Safe API + revaluation if the last
             # calculation was within WITHDRAWAL_CACHE_TTL_SECONDS. Negative
             # ages (clock skew, malformed timestamp) are treated as expired
@@ -2504,30 +2509,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                                 "Failed to parse cached withdrawal value; recomputing"
                             )
 
-            all_erc20_transfers_optimism = (
-                yield from self._track_erc20_transfers_optimism(
-                    self.params.safe_contract_addresses.get(chain),
-                    int(datetime.now().timestamp()),
-                )
+            all_erc20_transfers = yield from self._track_erc20_transfers_optimism(
+                self.params.safe_contract_addresses.get(chain),
+                int(datetime.now().timestamp()),
+                chain=chain,
             )
             # ``None`` signals fetcher failure (exception or mid-pagination
             # error). Skip the kv cache write so a transient blip doesn't
             # pin ``withdrawal=0`` until the next TTL boundary.
-            if all_erc20_transfers_optimism is None:
+            if all_erc20_transfers is None:
                 self.context.logger.warning(
                     "Failed to fetch ERC20 transfers, returning zero withdrawal "
                     "value without caching"
                 )
                 return Decimal(0)
-            outgoing_erc20_transfers_optimism = all_erc20_transfers_optimism.get(
-                "outgoing", {}
-            )
+            outgoing_erc20_transfers = all_erc20_transfers.get("outgoing", {})
             self.context.logger.info(
-                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_optimism}"
+                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers}"
             )
             withdrawal_value = (
                 yield from self._track_and_calculate_withdrawal_value_optimism(
-                    outgoing_erc20_transfers_optimism,
+                    outgoing_erc20_transfers,
+                    chain=chain,
                 )
             )
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
@@ -2540,6 +2543,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return withdrawal_value
         else:
+            # A new Safe-backed L2 added to ``target_investment_chains[0]``
+            # without updating this dispatch would silently return 0 and
+            # inflate Total ROI on that chain. Log loudly so the gap is
+            # visible rather than swallowed.
+            self.context.logger.error(
+                f"calculate_withdrawals_value: unsupported chain {chain!r}; "
+                "returning 0 (withdrawal accounting is missing for this chain)"
+            )
             return Decimal(0)
 
     def _track_and_calculate_withdrawal_value_mode(
@@ -2589,12 +2600,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _track_and_calculate_withdrawal_value_optimism(
         self,
         outgoing_erc20_transfers: Dict,
+        chain: str = "optimism",
     ) -> Generator[None, None, Decimal]:
-        """Track USDC transfers from safe address and handle withdrawal logic for Optimism."""
+        """Filter USDC outgoing transfers and price them against ``chain``.
+
+        Works for any SafeGlobal-served chain that ``calculate_withdrawals_value``
+        dispatches into this path (Optimism today, Base after the dispatcher
+        was widened). ``_is_not_other_contract_optimism`` is called with the
+        same ``chain`` so the eth_getCode probe, the Safe Transaction Service
+        lookup, and the cache key are all scoped to the chain the transfer
+        happened on.
+
+        :param outgoing_erc20_transfers: date-keyed outgoing transfers from
+            ``_track_erc20_transfers_optimism``.
+        :param chain: chain name used to filter contract recipients and to
+            select the USDC coin id for historical pricing.
+        :yield: None.
+        :return: the total USD value of withdrawals.
+        """
         try:
             if not outgoing_erc20_transfers:
                 self.context.logger.warning(
-                    "No outgoing transfers found for Optimism chain"
+                    f"No outgoing transfers found for {chain} chain"
                 )
                 return Decimal(0)
 
@@ -2623,7 +2650,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 to_address = transfer.get("to_address")
                 if to_address:  # pragma: no branch
                     is_not_other_contract = (
-                        yield from self._is_not_other_contract_optimism(to_address)
+                        yield from self._is_not_other_contract_optimism(
+                            to_address, chain=chain
+                        )
                     )
                     if is_not_other_contract:
                         withdrawal_transfers.append(transfer)
@@ -2631,7 +2660,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"USDC transfers: {usdc_transfers}")
             self.context.logger.info(f"Withdrawal transfers: {withdrawal_transfers}")
             withdrawal_value = yield from self._calculate_total_withdrawal_value(
-                withdrawal_transfers, chain="optimism"
+                withdrawal_transfers, chain=chain
             )
             return withdrawal_value
         except Exception as e:
@@ -4646,11 +4675,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self,
         safe_address: str,
         final_timestamp: int,
+        chain: str = "optimism",
     ) -> Generator[None, None, Optional[Dict[str, Dict[str, List[Dict]]]]]:
-        """Fetch and organize ERC20 token transfers for Optimism chain using Safe API.
+        """Fetch and organize ERC20 token transfers for a SafeGlobal-served chain.
 
         Persists outgoing USDC transfers to funding_events.json under the
-        ``optimism_withdrawals`` key so subsequent cycles early-stop after one
+        ``{chain}_withdrawals`` key so subsequent cycles early-stop after one
         page when no new outgoing activity has occurred. Dedup is per-transfer
         (transferId, falling back to txHash + log_index) so a same-day
         withdrawal added after one already stored on the same date is not
@@ -4666,25 +4696,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :param safe_address: the Safe contract address.
         :param final_timestamp: unix timestamp used as the upper bound for
             ``executionDate`` filtering.
+        :param chain: chain name used to pick the Safe API slug, the
+            per-chain persistence key, and the token-metadata RPC.
         :yield: None.
         :return: ``{"outgoing": <date-keyed transfers dict>}`` on success, or
             ``None`` when the fetch failed.
         """
+        withdrawals_key = f"{chain}_withdrawals"
         try:
             if not self.funding_events:
                 self.funding_events = self.read_funding_events() or {}
-            existing_outgoing = self.funding_events.get("optimism_withdrawals", {})
+            existing_outgoing = self.funding_events.get(withdrawals_key, {})
 
             if not safe_address:
                 self.context.logger.warning(
-                    "No address provided for fetching Optimism ERC20 transfers"
+                    f"No address provided for fetching {chain} ERC20 transfers"
                 )
                 return {"outgoing": existing_outgoing}
 
             # Paginate by offset rather than following Safe's absolute ``next``
             # URL — see _fetch_optimism_transfers_safeglobal for why.
             transfers_base_url = self._build_safe_api_url(
-                "optimism", "v1", f"safes/{safe_address}/transfers/"
+                chain, "v1", f"safes/{safe_address}/transfers/"
             )
 
             processed_count = 0
@@ -4701,7 +4734,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if pages_processed >= MAX_PAGINATION_PAGES:
                     self.context.logger.warning(
                         f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
-                        "Optimism withdrawals; treating as a failed fetch so "
+                        f"{chain} withdrawals; treating as a failed fetch so "
                         "partial data is not persisted with a falsely complete "
                         "seen-set"
                     )
@@ -4722,7 +4755,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not success:
-                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    self.context.logger.error(f"Failed to fetch {chain} transfers")
                     fetch_failed = True
                     break
 
@@ -4803,10 +4836,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if not token_info:
                         if token_address:
                             decimals = yield from self._get_token_decimals(
-                                "optimism", token_address
+                                chain, token_address
                             )
                             symbol = yield from self._get_token_symbol(
-                                "optimism", token_address
+                                chain, token_address
                             )
                         else:
                             continue
@@ -4852,7 +4885,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 offset += len(transfers)
 
             self.context.logger.info(
-                f"Completed Optimism ERC20 transfers: {processed_count} outgoing transfers found"
+                f"Completed {chain} ERC20 transfers: {processed_count} outgoing transfers found"
             )
 
             if fetch_failed:
@@ -4866,13 +4899,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             for date, transfers_list in new_by_date.items():
                 existing_outgoing.setdefault(date, []).extend(transfers_list)
 
-            self.funding_events["optimism_withdrawals"] = existing_outgoing
+            self.funding_events[withdrawals_key] = existing_outgoing
             self.store_funding_events()
 
             return {"outgoing": existing_outgoing}
 
         except Exception as e:
-            self.context.logger.error(f"Error tracking Optimism ERC20 transfers: {e}")
+            self.context.logger.error(f"Error tracking {chain} ERC20 transfers: {e}")
             return None
 
     def _track_erc20_transfers_mode(

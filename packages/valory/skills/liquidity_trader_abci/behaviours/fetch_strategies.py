@@ -42,25 +42,25 @@ from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract
 )
 from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
 from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
+from packages.valory.contracts.velodrome_gauge.contract import VelodromeGaugeContract
 from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
     VelodromeNonFungiblePositionManagerContract,
 )
-from packages.valory.contracts.velodrome_gauge.contract import VelodromeGaugeContract
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    Chain,
-    DexType,
-    LiquidityTraderBaseBehaviour,
     OLAS_ADDRESSES,
     PORTFOLIO_UPDATE_INTERVAL,
-    PositionStatus,
-    TradingType,
     VELODROME_FAMILY_DEX_TYPES,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
+    Chain,
+    DexType,
+    LiquidityTraderBaseBehaviour,
+    PositionStatus,
+    TradingType,
     _noop_rate_limit_callback,
     initial_value_ts_kv_key,
     total_withdrawals_kv_key,
@@ -5030,6 +5030,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         distributes VELO. ``_get_velo_token_address`` already returns the
         correct contract per chain, but a few sites still need the symbol
         for UI labels and CoinGecko price lookups.
+
+        :param chain: chain name used to pick the reward token symbol.
+        :return: ``"AERO"`` on Base, ``"VELO"`` on every other chain.
         """
         return "AERO" if chain == "base" else "VELO"
 

@@ -251,8 +251,10 @@ class TestCheckPriceMovement:
         assert result is True
 
     def test_narrowest_range_used(self) -> None:
-        """When multiple positions exist, the narrowest tick range is selected
-        for the zero-width guard (the percentage formula itself is range-free)."""
+        """Narrowest tick range is selected for the zero-width guard.
+
+        The percentage formula itself is range-free.
+        """
         b = make_behaviour()
         b.params.slippage_tolerance = (
             0.10  # 10% tolerance -> slippage_tolerance_pct = 10
@@ -2367,9 +2369,11 @@ class TestEnterClPool:
         assert len(result[0]) == 2
 
     def test_scaling_single_sided_not_zeroed(self) -> None:
-        """A single-sided position (one token's max is 0) must not be zeroed by
-        the over-max scaling. Regression for the Base 1-tick band where
-        max_amounts_in[0] == 0 forced scale_factor to 0 and minted 0/0."""
+        """A single-sided position (one token's max is 0) must not be zeroed.
+
+        Regression for the Base 1-tick band where max_amounts_in[0] == 0 forced
+        the over-max scale_factor to 0 and minted 0/0.
+        """
         b = self._make_b()
         tr = [
             [
@@ -4249,7 +4253,8 @@ class TestCalculateIndividualTokenAmounts:
         token0 has 6 decimals, token1 has 18, both ~$1. A 1:1 USD pool means a
         raw price of 1e12 (sqrt_price = 1e6 * 2**96), i.e. a human price of 1.0.
         A 50/50 value split of 1.0 token0-equivalent must give 0.5 of each in
-        human units."""
+        human units.
+        """
         b = make_behaviour()
         sqrt_price_x96 = int(1_000_000 * 2**96)  # raw price 1e12 -> human price 1.0
         a0, a1 = b._calculate_individual_token_amounts(
@@ -4306,7 +4311,8 @@ class TestCalculateIndividualTokenAmounts:
 
         price_ratio = (1.5)^2 = 2.25 raw token1 per raw token0; same decimals so
         human price = 2.25. A token0-equivalent value converts to token1 by
-        multiplying by the price, so 0.5 token0-value -> 0.5 * 2.25 token1."""
+        multiplying by the price, so 0.5 token0-value -> 0.5 * 2.25 token1.
+        """
         b = make_behaviour()
         # price_ratio = (1.5)^2 = 2.25
         sqrt_price_x96 = int(2**96 * 1.5)

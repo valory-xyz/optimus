@@ -5979,9 +5979,10 @@ class TestFetchAllTransfersUntilDateBase:
         obj.store_funding_events.assert_called_once()
 
     def test_fetch_failed_skips_persist_and_returns_prior(self):
-        """A failed safeglobal pagination must NOT persist; must return the
-        previously-persisted raw data so a partial overwrite doesn't poison
-        the next cycle's seen-set.
+        """A failed safeglobal pagination must NOT persist.
+
+        Must return the previously-persisted raw data so a partial overwrite
+        doesn't poison the next cycle's seen-set.
         """
         obj = _mk()
         prior = {"2025-01-01": [{"transfer_id": "x"}]}

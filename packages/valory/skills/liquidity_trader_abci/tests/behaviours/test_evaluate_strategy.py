@@ -2717,9 +2717,12 @@ class TestCalculateVelodromeTokenRatios:
         assert result["position_requirements"][0]["status"] == "IN_RANGE"
 
     def test_in_range_mixed_decimals_not_skewed(self):
-        """In-range split must be value-based, not raw. With USDC(6)/eUSD(18)
-        the raw token1 amount dwarfs token0, but weighting amount0 by the raw
-        pool price recovers the ~0.22/0.78 value split instead of 0.0/1.0."""
+        """In-range split must be value-based, not raw.
+
+        With USDC(6)/eUSD(18) the raw token1 amount dwarfs token0, but weighting
+        amount0 by the raw pool price recovers the ~0.22/0.78 value split instead
+        of 0.0/1.0.
+        """
         b = _mk()
         # raw price 1e12 (sqrt = 1e6 * 2**96): a 6/18-decimal pair at ~$1
         sqrt_price = int(1_000_000 * (2**96))

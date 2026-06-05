@@ -1511,7 +1511,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Add VELO rewards if position is staked
         velo_rewards_usd = Decimal(0)
-        if position.get("staked", False) and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES:
+        if (
+            position.get("staked", False)
+            and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
+        ):
             # Get VELO token address and check if it's in current_balances
             velo_token_address = self._get_velo_token_address(chain)
             if velo_token_address and velo_token_address in current_balances:
@@ -3187,10 +3190,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
             elif chain == Chain.BASE.value:
                 self.context.logger.info("Using Base-specific transfer fetching")
-                all_transfers = (
-                    yield from self._fetch_all_transfers_until_date_base(
-                        safe_address, current_date
-                    )
+                all_transfers = yield from self._fetch_all_transfers_until_date_base(
+                    safe_address, current_date
                 )
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
@@ -4320,9 +4321,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         fetch_failed = False
 
         try:
-            self.context.logger.info(
-                "Fetching Base transfers using SafeGlobal API..."
-            )
+            self.context.logger.info("Fetching Base transfers using SafeGlobal API...")
 
             transfers_base_url = self._build_safe_api_url(
                 "base", "v1", f"safes/{address}/incoming-transfers/"

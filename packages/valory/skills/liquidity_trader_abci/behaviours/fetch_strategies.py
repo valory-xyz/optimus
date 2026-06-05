@@ -660,12 +660,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         individual_shares = []
         portfolio_breakdown = []
 
-        # Map DEX types to their handler functions
+        # Map DEX types to their handler functions. Aerodrome on Base shares
+        # the Velodrome code path (same protocol fork, see
+        # VELODROME_FAMILY_DEX_TYPES), so it routes through the same handler.
         dex_handlers = {
             DexType.BALANCER.value: self._handle_balancer_position,
             DexType.UNISWAP_V3.value: self._handle_uniswap_position,
             DexType.STURDY.value: self._handle_sturdy_position,
             DexType.VELODROME.value: self._handle_velodrome_position,
+            DexType.AERODROME.value: self._handle_velodrome_position,
         }
 
         # Process open positions
@@ -1017,6 +1020,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 DexType.UNISWAP_V3.value: "uniswapV3",
                 DexType.STURDY.value: "sturdy",
                 DexType.VELODROME.value: "velodrome",
+                DexType.AERODROME.value: "aerodrome",
                 DexType.BALANCER.value: "balancerPool",
             }
 

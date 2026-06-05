@@ -1272,19 +1272,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             user_address, pool_address, token_id, chain, position
         )
 
-        # Add VELO rewards to user balances if position is staked
+        # Add gauge reward token (VELO / AERO) to user balances if position is staked
         if position.get("staked", False):
             velo_rewards = yield from self._get_velodrome_pending_rewards(
                 position, chain, user_address
             )
             if velo_rewards > 0:
-                # Get VELO token address for the chain
+                # Get VELO/AERO token address for the chain
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
                     # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
                     user_balances[velo_token_address] = velo_rewards
+                    reward_symbol = self._get_velo_family_reward_symbol(chain)
                     self.context.logger.info(
-                        f"Added VELO rewards to position: {velo_rewards}"
+                        f"Added {reward_symbol} rewards to position: {velo_rewards}"
                     )
 
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
@@ -1918,19 +1919,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # staked balance there when the position is marked staked.
         user_balance = None
         if position.get("staked"):
-            gauge_address = yield from self._resolve_velodrome_gauge_address(
+            resolved, gauge_address = yield from self._resolve_velodrome_gauge_address(
                 pool_address, chain
             )
-            if gauge_address:
-                user_balance = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=gauge_address,
-                    contract_public_id=VelodromeGaugeContract.contract_id,
-                    contract_callable="balance_of",
-                    data_key="balance",
-                    account=user_address,
-                    chain_id=chain,
+            if not resolved or gauge_address is None:
+                # pool.balanceOf(safe) is 0 for a staked LP because the
+                # tokens are at the gauge, so falling through to the pool
+                # read below would contribute $0 from this position to
+                # value_in_pools — a known-wrong portfolio value. Surface
+                # the failure and skip instead.
+                self.context.logger.error(
+                    f"Could not resolve gauge for staked Velodrome/Aerodrome "
+                    f"position on {chain} (pool={pool_address}); skipping share "
+                    f"calculation to avoid contributing a wrong zero."
                 )
+                return {}
+            user_balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeGaugeContract.contract_id,
+                contract_callable="balance_of",
+                data_key="balance",
+                account=user_address,
+                chain_id=chain,
+            )
 
         if user_balance is None:
             user_balance = yield from self.contract_interact(
@@ -3055,19 +3067,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             balance = None
             if position.get("staked"):
-                gauge_address = yield from self._resolve_velodrome_gauge_address(
-                    pool_address, chain
-                )
-                if gauge_address:
-                    balance = yield from self.contract_interact(
-                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                        contract_address=gauge_address,
-                        contract_public_id=VelodromeGaugeContract.contract_id,
-                        contract_callable="balance_of",
-                        data_key="balance",
-                        account=safe_address,
-                        chain_id=chain,
+                resolved, gauge_address = (
+                    yield from self._resolve_velodrome_gauge_address(
+                        pool_address, chain
                     )
+                )
+                if not resolved or gauge_address is None:
+                    # pool.balanceOf is 0 for a staked LP because the tokens
+                    # are at the gauge, so the pool-fallback below would
+                    # write a known-wrong 0. Skip and surface the failure.
+                    self.context.logger.error(
+                        f"Could not resolve gauge for staked Velodrome/Aerodrome "
+                        f"position on {chain} (pool={pool_address}); skipping "
+                        f"balance update to avoid writing a wrong zero."
+                    )
+                    return
+                balance = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=gauge_address,
+                    contract_public_id=VelodromeGaugeContract.contract_id,
+                    contract_callable="balance_of",
+                    data_key="balance",
+                    account=safe_address,
+                    chain_id=chain,
+                )
 
             if balance is None:
                 balance = yield from self.contract_interact(
@@ -3093,21 +3116,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _resolve_velodrome_gauge_address(
         self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
+    ) -> Generator[None, None, Tuple[bool, Optional[str]]]:
         """Look up the Velodrome / Aerodrome gauge address for a pool.
+
+        Returns a (resolved, gauge_address) pair so callers can tell a
+        transient Voter RPC failure (``resolved=False``) apart from a
+        determined "no gauge" answer (``resolved=True, gauge_address=None``
+        — voter not configured for the chain, or ``gauges(pool)`` returned
+        the zero address). The former should not silently fall back to
+        ``pool.balanceOf`` on a staked position, because that read is 0
+        and would write a known-wrong portfolio value.
 
         :param pool_address: the LP pool address whose gauge to look up.
         :param chain: chain name used to pick the Voter contract address.
         :yield: None.
-        :return: the gauge address, or None if no gauge exists for the pool
-            or the Voter contract address is not configured for the chain.
+        :return: ``(True, gauge_address)`` on a successful lookup,
+            ``(True, None)`` when the chain has no configured Voter or
+            the pool has no gauge, and ``(False, None)`` when the Voter
+            RPC call itself fails.
         """
         voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
         if not voter_address:
             self.context.logger.warning(
                 f"No Velodrome voter contract address configured for chain {chain}"
             )
-            return None
+            return True, None
 
         gauge_address = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3119,10 +3152,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
 
-        if not gauge_address or gauge_address == ZERO_ADDRESS:
-            return None
+        if gauge_address is None:
+            return False, None
 
-        return gauge_address
+        if gauge_address == ZERO_ADDRESS:
+            return True, None
+
+        return True, gauge_address
 
     def _update_sturdy_position(
         self, position: Dict[str, Any]
@@ -4357,8 +4393,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         a pool returning tokens on exit is part of position settlement, not
         new external capital). The code check must run against the chain the
         transfer happened on: an address can be a contract on one L2 and an
-        EOA on another. ``chain`` defaults to "optimism" so the old call
-        sites keep working unchanged.
+        EOA on another.
 
         :param from_address: the transfer's sender address.
         :param chain: chain name used to pick the ledger RPC, the Safe API
@@ -4391,12 +4426,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 pass
 
         chain_to_rpc = {
-            "optimism": self.params.optimism_ledger_rpc,
-            "base": self.params.base_ledger_rpc,
+            Chain.OPTIMISM.value: self.params.optimism_ledger_rpc,
+            Chain.BASE.value: self.params.base_ledger_rpc,
         }
         rpc_url = chain_to_rpc.get(chain)
         if not rpc_url:
-            self.context.logger.warning(
+            # A new Safe-backed L2 added upstream without updating this map
+            # would silently exclude every funding event on that chain and
+            # understate initial investment. Log loudly so the gap is visible.
+            self.context.logger.error(
                 f"No ledger RPC configured for chain {chain}; cannot classify "
                 f"transfer from {from_address}"
             )
@@ -4464,9 +4502,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return False
 
     def _is_not_other_contract_optimism(
-        self, to_address: str
+        self, to_address: str, chain: str = "optimism"
     ) -> Generator[None, None, bool]:
-        """Check if to_address is EOA or GnosisSafe (i.e., NOT OtherContract)."""
+        """Check if to_address is EOA or GnosisSafe on ``chain``.
+
+        Mirrors the chain-aware classification used on the from-side: an
+        address can be a contract on one L2 and an EOA on another, so the
+        code check, the Safe Transaction Service lookup, and the cached
+        verdict must all be scoped to the chain the transfer happened on.
+
+        :param to_address: the transfer's recipient address.
+        :param chain: chain name used to pick the ledger RPC, the Safe API
+            slug, and the per-chain cache key.
+        :yield: None.
+        :return: True if ``to_address`` resolves to an EOA on ``chain`` or
+            to a Gnosis Safe on the Safe Transaction Service for ``chain``.
+        """
         if not to_address:
             return False
 
@@ -4478,8 +4529,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             return False
 
-        # Check cache first
-        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{to_address.lower()}"
+        # Per-chain cache key — an address can be a contract on one chain
+        # and an EOA on another, so the cached verdict must be chain-scoped.
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}{chain}_{to_address.lower()}"
         cached_result = yield from self._read_kv((cache_key,))
 
         if cached_result and cached_result.get(cache_key):
@@ -4489,8 +4541,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             except (json.JSONDecodeError, KeyError):
                 pass
 
+        chain_to_rpc = {
+            Chain.OPTIMISM.value: self.params.optimism_ledger_rpc,
+            Chain.BASE.value: self.params.base_ledger_rpc,
+        }
+        rpc_url = chain_to_rpc.get(chain)
+        if not rpc_url:
+            # A new Safe-backed L2 added upstream without updating this map
+            # would silently exclude every withdrawal target on that chain
+            # and understate realised value. Log loudly so the gap is visible.
+            self.context.logger.error(
+                f"No ledger RPC configured for chain {chain}; cannot classify "
+                f"transfer to {to_address}"
+            )
+            return False
+
         try:
-            # Use Optimism RPC to check if address is a contract
             payload = {
                 "jsonrpc": "2.0",
                 "method": "eth_getCode",
@@ -4499,7 +4565,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint=self.params.optimism_ledger_rpc,
+                endpoint=rpc_url,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4509,18 +4575,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not success:
-                self.context.logger.error("Failed to check contract code")
+                self.context.logger.error(
+                    f"Failed to check contract code on {chain} for {to_address}"
+                )
                 return False
 
             code = result.get("result", "0x")
 
-            # If code is '0x', it's an EOA
+            # If code is '0x', it's an EOA on this chain
             if code == "0x":
                 is_eoa = True
             else:
-                # If it has code, check if it's a GnosisSafe
+                # Has code on this chain — check the Safe Transaction Service
+                # for the same chain to see if it's a Gnosis Safe.
                 safe_check_url = self._build_safe_api_url(
-                    "optimism", "v1", f"safes/{to_address}/"
+                    chain, "v1", f"safes/{to_address}/"
                 )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
@@ -4532,18 +4601,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 is_eoa = success
 
-            # Cache the result permanently (no TTL)
+            # Cache the result permanently (no TTL) under the per-chain key.
             cache_data = {"is_eoa": is_eoa}
             yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
             if not is_eoa:
                 self.context.logger.info(
-                    f"Excluding transfer to contract: {to_address}"
+                    f"Excluding {chain} transfer to contract: {to_address}"
                 )
             return is_eoa
 
         except Exception as e:
-            self.context.logger.error(f"Error checking address {to_address}: {e}")
+            self.context.logger.error(
+                f"Error checking address {to_address} on {chain}: {e}"
+            )
             return False
 
     def _save_transfer_data_optimism(self, data: Dict) -> Generator[None, None, None]:
@@ -5034,7 +5105,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :param chain: chain name used to pick the reward token symbol.
         :return: ``"AERO"`` on Base, ``"VELO"`` on every other chain.
         """
-        return "AERO" if chain == "base" else "VELO"
+        return "AERO" if chain == Chain.BASE.value else "VELO"
 
     def _validate_velodrome_v2_pool_addresses(self) -> Generator[None, None, None]:
         """Validate Velodrome v2 pool addresses for all positions."""

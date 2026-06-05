@@ -31,6 +31,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    Chain,
     OLAS_ADDRESSES,
     ZERO_ADDRESS,
 )
@@ -9850,3 +9851,362 @@ class TestDirectReadWs1EdgeCoverage:
         assert len(withdrawals["2023-06-01"]) == 1
         assert withdrawals["2023-06-01"][0]["transfer_id"] == ""
         o.store_funding_events.assert_called()
+
+
+class TestResolveVelodromeGaugeAddress:
+    """TestResolveVelodromeGaugeAddress."""
+
+    def test_no_voter_configured_returns_resolved_none(self):
+        """No voter configured for the chain is a determined ``no gauge``.
+
+        The first tuple element is True so callers know the absence is
+        configuration-determined, not a transient failure.
+        """
+        obj = _mk()
+        obj.params.velodrome_voter_contract_addresses = {}
+        gen = obj._resolve_velodrome_gauge_address("0xPool", "base")
+        assert _drive(gen) == (True, None)
+
+    def test_zero_address_gauge_returns_resolved_none(self):
+        """``gauges(pool)`` returning the zero address means no gauge exists.
+
+        That is a determined answer from the chain, so the resolver returns
+        ``(True, None)`` (resolved, no gauge) — not a transient failure.
+        """
+        obj = _mk()
+        obj.params.velodrome_voter_contract_addresses = {"base": "0xVoter"}
+        obj.contract_interact = _gen_return(ZERO_ADDRESS)
+        gen = obj._resolve_velodrome_gauge_address("0xPool", "base")
+        assert _drive(gen) == (True, None)
+
+    def test_valid_gauge_returns_resolved_address(self):
+        """A non-zero gauge address resolves to ``(True, address)``."""
+        obj = _mk()
+        obj.params.velodrome_voter_contract_addresses = {"base": "0xVoter"}
+        obj.contract_interact = _gen_return("0xGauge")
+        gen = obj._resolve_velodrome_gauge_address("0xPool", "base")
+        assert _drive(gen) == (True, "0xGauge")
+
+    def test_transient_rpc_failure_returns_unresolved(self):
+        """``contract_interact`` returning None signals a transient failure.
+
+        That must be distinguishable from a genuine zero-address answer so
+        callers can skip a staked position rather than fall back to the
+        pool balance (which is 0 for staked LPs and would write a wrong $0).
+        """
+        obj = _mk()
+        obj.params.velodrome_voter_contract_addresses = {"base": "0xVoter"}
+        obj.contract_interact = _gen_return(None)
+        gen = obj._resolve_velodrome_gauge_address("0xPool", "base")
+        assert _drive(gen) == (False, None)
+
+
+class TestUpdateVelodromePositionStaked:
+    """Staked branch of ``_update_velodrome_position``.
+
+    Pre-PR (and even mid-PR before the resolver-sentinel change), a transient
+    Voter RPC blip silently fell through to ``pool.balanceOf(safe)`` which
+    is 0 for a staked LP, so the position was valued at $0 with only a
+    warning. These tests pin the new contract: read the gauge balance when
+    resolution succeeds, skip the position entirely when it does not.
+    """
+
+    def _staked_pos(self):
+        return {
+            "chain": "base",
+            "is_cl_pool": False,
+            "pool_address": "0xPool",
+            "staked": True,
+        }
+
+    def test_uses_gauge_balance_not_pool_balance(self):
+        """A staked LP is read from the gauge, not the pool.
+
+        The mock fails any pool-side ``get_balance`` call so the assertion
+        on ``current_liquidity`` only succeeds when the gauge path runs.
+        """
+        obj = _mk()
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj.params.velodrome_voter_contract_addresses = {"base": "0xVoter"}
+
+        captured = []
+
+        def fake_ci(*a, **kw):
+            yield
+            callable_ = kw.get("contract_callable")
+            if callable_ == "gauges":
+                return "0xGauge"
+            if callable_ == "balance_of":
+                captured.append(kw)
+                return 4242
+            # Any pool-side read here would be silently wrong on a staked LP.
+            return None
+
+        obj.contract_interact = fake_ci
+        pos = self._staked_pos()
+        _drive(obj._update_velodrome_position(pos))
+
+        assert pos["current_liquidity"] == 4242
+        assert captured[0]["contract_address"] == "0xGauge"
+
+    def test_skips_when_voter_lookup_fails_transiently(self):
+        """Transient gauge resolution failure must not write a wrong zero."""
+        obj = _mk()
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj.params.velodrome_voter_contract_addresses = {"base": "0xVoter"}
+
+        def fake_ci(*a, **kw):
+            yield
+            if kw.get("contract_callable") == "gauges":
+                return None
+            # If the pool fallback were exercised this would write 0.
+            return 0
+
+        obj.contract_interact = fake_ci
+        pos = self._staked_pos()
+        _drive(obj._update_velodrome_position(pos))
+
+        assert "current_liquidity" not in pos
+
+    def test_skips_when_no_voter_configured(self):
+        """No-voter is a determined ``no gauge`` answer, but still skip.
+
+        ``pool.balanceOf(safe)`` is 0 for a staked LP regardless of why
+        the gauge could not be found, so the pool fallback is always
+        wrong for a staked position.
+        """
+        obj = _mk()
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj.params.velodrome_voter_contract_addresses = {}
+        obj.contract_interact = _gen_return(0)
+        pos = self._staked_pos()
+        _drive(obj._update_velodrome_position(pos))
+
+        assert "current_liquidity" not in pos
+
+
+class TestGetUserShareValueVelodromeNonClStaked:
+    """Staked branch of ``_get_user_share_value_velodrome_non_cl``."""
+
+    def test_staked_uses_gauge_balance(self):
+        """Staked share calculation reads ``balance_of`` from the gauge."""
+        obj = _mk()
+        obj.params.velodrome_voter_contract_addresses = {"base": "0xVoter"}
+
+        def fake_ci(*a, **kw):
+            yield
+            callable_ = kw.get("contract_callable")
+            if callable_ == "gauges":
+                return "0xGauge"
+            if callable_ == "balance_of":
+                return 50  # user balance from the gauge
+            if callable_ == "get_total_supply":
+                return 100
+            if callable_ == "get_reserves":
+                return [10**18, 2 * 10**18]
+            return None
+
+        obj.contract_interact = fake_ci
+
+        def fake_dec(*a, **kw):
+            yield
+            return 18
+
+        obj._get_token_decimals = fake_dec
+
+        pos = {"token0_symbol": "A", "token1_symbol": "B", "staked": True}
+        result = _drive(
+            obj._get_user_share_value_velodrome_non_cl(
+                "0xU", "0xPool", "base", pos, "0xT0", "0xT1"
+            )
+        )
+        assert "0xT0" in result
+        assert "0xT1" in result
+
+    def test_staked_resolver_failure_returns_empty(self):
+        """A transient resolver failure returns empty, not a wrong-zero share."""
+        obj = _mk()
+        obj.params.velodrome_voter_contract_addresses = {"base": "0xVoter"}
+
+        def fake_ci(*a, **kw):
+            yield
+            if kw.get("contract_callable") == "gauges":
+                return None
+            # If the pool fallback were exercised it would zero the share.
+            return 0
+
+        obj.contract_interact = fake_ci
+
+        pos = {"token0_symbol": "A", "token1_symbol": "B", "staked": True}
+        result = _drive(
+            obj._get_user_share_value_velodrome_non_cl(
+                "0xU", "0xPool", "base", pos, "0xT0", "0xT1"
+            )
+        )
+        assert result == {}
+
+
+class TestGetVeloFamilyRewardSymbol:
+    """TestGetVeloFamilyRewardSymbol."""
+
+    def test_base_returns_aero(self):
+        """Aerodrome on Base distributes AERO."""
+        obj = _mk()
+        assert obj._get_velo_family_reward_symbol(Chain.BASE.value) == "AERO"
+
+    def test_optimism_returns_velo(self):
+        """Velodrome on Optimism distributes VELO."""
+        obj = _mk()
+        assert obj._get_velo_family_reward_symbol(Chain.OPTIMISM.value) == "VELO"
+
+    def test_mode_returns_velo(self):
+        """Velodrome on Mode distributes VELO."""
+        obj = _mk()
+        assert obj._get_velo_family_reward_symbol(Chain.MODE.value) == "VELO"
+
+
+class TestShouldIncludeTransferOptimismChain:
+    """Chain routing for ``_should_include_transfer_optimism``."""
+
+    def test_base_chain_uses_base_rpc(self):
+        """Passing chain=base routes the eth_getCode call to base_ledger_rpc."""
+        obj = _mk()
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj.params.optimism_ledger_rpc = "https://op.rpc"
+        obj.params.base_ledger_rpc = "https://base.rpc"
+
+        captured = []
+
+        def fake_req(*a, **kw):
+            captured.append(kw.get("endpoint"))
+            yield
+            return (True, {"result": "0x"})
+
+        obj._request_with_retries = fake_req
+
+        gen = obj._should_include_transfer_optimism("0xABC", chain="base")
+        assert _drive(gen) is True
+        assert captured == ["https://base.rpc"]
+
+    def test_base_chain_uses_base_cache_key(self):
+        """A Base-chain hit must read/write a base-scoped cache key."""
+        obj = _mk()
+        base_key = f"{CONTRACT_CHECK_CACHE_PREFIX}base_0xabc"
+        obj._read_kv = _gen_return({base_key: json.dumps({"is_eoa": True})})
+        gen = obj._should_include_transfer_optimism("0xABC", chain="base")
+        assert _drive(gen) is True
+
+    def test_optimism_cache_does_not_satisfy_base_lookup(self):
+        """Cached optimism verdict must not leak into a base classification.
+
+        An address can be a contract on one chain and an EOA on another, so
+        a cached optimism ``is_eoa=True`` must not short-circuit a base
+        classification: the base lookup proceeds to the RPC.
+        """
+        obj = _mk()
+        op_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_0xabc"
+        obj._read_kv = _gen_return({op_key: json.dumps({"is_eoa": True})})
+        obj._write_kv = _gen_none
+        obj.params.optimism_ledger_rpc = "https://op.rpc"
+        obj.params.base_ledger_rpc = "https://base.rpc"
+
+        captured = []
+
+        def fake_req(*a, **kw):
+            captured.append(kw.get("endpoint"))
+            yield
+            return (True, {"result": "0x"})
+
+        obj._request_with_retries = fake_req
+
+        gen = obj._should_include_transfer_optimism("0xABC", chain="base")
+        _drive(gen)
+        assert captured == ["https://base.rpc"]
+
+    def test_unknown_chain_is_rejected(self):
+        """A chain with no configured RPC is rejected; no RPC call is issued."""
+        obj = _mk()
+        obj._read_kv = _gen_return({})
+        obj.params.optimism_ledger_rpc = "https://op.rpc"
+        obj.params.base_ledger_rpc = "https://base.rpc"
+
+        def fail_req(*a, **kw):
+            raise AssertionError("RPC must not be called for an unknown chain")
+            yield  # noqa
+
+        obj._request_with_retries = fail_req
+
+        gen = obj._should_include_transfer_optimism("0xABC", chain="arbitrum")
+        assert _drive(gen) is False
+
+
+class TestIsNotOtherContractOptimismChain:
+    """Chain routing for ``_is_not_other_contract_optimism``."""
+
+    def test_base_chain_uses_base_rpc(self):
+        """Passing chain=base routes the eth_getCode call to base_ledger_rpc."""
+        obj = _mk()
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj.params.optimism_ledger_rpc = "https://op.rpc"
+        obj.params.base_ledger_rpc = "https://base.rpc"
+
+        captured = []
+
+        def fake_req(*a, **kw):
+            captured.append(kw.get("endpoint"))
+            yield
+            return (True, {"result": "0x"})
+
+        obj._request_with_retries = fake_req
+
+        gen = obj._is_not_other_contract_optimism("0xABC", chain="base")
+        assert _drive(gen) is True
+        assert captured == ["https://base.rpc"]
+
+    def test_base_chain_uses_base_cache_key(self):
+        """Base-chain hit must read/write a base-scoped cache key."""
+        obj = _mk()
+        base_key = f"{CONTRACT_CHECK_CACHE_PREFIX}base_0xabc"
+        obj._read_kv = _gen_return({base_key: json.dumps({"is_eoa": True})})
+        gen = obj._is_not_other_contract_optimism("0xABC", chain="base")
+        assert _drive(gen) is True
+
+    def test_optimism_cache_does_not_satisfy_base_lookup(self):
+        """A cached optimism verdict must not short-circuit a base lookup."""
+        obj = _mk()
+        op_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_0xabc"
+        obj._read_kv = _gen_return({op_key: json.dumps({"is_eoa": True})})
+        obj._write_kv = _gen_none
+        obj.params.optimism_ledger_rpc = "https://op.rpc"
+        obj.params.base_ledger_rpc = "https://base.rpc"
+
+        captured = []
+
+        def fake_req(*a, **kw):
+            captured.append(kw.get("endpoint"))
+            yield
+            return (True, {"result": "0x"})
+
+        obj._request_with_retries = fake_req
+
+        gen = obj._is_not_other_contract_optimism("0xABC", chain="base")
+        _drive(gen)
+        assert captured == ["https://base.rpc"]
+
+    def test_unknown_chain_is_rejected(self):
+        """A chain with no configured RPC is rejected; no RPC call is issued."""
+        obj = _mk()
+        obj._read_kv = _gen_return({})
+        obj.params.optimism_ledger_rpc = "https://op.rpc"
+        obj.params.base_ledger_rpc = "https://base.rpc"
+
+        def fail_req(*a, **kw):
+            raise AssertionError("RPC must not be called for an unknown chain")
+            yield  # noqa
+
+        obj._request_with_retries = fail_req
+
+        gen = obj._is_not_other_contract_optimism("0xABC", chain="arbitrum")
+        assert _drive(gen) is False

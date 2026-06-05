@@ -724,8 +724,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     )
 
-            except Exception as e:
-                self.context.logger.error(f"Error processing position: {str(e)}")
+            except Exception:
+                # ``logger.exception`` keeps the traceback so a position
+                # that consistently throws is debuggable from the agent
+                # log. ``continue`` quietly drops the position's value
+                # from the share total, so without the traceback this is
+                # a silent shrink of the portfolio.
+                self.context.logger.exception(
+                    f"Error processing position {position.get('pool_address')!r}"
+                )
                 continue
 
         self.store_current_positions()
@@ -1049,13 +1056,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_safe_value: Decimal,
         staking_rewards_value: Decimal,
         airdrop_rewards_value: Decimal,
-        withdrawals_value: Decimal,
+        withdrawals_value: Optional[Decimal],
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
         portfolio_breakdown: List[Dict],
-    ) -> Dict:
-        """Create the final portfolio data structure."""
+    ) -> Optional[Dict]:
+        """Build the portfolio snapshot dict.
+
+        Returns ``None`` (rather than ``{}``) on an unexpected exception so
+        the caller can tell "errored" from "empty" and preserve the last
+        known portfolio rather than overwrite it with a partial state.
+
+        :param total_pools_value: USD value held in open pool positions.
+        :param total_safe_value: USD value held directly in the safe.
+        :param staking_rewards_value: USD value of accrued staking rewards.
+        :param airdrop_rewards_value: USD value of airdropped rewards.
+        :param withdrawals_value: USD value of cumulative outflows, or
+            ``None`` when the fetcher failed and the caller should skip
+            ROI math to avoid treating a transient blip as zero.
+        :param initial_investment: USD value of initial funding inflows.
+        :param volume: USD value of all positions ever opened.
+        :param allocations: List of open allocations.
+        :param portfolio_breakdown: Per-asset balance/price/value rows.
+        :return: The portfolio dict, or ``None`` on exception.
+        """
 
         # Get agent_hash from environment
         try:
@@ -1070,7 +1095,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Convert to percentage by multiplying by 100
             total_roi = None
             partial_roi = None
-            if initial_investment is not None and initial_investment > 0:
+            if (
+                initial_investment is not None
+                and initial_investment > 0
+                and withdrawals_value is not None
+            ):
                 try:
                     # Total ROI includes staking rewards + airdrop rewards
                     total_roi_decimal = (
@@ -1099,6 +1128,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")
                     total_roi = None
                     partial_roi = None
+            elif withdrawals_value is None:
+                self.context.logger.info(
+                    "ROI not calculated - withdrawals fetch failed this cycle; "
+                    "preserving last-known ROI by skipping the recompute."
+                )
             else:
                 self.context.logger.info(
                     f"ROI not calculated - initial_investment: {initial_investment}"
@@ -1175,7 +1209,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "portfolio_value": float(total_portfolio_value),
                 "value_in_pools": float(total_pools_value),
                 "value_in_safe": float(total_safe_value),
-                "value_in_withdrawals": float(withdrawals_value),
+                "value_in_withdrawals": (
+                    float(withdrawals_value) if withdrawals_value is not None else None
+                ),
                 "initial_investment": (
                     float(initial_investment)
                     if initial_investment is not None
@@ -1191,9 +1227,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "address": safe_address,
                 "last_updated": int(self._get_current_timestamp()),
             }
-        except Exception as e:
-            self.context.logger.error(f"Error creating portfolio data: {str(e)}")
-            return {}
+        except Exception:
+            # ``logger.exception`` captures the traceback so a recurring
+            # portfolio-build crash is debuggable from the log. Returning
+            # ``None`` (not ``{}``) lets the caller's ``if portfolio_data:``
+            # guard distinguish "errored — preserve last known" from
+            # legitimately empty.
+            self.context.logger.exception("Error creating portfolio data")
+            return None
 
     def _handle_balancer_position(
         self, position: Dict, chain: str
@@ -1416,27 +1457,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     token_prices,
                 )
 
-                # Check cost recovery using actual yield
-                entry_cost = position.get("entry_cost", 0)
-                if yield_usd >= entry_cost:
-                    position["cost_recovered"] = True
-                    position["yield_usd"] = float(yield_usd)
+                if yield_usd is None:
+                    # The reward-price fetch failed mid-computation. Leave
+                    # the last-known ``yield_usd`` and ``cost_recovered``
+                    # in place rather than overwriting them with an
+                    # undercount that would misreport recovery progress.
                     self.context.logger.info(
-                        f"Position {position.get('pool_address')} has recovered costs: "
-                        f"yield=${yield_usd:.2f} >= entry_cost=${entry_cost:.2f}"
+                        f"Yield recompute skipped for "
+                        f"{position.get('pool_address')}; preserving last-known "
+                        f"yield={position.get('yield_usd')}"
                     )
                 else:
-                    position["cost_recovered"] = False
-                    position["yield_usd"] = float(yield_usd)
-                    recovery_percentage = (
-                        (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
-                    )
-                    remaining_yield_needed = entry_cost - yield_usd
-                    self.context.logger.info(
-                        f"Position {position.get('pool_address')} cost recovery progress: "
-                        f"{recovery_percentage:.1f}% (${yield_usd:.2f}/${entry_cost:.2f}), "
-                        f"need ${remaining_yield_needed:.2f} more"
-                    )
+                    # Check cost recovery using actual yield
+                    entry_cost = position.get("entry_cost", 0)
+                    if yield_usd >= entry_cost:
+                        position["cost_recovered"] = True
+                        position["yield_usd"] = float(yield_usd)
+                        self.context.logger.info(
+                            f"Position {position.get('pool_address')} has recovered costs: "
+                            f"yield=${yield_usd:.2f} >= entry_cost=${entry_cost:.2f}"
+                        )
+                    else:
+                        position["cost_recovered"] = False
+                        position["yield_usd"] = float(yield_usd)
+                        recovery_percentage = (
+                            (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
+                        )
+                        remaining_yield_needed = entry_cost - yield_usd
+                        self.context.logger.info(
+                            f"Position {position.get('pool_address')} cost recovery progress: "
+                            f"{recovery_percentage:.1f}% (${yield_usd:.2f}/${entry_cost:.2f}), "
+                            f"need ${remaining_yield_needed:.2f} more"
+                        )
             else:
                 # Fallback for positions without complete initial data
                 position["cost_recovered"] = False
@@ -1516,18 +1568,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             token1_increase * token1_price
         )
 
-        # Add VELO rewards if position is staked
+        # Add VELO/AERO rewards if position is staked
         velo_rewards_usd = Decimal(0)
         if (
             position.get("staked", False)
             and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
         ):
-            # Get VELO token address and check if it's in current_balances
+            # Get reward-token address and check if it's in current_balances
             velo_token_address = self._get_velo_token_address(chain)
             if velo_token_address and velo_token_address in current_balances:
                 velo_balance = current_balances[velo_token_address]
                 if velo_balance > 0:
-                    # Get VELO price
+                    # Get reward-token price
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
@@ -1537,13 +1589,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
                         velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
+                            # Returning ``None`` signals "could not compute"
+                            # to the caller so the position's last-known
+                            # ``yield_usd`` is preserved rather than over-
+                            # written with an undercount (which would mis-
+                            # report cost-recovery progress).
                             self.context.logger.warning(
-                                f"Could not fetch {reward_symbol} price for "
-                                "yield calculation"
+                                f"Could not fetch {reward_symbol} price; "
+                                "skipping yield recompute to preserve last-known "
+                                "yield rather than undercount"
                             )
-                            velo_price = Decimal(0)
-                        else:
-                            velo_price = Decimal(str(velo_price))
+                            return None
+                        velo_price = Decimal(str(velo_price))
 
                     velo_rewards_usd = velo_balance * velo_price
 
@@ -2443,32 +2500,84 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return Decimal(0)
 
-    def calculate_withdrawals_value(self) -> Generator[None, None, Decimal]:
-        """Calculate the value of withdrawals."""
-        chain = self.params.target_investment_chains[0]
+    def calculate_withdrawals_value(self) -> Generator[None, None, Optional[Decimal]]:
+        """Aggregate USD withdrawal value across all target investment chains.
+
+        Returns ``None`` if any chain's fetcher fails so the caller can
+        preserve the last-known ROI rather than treating a transient API
+        blip as zero withdrawals (which would inflate Total ROI).
+
+        :yield: None.
+        :return: Total withdrawals in USD across configured chains, or
+            ``None`` if at least one chain's fetch could not complete.
+        """
+        total_withdrawal_value = Decimal(0)
+        any_fetch_failed = False
+        for chain in self.params.target_investment_chains:
+            chain_value = yield from self._calculate_chain_withdrawal_value(chain)
+            if chain_value is None:
+                # Keep iterating so other chains' TTL caches still refresh,
+                # but flag for the caller so ROI math is skipped this cycle.
+                any_fetch_failed = True
+                continue
+            total_withdrawal_value += chain_value
+
+        if any_fetch_failed:
+            self.context.logger.warning(
+                "Withdrawal fetch failed for at least one chain; returning "
+                "None so the caller preserves the last-known ROI rather than "
+                "assuming zero withdrawals."
+            )
+            return None
+
+        return total_withdrawal_value
+
+    def _calculate_chain_withdrawal_value(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Decimal]]:
+        """Compute withdrawals for one chain.
+
+        ``None`` signals a transient fetcher failure that the aggregator
+        must treat as "do not skew the total." A determined zero (no
+        outgoing transfers, unsupported chain, missing safe) is returned
+        as ``Decimal(0)`` so a configured but-quiet chain does not poison
+        the multi-chain total.
+
+        :param chain: chain name from ``target_investment_chains``.
+        :yield: None.
+        :return: Per-chain withdrawal value, or ``None`` on fetch failure.
+        """
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        if not safe_address:
+            self.context.logger.warning(
+                f"No safe configured for chain {chain}; treating withdrawal as 0"
+            )
+            return Decimal(0)
 
         if chain == Chain.MODE.value:
             all_erc20_transfers_mode = self._track_erc20_transfers_mode(
-                self.params.safe_contract_addresses.get(chain),
+                safe_address,
                 datetime.now().timestamp(),
             )
             if all_erc20_transfers_mode is None:
                 self.context.logger.warning(
-                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                    f"Failed to fetch {chain} ERC20 transfers; "
+                    "returning None so the aggregator preserves last-known ROI"
                 )
-                return Decimal(0)
+                return None
             outgoing_erc20_transfers_mode = all_erc20_transfers_mode["outgoing"]
             self.context.logger.info(
-                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_mode}"
+                f"Outgoing {chain} ERC20 transfers: {outgoing_erc20_transfers_mode}"
             )
             withdrawal_value = (
                 yield from self._track_and_calculate_withdrawal_value_mode(
                     outgoing_erc20_transfers_mode,
                 )
             )
-            self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+            self.context.logger.info(f"{chain} withdrawal value: ${withdrawal_value}")
             return withdrawal_value
-        elif chain in (Chain.OPTIMISM.value, Chain.BASE.value):
+
+        if chain in (Chain.OPTIMISM.value, Chain.BASE.value):
             # Both Optimism and Base are served by SafeGlobal and share the
             # same pagination + classification path. Persistence keys are
             # chain-scoped (``{chain}_withdrawals`` plus the per-chain TTL
@@ -2500,8 +2609,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if cached_val is not None:
                         try:
                             self.context.logger.info(
-                                f"Withdrawal cache hit ({age_seconds}s old, "
-                                f"ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
+                                f"{chain} withdrawal cache hit ({age_seconds}s "
+                                f"old, ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
                             )
                             return Decimal(str(cached_val))
                         except (InvalidOperation, ValueError, TypeError):
@@ -2510,22 +2619,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             )
 
             all_erc20_transfers = yield from self._track_erc20_transfers_optimism(
-                self.params.safe_contract_addresses.get(chain),
+                safe_address,
                 int(datetime.now().timestamp()),
                 chain=chain,
             )
-            # ``None`` signals fetcher failure (exception or mid-pagination
-            # error). Skip the kv cache write so a transient blip doesn't
-            # pin ``withdrawal=0`` until the next TTL boundary.
             if all_erc20_transfers is None:
+                # ``None`` signals fetcher failure (exception or
+                # mid-pagination error). Skip the kv cache write so a
+                # transient blip doesn't pin ``withdrawal=0`` until the
+                # next TTL boundary, and surface ``None`` to the aggregator.
                 self.context.logger.warning(
-                    "Failed to fetch ERC20 transfers, returning zero withdrawal "
-                    "value without caching"
+                    f"Failed to fetch {chain} ERC20 transfers; returning None "
+                    "without caching so the aggregator preserves last-known ROI"
                 )
-                return Decimal(0)
+                return None
             outgoing_erc20_transfers = all_erc20_transfers.get("outgoing", {})
             self.context.logger.info(
-                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers}"
+                f"Outgoing {chain} ERC20 transfers: {outgoing_erc20_transfers}"
             )
             withdrawal_value = (
                 yield from self._track_and_calculate_withdrawal_value_optimism(
@@ -2533,7 +2643,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     chain=chain,
                 )
             )
-            self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+            self.context.logger.info(f"{chain} withdrawal value: ${withdrawal_value}")
 
             yield from self._write_kv(
                 {
@@ -2542,16 +2652,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
             return withdrawal_value
-        else:
-            # A new Safe-backed L2 added to ``target_investment_chains[0]``
-            # without updating this dispatch would silently return 0 and
-            # inflate Total ROI on that chain. Log loudly so the gap is
-            # visible rather than swallowed.
-            self.context.logger.error(
-                f"calculate_withdrawals_value: unsupported chain {chain!r}; "
-                "returning 0 (withdrawal accounting is missing for this chain)"
-            )
-            return Decimal(0)
+
+        # A new Safe-backed L2 added to ``target_investment_chains`` without
+        # updating this dispatch would silently treat its withdrawals as 0.
+        # Log loudly so the gap is visible rather than swallowed.
+        self.context.logger.error(
+            f"_calculate_chain_withdrawal_value: unsupported chain {chain!r}; "
+            "returning 0 (withdrawal accounting is missing for this chain)"
+        )
+        return Decimal(0)
 
     def _track_and_calculate_withdrawal_value_mode(
         self,
@@ -3358,12 +3467,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_investment = yield from self._calculate_chain_investment_value(chain)
             total_investment += chain_investment
 
+            # Per-chain timestamp write must live inside the loop: ``chain``
+            # outside the loop is whichever value happened to be last, so a
+            # post-loop write would only refresh that one chain's TTL key
+            # and the others would look permanently expired — re-fetching
+            # full SafeGlobal history every cycle.
+            timestamp = int(self._get_current_timestamp())
+            yield from self._write_kv({initial_value_ts_kv_key(chain): str(timestamp)})
+
         # Per-chain totals are written inside ``_calculate_chain_investment_value``;
         # a single post-loop write would target only the last-iterated chain with
         # the cross-chain sum and over-count it on the next cache-hit read.
-
-        timestamp = int(self._get_current_timestamp())
-        yield from self._write_kv({initial_value_ts_kv_key(chain): str(timestamp)})
 
         self.context.logger.info(
             f"Total initial investment from all chains: ${total_investment}"

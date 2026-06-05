@@ -1810,14 +1810,20 @@ class TestCalculateWithdrawalsValue:
         assert _drive(gen) == Decimal(0)
 
     def test_mode_none_transfers(self):
-        """Test mode none transfers."""
+        """Fetcher failure surfaces as None so the caller can preserve ROI.
+
+        A blanket ``Decimal(0)`` would let a transient Mode API blip flow
+        into the ROI numerator as "zero withdrawals" and inflate Total
+        ROI for the cycle. Returning ``None`` lets the caller skip the
+        recompute instead.
+        """
         obj = _mk()
 
         obj.params.target_investment_chains = ["mode"]
         obj.params.safe_contract_addresses = {"mode": "0xSafe"}
         obj._track_erc20_transfers_mode = MagicMock(return_value=None)
         gen = obj.calculate_withdrawals_value()
-        assert _drive(gen) == Decimal(0)
+        assert _drive(gen) is None
 
     def test_mode_with_transfers(self):
         """Test mode with transfers."""
@@ -1833,7 +1839,12 @@ class TestCalculateWithdrawalsValue:
         assert _drive(gen) == Decimal("50")
 
     def test_optimism_no_transfers(self):
-        """Test optimism no transfers."""
+        """Fetcher failure on Optimism returns None at the aggregator level.
+
+        Same contract as the Mode case: the SafeGlobal fetcher returning
+        None means "transient API blip," and the aggregator surfaces that
+        to the caller so the cycle's ROI is preserved rather than zeroed.
+        """
         obj = _mk()
 
         obj.params.target_investment_chains = ["optimism"]
@@ -1843,7 +1854,7 @@ class TestCalculateWithdrawalsValue:
         obj._read_kv = _gen_return({})
         obj._track_erc20_transfers_optimism = _gen_return(None)
         gen = obj.calculate_withdrawals_value()
-        assert _drive(gen) == Decimal(0)
+        assert _drive(gen) is None
 
     def test_optimism_with_transfers(self):
         """Test optimism with transfers."""
@@ -2558,8 +2569,14 @@ class TestCreatePortfolioData:
         )
         assert len(result["portfolio_breakdown"]) == 0
 
-    def test_exception(self):
-        """Test exception."""
+    def test_exception_returns_none(self):
+        """An unexpected exception returns None so the caller preserves last-known.
+
+        The caller's ``if portfolio_data:`` guard rejects both ``None``
+        and ``{}``, but returning ``None`` makes the "errored" intent
+        explicit so a future change to the caller can distinguish
+        "errored, preserve" from "legitimately empty."
+        """
         obj = _mk()
 
         obj.params.target_investment_chains = []  # will cause index error
@@ -2574,7 +2591,7 @@ class TestCreatePortfolioData:
             [],
             [],
         )
-        assert result == {}
+        assert result is None
 
     def test_allocation_error_skipped(self):
         """Test allocation error skipped."""
@@ -4641,8 +4658,14 @@ class TestCalculateCorrectedYieldVeloBranches:
         result = _drive(gen)
         assert result == Decimal("5.0")  # 10 * 0.5
 
-    def test_velo_price_fetch_none(self):
-        """Cover lines 1436-1439: _fetch_coin_price returns None."""
+    def test_velo_price_fetch_none_returns_none(self):
+        """Missing VELO/AERO price returns None so the caller preserves yield.
+
+        Falling back to ``Decimal(0)`` would silently undercount the
+        position's yield and corrupt the cost-recovery progress shown to
+        the user. ``None`` signals "couldn't compute fully" so the caller
+        keeps the position's last-known ``yield_usd`` instead.
+        """
         obj = _mk()
 
         def fake_dec(*a, **kw):
@@ -4669,7 +4692,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             pos, 10**18, 10**18, balances, "optimism", prices
         )
         result = _drive(gen)
-        assert result == Decimal("0")  # velo_price defaults to 0
+        assert result is None
 
     def test_velo_balance_zero(self):
         """Cover 1428->1446: velo_balance == 0 -> skip."""
@@ -8439,7 +8462,10 @@ class TestCalculateWithdrawalsValueTtlCache:
         obj._get_current_timestamp = lambda: 1704067200
 
         result = _drive(obj.calculate_withdrawals_value())
-        assert result == Decimal(0)
+        # Aggregator surfaces None for any chain whose fetcher fails so the
+        # caller preserves the last-known ROI rather than treating the
+        # transient blip as zero withdrawals.
+        assert result is None
         # Critical: no kv write on failure so the next cycle retries.
         assert writes == {}
 
@@ -10325,7 +10351,12 @@ class TestCalculateWithdrawalsValueBaseDispatch:
         assert _drive(obj.calculate_withdrawals_value()) == Decimal("99.5")
 
     def test_base_skips_kv_write_on_fetcher_failure(self):
-        """A None return from the fetcher must not pin withdrawal=0 in the cache."""
+        """A None return from the fetcher must not pin withdrawal=0 in the cache.
+
+        The aggregator surfaces ``None`` so the caller preserves the
+        last-known ROI rather than assuming zero withdrawals; the
+        per-chain kv cache is left untouched so the next cycle retries.
+        """
         obj = _mk()
         obj.params.target_investment_chains = ["base"]
         obj.params.safe_contract_addresses = {"base": "0xSafe"}
@@ -10339,7 +10370,7 @@ class TestCalculateWithdrawalsValueBaseDispatch:
 
         obj._write_kv = fail_write
 
-        assert _drive(obj.calculate_withdrawals_value()) == Decimal(0)
+        assert _drive(obj.calculate_withdrawals_value()) is None
 
 
 class TestTrackErc20TransfersBaseRouting:
@@ -10452,3 +10483,114 @@ class TestTrackAndCalculateWithdrawalValueBaseRouting:
         assert result == Decimal("4")
         assert captured_classifier["chain"] == Chain.BASE.value
         assert captured_pricer["chain"] == Chain.BASE.value
+
+
+class TestCalculateUserShareValuesAerodromeDispatch:
+    """Aerodrome positions must route through ``_handle_velodrome_position``.
+
+    Aerodrome shares the Velodrome code path on Base, so the
+    ``dex_handlers`` dispatch in ``calculate_user_share_values`` keys
+    both ``DexType.VELODROME.value`` and ``DexType.AERODROME.value`` to
+    the same handler. A regression that drops the Aerodrome entry (or
+    renames the value) would silently route Aerodrome positions through
+    "unsupported dex type" and produce $0 portfolio value on Base while
+    leaving line coverage at 100%.
+    """
+
+    def test_aerodrome_position_routes_to_velodrome_handler(self):
+        """An Aerodrome/Base position must reach ``_handle_velodrome_position``.
+
+        Captures the call args so a future change that loses Aerodrome
+        from the dispatch (and therefore silently shrinks the Base
+        portfolio) fails this test rather than passing quietly.
+        """
+        obj = _mk()
+        obj.current_positions = [
+            {
+                "status": "open",
+                "dex_type": "aerodrome",
+                "chain": "base",
+                "pool_address": "0xAeroPool",
+                "token0": "0xT0",
+                "token1": "0xT1",
+                "token0_symbol": "A",
+                "token1_symbol": "B",
+                "apr": 5.0,
+            }
+        ]
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj.store_current_positions = MagicMock()
+
+        called: Dict[str, Any] = {}
+
+        def fake_velo_handler(position, chain):
+            called["position"] = position
+            called["chain"] = chain
+            yield
+            return (
+                {"0xT0": Decimal("1"), "0xT1": Decimal("1")},
+                "Velodrome Pool",
+                {"0xT0": "A", "0xT1": "B"},
+            )
+
+        obj._handle_velodrome_position = fake_velo_handler
+        # Ensure no other handler can absorb the position.
+        obj._handle_balancer_position = _gen_return(None)
+        obj._handle_uniswap_position = _gen_return(None)
+        obj._handle_sturdy_position = _gen_return(None)
+
+        obj._calculate_position_value = _gen_return(Decimal("10"))
+        obj._calculate_safe_balances_value = _gen_return(Decimal("0"))
+        obj.calculate_stakig_rewards_value = _gen_return(Decimal("0"))
+        obj.calculate_airdrop_rewards_value = _gen_return(Decimal("0"))
+        obj.calculate_withdrawals_value = _gen_return(Decimal("0"))
+        obj._update_portfolio_metrics = _gen_none
+        obj.calculate_initial_investment_value_from_funding_events = _gen_return(100.0)
+        obj._calculate_total_volume = _gen_return(100.0)
+        obj._create_portfolio_data = lambda *a, **kw: {"ok": True}
+        obj.store_portfolio_data = MagicMock()
+
+        _drive(obj.calculate_user_share_values())
+
+        assert called["chain"] == "base"
+        assert called["position"]["dex_type"] == "aerodrome"
+        assert called["position"]["pool_address"] == "0xAeroPool"
+
+
+class TestCalculateInitialInvestmentTimestampPerChain:
+    """Per-chain timestamp write must live inside the loop.
+
+    A post-loop write would only refresh whichever chain happened to be
+    the last iterated, leaving every other chain's TTL key permanently
+    expired and re-fetching their full SafeGlobal history every cycle.
+    """
+
+    def test_timestamp_written_per_chain(self):
+        """Every iterated chain gets its own ``initial_value_ts_*`` write."""
+        obj = _mk()
+        obj.params.target_investment_chains = ["base", "optimism"]
+        obj.params.safe_contract_addresses = {"base": "0xB", "optimism": "0xO"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._fetch_all_transfers_until_date_optimism = _gen_return({})
+        obj._calculate_chain_investment_value = _gen_return(0.0)
+        obj._get_current_timestamp = lambda: 1704067200
+
+        writes: List[Dict[str, str]] = []
+
+        def capture_write(payload):
+            writes.append(dict(payload))
+            yield
+
+        obj._write_kv = capture_write
+
+        _drive(obj.calculate_initial_investment_value_from_funding_events())
+
+        written_keys = {k for payload in writes for k in payload}
+        # Both per-chain timestamp keys must land.
+        assert (
+            "last_initial_value_calculated_timestamp_base" in written_keys
+        ), written_keys
+        assert (
+            "last_initial_value_calculated_timestamp_optimism" in written_keys
+        ), written_keys

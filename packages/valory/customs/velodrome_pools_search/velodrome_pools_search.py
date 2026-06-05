@@ -3316,19 +3316,49 @@ def run(
     Returns:
         Dict containing either error messages or result data
     """
-    # Clear previous errors
-    get_errors().clear()
-
-    # Apply caller-provided per-chain RPC overrides so the strategy talks to
-    # the same endpoints as the agent's ledger connection. Falls back to the
-    # hardcoded defaults when a chain is not supplied.
+    # Apply caller-provided per-chain RPC overrides so the strategy talks
+    # to the same endpoints as the agent's ledger connection, then restore
+    # the original mapping on the way out. ``RPC_ENDPOINTS`` is read from
+    # many downstream sites in this module, so a leaked override from one
+    # ``run()`` would silently bleed into the next cycle (or the next
+    # test) — which is exactly what the snapshot here protects against.
     chain_to_rpc = kwargs.pop("chain_to_rpc", None) or {}
+    rpc_overrides_snapshot: Dict[int, Optional[str]] = {}
     if chain_to_rpc:
         name_to_id = {cname: cid for cid, cname in CHAIN_NAMES.items()}
         for chain_name, rpc_url in chain_to_rpc.items():
             cid = name_to_id.get(chain_name.lower())
             if cid is not None and rpc_url:
+                # ``None`` here means "the key was absent" so we know to
+                # delete on restore rather than write a sentinel back.
+                rpc_overrides_snapshot[cid] = RPC_ENDPOINTS.get(cid)
                 RPC_ENDPOINTS[cid] = rpc_url
+
+    try:
+        return _run_impl(force_refresh=force_refresh, **kwargs)
+    finally:
+        for cid, prior in rpc_overrides_snapshot.items():
+            if prior is None:
+                RPC_ENDPOINTS.pop(cid, None)
+            else:
+                RPC_ENDPOINTS[cid] = prior
+
+
+def _run_impl(
+    force_refresh: bool = False, **kwargs: Any
+) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
+    """Run the Velodrome pool analysis.
+
+    Helper for :func:`run`. ``RPC_ENDPOINTS`` overrides have already been
+    applied (and will be restored by the wrapper), so this body can treat
+    the module-level mapping as the source of truth.
+
+    :param force_refresh: When True, invalidate the price cache before running.
+    :param kwargs: Strategy-specific kwargs (see :func:`run`).
+    :return: Dict containing either error messages or result data.
+    """
+    # Clear previous errors
+    get_errors().clear()
 
     # Apply configurable price cache TTL and shared cache dict
     price_cache_ttl_val = int(kwargs.pop("price_cache_ttl", 1800))

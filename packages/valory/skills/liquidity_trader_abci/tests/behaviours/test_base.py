@@ -42,6 +42,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
+    last_known_safe_balances_kv_key,
+    safe_balances_kv_key,
+    safe_balances_ts_kv_key,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 
@@ -5580,3 +5583,132 @@ class TestGetLastKnownPriceHistoricalBranch:
             b._read_kv = mock_read  # type: ignore[method-assign]
             result = _exhaust(b._get_last_known_price("0xToken"))
             assert result == 42.5
+
+
+def _make_base_b() -> Any:
+    """Behaviour stubbed for the Base SafeApi-parse path.
+
+    Mirrors :func:`_make_optimism_b` but with the safe address keyed to
+    Base so the cache reads/writes flow through ``safe_balances_*_base``.
+
+    :return: behaviour instance with the noop stubs installed.
+    """
+    b = _make_behaviour()
+    b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+    b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
+    b._get_current_timestamp = lambda: 0  # type: ignore[assignment,method-assign]
+    b._fetch_reward_balances = _make_gen([])  # type: ignore[assignment,method-assign]
+    b._supplement_with_onchain_whitelisted_balances = (  # type: ignore[method-assign]
+        _make_gen(None)
+    )
+    b.params.safe_contract_addresses = {"base": "0xBaseSafe"}
+    return b
+
+
+class TestGetSafeBalancesFromSafeApiBaseTtlKeys:
+    """Base TTL kv keys must not collide with Optimism's.
+
+    ``_get_safe_balances_from_safe_api`` reads/writes
+    ``safe_balances_{chain}`` and ``last_safe_balances_calculated_timestamp_{chain}``.
+    A regression that hardcoded the optimism suffix would let an
+    Optimism balance refresh poison the Base cache (or vice versa).
+    """
+
+    def test_base_reads_and_writes_base_scoped_keys(self) -> None:
+        """The kv read carries Base keys; the kv write only touches Base keys.
+
+        Captures the read-key set and write payload so a future change
+        that mixes chain suffixes fails this test rather than passing
+        quietly.
+        """
+        b = _make_base_b()
+        read_keys: list = []
+
+        def capture_read(keys: Any) -> Any:
+            read_keys.extend(keys)
+            yield
+            return {}
+
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._read_kv = capture_read  # type: ignore[method-assign]
+        b._write_kv = capture_write  # type: ignore[method-assign]
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (True, [])
+        )
+
+        _exhaust(b._get_safe_balances_from_safe_api("base"))
+
+        assert safe_balances_kv_key("base") in read_keys
+        assert safe_balances_ts_kv_key("base") in read_keys
+        # Optimism keys must never appear here on a Base call.
+        assert safe_balances_kv_key("optimism") not in read_keys
+        assert safe_balances_ts_kv_key("optimism") not in read_keys
+
+        written_keys = {k for payload in writes for k in payload}
+        # Writes target Base keys only; no Optimism cross-write.
+        base_writes = {k for k in written_keys if k.endswith("_base")}
+        assert base_writes, written_keys
+        assert not {k for k in written_keys if k.endswith("_optimism")}
+
+
+class TestDetectAndInvalidateOnInflowBase:
+    """Inflow detection scopes its snapshot key by chain.
+
+    A regression that hardcoded ``last_known_safe_balances_optimism``
+    here would let a Base inflow re-baseline Optimism's snapshot and
+    suppress the Optimism cache invalidation it should have triggered.
+    """
+
+    def test_base_reads_base_scoped_snapshot(self) -> None:
+        """The snapshot read for a Base inflow scan uses the Base-scoped key."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+
+        read_keys: list = []
+
+        def capture_read(keys: Any) -> Any:
+            for k in keys:
+                read_keys.append(k)
+            yield
+            return {}
+
+        b._read_kv = capture_read  # type: ignore[method-assign]
+
+        _exhaust(b._detect_and_invalidate_on_inflow("base", "0xBaseSafe"))
+
+        assert last_known_safe_balances_kv_key("base") in read_keys
+        assert last_known_safe_balances_kv_key("optimism") not in read_keys
+
+    def test_base_writes_base_scoped_snapshot(self) -> None:
+        """The baseline-snapshot write targets the Base key, never Optimism's."""
+        b = _make_behaviour()
+        b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({})  # type: ignore[assignment,method-assign]
+
+        writes: list = []
+
+        def capture_write(payload: Any) -> Any:
+            writes.append(payload)
+            yield
+            return True
+
+        b._write_kv = capture_write  # type: ignore[method-assign]
+
+        _exhaust(b._detect_and_invalidate_on_inflow("base", "0xBaseSafe"))
+
+        snapshot_writes = [
+            w for w in writes if last_known_safe_balances_kv_key("base") in w
+        ]
+        assert len(snapshot_writes) == 1
+        assert not [
+            w for w in writes if last_known_safe_balances_kv_key("optimism") in w
+        ]

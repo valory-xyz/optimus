@@ -144,12 +144,19 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # so their relative change is dimensionless. Express it as a percentage
             # to compare against slippage_tolerance, which the rest of the codebase
             # treats as a fraction of price.
-            if price_at_selection:
-                price_change_pct = (
-                    abs(current_price - price_at_selection) / price_at_selection
-                ) * 100
-            else:
-                price_change_pct = 0.0
+            if not price_at_selection:
+                # A 0/None selection price is "can't check," not "didn't move."
+                # Returning ``False`` here would mark the position as in-range
+                # for the rest of its lifetime and suppress every out-of-range
+                # rebalance. Surface the gap as the caller-handled sentinel.
+                self.context.logger.warning(
+                    "[PRICE_MONITORING] price_at_selection is zero/None; "
+                    "cannot compute price movement"
+                )
+                return None
+            price_change_pct = (
+                abs(current_price - price_at_selection) / price_at_selection
+            ) * 100
 
             slippage_tolerance_pct = self.params.slippage_tolerance * 100
 
@@ -911,7 +918,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 )
                 return None, None
 
-            # Call mint on the CLPoolManager contract
+            # Call mint on the NonFungiblePositionManager contract
             mint_tx_hash = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=position_manager_address,
@@ -1020,7 +1027,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         if not position_manager_address:
             self.context.logger.error(
-                f"No CLPoolManager contract address found for chain {chain}"
+                f"No NonFungiblePositionManager contract address found for chain {chain}"
             )
             return None, None, None
 
@@ -1206,7 +1213,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         if not position_manager_address:
             self.context.logger.error(
-                f"No CLPoolManager contract address found for chain {chain}"
+                f"No NonFungiblePositionManager contract address found for chain {chain}"
             )
             return None
 
@@ -1242,7 +1249,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         if not position_manager_address:
             self.context.logger.error(
-                f"No CLPoolManager contract address found for chain {chain}"
+                f"No NonFungiblePositionManager contract address found for chain {chain}"
             )
             return None
 
@@ -1278,7 +1285,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         if not position_manager_address:
             self.context.logger.error(
-                f"No CLPoolManager contract address found for chain {chain}"
+                f"No NonFungiblePositionManager contract address found for chain {chain}"
             )
             return None
 

@@ -276,11 +276,16 @@ class TestCheckPriceMovement:
         result = exhaust_generator(gen)
         assert result is False
 
-    def test_zero_price_at_selection_returns_false(self) -> None:
-        """A falsy baseline price yields 0% change (avoids div-by-zero) -> False."""
+    def test_zero_price_at_selection_returns_none(self) -> None:
+        """A falsy baseline price is the existing ``can't check`` sentinel.
+
+        Returning ``False`` here would mark the position as in-range for
+        the rest of its lifetime and suppress every out-of-range
+        rebalance. The caller already guards ``is None`` as the
+        "skip this check" signal, so the resolver surfaces ``None``.
+        """
         b = make_behaviour()
         b.params.slippage_tolerance = 0.01  # 1% tolerance
-        # price_at_selection = 0 -> price_change_pct defaults to 0.0 -> not moved
         gen = self._make_gen(
             b,
             current_price=1.0,
@@ -288,7 +293,7 @@ class TestCheckPriceMovement:
             tick_ranges=[[{"tick_lower": -100, "tick_upper": 100}]],
         )
         result = exhaust_generator(gen)
-        assert result is False
+        assert result is None
 
     def test_exception_returns_none(self) -> None:
         """When an exception occurs, returns None."""

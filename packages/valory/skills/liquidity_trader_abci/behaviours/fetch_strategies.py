@@ -28,6 +28,7 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
 import requests
 from eth_utils import to_checksum_address
+
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,

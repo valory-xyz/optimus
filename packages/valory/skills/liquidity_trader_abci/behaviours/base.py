@@ -315,7 +315,11 @@ WHITELISTED_ASSETS = {
         "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
         "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
         "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
-        # Shortlist additions for testing, separate PR pending
+        # Tier-1 stablecoin additions from the Base/Aerodrome LpSugar whitelist
+        # sweep: each is $1-pegged, has a CoinGecko coin id for pricing, and pairs
+        # with a whitelisted anchor (USDC; eUSD also pairs frxUSD). A pool is only
+        # investable when every token in it is whitelisted, so each unlocks real
+        # Aerodrome depth. Ordered by safety x liquidity.
         "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
         "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
         "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",

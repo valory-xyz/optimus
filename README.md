@@ -2,9 +2,11 @@
 
 ## Overview
 
-Optimus is an autonomous agent service that automatically manages liquidity provision on the Optimism network. Built on the Open Autonomy framework, Optimus uses sophisticated finite state machines to coordinate actions across multiple agents without human intervention.
+Optimus is an autonomous agent service that automatically manages liquidity provision across multiple Layer 2 networks. Built on the Open Autonomy framework, Optimus uses sophisticated finite state machines to coordinate actions across multiple agents without human intervention.
 
-The system identifies, evaluates, and executes profitable liquidity provision opportunities by integrating with major decentralized exchanges including Balancer, Uniswap V3, and Velodrome. It automatically tracks performance metrics while providing real-time portfolio management with comprehensive analytics and risk assessment.
+The agent runs against one chain at a time, selected via `TARGET_INVESTMENT_CHAINS`. The currently supported chains are Optimism and Base; Mode is supported as a legacy target.
+
+The system identifies, evaluates, and executes profitable liquidity provision opportunities by integrating with major decentralized exchanges including Balancer, Uniswap V3, Velodrome (Optimism), and Aerodrome (Base). It automatically tracks performance metrics while providing real-time portfolio management with comprehensive analytics and risk assessment.
 
 Optimus operates as a decentralized autonomous system that can handle complex multi-step operations including token swapping and liquidity provision. It maintains detailed records of all activities and continuously optimizes its strategies based on market conditions and performance data.
 
@@ -25,12 +27,14 @@ Optimus integrates with the following decentralized exchanges and protocols:
 - NFT-based position management through the Position Manager contract
 - Allows multiple positions in the same pool with different ranges
 
-### Velodrome
+### Velodrome (Optimism) / Aerodrome (Base)
+- Aerodrome is the Base deployment of the same protocol fork; pool, gauge, voter, and CL contracts share the same interfaces, so both chains share the trader code path
 - Supports stable pools, volatile pools, and concentrated liquidity pools
 - Advanced mathematical models to calculate optimized liquidity bands for Concentrated Pools
 - Calculates different liquidity bands for optimal positioning
 - Volatile pools use traditional constant product formulas
-- Handles additional VELO rewards for liquidity providers
+- Handles additional gauge rewards for liquidity providers: VELO on Optimism, AERO on Base
+- Staked LP positions are read from the gauge (not the pool) so portfolio values reflect deposited liquidity
 
 ## Operational Process
 
@@ -89,7 +93,7 @@ Verifies whether Key Performance Indicators for staking rewards have been satisf
 
 #### GetPositionsRound
 Retrieves and updates comprehensive information about the system's current portfolio state across all supported networks and protocols. This round:
-- Fetches active liquidity positions from all integrated protocols (Balancer, Uniswap V3, Velodrome)
+- Fetches active liquidity positions from all integrated protocols (Balancer, Uniswap V3, Velodrome on Optimism, Aerodrome on Base)
 - Queries each protocol's contracts for current position data including liquidity amounts, token balances, and position status
 - Updates position statuses by checking for closed, liquidated, or modified positions
 - Identifies positions with zero liquidity and marks them as closed
@@ -98,7 +102,7 @@ Retrieves and updates comprehensive information about the system's current portf
 
 #### EvaluateStrategyRound
 Performs comprehensive analysis of all available strategies to determine which opportunities merit execution. This round:
-- Fetches trading opportunities from multiple DEXs/protocols (Balancer, Uniswap, Velodrome)
+- Fetches trading opportunities from multiple DEXs/protocols (Balancer, Uniswap V3, Velodrome on Optimism, Aerodrome on Base)
 - Performs risk factor assessment including impermanent loss potential, historical performance, and liquidity depth analysis
 - Determines optimal allocation amounts based on portfolio size, risk tolerance, and diversification requirements
 - Calculates appropriate position sizes that maximize returns while maintaining acceptable risk levels
@@ -181,12 +185,13 @@ autonomy packages sync --update-packages
     EOF
     ```
 
-2. **Deploy Safes**: You need to deploy [Safes](https://safe.global/) on the following networks:
-   - Optimism
+2. **Deploy Safes**: You need to deploy a [Safe](https://safe.global/) on the network you want the agent to operate on:
+   - Optimism, and / or
+   - Base
 
-3. **Fund Accounts**: 
-   - Provide ETH and USDC to your Safe address on Optimsim
-   - Provide ETH to your agent on Optimism to cover gas fees
+3. **Fund Accounts**:
+   - Provide ETH and USDC to your Safe address on the target chain (Optimism and/or Base)
+   - Provide ETH to your agent on the target chain to cover gas fees
 
 **Note**: Transaction simulation via Tenderly has been deprecated. The agent now proceeds with transactions without pre-execution validation.
 
@@ -194,10 +199,19 @@ autonomy packages sync --update-packages
 
 Set up the following environment variables:
 
-```bashexport OPTIMISM_LEDGER_RPC=INSERT_YOUR_OPTIMISM_RPC
+```bash
+# RPCs — set whichever chains you want the agent to operate on.
+export OPTIMISM_LEDGER_RPC=INSERT_YOUR_OPTIMISM_RPC
+export BASE_LEDGER_RPC=INSERT_YOUR_BASE_RPC
 
 export ALL_PARTICIPANTS='["YOUR_AGENT_ADDRESS"]'
-export SAFE_CONTRACT_ADDRESSES='{"optimism":"YOUR_SAFE_ADDRESS_ON_OPTIMISM"}'
+
+# Safe addresses, keyed by chain — include only the chains you funded.
+export SAFE_CONTRACT_ADDRESSES='{"optimism":"YOUR_SAFE_ADDRESS_ON_OPTIMISM","base":"YOUR_SAFE_ADDRESS_ON_BASE"}'
+
+# Which chain the agent should run against. Single-chain only; the first
+# entry is what dispatchers like withdrawal accounting read.
+export TARGET_INVESTMENT_CHAINS='["base"]'   # or '["optimism"]'
 
 export SLIPPAGE_FOR_SWAP=0.09
 ```

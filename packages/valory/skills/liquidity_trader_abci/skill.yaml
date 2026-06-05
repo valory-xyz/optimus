@@ -13,7 +13,7 @@ fingerprint:
   behaviours/check_staking_kpi_met.py: bafybeieidx73vhcck7i3o2wkr435tarz5ikl4sogopgocg5quakgtf3csy
   behaviours/decision_making.py: bafybeiecevpplgg23gptaexr6kp4opddeydms5lzziuehtngdxxc3mayw4
   behaviours/evaluate_strategy.py: bafybeigvd26lxpdq27nfj2jvyexmvfpch7wqlo772rahvil6nvek26axp4
-  behaviours/fetch_strategies.py: bafybeigt5fpln4ivvcajik45u5wehhnnuuuawd64w4ch2i2bv37x2bcsae
+  behaviours/fetch_strategies.py: bafybeifojuolh4wboa3d6qqq74wnmfj6u6keumvbdx5oqyidixt26horhm
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeiaadochurz7hibufbl2ijg6v6sdg25dnuoggc5tayrxu5alnlhjxu
   behaviours/round_behaviour.py: bafybeiafqu4chrxrtxqijd22h6xim4sbon5j4rz3any3vfpbi3qhsovyua
@@ -51,7 +51,7 @@ fingerprint:
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidv7ckk3qqyovnynl5v7nuxwzbols7jkhkrtiwa3uv7lxi4nykqtm
   tests/behaviours/test_decision_making.py: bafybeigs63ccyv6nivol2p4nqxvhfn6obkukib2kgaa5hzrhtje564ziuu
   tests/behaviours/test_evaluate_strategy.py: bafybeies3glm2jbmt7v2ejwu2fgter2elqjq5k7e6nqclrkdplinzwsj4i
-  tests/behaviours/test_fetch_strategies.py: bafybeihaku6lrmzryktng6clavtzhxvtbren6qglqxscxsxinwat6fnhr4
+  tests/behaviours/test_fetch_strategies.py: bafybeib7czh7bryterfesnut25pqoyc63xhit3ckojmy66wwwjyqbpqrou
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeigievecybq7geucnqou7av3rrqsnjitgxydbo6fjopmki34n74q5u
   tests/behaviours/test_round_behaviour.py: bafybeibwy6np27mile6hf72nfjh65qsvegzedmsyeskfeprdwfvjbe77jq
@@ -325,7 +325,7 @@ models:
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702","base":"0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53"}'
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE",
-        "base": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
+        "base": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/9etc5Ht8eQGghXrkbWJk2yMzNypCFTL46m1iLXqE2rnq"}'
       velodrome_slipstream_helper_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202","base":"0x9c62ab10577fB3C20A22E231b7703Ed6D456CC7a"}'
       velodrome_voter_contract_addresses: '{"optimism":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123","base":"0x16613524e02ad97eDfeF371bC883F2F5d6C480A5"}'
       velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8","base":"0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E"}'

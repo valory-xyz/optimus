@@ -42,10 +42,12 @@ from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract
 )
 from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
 from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
+from packages.valory.contracts.velodrome_gauge.contract import VelodromeGaugeContract
 from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
     VelodromeNonFungiblePositionManagerContract,
 )
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
+from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -660,12 +662,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         individual_shares = []
         portfolio_breakdown = []
 
-        # Map DEX types to their handler functions
+        # Map DEX types to their handler functions. Aerodrome on Base shares
+        # the Velodrome code path (same protocol fork, see
+        # VELODROME_FAMILY_DEX_TYPES), so it routes through the same handler.
         dex_handlers = {
             DexType.BALANCER.value: self._handle_balancer_position,
             DexType.UNISWAP_V3.value: self._handle_uniswap_position,
             DexType.STURDY.value: self._handle_sturdy_position,
             DexType.VELODROME.value: self._handle_velodrome_position,
+            DexType.AERODROME.value: self._handle_velodrome_position,
         }
 
         # Process open positions
@@ -1017,6 +1022,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 DexType.UNISWAP_V3.value: "uniswapV3",
                 DexType.STURDY.value: "sturdy",
                 DexType.VELODROME.value: "velodrome",
+                DexType.AERODROME.value: "aerodrome",
                 DexType.BALANCER.value: "balancerPool",
             }
 
@@ -1266,19 +1272,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             user_address, pool_address, token_id, chain, position
         )
 
-        # Add VELO rewards to user balances if position is staked
+        # Add gauge reward token (VELO / AERO) to user balances if position is staked
         if position.get("staked", False):
             velo_rewards = yield from self._get_velodrome_pending_rewards(
                 position, chain, user_address
             )
             if velo_rewards > 0:
-                # Get VELO token address for the chain
+                # Get VELO/AERO token address for the chain
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
                     # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
                     user_balances[velo_token_address] = velo_rewards
+                    reward_symbol = self._get_velo_family_reward_symbol(chain)
                     self.context.logger.info(
-                        f"Added VELO rewards to position: {velo_rewards}"
+                        f"Added {reward_symbol} rewards to position: {velo_rewards}"
                     )
 
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
@@ -1287,10 +1294,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             position.get("token1"): position.get("token1_symbol"),
         }
 
-        # Add VELO to token_info if rewards exist
+        # Add the gauge reward token (VELO / AERO) to token_info if rewards exist
         velo_token_address = self._get_velo_token_address(chain)
         if velo_token_address and velo_token_address in user_balances:
-            token_info[velo_token_address] = "VELO"
+            token_info[velo_token_address] = self._get_velo_family_reward_symbol(chain)
 
         return user_balances, details, token_info
 
@@ -1524,11 +1531,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        reward_symbol = self._get_velo_family_reward_symbol(chain)
+                        velo_coin_id = self.get_coin_id_from_symbol(
+                            reward_symbol, chain
+                        )
                         velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
                             self.context.logger.warning(
-                                "Could not fetch VELO price for yield calculation"
+                                f"Could not fetch {reward_symbol} price for "
+                                "yield calculation"
                             )
                             velo_price = Decimal(0)
                         else:
@@ -1901,15 +1912,48 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address,
     ):
         """Calculate the user's share value and token balances in a Velodrome non-CL pool."""
-        user_balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="check_balance",
-            data_key="token",
-            account=user_address,
-            chain_id=chain,
-        )
+        # Staked positions hold their LP tokens at the gauge, not at the safe.
+        # The pool's balanceOf(safe) returns 0 in that case and the share
+        # calculation collapses to zero, leaving the position out of
+        # value_in_pools. Resolve the gauge via the Voter and read the
+        # staked balance there when the position is marked staked.
+        user_balance = None
+        if position.get("staked"):
+            resolved, gauge_address = yield from self._resolve_velodrome_gauge_address(
+                pool_address, chain
+            )
+            if not resolved or gauge_address is None:
+                # pool.balanceOf(safe) is 0 for a staked LP because the
+                # tokens are at the gauge, so falling through to the pool
+                # read below would contribute $0 from this position to
+                # value_in_pools — a known-wrong portfolio value. Surface
+                # the failure and skip instead.
+                self.context.logger.error(
+                    f"Could not resolve gauge for staked Velodrome/Aerodrome "
+                    f"position on {chain} (pool={pool_address}); skipping share "
+                    f"calculation to avoid contributing a wrong zero."
+                )
+                return {}
+            user_balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeGaugeContract.contract_id,
+                contract_callable="balance_of",
+                data_key="balance",
+                account=user_address,
+                chain_id=chain,
+            )
+
+        if user_balance is None:
+            user_balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=ERC20.contract_id,
+                contract_callable="check_balance",
+                data_key="token",
+                account=user_address,
+                chain_id=chain,
+            )
         if user_balance is None:
             self.context.logger.error(
                 f"Failed to get user balance for pool: {pool_address}"
@@ -2296,7 +2340,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_address == ZERO_ADDRESS:
                         token_price = yield from self._fetch_zero_address_price()
                     elif token_address.lower() == velo_token_address:
-                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        velo_coin_id = self.get_coin_id_from_symbol(
+                            self._get_velo_family_reward_symbol(chain), chain
+                        )
                         token_price = yield from self._fetch_coin_price(velo_coin_id)
                     else:
                         token_price = yield from self._fetch_token_price(
@@ -2401,7 +2447,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Calculate the value of withdrawals."""
         chain = self.params.target_investment_chains[0]
 
-        if chain == "mode":
+        if chain == Chain.MODE.value:
             all_erc20_transfers_mode = self._track_erc20_transfers_mode(
                 self.params.safe_contract_addresses.get(chain),
                 datetime.now().timestamp(),
@@ -2422,7 +2468,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
             return withdrawal_value
-        elif chain == "optimism":
+        elif chain in (Chain.OPTIMISM.value, Chain.BASE.value):
+            # Both Optimism and Base are served by SafeGlobal and share the
+            # same pagination + classification path. Persistence keys are
+            # chain-scoped (``{chain}_withdrawals`` plus the per-chain TTL
+            # kv keys below) so the two never share state.
+
             # TTL-based cache: skip Safe API + revaluation if the last
             # calculation was within WITHDRAWAL_CACHE_TTL_SECONDS. Negative
             # ages (clock skew, malformed timestamp) are treated as expired
@@ -2458,30 +2509,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                                 "Failed to parse cached withdrawal value; recomputing"
                             )
 
-            all_erc20_transfers_optimism = (
-                yield from self._track_erc20_transfers_optimism(
-                    self.params.safe_contract_addresses.get(chain),
-                    int(datetime.now().timestamp()),
-                )
+            all_erc20_transfers = yield from self._track_erc20_transfers_optimism(
+                self.params.safe_contract_addresses.get(chain),
+                int(datetime.now().timestamp()),
+                chain=chain,
             )
             # ``None`` signals fetcher failure (exception or mid-pagination
             # error). Skip the kv cache write so a transient blip doesn't
             # pin ``withdrawal=0`` until the next TTL boundary.
-            if all_erc20_transfers_optimism is None:
+            if all_erc20_transfers is None:
                 self.context.logger.warning(
                     "Failed to fetch ERC20 transfers, returning zero withdrawal "
                     "value without caching"
                 )
                 return Decimal(0)
-            outgoing_erc20_transfers_optimism = all_erc20_transfers_optimism.get(
-                "outgoing", {}
-            )
+            outgoing_erc20_transfers = all_erc20_transfers.get("outgoing", {})
             self.context.logger.info(
-                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_optimism}"
+                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers}"
             )
             withdrawal_value = (
                 yield from self._track_and_calculate_withdrawal_value_optimism(
-                    outgoing_erc20_transfers_optimism,
+                    outgoing_erc20_transfers,
+                    chain=chain,
                 )
             )
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
@@ -2494,6 +2543,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return withdrawal_value
         else:
+            # A new Safe-backed L2 added to ``target_investment_chains[0]``
+            # without updating this dispatch would silently return 0 and
+            # inflate Total ROI on that chain. Log loudly so the gap is
+            # visible rather than swallowed.
+            self.context.logger.error(
+                f"calculate_withdrawals_value: unsupported chain {chain!r}; "
+                "returning 0 (withdrawal accounting is missing for this chain)"
+            )
             return Decimal(0)
 
     def _track_and_calculate_withdrawal_value_mode(
@@ -2543,12 +2600,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _track_and_calculate_withdrawal_value_optimism(
         self,
         outgoing_erc20_transfers: Dict,
+        chain: str = "optimism",
     ) -> Generator[None, None, Decimal]:
-        """Track USDC transfers from safe address and handle withdrawal logic for Optimism."""
+        """Filter USDC outgoing transfers and price them against ``chain``.
+
+        Works for any SafeGlobal-served chain that ``calculate_withdrawals_value``
+        dispatches into this path (Optimism today, Base after the dispatcher
+        was widened). ``_is_not_other_contract_optimism`` is called with the
+        same ``chain`` so the eth_getCode probe, the Safe Transaction Service
+        lookup, and the cache key are all scoped to the chain the transfer
+        happened on.
+
+        :param outgoing_erc20_transfers: date-keyed outgoing transfers from
+            ``_track_erc20_transfers_optimism``.
+        :param chain: chain name used to filter contract recipients and to
+            select the USDC coin id for historical pricing.
+        :yield: None.
+        :return: the total USD value of withdrawals.
+        """
         try:
             if not outgoing_erc20_transfers:
                 self.context.logger.warning(
-                    "No outgoing transfers found for Optimism chain"
+                    f"No outgoing transfers found for {chain} chain"
                 )
                 return Decimal(0)
 
@@ -2577,7 +2650,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 to_address = transfer.get("to_address")
                 if to_address:  # pragma: no branch
                     is_not_other_contract = (
-                        yield from self._is_not_other_contract_optimism(to_address)
+                        yield from self._is_not_other_contract_optimism(
+                            to_address, chain=chain
+                        )
                     )
                     if is_not_other_contract:
                         withdrawal_transfers.append(transfer)
@@ -2585,7 +2660,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"USDC transfers: {usdc_transfers}")
             self.context.logger.info(f"Withdrawal transfers: {withdrawal_transfers}")
             withdrawal_value = yield from self._calculate_total_withdrawal_value(
-                withdrawal_transfers, chain="optimism"
+                withdrawal_transfers, chain=chain
             )
             return withdrawal_value
         except Exception as e:
@@ -3004,7 +3079,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Failed to get liquidity for Velodrome CL position: {pos}"
                     )
         else:
-            # Handle Velodrome stable/volatile pool
+            # Handle Velodrome stable/volatile pool. Staked positions hold
+            # their LP tokens at the gauge, not at the safe, so the pool's
+            # balanceOf(safe) returns 0 for them. Resolve the gauge via the
+            # Voter and read the staked balance there in that case.
             pool_address = position.get("pool_address")
             safe_address = self.params.safe_contract_addresses.get(
                 position.get("chain")
@@ -3016,16 +3094,43 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return
 
-            # Get the current balance of LP tokens
-            balance = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=pool_address,
-                contract_public_id=VelodromePoolContract.contract_id,
-                contract_callable="get_balance",
-                data_key="balance",
-                account=safe_address,
-                chain_id=chain,
-            )
+            balance = None
+            if position.get("staked"):
+                resolved, gauge_address = (
+                    yield from self._resolve_velodrome_gauge_address(
+                        pool_address, chain
+                    )
+                )
+                if not resolved or gauge_address is None:
+                    # pool.balanceOf is 0 for a staked LP because the tokens
+                    # are at the gauge, so the pool-fallback below would
+                    # write a known-wrong 0. Skip and surface the failure.
+                    self.context.logger.error(
+                        f"Could not resolve gauge for staked Velodrome/Aerodrome "
+                        f"position on {chain} (pool={pool_address}); skipping "
+                        f"balance update to avoid writing a wrong zero."
+                    )
+                    return
+                balance = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=gauge_address,
+                    contract_public_id=VelodromeGaugeContract.contract_id,
+                    contract_callable="balance_of",
+                    data_key="balance",
+                    account=safe_address,
+                    chain_id=chain,
+                )
+
+            if balance is None:
+                balance = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=pool_address,
+                    contract_public_id=VelodromePoolContract.contract_id,
+                    contract_callable="get_balance",
+                    data_key="balance",
+                    account=safe_address,
+                    chain_id=chain,
+                )
 
             if balance is not None:
                 # Update the position with the current amount
@@ -3037,6 +3142,52 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(
                     f"Failed to get balance for Velodrome pool position: {position}"
                 )
+
+    def _resolve_velodrome_gauge_address(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Tuple[bool, Optional[str]]]:
+        """Look up the Velodrome / Aerodrome gauge address for a pool.
+
+        Returns a (resolved, gauge_address) pair so callers can tell a
+        transient Voter RPC failure (``resolved=False``) apart from a
+        determined "no gauge" answer (``resolved=True, gauge_address=None``
+        — voter not configured for the chain, or ``gauges(pool)`` returned
+        the zero address). The former should not silently fall back to
+        ``pool.balanceOf`` on a staked position, because that read is 0
+        and would write a known-wrong portfolio value.
+
+        :param pool_address: the LP pool address whose gauge to look up.
+        :param chain: chain name used to pick the Voter contract address.
+        :yield: None.
+        :return: ``(True, gauge_address)`` on a successful lookup,
+            ``(True, None)`` when the chain has no configured Voter or
+            the pool has no gauge, and ``(False, None)`` when the Voter
+            RPC call itself fails.
+        """
+        voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
+        if not voter_address:
+            self.context.logger.warning(
+                f"No Velodrome voter contract address configured for chain {chain}"
+            )
+            return True, None
+
+        gauge_address = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=voter_address,
+            contract_public_id=VelodromeVoterContract.contract_id,
+            contract_callable="gauges",
+            data_key="gauge",
+            pool_address=pool_address,
+            chain_id=chain,
+        )
+
+        if gauge_address is None:
+            return False, None
+
+        if gauge_address == ZERO_ADDRESS:
+            return True, None
+
+        return True, gauge_address
 
     def _update_sturdy_position(
         self, position: Dict[str, Any]
@@ -4179,9 +4330,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if from_address.lower() == address.lower():
                         continue
 
-                    # Filter from address - only include EOAs and GnosisSafe contracts
+                    # Filter from address - only include EOAs and GnosisSafe
+                    # contracts on the chain the transfer happened on.
                     should_include = yield from self._should_include_transfer_optimism(
-                        from_address
+                        from_address, chain=chain
                     )
                     if not should_include:
                         continue
@@ -4262,9 +4414,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         return not fetch_failed
 
     def _should_include_transfer_optimism(
-        self, from_address: str
+        self, from_address: str, chain: str = "optimism"
     ) -> Generator[None, None, bool]:
-        """Determine if an Optimism transfer should be included based on from address type."""
+        """Decide whether to include a transfer based on the from-address type.
+
+        EOAs and Gnosis Safes are real funders; smart contracts are not (e.g.
+        a pool returning tokens on exit is part of position settlement, not
+        new external capital). The code check must run against the chain the
+        transfer happened on: an address can be a contract on one L2 and an
+        EOA on another.
+
+        :param from_address: the transfer's sender address.
+        :param chain: chain name used to pick the ledger RPC, the Safe API
+            slug, and the per-chain cache key.
+        :yield: None.
+        :return: True if the from-address resolves to an EOA on ``chain`` or
+            to a Gnosis Safe on the Safe Transaction Service for ``chain``.
+        """
         if not from_address:
             return False
 
@@ -4276,8 +4442,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             return False
 
-        # Check cache first
-        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{from_address.lower()}"
+        # Per-chain cache key — an address can be a contract on one chain and
+        # an EOA on another, so the cached answer must be chain-scoped.
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}{chain}_{from_address.lower()}"
         cached_result = yield from self._read_kv((cache_key,))
 
         if cached_result and cached_result.get(cache_key):
@@ -4287,8 +4454,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             except (json.JSONDecodeError, KeyError):
                 pass
 
+        chain_to_rpc = {
+            Chain.OPTIMISM.value: self.params.optimism_ledger_rpc,
+            Chain.BASE.value: self.params.base_ledger_rpc,
+        }
+        rpc_url = chain_to_rpc.get(chain)
+        if not rpc_url:
+            # A new Safe-backed L2 added upstream without updating this map
+            # would silently exclude every funding event on that chain and
+            # understate initial investment. Log loudly so the gap is visible.
+            self.context.logger.error(
+                f"No ledger RPC configured for chain {chain}; cannot classify "
+                f"transfer from {from_address}"
+            )
+            return False
+
         try:
-            # Use Optimism RPC to check if address is a contract
             payload = {
                 "jsonrpc": "2.0",
                 "method": "eth_getCode",
@@ -4297,7 +4478,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint=self.params.optimism_ledger_rpc,
+                endpoint=rpc_url,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4307,18 +4488,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not success:
-                self.context.logger.error("Failed to check contract code")
+                self.context.logger.error(
+                    f"Failed to check contract code on {chain} for {from_address}"
+                )
                 return False
 
             code = result.get("result", "0x")
 
-            # If code is '0x', it's an EOA
+            # If code is '0x', it's an EOA on this chain
             if code == "0x":
                 is_eoa = True
             else:
-                # If it has code, check if it's a GnosisSafe
+                # Has code on this chain — check the Safe Transaction Service
+                # for the same chain to see if it's a Gnosis Safe.
                 safe_check_url = self._build_safe_api_url(
-                    "optimism", "v1", f"safes/{from_address}/"
+                    chain, "v1", f"safes/{from_address}/"
                 )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
@@ -4330,24 +4514,39 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 is_eoa = success
 
-            # Cache the result permanently (no TTL)
+            # Cache the result permanently (no TTL) under the per-chain key.
             cache_data = {"is_eoa": is_eoa}
             yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
             if not is_eoa:
                 self.context.logger.info(
-                    f"Excluding transfer from contract: {from_address}"
+                    f"Excluding {chain} transfer from contract: {from_address}"
                 )
             return is_eoa
 
         except Exception as e:
-            self.context.logger.error(f"Error checking address {from_address}: {e}")
+            self.context.logger.error(
+                f"Error checking address {from_address} on {chain}: {e}"
+            )
             return False
 
     def _is_not_other_contract_optimism(
-        self, to_address: str
+        self, to_address: str, chain: str = "optimism"
     ) -> Generator[None, None, bool]:
-        """Check if to_address is EOA or GnosisSafe (i.e., NOT OtherContract)."""
+        """Check if to_address is EOA or GnosisSafe on ``chain``.
+
+        Mirrors the chain-aware classification used on the from-side: an
+        address can be a contract on one L2 and an EOA on another, so the
+        code check, the Safe Transaction Service lookup, and the cached
+        verdict must all be scoped to the chain the transfer happened on.
+
+        :param to_address: the transfer's recipient address.
+        :param chain: chain name used to pick the ledger RPC, the Safe API
+            slug, and the per-chain cache key.
+        :yield: None.
+        :return: True if ``to_address`` resolves to an EOA on ``chain`` or
+            to a Gnosis Safe on the Safe Transaction Service for ``chain``.
+        """
         if not to_address:
             return False
 
@@ -4359,8 +4558,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             return False
 
-        # Check cache first
-        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{to_address.lower()}"
+        # Per-chain cache key — an address can be a contract on one chain
+        # and an EOA on another, so the cached verdict must be chain-scoped.
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}{chain}_{to_address.lower()}"
         cached_result = yield from self._read_kv((cache_key,))
 
         if cached_result and cached_result.get(cache_key):
@@ -4370,8 +4570,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             except (json.JSONDecodeError, KeyError):
                 pass
 
+        chain_to_rpc = {
+            Chain.OPTIMISM.value: self.params.optimism_ledger_rpc,
+            Chain.BASE.value: self.params.base_ledger_rpc,
+        }
+        rpc_url = chain_to_rpc.get(chain)
+        if not rpc_url:
+            # A new Safe-backed L2 added upstream without updating this map
+            # would silently exclude every withdrawal target on that chain
+            # and understate realised value. Log loudly so the gap is visible.
+            self.context.logger.error(
+                f"No ledger RPC configured for chain {chain}; cannot classify "
+                f"transfer to {to_address}"
+            )
+            return False
+
         try:
-            # Use Optimism RPC to check if address is a contract
             payload = {
                 "jsonrpc": "2.0",
                 "method": "eth_getCode",
@@ -4380,7 +4594,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
             success, result = yield from self._request_with_retries(
-                endpoint=self.params.optimism_ledger_rpc,
+                endpoint=rpc_url,
                 method="POST",
                 body=payload,
                 rate_limited_code=429,
@@ -4390,18 +4604,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not success:
-                self.context.logger.error("Failed to check contract code")
+                self.context.logger.error(
+                    f"Failed to check contract code on {chain} for {to_address}"
+                )
                 return False
 
             code = result.get("result", "0x")
 
-            # If code is '0x', it's an EOA
+            # If code is '0x', it's an EOA on this chain
             if code == "0x":
                 is_eoa = True
             else:
-                # If it has code, check if it's a GnosisSafe
+                # Has code on this chain — check the Safe Transaction Service
+                # for the same chain to see if it's a Gnosis Safe.
                 safe_check_url = self._build_safe_api_url(
-                    "optimism", "v1", f"safes/{to_address}/"
+                    chain, "v1", f"safes/{to_address}/"
                 )
                 success, _ = yield from self._request_with_retries(
                     endpoint=safe_check_url,
@@ -4413,18 +4630,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 is_eoa = success
 
-            # Cache the result permanently (no TTL)
+            # Cache the result permanently (no TTL) under the per-chain key.
             cache_data = {"is_eoa": is_eoa}
             yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
             if not is_eoa:
                 self.context.logger.info(
-                    f"Excluding transfer to contract: {to_address}"
+                    f"Excluding {chain} transfer to contract: {to_address}"
                 )
             return is_eoa
 
         except Exception as e:
-            self.context.logger.error(f"Error checking address {to_address}: {e}")
+            self.context.logger.error(
+                f"Error checking address {to_address} on {chain}: {e}"
+            )
             return False
 
     def _save_transfer_data_optimism(self, data: Dict) -> Generator[None, None, None]:
@@ -4456,11 +4675,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self,
         safe_address: str,
         final_timestamp: int,
+        chain: str = "optimism",
     ) -> Generator[None, None, Optional[Dict[str, Dict[str, List[Dict]]]]]:
-        """Fetch and organize ERC20 token transfers for Optimism chain using Safe API.
+        """Fetch and organize ERC20 token transfers for a SafeGlobal-served chain.
 
         Persists outgoing USDC transfers to funding_events.json under the
-        ``optimism_withdrawals`` key so subsequent cycles early-stop after one
+        ``{chain}_withdrawals`` key so subsequent cycles early-stop after one
         page when no new outgoing activity has occurred. Dedup is per-transfer
         (transferId, falling back to txHash + log_index) so a same-day
         withdrawal added after one already stored on the same date is not
@@ -4476,25 +4696,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :param safe_address: the Safe contract address.
         :param final_timestamp: unix timestamp used as the upper bound for
             ``executionDate`` filtering.
+        :param chain: chain name used to pick the Safe API slug, the
+            per-chain persistence key, and the token-metadata RPC.
         :yield: None.
         :return: ``{"outgoing": <date-keyed transfers dict>}`` on success, or
             ``None`` when the fetch failed.
         """
+        withdrawals_key = f"{chain}_withdrawals"
         try:
             if not self.funding_events:
                 self.funding_events = self.read_funding_events() or {}
-            existing_outgoing = self.funding_events.get("optimism_withdrawals", {})
+            existing_outgoing = self.funding_events.get(withdrawals_key, {})
 
             if not safe_address:
                 self.context.logger.warning(
-                    "No address provided for fetching Optimism ERC20 transfers"
+                    f"No address provided for fetching {chain} ERC20 transfers"
                 )
                 return {"outgoing": existing_outgoing}
 
             # Paginate by offset rather than following Safe's absolute ``next``
             # URL — see _fetch_optimism_transfers_safeglobal for why.
             transfers_base_url = self._build_safe_api_url(
-                "optimism", "v1", f"safes/{safe_address}/transfers/"
+                chain, "v1", f"safes/{safe_address}/transfers/"
             )
 
             processed_count = 0
@@ -4511,7 +4734,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if pages_processed >= MAX_PAGINATION_PAGES:
                     self.context.logger.warning(
                         f"Hit MAX_PAGINATION_PAGES cap ({MAX_PAGINATION_PAGES}) for "
-                        "Optimism withdrawals; treating as a failed fetch so "
+                        f"{chain} withdrawals; treating as a failed fetch so "
                         "partial data is not persisted with a falsely complete "
                         "seen-set"
                     )
@@ -4532,7 +4755,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not success:
-                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    self.context.logger.error(f"Failed to fetch {chain} transfers")
                     fetch_failed = True
                     break
 
@@ -4613,10 +4836,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if not token_info:
                         if token_address:
                             decimals = yield from self._get_token_decimals(
-                                "optimism", token_address
+                                chain, token_address
                             )
                             symbol = yield from self._get_token_symbol(
-                                "optimism", token_address
+                                chain, token_address
                             )
                         else:
                             continue
@@ -4662,7 +4885,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 offset += len(transfers)
 
             self.context.logger.info(
-                f"Completed Optimism ERC20 transfers: {processed_count} outgoing transfers found"
+                f"Completed {chain} ERC20 transfers: {processed_count} outgoing transfers found"
             )
 
             if fetch_failed:
@@ -4676,13 +4899,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             for date, transfers_list in new_by_date.items():
                 existing_outgoing.setdefault(date, []).extend(transfers_list)
 
-            self.funding_events["optimism_withdrawals"] = existing_outgoing
+            self.funding_events[withdrawals_key] = existing_outgoing
             self.store_funding_events()
 
             return {"outgoing": existing_outgoing}
 
         except Exception as e:
-            self.context.logger.error(f"Error tracking Optimism ERC20 transfers: {e}")
+            self.context.logger.error(f"Error tracking {chain} ERC20 transfers: {e}")
             return None
 
     def _track_erc20_transfers_mode(
@@ -4903,6 +5126,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Get the VELO token address for the specified chain from params."""
         velo_addresses = self.params.velo_token_contract_addresses
         return velo_addresses.get(chain)
+
+    def _get_velo_family_reward_symbol(self, chain: str) -> str:
+        """Return the LP-gauge reward token symbol for the chain.
+
+        Aerodrome on Base distributes AERO; Velodrome on Optimism and Mode
+        distributes VELO. ``_get_velo_token_address`` already returns the
+        correct contract per chain, but a few sites still need the symbol
+        for UI labels and CoinGecko price lookups.
+
+        :param chain: chain name used to pick the reward token symbol.
+        :return: ``"AERO"`` on Base, ``"VELO"`` on every other chain.
+        """
+        return "AERO" if chain == Chain.BASE.value else "VELO"
 
     def _validate_velodrome_v2_pool_addresses(self) -> Generator[None, None, None]:
         """Validate Velodrome v2 pool addresses for all positions."""

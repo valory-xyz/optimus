@@ -45,7 +45,9 @@ from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPool
 from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
     VelodromeNonFungiblePositionManagerContract,
 )
+from packages.valory.contracts.velodrome_gauge.contract import VelodromeGaugeContract
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
+from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -1905,15 +1907,37 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address,
     ):
         """Calculate the user's share value and token balances in a Velodrome non-CL pool."""
-        user_balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="check_balance",
-            data_key="token",
-            account=user_address,
-            chain_id=chain,
-        )
+        # Staked positions hold their LP tokens at the gauge, not at the safe.
+        # The pool's balanceOf(safe) returns 0 in that case and the share
+        # calculation collapses to zero, leaving the position out of
+        # value_in_pools. Resolve the gauge via the Voter and read the
+        # staked balance there when the position is marked staked.
+        user_balance = None
+        if position.get("staked"):
+            gauge_address = yield from self._resolve_velodrome_gauge_address(
+                pool_address, chain
+            )
+            if gauge_address:
+                user_balance = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=gauge_address,
+                    contract_public_id=VelodromeGaugeContract.contract_id,
+                    contract_callable="balance_of",
+                    data_key="balance",
+                    account=user_address,
+                    chain_id=chain,
+                )
+
+        if user_balance is None:
+            user_balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=ERC20.contract_id,
+                contract_callable="check_balance",
+                data_key="token",
+                account=user_address,
+                chain_id=chain,
+            )
         if user_balance is None:
             self.context.logger.error(
                 f"Failed to get user balance for pool: {pool_address}"
@@ -3008,7 +3032,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Failed to get liquidity for Velodrome CL position: {pos}"
                     )
         else:
-            # Handle Velodrome stable/volatile pool
+            # Handle Velodrome stable/volatile pool. Staked positions hold
+            # their LP tokens at the gauge, not at the safe, so the pool's
+            # balanceOf(safe) returns 0 for them. Resolve the gauge via the
+            # Voter and read the staked balance there in that case.
             pool_address = position.get("pool_address")
             safe_address = self.params.safe_contract_addresses.get(
                 position.get("chain")
@@ -3020,16 +3047,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return
 
-            # Get the current balance of LP tokens
-            balance = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=pool_address,
-                contract_public_id=VelodromePoolContract.contract_id,
-                contract_callable="get_balance",
-                data_key="balance",
-                account=safe_address,
-                chain_id=chain,
-            )
+            balance = None
+            if position.get("staked"):
+                gauge_address = yield from self._resolve_velodrome_gauge_address(
+                    pool_address, chain
+                )
+                if gauge_address:
+                    balance = yield from self.contract_interact(
+                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                        contract_address=gauge_address,
+                        contract_public_id=VelodromeGaugeContract.contract_id,
+                        contract_callable="balance_of",
+                        data_key="balance",
+                        account=safe_address,
+                        chain_id=chain,
+                    )
+
+            if balance is None:
+                balance = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=pool_address,
+                    contract_public_id=VelodromePoolContract.contract_id,
+                    contract_callable="get_balance",
+                    data_key="balance",
+                    account=safe_address,
+                    chain_id=chain,
+                )
 
             if balance is not None:
                 # Update the position with the current amount
@@ -3041,6 +3084,39 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(
                     f"Failed to get balance for Velodrome pool position: {position}"
                 )
+
+    def _resolve_velodrome_gauge_address(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Look up the Velodrome / Aerodrome gauge address for a pool.
+
+        :param pool_address: the LP pool address whose gauge to look up.
+        :param chain: chain name used to pick the Voter contract address.
+        :yield: None.
+        :return: the gauge address, or None if no gauge exists for the pool
+            or the Voter contract address is not configured for the chain.
+        """
+        voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
+        if not voter_address:
+            self.context.logger.warning(
+                f"No Velodrome voter contract address configured for chain {chain}"
+            )
+            return None
+
+        gauge_address = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=voter_address,
+            contract_public_id=VelodromeVoterContract.contract_id,
+            contract_callable="gauges",
+            data_key="gauge",
+            pool_address=pool_address,
+            chain_id=chain,
+        )
+
+        if not gauge_address or gauge_address == ZERO_ADDRESS:
+            return None
+
+        return gauge_address
 
     def _update_sturdy_position(
         self, position: Dict[str, Any]

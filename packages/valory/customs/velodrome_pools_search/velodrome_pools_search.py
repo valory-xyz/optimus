@@ -420,8 +420,9 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
+@lru_cache(maxsize=8)
 def get_web3_connection(rpc_url):
-    """Get a fresh Web3 connection per call to avoid stuck pooled sessions."""
+    """Get or create a Web3 connection with caching."""
     return Web3(
         Web3.HTTPProvider(
             rpc_url,

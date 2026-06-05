@@ -5953,12 +5953,12 @@ class TestFetchAllTransfersUntilDateOptimism:
 
 
 class TestFetchAllTransfersUntilDateBase:
-    """TestFetchAllTransfersUntilDateBase mirrors the Optimism wrapper.
+    """TestFetchAllTransfersUntilDateBase exercises the chain="base" path.
 
-    Same fetch-succeeded / persist contract on the new
-    ``_fetch_all_transfers_until_date_base`` so a regression that
-    persists partial data on a failed safeglobal pagination would
-    be caught the same way the Optimism counterpart catches it.
+    The Base dispatcher routes through the same SafeGlobal wrapper used for
+    Optimism with ``chain="base"``. Same fetch-succeeded / persist contract,
+    so a regression that persists partial data on a failed safeglobal
+    pagination would be caught the same way the Optimism case catches it.
     """
 
     def test_success(self):
@@ -5967,13 +5967,19 @@ class TestFetchAllTransfersUntilDateBase:
         obj.read_funding_events = lambda: {}
         obj.store_funding_events = MagicMock()
 
-        def fake_safeglobal(address, end_date, all_transfers_by_date, existing_data):
+        def fake_safeglobal(
+            address, end_date, all_transfers_by_date, existing_data, chain="optimism"
+        ):
             """Fake safeglobal returning True (success) without mutating state."""
             yield
             return True
 
-        obj._fetch_base_transfers_safeglobal = fake_safeglobal
-        result = _drive(obj._fetch_all_transfers_until_date_base("0xA", "2025-01-01"))
+        obj._fetch_optimism_transfers_safeglobal = fake_safeglobal
+        result = _drive(
+            obj._fetch_all_transfers_until_date_optimism(
+                "0xA", "2025-01-01", chain="base"
+            )
+        )
         assert isinstance(result, dict)
         assert obj.funding_events == {"base": {}}
         obj.store_funding_events.assert_called_once()
@@ -5989,13 +5995,19 @@ class TestFetchAllTransfersUntilDateBase:
         obj.read_funding_events = lambda: {"base": prior}
         obj.store_funding_events = MagicMock()
 
-        def failing_safeglobal(address, end_date, all_transfers_by_date, existing_data):
+        def failing_safeglobal(
+            address, end_date, all_transfers_by_date, existing_data, chain="optimism"
+        ):
             """Return False to signal mid-stream failure."""
             yield
             return False
 
-        obj._fetch_base_transfers_safeglobal = failing_safeglobal
-        result = _drive(obj._fetch_all_transfers_until_date_base("0xA", "2025-01-01"))
+        obj._fetch_optimism_transfers_safeglobal = failing_safeglobal
+        result = _drive(
+            obj._fetch_all_transfers_until_date_optimism(
+                "0xA", "2025-01-01", chain="base"
+            )
+        )
         assert result == prior
         obj.store_funding_events.assert_not_called()
 
@@ -6009,9 +6021,14 @@ class TestFetchAllTransfersUntilDateBase:
             yield
             raise RuntimeError("fail")
 
-        obj._fetch_base_transfers_safeglobal = boom
+        obj._fetch_optimism_transfers_safeglobal = boom
         assert (
-            _drive(obj._fetch_all_transfers_until_date_base("0xA", "2025-01-01")) == {}
+            _drive(
+                obj._fetch_all_transfers_until_date_optimism(
+                    "0xA", "2025-01-01", chain="base"
+                )
+            )
+            == {}
         )
 
 

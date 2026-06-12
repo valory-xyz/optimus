@@ -133,6 +133,12 @@ PROTOCOL_DEFINITIONS = {
 }
 MODIUS_AGENT_PROFILE_PATH = "modius-ui-build"
 OPTIMUS_AGENT_PROFILE_PATH = "optimus-ui-build"
+BASIUS_AGENT_PROFILE_PATH = "basius-ui-build"
+
+CHAIN_TO_AGENT_PROFILE_PATH = {
+    "optimism": OPTIMUS_AGENT_PROFILE_PATH,
+    "base": BASIUS_AGENT_PROFILE_PATH,
+}
 
 OK_CODE = 200
 NOT_FOUND_CODE = 404
@@ -412,10 +418,9 @@ class HttpHandler(BaseHttpHandler):
             chain_strategies = self.context.params.available_strategies.get(chain, [])
             self.available_strategies.extend(chain_strategies)
 
-        self.agent_profile_path = (
-            OPTIMUS_AGENT_PROFILE_PATH
-            if self.context.params.target_investment_chains[0] == "optimism"
-            else MODIUS_AGENT_PROFILE_PATH
+        self.agent_profile_path = CHAIN_TO_AGENT_PROFILE_PATH.get(
+            self.context.params.target_investment_chains[0],
+            MODIUS_AGENT_PROFILE_PATH,
         )
 
     def teardown(self) -> None:

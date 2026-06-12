@@ -19,7 +19,8 @@
 
 """This module contains the behaviour for checking is staking kpi is met for the 'liquidity_trader_abci' skill."""
 
-from typing import Generator, Optional, Type
+from statistics import median
+from typing import Generator, Optional, Tuple, Type
 
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -27,6 +28,9 @@ from packages.valory.contracts.gnosis_safe.contract import (
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.funds_manager.behaviours import (
+    GET_FUNDS_STATUS_METHOD_NAME,
+)
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     ETHER_VALUE,
     LiquidityTraderBaseBehaviour,
@@ -43,6 +47,9 @@ from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met i
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
+
+
+_RECENT_GAS_RECORDS_TO_CONSIDER = 5
 
 
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
@@ -109,11 +116,30 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             self.context.logger.info(
                                 f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
                             )
-                            self.context.logger.info("Preparing vanity tx..")
-                            vanity_tx_hex = yield from self._prepare_vanity_tx(
+                            signal = self._real_tx_cost_vs_balance(
                                 chain=self.params.staking_chain  # type: ignore[arg-type]
                             )
-                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
+                            if signal is not None and signal[0] < signal[1]:
+                                balance, cost = signal
+                                # Padding the multisig nonce with vanity txs
+                                # while the EOA cannot fund a real on-chain
+                                # action hides the funding alert behind a
+                                # green staking KPI.
+                                self.context.logger.warning(
+                                    "vanity-tx suppressed: agent EOA balance "
+                                    "%d wei on %s is below the recent real-tx "
+                                    "cost %d wei; fund EOA to restore staking "
+                                    "activity",
+                                    balance,
+                                    self.params.staking_chain,
+                                    cost,
+                                )
+                            else:
+                                self.context.logger.info("Preparing vanity tx..")
+                                vanity_tx_hex = yield from self._prepare_vanity_tx(
+                                    chain=self.params.staking_chain  # type: ignore[arg-type]
+                                )
+                                self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(
@@ -129,6 +155,59 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
+
+    def _real_tx_cost_vs_balance(
+        self, chain: str
+    ) -> Optional[Tuple[int, int]]:
+        """Return (eoa_balance, recent_real_tx_cost) on `chain`, or None.
+
+        Balance comes from the funds_manager shared-state hook (same
+        source backing /funds-status). Cost is the median of the last
+        few records in the GasCostTracker, which post_tx_settlement
+        populates from settled non-vanity tx receipts. Returns None
+        when either signal cannot be read so a transient lookup error
+        does not silently kill the staking KPI.
+        """
+        chain_id = self.params.chain_to_chain_id_mapping.get(chain)
+        if not chain_id:
+            return None
+        records = self.gas_cost_tracker.data.get(str(chain_id), [])
+        if not records:
+            return None
+        try:
+            recent_costs = [
+                int(r["gas_used"]) * int(r["gas_price"])
+                for r in records[-_RECENT_GAS_RECORDS_TO_CONSIDER:]
+            ]
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not recent_costs:
+            return None
+        cost = int(median(recent_costs))
+
+        try:
+            hook = self.context.shared_state.get(GET_FUNDS_STATUS_METHOD_NAME)
+        except (AttributeError, TypeError):
+            return None
+        if hook is None:
+            return None
+        try:
+            response = hook().get_response_body()
+        except Exception:  # pylint: disable=broad-except
+            return None
+        balance_str = (
+            response.get(chain, {})
+            .get(self.context.agent_address, {})
+            .get(ZERO_ADDRESS, {})
+            .get("balance")
+        )
+        if balance_str is None:
+            return None
+        try:
+            balance = int(balance_str)
+        except (TypeError, ValueError):
+            return None
+        return balance, cost
 
     def _prepare_vanity_tx(self, chain: str) -> Generator[None, None, Optional[str]]:
         self.context.logger.info(f"Preparing vanity transaction for chain: {chain}")

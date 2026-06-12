@@ -23,9 +23,50 @@
 
 from unittest.mock import MagicMock, PropertyMock, patch
 
+from packages.valory.skills.funds_manager.behaviours import (
+    GET_FUNDS_STATUS_METHOD_NAME,
+)
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
+
+
+_AGENT_EOA = "0xagent"
+_OPTIMISM_CHAIN_ID = 10
+
+
+def _funds_status_hook_returning(response_body):
+    """Build a fake shared_state hook that returns a fund-status response body."""
+
+    class _FakeFundRequirements:
+        def get_response_body(self):
+            return response_body
+
+    return lambda: _FakeFundRequirements()
+
+
+def _gas_records(*costs_wei):
+    """Build gas-cost tracker records where each entry has product == cost_wei."""
+    return [
+        {"gas_used": cost, "gas_price": 1, "timestamp": idx, "tx_hash": f"0x{idx:x}"}
+        for idx, cost in enumerate(costs_wei)
+    ]
+
+
+def _balance_response(chain, balance_wei):
+    """Build a flattened funds-status response with the EOA balance set."""
+    return {
+        chain: {
+            _AGENT_EOA: {
+                ZERO_ADDRESS: {
+                    "balance": str(balance_wei),
+                    "deficit": "0",
+                    "decimals": 18,
+                }
+            }
+        }
+    }
 
 
 def _gen_return_false(*args, **kwargs):
@@ -35,11 +76,18 @@ def _gen_return_false(*args, **kwargs):
 
 
 def _make_behaviour():
-    """Create a CheckStakingKPIMetBehaviour without __init__."""
+    """Create a CheckStakingKPIMetBehaviour without __init__.
+
+    Mirrors production state where the base behaviour __init__ always
+    sets ``gas_cost_tracker``. Default is an empty tracker so the
+    vanity-tx funding gate falls open (signal unknown).
+    """
     obj = object.__new__(CheckStakingKPIMetBehaviour)
     ctx = MagicMock()
     obj.__dict__["_context"] = ctx
     obj._read_investing_paused = _gen_return_false
+    obj.gas_cost_tracker = MagicMock()
+    obj.gas_cost_tracker.data = {}
     return obj
 
 
@@ -415,3 +463,166 @@ class TestPrepareVanityTx:
                 assert result is None
         finally:
             mod.hash_payload_to_hex = original_hash
+
+
+class TestVanityTxFundingGate:
+    """Verify the funding gate at the vanity-tx decision point.
+
+    These exercise async_act end-to-end with the KPI-not-met,
+    threshold-exceeded, vanity-tx-needed shape (same setup as
+    test_async_act_kpi_not_met_vanity_tx) and assert whether the
+    suppression branch fires.
+    """
+
+    @staticmethod
+    def _base_obj_with_kpi_unmet():
+        """Build a behaviour mid-flow with the prerequisites for vanity tx in place."""
+        obj = _make_behaviour()
+        obj.context.agent_address = _AGENT_EOA
+
+        def fake_is_kpi_met():
+            yield
+            return False
+
+        def fake_get_nonces(chain, multisig):
+            yield
+            return 2
+
+        obj._is_staking_kpi_met = fake_is_kpi_met
+        obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        obj.gas_cost_tracker = MagicMock()
+        obj.gas_cost_tracker.data = {}
+        return obj
+
+    @staticmethod
+    def _params_with_optimism_mapping():
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        params_mock.staking_threshold_period = 10
+        params_mock.chain_to_chain_id_mapping = {"optimism": _OPTIMISM_CHAIN_ID}
+        return params_mock
+
+    @staticmethod
+    def _synced_with_kpi_unmet():
+        synced_mock = MagicMock()
+        synced_mock.period_count = 20
+        synced_mock.period_number_at_last_cp = 0
+        synced_mock.min_num_of_safe_tx_required = 5
+        return synced_mock
+
+    def test_vanity_tx_suppressed_when_balance_below_recent_real_tx_cost(
+        self,
+    ) -> None:
+        """David's edge case: EOA below real-tx cost but vanity tx still cheap.
+
+        Balance ~6.92e13 wei, real-tx cost ~1.55e14 wei from his Pearl
+        logs. Guard must skip _prepare_vanity_tx and emit a WARNING.
+        """
+        obj = self._base_obj_with_kpi_unmet()
+        obj.gas_cost_tracker.data = {
+            str(_OPTIMISM_CHAIN_ID): _gas_records(
+                155_000_000_000_000,
+                155_000_000_000_000,
+                155_000_000_000_000,
+            ),
+        }
+        obj.context.shared_state = {
+            GET_FUNDS_STATUS_METHOD_NAME: _funds_status_hook_returning(
+                _balance_response("optimism", 69_207_718_314_629)
+            ),
+        }
+
+        vanity_called = {"flag": False}
+
+        def fake_prepare_vanity_tx(chain):
+            vanity_called["flag"] = True
+            yield
+            return "0xvanity"
+
+        obj._prepare_vanity_tx = fake_prepare_vanity_tx
+
+        TestCheckStakingKPIMetBehaviour()._run_async_act(
+            obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
+        )
+
+        assert vanity_called["flag"] is False
+        obj.context.logger.warning.assert_called()
+
+    def test_vanity_tx_runs_when_balance_above_recent_real_tx_cost(self) -> None:
+        """Healthy EOA: gate is silent and the existing vanity path runs."""
+        obj = self._base_obj_with_kpi_unmet()
+        obj.gas_cost_tracker.data = {
+            str(_OPTIMISM_CHAIN_ID): _gas_records(
+                100_000_000_000_000,
+                100_000_000_000_000,
+            ),
+        }
+        obj.context.shared_state = {
+            GET_FUNDS_STATUS_METHOD_NAME: _funds_status_hook_returning(
+                _balance_response("optimism", 500_000_000_000_000)
+            ),
+        }
+
+        vanity_called = {"flag": False}
+
+        def fake_prepare_vanity_tx(chain):
+            vanity_called["flag"] = True
+            yield
+            return "0xvanity"
+
+        obj._prepare_vanity_tx = fake_prepare_vanity_tx
+
+        TestCheckStakingKPIMetBehaviour()._run_async_act(
+            obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
+        )
+
+        assert vanity_called["flag"] is True
+
+    def test_vanity_tx_runs_when_no_gas_records_yet(self) -> None:
+        """Fresh boot, no real-tx history → cost signal unknown → fail open."""
+        obj = self._base_obj_with_kpi_unmet()
+        obj.gas_cost_tracker.data = {}
+        obj.context.shared_state = {
+            GET_FUNDS_STATUS_METHOD_NAME: _funds_status_hook_returning(
+                _balance_response("optimism", 1)
+            ),
+        }
+
+        vanity_called = {"flag": False}
+
+        def fake_prepare_vanity_tx(chain):
+            vanity_called["flag"] = True
+            yield
+            return "0xvanity"
+
+        obj._prepare_vanity_tx = fake_prepare_vanity_tx
+
+        TestCheckStakingKPIMetBehaviour()._run_async_act(
+            obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
+        )
+
+        assert vanity_called["flag"] is True
+
+    def test_vanity_tx_runs_when_funds_status_hook_missing(self) -> None:
+        """funds_manager not loaded / hook absent → balance unknown → fail open."""
+        obj = self._base_obj_with_kpi_unmet()
+        obj.gas_cost_tracker.data = {
+            str(_OPTIMISM_CHAIN_ID): _gas_records(155_000_000_000_000),
+        }
+        obj.context.shared_state = {}
+
+        vanity_called = {"flag": False}
+
+        def fake_prepare_vanity_tx(chain):
+            vanity_called["flag"] = True
+            yield
+            return "0xvanity"
+
+        obj._prepare_vanity_tx = fake_prepare_vanity_tx
+
+        TestCheckStakingKPIMetBehaviour()._run_async_act(
+            obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
+        )
+
+        assert vanity_called["flag"] is True

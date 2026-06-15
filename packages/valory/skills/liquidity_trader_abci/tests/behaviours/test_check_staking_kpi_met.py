@@ -612,6 +612,38 @@ class TestVanityTxFundingGate:
 
         assert vanity_called["flag"] is True
 
+    def test_vanity_tx_runs_when_balance_equals_cost(self) -> None:
+        """Fence-post: balance == cost → strict ``<`` is False → vanity runs.
+
+        Pins the ``<`` vs ``<=`` boundary end-to-end: a regression to ``<=``
+        would suppress here and fail this test.
+        """
+        obj = self._base_obj_with_kpi_unmet()
+        obj.gas_cost_tracker.data = {
+            str(_OPTIMISM_CHAIN_ID): _gas_records(200_000_000_000_000),
+        }
+        obj.context.shared_state = {
+            GET_FUNDS_STATUS_METHOD_NAME: _funds_status_hook_returning(
+                _balance_response("optimism", 200_000_000_000_000)
+            ),
+        }
+
+        vanity_called = {"flag": False}
+
+        def fake_prepare_vanity_tx(chain):
+            vanity_called["flag"] = True
+            yield
+            return "0xvanity"
+
+        obj._prepare_vanity_tx = fake_prepare_vanity_tx
+
+        _run_async_act(
+            obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
+        )
+
+        assert vanity_called["flag"] is True
+        obj.context.logger.warning.assert_not_called()
+
     def test_vanity_tx_runs_when_no_gas_records_yet(self) -> None:
         """Fresh boot, no real-tx history → cost signal unknown → fail open."""
         obj = self._base_obj_with_kpi_unmet()
@@ -762,13 +794,17 @@ class TestRealTxCostVsBalance:
         assert signal.eoa_balance == 500
         assert signal.recent_real_tx_cost == 200  # median(100, 200, 300)
 
-    def test_balance_equal_cost_is_not_suppressed(self) -> None:
-        """Fence-post: balance == cost means strict ``<`` is False -> vanity runs."""
+    def test_signal_carries_equal_values_at_boundary(self) -> None:
+        """At balance == cost the method reports both as the same wei value.
+
+        The gate's strict ``<`` policy at this boundary is pinned end-to-end by
+        ``TestVanityTxFundingGate.test_vanity_tx_runs_when_balance_equals_cost``.
+        """
         obj = self._obj_with(
             records=_gas_records(200),
             shared_state=self._healthy_shared_state(200),
         )
         signal = _call_signal(obj, self._params())
         assert signal is not None
-        assert signal.eoa_balance == signal.recent_real_tx_cost
-        assert not (signal.eoa_balance < signal.recent_real_tx_cost)
+        assert signal.eoa_balance == 200
+        assert signal.recent_real_tx_cost == 200

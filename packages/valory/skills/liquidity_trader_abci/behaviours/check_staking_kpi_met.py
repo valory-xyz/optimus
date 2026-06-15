@@ -186,10 +186,14 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
         WARNING so a permanently dead gate is not mistaken for a healthy boot.
 
         Latency note: the hook runs synchronous Multicall RPCs (one per
-        configured chain). Each RPC is bounded by funds_manager's
-        ``rpc_timeout_seconds`` and retry config, and this gate only runs on the
-        rare KPI-behind path, so the cooperative ``async_act`` loop is not
-        stalled unboundedly.
+        configured chain, even though only ``chain`` is needed) and the shipped
+        ``funds_manager`` builds its ``Web3`` provider with no explicit HTTP
+        timeout, so a slow/hanging endpoint can block the cooperative
+        ``async_act`` loop until the round timer fires. This risk is accepted
+        because the gate only runs on the rare KPI-behind path (KPI unmet,
+        threshold period exceeded, and txs still owed). Bounding the call with a
+        timeout — or having ``funds_manager`` cache its last poll so this reads a
+        scalar — is left as a ``funds_manager`` follow-up.
 
         :param chain: chain name as used in ``chain_to_chain_id_mapping`` and
             ``safe_contract_addresses`` (the staking chain).

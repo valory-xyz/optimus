@@ -87,9 +87,10 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
         effective_gas_price = response.get("effectiveGasPrice")
         gas_used = response.get("gasUsed")
         if gas_used and effective_gas_price:
-            # Normalize to int at the single write chokepoint so the tracker
-            # only ever holds ints; downstream readers (e.g. the vanity-tx
-            # funding gate) then never hit a hex-string -> ValueError path.
+            # Receipt values are ints in practice, but some middleware paths
+            # surface them as float or decimal-string. Normalize at this single
+            # write chokepoint so the tracker only ever holds ints and the
+            # downstream vanity-tx funding gate can multiply them directly.
             gas_used = int(gas_used)
             effective_gas_price = int(effective_gas_price)
             self.context.logger.info(

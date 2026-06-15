@@ -31,7 +31,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_m
     CheckStakingKPIMetBehaviour,
 )
 
-
 _AGENT_EOA = "0xagent"
 _OPTIMISM_CHAIN_ID = 10
 
@@ -81,6 +80,8 @@ def _make_behaviour():
     Mirrors production state where the base behaviour __init__ always
     sets ``gas_cost_tracker``. Default is an empty tracker so the
     vanity-tx funding gate falls open (signal unknown).
+
+    :return: a ``CheckStakingKPIMetBehaviour`` instance with a mocked context.
     """
     obj = object.__new__(CheckStakingKPIMetBehaviour)
     ctx = MagicMock()
@@ -101,39 +102,66 @@ def _drive(gen):
             return exc.value
 
 
+def _call_signal(obj, params_mock, chain="optimism"):
+    """Call ``_real_tx_cost_vs_balance`` directly with ``params`` patched.
+
+    Lets the funding-signal branches be unit-tested without driving the whole
+    round, which is what the 100%-coverage gate needs for the ~8 return paths.
+
+    :param obj: the behaviour under test (mocked context already attached).
+    :param params_mock: object returned by the patched ``params`` property.
+    :param chain: chain name passed to ``_real_tx_cost_vs_balance``.
+    :return: the ``_FundingSignal`` (or ``None``) returned by the method.
+    """
+    with patch.object(
+        type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+    ):
+        return obj._real_tx_cost_vs_balance(chain)
+
+
+def _run_async_act(obj, params_mock, synced_mock):
+    """Drive ``async_act`` to completion with params/synchronized_data patched.
+
+    Shared by every class that exercises the full round so a future change to
+    one test class's fixtures cannot silently break another that borrowed it.
+
+    :param obj: the behaviour under test (mocked context already attached).
+    :param params_mock: object returned by the patched ``params`` property.
+    :param synced_mock: object returned by the patched ``synchronized_data``.
+    """
+    with (
+        patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ),
+        patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced_mock,
+        ),
+    ):
+        benchmark_mock = MagicMock()
+        obj.context.benchmark_tool.measure.return_value = benchmark_mock
+        obj.context.agent_address = "0xagent"
+
+        def fake_send(*args, **kwargs):
+            """Fake send."""
+            yield
+
+        def fake_wait(*args, **kwargs):
+            """Fake wait."""
+            yield
+
+        obj.send_a2a_transaction = fake_send
+        obj.wait_until_round_end = fake_wait
+        obj.set_done = MagicMock()
+
+        gen = obj.async_act()
+        _drive(gen)
+
+
 class TestCheckStakingKPIMetBehaviour:
     """Tests for CheckStakingKPIMetBehaviour."""
-
-    def _run_async_act(self, obj, params_mock, synced_mock):
-        with (
-            patch.object(
-                type(obj), "params", new_callable=PropertyMock, return_value=params_mock
-            ),
-            patch.object(
-                type(obj),
-                "synchronized_data",
-                new_callable=PropertyMock,
-                return_value=synced_mock,
-            ),
-        ):
-            benchmark_mock = MagicMock()
-            obj.context.benchmark_tool.measure.return_value = benchmark_mock
-            obj.context.agent_address = "0xagent"
-
-            def fake_send(*args, **kwargs):
-                """Fake send."""
-                yield
-
-            def fake_wait(*args, **kwargs):
-                """Fake wait."""
-                yield
-
-            obj.send_a2a_transaction = fake_send
-            obj.wait_until_round_end = fake_wait
-            obj.set_done = MagicMock()
-
-            gen = obj.async_act()
-            _drive(gen)
 
     def test_async_act_kpi_check_error(self) -> None:
         """Test async_act when _is_staking_kpi_met returns None."""
@@ -149,7 +177,7 @@ class TestCheckStakingKPIMetBehaviour:
             return None
 
         obj._is_staking_kpi_met = fake_is_kpi_met
-        self._run_async_act(obj, params_mock, synced_mock)
+        _run_async_act(obj, params_mock, synced_mock)
         obj.context.logger.error.assert_called()
         obj.set_done.assert_called_once()
 
@@ -167,7 +195,7 @@ class TestCheckStakingKPIMetBehaviour:
             return True
 
         obj._is_staking_kpi_met = fake_is_kpi_met
-        self._run_async_act(obj, params_mock, synced_mock)
+        _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
     def test_async_act_kpi_not_met_threshold_not_exceeded(self) -> None:
@@ -188,7 +216,7 @@ class TestCheckStakingKPIMetBehaviour:
             return False
 
         obj._is_staking_kpi_met = fake_is_kpi_met
-        self._run_async_act(obj, params_mock, synced_mock)
+        _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
     def test_async_act_kpi_not_met_vanity_tx(self) -> None:
@@ -222,7 +250,7 @@ class TestCheckStakingKPIMetBehaviour:
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
         obj._prepare_vanity_tx = fake_prepare_vanity_tx
-        self._run_async_act(obj, params_mock, synced_mock)
+        _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
     def test_async_act_kpi_not_met_nonces_none(self) -> None:
@@ -250,7 +278,7 @@ class TestCheckStakingKPIMetBehaviour:
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
-        self._run_async_act(obj, params_mock, synced_mock)
+        _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
     def test_async_act_kpi_not_met_no_tx_needed(self) -> None:
@@ -278,7 +306,7 @@ class TestCheckStakingKPIMetBehaviour:
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
-        self._run_async_act(obj, params_mock, synced_mock)
+        _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
 
@@ -514,10 +542,11 @@ class TestVanityTxFundingGate:
     def test_vanity_tx_suppressed_when_balance_below_recent_real_tx_cost(
         self,
     ) -> None:
-        """David's edge case: EOA below real-tx cost but vanity tx still cheap.
+        """Suppress the vanity tx when the EOA balance is below the real-tx cost.
 
-        Balance ~6.92e13 wei, real-tx cost ~1.55e14 wei from his Pearl
-        logs. Guard must skip _prepare_vanity_tx and emit a WARNING.
+        Representative values from a production incident: balance ~6.92e13 wei,
+        real-tx cost ~1.55e14 wei. Guard must skip _prepare_vanity_tx and emit a
+        WARNING that carries the concrete balance and cost numbers.
         """
         obj = self._base_obj_with_kpi_unmet()
         obj.gas_cost_tracker.data = {
@@ -542,12 +571,16 @@ class TestVanityTxFundingGate:
 
         obj._prepare_vanity_tx = fake_prepare_vanity_tx
 
-        TestCheckStakingKPIMetBehaviour()._run_async_act(
+        _run_async_act(
             obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
         )
 
         assert vanity_called["flag"] is False
-        obj.context.logger.warning.assert_called()
+        # Assert the WARNING carries the real numbers, so a regression that
+        # logged zeros or swapped balance/cost would not slip through.
+        warning_msg = obj.context.logger.warning.call_args.args[0]
+        assert "69207718314629" in warning_msg
+        assert "155000000000000" in warning_msg
 
     def test_vanity_tx_runs_when_balance_above_recent_real_tx_cost(self) -> None:
         """Healthy EOA: gate is silent and the existing vanity path runs."""
@@ -573,7 +606,7 @@ class TestVanityTxFundingGate:
 
         obj._prepare_vanity_tx = fake_prepare_vanity_tx
 
-        TestCheckStakingKPIMetBehaviour()._run_async_act(
+        _run_async_act(
             obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
         )
 
@@ -598,7 +631,7 @@ class TestVanityTxFundingGate:
 
         obj._prepare_vanity_tx = fake_prepare_vanity_tx
 
-        TestCheckStakingKPIMetBehaviour()._run_async_act(
+        _run_async_act(
             obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
         )
 
@@ -621,8 +654,121 @@ class TestVanityTxFundingGate:
 
         obj._prepare_vanity_tx = fake_prepare_vanity_tx
 
-        TestCheckStakingKPIMetBehaviour()._run_async_act(
+        _run_async_act(
             obj, self._params_with_optimism_mapping(), self._synced_with_kpi_unmet()
         )
 
         assert vanity_called["flag"] is True
+
+
+class TestRealTxCostVsBalance:
+    """Direct unit tests for ``_real_tx_cost_vs_balance``.
+
+    Covers every ``return None`` branch (the coverage gate needs each one) plus
+    the success path and the ``balance == cost`` fence-post.
+    """
+
+    @staticmethod
+    def _params(mapping=None):
+        params_mock = MagicMock()
+        params_mock.chain_to_chain_id_mapping = (
+            {"optimism": _OPTIMISM_CHAIN_ID} if mapping is None else mapping
+        )
+        return params_mock
+
+    @staticmethod
+    def _obj_with(records=None, shared_state=None):
+        obj = _make_behaviour()
+        obj.context.agent_address = _AGENT_EOA
+        obj.gas_cost_tracker = MagicMock()
+        obj.gas_cost_tracker.data = (
+            {} if records is None else {str(_OPTIMISM_CHAIN_ID): records}
+        )
+        obj.context.shared_state = {} if shared_state is None else shared_state
+        return obj
+
+    def _healthy_shared_state(self, balance_wei):
+        return {
+            GET_FUNDS_STATUS_METHOD_NAME: _funds_status_hook_returning(
+                _balance_response("optimism", balance_wei)
+            ),
+        }
+
+    def test_returns_none_when_chain_id_missing(self) -> None:
+        """No chain_id mapping -> signal unknown."""
+        obj = self._obj_with(records=_gas_records(1))
+        assert _call_signal(obj, self._params(mapping={})) is None
+
+    def test_returns_none_when_no_records(self) -> None:
+        """No gas records yet -> cost unknown."""
+        obj = self._obj_with(records=None)
+        assert _call_signal(obj, self._params()) is None
+
+    def test_returns_none_and_warns_on_malformed_gas_record(self) -> None:
+        """A record missing keys -> warn and fail open."""
+        obj = self._obj_with(records=[{"timestamp": 0, "tx_hash": "0x0"}])
+        assert _call_signal(obj, self._params()) is None
+        obj.context.logger.warning.assert_called_once()
+
+    def test_returns_none_when_hook_missing(self) -> None:
+        """funds-status hook not registered -> balance unknown."""
+        obj = self._obj_with(records=_gas_records(1), shared_state={})
+        assert _call_signal(obj, self._params()) is None
+
+    def test_returns_none_and_warns_when_hook_raises(self) -> None:
+        """Hook raising (e.g. API drift) -> warn and fail open."""
+
+        class _Boom:
+            def get_response_body(self):
+                raise RuntimeError("api drift")
+
+        obj = self._obj_with(
+            records=_gas_records(1),
+            shared_state={GET_FUNDS_STATUS_METHOD_NAME: lambda: _Boom()},
+        )
+        assert _call_signal(obj, self._params()) is None
+        obj.context.logger.warning.assert_called_once()
+
+    def test_returns_none_when_balance_absent(self) -> None:
+        """Hook responds but the EOA/native balance is missing -> unknown."""
+        obj = self._obj_with(
+            records=_gas_records(1),
+            shared_state={
+                GET_FUNDS_STATUS_METHOD_NAME: _funds_status_hook_returning({})
+            },
+        )
+        assert _call_signal(obj, self._params()) is None
+
+    def test_returns_none_when_balance_non_numeric(self) -> None:
+        """Balance present but not an int string -> unknown."""
+        response = _balance_response("optimism", 0)
+        response["optimism"][_AGENT_EOA][ZERO_ADDRESS]["balance"] = "not-a-number"
+        obj = self._obj_with(
+            records=_gas_records(1),
+            shared_state={
+                GET_FUNDS_STATUS_METHOD_NAME: _funds_status_hook_returning(response)
+            },
+        )
+        assert _call_signal(obj, self._params()) is None
+
+    def test_returns_signal_on_success(self) -> None:
+        """Both signals present -> named fields carry balance and median cost."""
+        obj = self._obj_with(
+            records=_gas_records(100, 200, 300),
+            shared_state=self._healthy_shared_state(500),
+        )
+        signal = _call_signal(obj, self._params())
+        assert signal is not None
+        assert signal.eoa_balance == 500
+        assert signal.recent_real_tx_cost == 200  # median(100, 200, 300)
+
+    def test_balance_equal_cost_is_not_suppressed(self) -> None:
+        """Fence-post: balance == cost means strict ``<`` is False -> vanity runs."""
+        obj = self._obj_with(
+            records=_gas_records(200),
+            shared_state=self._healthy_shared_state(200),
+        )
+        signal = _call_signal(obj, self._params())
+        assert signal is not None
+        assert signal.eoa_balance == signal.recent_real_tx_cost
+        assert not (signal.eoa_balance < signal.recent_real_tx_cost)

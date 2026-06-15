@@ -29,6 +29,7 @@ import pytest
 import requests
 
 from packages.valory.skills.optimus_abci.handlers import (
+    BASIUS_AGENT_PROFILE_PATH,
     BaseHandler,
     ESTIMATED_GAS_PER_TX,
     HttpCode,
@@ -4025,13 +4026,30 @@ class TestHttpHandlerMethods:
             mock_load.return_value = {"transition_func": {}}
             handler.setup()
 
-    def test_setup_http_handler_modius(self) -> None:
-        """Test HttpHandler.setup with non-optimism chain."""
+    def test_setup_http_handler_basius(self) -> None:
+        """Test HttpHandler.setup with base chain selects the basius UI."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
         ctx.params.service_endpoint_base = "http://localhost:8000"
         ctx.params.target_investment_chains = ["base"]
         ctx.params.available_strategies = {"base": []}
+        with (
+            patch(
+                "packages.valory.skills.optimus_abci.handlers.load_fsm_spec"
+            ) as mock_load,
+            patch("packages.valory.skills.optimus_abci.handlers.ROUNDS_INFO", {}),
+        ):
+            mock_load.return_value = {"transition_func": {}}
+            handler.setup()
+        assert handler.agent_profile_path == BASIUS_AGENT_PROFILE_PATH
+
+    def test_setup_http_handler_modius_fallback(self) -> None:
+        """Test HttpHandler.setup falls back to modius UI for unmapped chains."""
+        handler, ctx = _make_http_handler()
+        ctx.params.use_x402 = False
+        ctx.params.service_endpoint_base = "http://localhost:8000"
+        ctx.params.target_investment_chains = ["mode"]
+        ctx.params.available_strategies = {"mode": []}
         with (
             patch(
                 "packages.valory.skills.optimus_abci.handlers.load_fsm_spec"

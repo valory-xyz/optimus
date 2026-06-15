@@ -7,11 +7,60 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiccxktek4ostfagk4x5gmi65muiuqmr2d4k7fvs22akqr7yiha2hq
+  basius-ui-build/README.md: bafybeifvfowlhe54q7rjtam5cmnqknvjwtpha5xzbhwrxyon7sof3j5mym
+  basius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
+  basius-ui-build/assets/basius-chat-BiDLb6xE.png: bafybeic2ujg6kdkhdpbcg43kouti5xaf7dpg7sfwdrugl4whw5epspkpcy
+  basius-ui-build/assets/index-B0bzDMyn.js: bafybeih4kzfiwl6zqckwju4tiguhg6hw7e557fyjsilhlts6u5oh4zfelq
+  basius-ui-build/assets/modius-chat-DP0cU_AO.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
+  basius-ui-build/assets/omenstrat-chat-C3wR6Eyq.png: bafybeifz5fhtwnitqld2mcwoduxm7cjr2bsxiicav62zfw2ugng6tg4hc4
+  basius-ui-build/assets/optimus-chat-D2Oor3H8.png: bafybeiessqtxhcnh7ll34sw7ihg7ijbhcp4hbyngm4lqgx6sjppjuyaja4
+  basius-ui-build/assets/polystrat-chat-DlTWIQ8U.png: bafybeihz3bue6cuvvfadkzcjzhim5atgrgeew6pmzy6ignkjvkymofjfeu
+  basius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
+  basius-ui-build/index.html: bafybeidppjxkjzytrh7iywx23n5eohr7rynnn3ulhhkrbn3nsi2a7qayhq
+  basius-ui-build/logos/basius-chat.png: bafybeic2ujg6kdkhdpbcg43kouti5xaf7dpg7sfwdrugl4whw5epspkpcy
+  basius-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
+  basius-ui-build/logos/networks/base-network.png: bafybeibhgomi7lrzmb6drlmmu6wseh6mejqoe66bnxzc53oklpxu24nfqq
+  basius-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
+  basius-ui-build/logos/networks/optimism-network.png: bafybeier5eew7564zbiwer7n76xpd5g6xhmuctm7e4cbjg247np75d6ayq
+  basius-ui-build/logos/optimus-chat.png: bafybeiessqtxhcnh7ll34sw7ihg7ijbhcp4hbyngm4lqgx6sjppjuyaja4
+  basius-ui-build/logos/protocols/aerodrome.png: bafybeifnftzdozw5hlzprt3cqo2fs3ft2pceqneivyeuewtlcrvxsywfsy
+  basius-ui-build/logos/protocols/balancer.png: bafybeifffu2b22hfra5ojt2femrtzkj4irlegmd5tfxg7dnmxagrnqmlki
+  basius-ui-build/logos/protocols/sturdy.png: bafybeiaipwep7gx6yxpzm7koklknr6clykkrepscfatb6qxnz4flcufx4u
+  basius-ui-build/logos/protocols/uniswapV3.png: bafybeibxmpyjjbtdgqe6vx723aclwwnijqf35iqganaq7zsb2zldklwyku
+  basius-ui-build/logos/protocols/velodrome.png: bafybeia42nydstgpohanlncbn6zzbrdj5gexu7fq3qiot6evit5j6hmilm
+  basius-ui-build/logos/tokens/aero.png: bafybeibnfdvlbh6bw7rdwd25edol3g6ydjjkmnwxudcvdzisetjez7hbam
+  basius-ui-build/logos/tokens/alusd.png: bafybeie3oydlxs2d5te5kdq45rc2q57yctkp4inbc3vix7xf25u27kaetu
+  basius-ui-build/logos/tokens/bal.png: bafybeidnd5afsjcevrmyd4ucf74auemv5c7lzyurieemmdv4ht4idzp6qi
+  basius-ui-build/logos/tokens/bold.png: bafybeigirswtyjan7zsgtw3yluwebjmjnt7a2fxdae4pknteyxqmcso3fe
+  basius-ui-build/logos/tokens/dai.png: bafybeifysdjm4t6mnzqvwrh5snqxbsiubvoa2akizyb5oiqaluxpwpqu7i
+  basius-ui-build/logos/tokens/dola.png: bafybeiadrmp3sgm4lqw524lo3rdrbusdhnh7adskklsvsog45iqaevkljm
+  basius-ui-build/logos/tokens/eth.png: bafybeiejj4gaj2ahgr6kavbg5rd5cnrpuxaicobfcd4ffxmlob664ouyrq
+  basius-ui-build/logos/tokens/ezeth.png: bafybeigknvkgjfidvpr2mkj7pfpt5dy2ecbn7z2kosdo2xc53crqh2bqe4
+  basius-ui-build/logos/tokens/frax.png: bafybeihrglrrv4bn6aqrmbbq55ukevqle45e3fmeji64ui75qblyi6b4oq
+  basius-ui-build/logos/tokens/lusd.png: bafybeif3gcoblrzyfoqyt7atyw2ew233logrm4digcge2elnvsgf4jiacu
+  basius-ui-build/logos/tokens/mode.png: bafybeiakyu4lwlzqgjluol6gpfbydezwh7cosj5mncpmorbwbe46c6ck3a
+  basius-ui-build/logos/tokens/olas.png: bafybeiguddvyhbusz6hya4rysexr45sn2nk5yn7mlwf34qdfrknxzxgfmi
+  basius-ui-build/logos/tokens/op.png: bafybeiejhf2onv6i3gjj4busavchwr2246br277bi7t5r2yugsfgkiou3e
+  basius-ui-build/logos/tokens/openusdt.png: bafybeib2telasvygswwc7xh7upgkdr6asxgzaegef6mhdopfam3rnp7l3e
+  basius-ui-build/logos/tokens/pxeth.png: bafybeidzbxp6eu3577tdhyjtxpezwegdi2l6norylg3lp2lzkkpd5rzoiq
+  basius-ui-build/logos/tokens/reth.png: bafybeihgvupiwdhxy75id46lgd6o4kccppgsixveglymjtiefditsa2b2e
+  basius-ui-build/logos/tokens/sdai.png: bafybeieb23rbidvqptyvwfuxnpzzkfv4ir2ilfv4ttnr5f47lnmzxnm7d4
+  basius-ui-build/logos/tokens/steth.png: bafybeifdxeuui5pjngbeku6rjgxewxieqcxtr2ggwmbmrn7pxhu3gt6apu
+  basius-ui-build/logos/tokens/stone.png: bafybeia255ikjhe4azvdc6d6bnndfdp3jtduzr7jwibacvvpp6o5qxx5jq
+  basius-ui-build/logos/tokens/tbtc.png: bafybeigmbnetcoo7yfacmxmzfej4aerqg4clpvabekfjdl7doaorrygley
+  basius-ui-build/logos/tokens/usd+.png: bafybeihrrrzhwlldje35d5s3euwq7zpdz7mxwfyb7aq3zxhhfgxj5jmngu
+  basius-ui-build/logos/tokens/usdc.png: bafybeiddabigc6c5ga27grotfy2bfr247eah2qs3nsjzup7z3l4r2kvggm
+  basius-ui-build/logos/tokens/usdglo.png: bafybeibbuiy4aap7trh3wwwlt6lgv7xr2hbfzs4inzxt2n4k2dwm5nejem
+  basius-ui-build/logos/tokens/usdt.png: bafybeidhg7xhvqpizest3mi3mpsd47cjda7jq2nhjjzikkkmfowesf4szi
+  basius-ui-build/logos/tokens/usdt0.png: bafybeig4muixers6emdrg645t46ggkcgwdrdrghwcsnoizpla56d2aj6gq
+  basius-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
+  basius-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
+  basius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   behaviours.py: bafybeib3kst4zp2btwplfwps3rptdknh7zjx2dndjcejzov4ldqmwcnzxu
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeielhxk7hstefud4xkvw2cxysverkegttcpm6uec7en7cmeuli2d6q
-  handlers.py: bafybeiasobikcutd6u2jmnjmehunalj3gyp4mmg7feqkov6lqvwms46qka
+  handlers.py: bafybeie6c32l3hnc3wadkdyjfvi53x2wmfxdb3flixj4blhkcmv3izne2a
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -108,7 +157,7 @@ fingerprint:
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
-  tests/test_handlers.py: bafybeihqbvftk25d3hukiogclpqcl6odz5uaff42jypmqpnyovc26hnrjm
+  tests/test_handlers.py: bafybeihinrl5y37tqv2u7fzomylzr6pxwbosnt3cx7cuuysypolsmgg5lq
   tests/test_models.py: bafybeigtkzz7qofobw4f2krnhqscpapspub3qnbwwpv7j4dzxtcjorle4u
   tests/test_prompts.py: bafybeibpbnuqhgntud3jiw4fjq77tffdcjoczg4mwu2qryka7vt7g5rl7i
 fingerprint_ignore_patterns: []

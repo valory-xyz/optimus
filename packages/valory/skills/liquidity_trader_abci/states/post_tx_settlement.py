@@ -51,6 +51,7 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
 from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
     WithdrawFundsRound,
 )
+from packages.valory.skills.mech_interact_abci.states.request import MechRequestRound
 
 
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
@@ -73,6 +74,10 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
             submitter_to_event: Dict[str, Event] = {
                 CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
                 CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
+                # New regime: the activity tx is submitted by mech_interact_abci's
+                # MechRequestRound, so it must map back to the staking loop or the
+                # multiplexer returns UNRECOGNIZED and the loop dies.
+                MechRequestRound.auto_round_id(): Event.MECH_REQUEST_TX_EXECUTED,
                 DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
                 FetchStrategiesRound.auto_round_id(): Event.TRANSFER_COMPLETED,
                 WithdrawFundsRound.auto_round_id(): Event.WITHDRAWAL_COMPLETED,

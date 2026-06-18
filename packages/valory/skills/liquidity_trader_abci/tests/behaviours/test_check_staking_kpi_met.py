@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+import json
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.funds_manager.behaviours import (
@@ -100,6 +101,33 @@ def _drive(gen):
             val = gen.send(val)
         except StopIteration as exc:
             return exc.value
+
+
+def _gen_value(value):
+    """Build a generator-function stub that yields once then returns ``value``."""
+
+    def _gen(*args, **kwargs):
+        yield
+        return value
+
+    return _gen
+
+
+def _stub_staking_reads(obj, *, regime=False, nonces_since_cp=0):
+    """Stub the staking on-chain reads the staked path performs.
+
+    ``async_act`` now computes the activity-target status (calling
+    ``_get_multisig_nonces_since_last_cp`` and ``_is_new_staking_regime``)
+    whenever the service is staked, before the vanity/mech branch. Tests that
+    only stub ``_is_staking_kpi_met`` would otherwise hit real contract calls or
+    a truthy ``MagicMock`` regime. Stub both to a deterministic value.
+
+    :param obj: the behaviour under test.
+    :param regime: value returned by ``_is_new_staking_regime``.
+    :param nonces_since_cp: value returned by ``_get_multisig_nonces_since_last_cp``.
+    """
+    obj._get_multisig_nonces_since_last_cp = _gen_value(nonces_since_cp)
+    obj._is_new_staking_regime = _gen_value(regime)
 
 
 def _call_signal(obj, params_mock, chain="optimism"):
@@ -195,6 +223,7 @@ class TestCheckStakingKPIMetBehaviour:
             return True
 
         obj._is_staking_kpi_met = fake_is_kpi_met
+        _stub_staking_reads(obj)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
@@ -216,6 +245,7 @@ class TestCheckStakingKPIMetBehaviour:
             return False
 
         obj._is_staking_kpi_met = fake_is_kpi_met
+        _stub_staking_reads(obj)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
@@ -249,6 +279,7 @@ class TestCheckStakingKPIMetBehaviour:
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        obj._is_new_staking_regime = _gen_value(False)  # old regime -> vanity path
         obj._prepare_vanity_tx = fake_prepare_vanity_tx
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
@@ -278,6 +309,7 @@ class TestCheckStakingKPIMetBehaviour:
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        obj._is_new_staking_regime = _gen_value(False)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
@@ -306,8 +338,127 @@ class TestCheckStakingKPIMetBehaviour:
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        obj._is_new_staking_regime = _gen_value(False)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
+
+
+class TestMechRequestPath:
+    """The new staking regime fires a mech request instead of a vanity tx."""
+
+    def _capture_payload(self, obj, params_mock, synced_mock):
+        """Drive async_act capturing the emitted payload."""
+        captured = {}
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        with (
+            patch.object(
+                type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+            ),
+            patch.object(
+                type(obj),
+                "synchronized_data",
+                new_callable=PropertyMock,
+                return_value=synced_mock,
+            ),
+        ):
+            obj.context.benchmark_tool.measure.return_value = MagicMock()
+            obj.context.agent_address = "0xagent"
+            obj.send_a2a_transaction = fake_send
+            obj.wait_until_round_end = fake_wait
+            obj.set_done = MagicMock()
+            _drive(obj.async_act())
+        return captured["payload"]
+
+    def test_new_regime_injects_mech_request_and_no_vanity_tx(self) -> None:
+        """New regime, KPI unmet, tx owed -> payload carries one mech request."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        params_mock.staking_threshold_period = 10
+        params_mock.activity_target = 1
+        params_mock.mech_tool = "openai-gpt-4o-2024-08-06"
+        params_mock.mech_request_prompt = "ping"
+
+        synced_mock = MagicMock()
+        synced_mock.period_count = 20
+        synced_mock.period_number_at_last_cp = 0
+        synced_mock.min_num_of_safe_tx_required = 5
+
+        obj._is_staking_kpi_met = _gen_value(False)
+        obj._get_multisig_nonces_since_last_cp = _gen_value(2)
+        obj._is_new_staking_regime = _gen_value(True)
+        # The funding gate must allow the request (no gas records -> fails open).
+        obj.gas_cost_tracker.data = {}
+
+        # A vanity tx must NOT be prepared on the new regime.
+        obj._prepare_vanity_tx = MagicMock(
+            side_effect=AssertionError("vanity tx must not run on the new regime")
+        )
+
+        payload = self._capture_payload(obj, params_mock, synced_mock)
+
+        assert payload.tx_hash is None  # no vanity tx
+        requests = json.loads(payload.mech_requests)
+        assert len(requests) == 1
+        assert requests[0]["tool"] == "openai-gpt-4o-2024-08-06"
+        assert requests[0]["prompt"] == "ping"
+        assert requests[0]["nonce"]
+        # Activity-target signal populated on the new regime.
+        assert payload.activity_target == 1
+        assert payload.activity_completed == 2
+        assert payload.is_activity_target_met is True
+
+    def test_regime_undetermined_skips_both_txs(self) -> None:
+        """A transient regime read (None) fires neither a mech nor a vanity tx."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        params_mock.staking_threshold_period = 10
+
+        synced_mock = MagicMock()
+        synced_mock.period_count = 20
+        synced_mock.period_number_at_last_cp = 0
+        synced_mock.min_num_of_safe_tx_required = 5
+
+        obj._is_staking_kpi_met = _gen_value(False)
+        obj._get_multisig_nonces_since_last_cp = _gen_value(2)
+        obj._is_new_staking_regime = _gen_value(None)  # transient/undetermined
+        obj.gas_cost_tracker.data = {}
+        obj._prepare_vanity_tx = MagicMock(
+            side_effect=AssertionError("no vanity tx when regime is undetermined")
+        )
+
+        payload = self._capture_payload(obj, params_mock, synced_mock)
+
+        assert payload.tx_hash is None
+        assert payload.mech_requests is None
+        # Activity status not populated when the regime is undetermined.
+        assert payload.is_activity_target_met is None
+        obj.context.logger.warning.assert_called()
+
+    def test_build_mech_request_metadata_shape(self) -> None:
+        """_build_mech_request_metadata emits exactly one well-formed MechMetadata."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.mech_tool = "tool-x"
+        params_mock.mech_request_prompt = "prompt-y"
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            payload = json.loads(obj._build_mech_request_metadata())
+        assert len(payload) == 1
+        assert payload[0]["tool"] == "tool-x"
+        assert payload[0]["prompt"] == "prompt-y"
+        assert isinstance(payload[0]["nonce"], str) and payload[0]["nonce"]
 
 
 class TestCheckStakingKPIMetWithdrawalGate:
@@ -380,6 +531,7 @@ class TestCheckStakingKPIMetWithdrawalGate:
 
         obj._read_investing_paused = fake_read_investing_paused
         obj._is_staking_kpi_met = fake_is_kpi_met
+        _stub_staking_reads(obj)
         obj.send_a2a_transaction = fake_send
         obj.wait_until_round_end = fake_wait
         obj.set_done = MagicMock()
@@ -518,6 +670,8 @@ class TestVanityTxFundingGate:
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        # Old regime: the funding gate guards the vanity-tx path.
+        obj._is_new_staking_regime = _gen_value(False)
         obj.gas_cost_tracker = MagicMock()
         obj.gas_cost_tracker.data = {}
         return obj

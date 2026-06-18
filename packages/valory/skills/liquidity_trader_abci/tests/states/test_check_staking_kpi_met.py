@@ -86,6 +86,7 @@ class TestCheckStakingKPIMetRound:
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.is_staking_kpi_met = True
         mock_synced.most_voted_tx_hash = None
+        mock_synced.mech_requests = "[]"
         with patch.object(
             CollectSameUntilThresholdRound,
             "end_block",
@@ -149,6 +150,7 @@ class TestCheckStakingKPIMetRound:
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.is_staking_kpi_met = True
         mock_synced.most_voted_tx_hash = None
+        mock_synced.mech_requests = "[]"
         with patch.object(
             CollectSameUntilThresholdRound,
             "end_block",
@@ -157,12 +159,29 @@ class TestCheckStakingKPIMetRound:
             result = round_obj.end_block()
         assert result == (mock_synced, Event.STAKING_KPI_MET)
 
+    def test_end_block_mech_request_needed(self) -> None:
+        """A pending mech request routes to MECH_REQUEST_NEEDED (new regime)."""
+        round_obj = self._stub_round(threshold=False)
+        mock_synced = MagicMock(spec=SynchronizedData)
+        # KPI not met, no vanity tx, but the producer injected one mech request.
+        mock_synced.is_staking_kpi_met = False
+        mock_synced.most_voted_tx_hash = None
+        mock_synced.mech_requests = '[{"prompt": "p", "tool": "t", "nonce": "n"}]'
+        with patch.object(
+            CollectSameUntilThresholdRound,
+            "end_block",
+            return_value=(mock_synced, Event.DONE),
+        ):
+            result = round_obj.end_block()
+        assert result == (mock_synced, Event.MECH_REQUEST_NEEDED)
+
     def test_end_block_kpi_not_met(self) -> None:
         """Test end_block returns STAKING_KPI_NOT_MET when kpi is not met."""
         round_obj = self._stub_round(threshold=False)
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.is_staking_kpi_met = False
         mock_synced.most_voted_tx_hash = None
+        mock_synced.mech_requests = "[]"
         with patch.object(
             CollectSameUntilThresholdRound,
             "end_block",
@@ -192,6 +211,7 @@ class TestCheckStakingKPIMetRound:
         mock_synced = MagicMock(spec=SynchronizedData)
         mock_synced.is_staking_kpi_met = True
         mock_synced.most_voted_tx_hash = None
+        mock_synced.mech_requests = "[]"
         with patch.object(
             CollectSameUntilThresholdRound,
             "end_block",

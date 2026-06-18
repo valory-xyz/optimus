@@ -50,6 +50,15 @@ class CheckStakingKPIMetPayload(MultisigTxPayload):
 
     is_staking_kpi_met: Optional[bool]
     event: Optional[str] = None
+    # New staking regime: a JSON list of one ``MechMetadata`` to hand off to the
+    # composed mech_interact_abci legs (``None`` when no request is owed). Always
+    # carried so it overwrites any stale db value from a prior MechRequestRound.
+    mech_requests: Optional[str] = None
+    # Off-chain activity-target signal surfaced on /healthcheck (new regime only;
+    # ``None`` on old regime / unstaked).
+    is_activity_target_met: Optional[bool] = None
+    activity_target: Optional[int] = None
+    activity_completed: Optional[int] = None
 
 
 @dataclass(frozen=True)

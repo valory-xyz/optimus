@@ -34,6 +34,27 @@ class FinishedCheckStakingKPIMetRound(DegenerateRound):
     """FinishedCheckStakingKPIMetRound"""
 
 
+class FinishedWithMechRequestRound(DegenerateRound):
+    """Producer hand-off to the composed mech_interact_abci legs (new regime).
+
+    Reached from ``CheckStakingKPIMetRound`` on ``MECH_REQUEST_NEEDED``. The
+    ``optimus_abci`` composition remaps this degenerate round to
+    ``MechVersionDetectionRound`` so the mech request is built and settled.
+    """
+
+
+class FinishedWithMechResponsePollRound(DegenerateRound):
+    """Hand-off to mech_interact_abci's response leg after the request settles.
+
+    Reached from ``PostTxSettlementRound`` once the mech-request tx settles
+    (``MECH_REQUEST_TX_EXECUTED``). The ``optimus_abci`` composition remaps this
+    to ``MechResponseRound``. The response is polled only to keep the FSM valid
+    (every composed round must be reachable) and to confirm the liveness request
+    was serviced — its content is discarded (no answer-handling round is
+    composed). The response round then routes back to ``CheckStakingKPIMetRound``.
+    """
+
+
 class FinishedDecisionMakingRound(DegenerateRound):
     """FinishedDecisionMakingRound"""
 

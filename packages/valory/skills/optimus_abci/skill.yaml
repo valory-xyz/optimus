@@ -56,12 +56,12 @@ fingerprint:
   basius-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   basius-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   basius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  behaviours.py: bafybeib3kst4zp2btwplfwps3rptdknh7zjx2dndjcejzov4ldqmwcnzxu
-  composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
+  behaviours.py: bafybeibj5q7zzxyvjrdn6wjpf44spuqkdnu2jhn4nmteb7x73ycaqi4tzm
+  composition.py: bafybeicwl4qp2ozf7ayerbkzc3rjujqsr4dlvsrdxtwquf6djacjjwmxaa
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
-  fsm_specification.yaml: bafybeielhxk7hstefud4xkvw2cxysverkegttcpm6uec7en7cmeuli2d6q
-  handlers.py: bafybeie6c32l3hnc3wadkdyjfvi53x2wmfxdb3flixj4blhkcmv3izne2a
-  models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
+  fsm_specification.yaml: bafybeiffslnjerjd3ezc5bih7fg5hseuj7qxscnjt6b3hltmyocsa5kxvq
+  handlers.py: bafybeigq53sq7g4wlxbyl4kodaxpqi6sxom3nwjlfvydw4ujxzmu4r3glq
+  models.py: bafybeibv4mboeszbjvp2nfh2hrxrkpxknjcmzsxxfvnzqk6fm6lev67hre
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
   modius-ui-build/assets/index-DPlzseC6.js: bafybeihn3b6hvbogyassji7f22tao4hqrvypoan2xqv5dlbbkolq6icphy
@@ -155,7 +155,7 @@ fingerprint:
   prompts.py: bafybeib64hnbhkt4bvdetufk3v2kmts2hs5o5h6p7otb6efkmbve33sgwi
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
-  tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
+  tests/test_composition.py: bafybeid6e22i3rvglxhfnwb5vn4nvqqkq4hfwbtfohkcafseokuiw6dyoi
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_handlers.py: bafybeihinrl5y37tqv2u7fzomylzr6pxwbosnt3cx7cuuysypolsmgg5lq
   tests/test_models.py: bafybeigtkzz7qofobw4f2krnhqscpapspub3qnbwwpv7j4dzxtcjorle4u
@@ -175,9 +175,10 @@ skills:
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
-- valory/liquidity_trader_abci:0.1.0:bafybeifojiolxc5dz6kmtzf7o73rzfzzoeufvo5mrxedtmg2zjlxx3uqqq
+- valory/liquidity_trader_abci:0.1.0:bafybeidjcfyq56goiksvjpqutbksnbam4fdemcmsfeyfcyjtnsggwyqgh4
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
+- valory/mech_interact_abci:0.1.0:bafybeidnmszufszq3ro4ebgrqzmhqgctrsc6sykeanfsbvotghvt2cgfsy
 behaviours:
   main:
     args: {}
@@ -289,7 +290,7 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
+      multisend_address: '0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD'
       velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","mode":"0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45","base":"0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43"}'
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0x416b433906b1B72FA758e166e239c43d68dC6F29","base":"0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
       tx_timeout: 10.0
@@ -328,6 +329,28 @@ models:
       staking_token_contract_address: '0x63C2c53c09dE534Dd3bc0b7771bf976070936bAC'
       staking_activity_checker_contract_address: '0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68'
       staking_threshold_period: 5
+      activity_target: 1
+      mech_tool: openai-gpt-4o-2024-08-06
+      mech_request_prompt: Optimus staking activity request.
+      multisend_batch_size: 1
+      mech_contract_address: '0x650C77F49cFa69e2AC1990A6B4585C322B012D0d'
+      ipfs_address: https://gateway.autonolas.tech/ipfs/
+      mech_chain_id: optimism
+      mech_wrapped_native_token_address: '0x4200000000000000000000000000000000000006'
+      mech_interaction_sleep_time: 10
+      use_mech_marketplace: true
+      mech_marketplace_config:
+        mech_marketplace_address: '0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461'
+        priority_mech_address: '0x650C77F49cFa69e2AC1990A6B4585C322B012D0d'
+        priority_mech_service_id: 194
+        response_timeout: 300
+        use_dynamic_mech_selection: false
+      agent_registry_address: '0x0000000000000000000000000000000000000000'
+      use_acn_for_delivers: false
+      valid_mechs:
+      - '0x650c77f49cfa69e2ac1990a6b4585c322b012d0d'
+      penalize_mech_time_window: 1800
+      deliveries_lookback_days: 30
       service_registry_contract_addresses: '{"optimism":"0x3d77596beb0f130a4415df3D2D8232B3d3D31e44","mode":"0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"}'
       store_path: data
       assets_info_filename: assets.json
@@ -418,6 +441,46 @@ models:
       retries: 5
       url: https://drand.cloudflare.com/public/latest
     class_name: RandomnessApi
+  mech_response:
+    args:
+      api_id: mech_response
+      headers:
+        Content-Type: application/json
+      method: GET
+      parameters: {}
+      response_key: result
+      response_type: str
+      retries: 5
+      url: ''
+    class_name: MechResponseSpecs
+  mech_tools:
+    args:
+      api_id: mech_tools
+      headers:
+        Content-Type: application/json
+      method: GET
+      parameters: {}
+      response_key: tools
+      response_type: list
+      retries: 5
+      url: ''
+    class_name: MechToolsSpecs
+  mechs_subgraph:
+    args:
+      api_id: mechs
+      headers:
+        Content-Type: application/json
+      method: POST
+      parameters: {}
+      response_key: data:meches
+      response_type: list
+      error_key: errors
+      error_index: 0
+      error_type: dict
+      retries: 5
+      url: https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism
+      delivery_rate_cap: 10000000000000000
+    class_name: MechsSubgraph
   requests:
     args: {}
     class_name: Requests

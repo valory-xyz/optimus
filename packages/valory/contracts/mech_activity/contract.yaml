@@ -1,0 +1,25 @@
+name: mech_activity
+author: valory
+version: 0.1.0
+type: contract
+description: Mech activity checker contract
+license: Apache-2.0
+aea_version: '>=2.0.0, <3.0.0'
+fingerprint:
+  __init__.py: bafybeid4hg5rx75ltdjmekmxdddwqzbvblygmvlhws5samjxfirnkp666i
+  build/MechActivity.json: bafybeih2rrbduwvmxd3c3v52uekgqnm2akl4uvst7sf3grjrlokf72jw6m
+  contract.py: bafybeifjtsapockgxglkxpfikd36zo3ogcvzzsztv3jybyqwbhvwpyblgu
+  tests/__init__.py: bafybeigwx4nxux6pd4bi5yhwdpjo3gy3rbljmgj55lih4dhwmwzoqk4lh4
+  tests/test_contract.py: bafybeigelzhqlaca7j4tb7jdy4zhpkza2swne7wis3syfqrpc32yv4mt7u
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: MechActivityContract
+contract_interface_paths:
+  ethereum: build/MechActivity.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==2.2.7
+  open-aea-test-autonomy:
+    version: ==0.21.23
+  web3:
+    version: <8,>=7.15.0

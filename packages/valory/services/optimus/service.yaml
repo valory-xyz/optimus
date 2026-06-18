@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiadles7napatcvomxencwd2eikg6wrdvk6oyn22gc7mwjunpnndoa
+agent: valory/optimus:0.1.0:bafybeif2gu67r57p5ildeyowtpomh73vzwxynjxg3irlvvgi2curveiyl4
 number_of_agents: 1
 deployment:
   agent:
@@ -55,7 +55,7 @@ models:
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
-      multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
+      multisend_address: ${MECH_MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
       termination_sleep: ${TERMINATION_SLEEP:int:900}
       reset_pause_duration: ${RESET_PAUSE_DURATION:int:30}
       on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
@@ -81,6 +81,22 @@ models:
       staking_token_contract_address: ${STAKING_TOKEN_CONTRACT_ADDRESS:str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${STAKING_THRESHOLD_PERIOD:int:5}
+      activity_target: ${ACTIVITY_TARGET:int:1}
+      mech_tool: ${MECH_TOOL:str:openai-gpt-4o-2024-08-06}
+      mech_request_prompt: ${MECH_REQUEST_PROMPT:str:Optimus staking activity request.}
+      multisend_batch_size: ${MECH_MULTISEND_BATCH_SIZE:int:1}
+      mech_contract_address: ${MECH_CONTRACT_ADDRESS:str:0x650C77F49cFa69e2AC1990A6B4585C322B012D0d}
+      ipfs_address: ${MECH_IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
+      mech_chain_id: ${MECH_CHAIN_ID:str:optimism}
+      mech_wrapped_native_token_address: ${MECH_WRAPPED_NATIVE_TOKEN_ADDRESS:str:0x4200000000000000000000000000000000000006}
+      mech_interaction_sleep_time: ${MECH_INTERACTION_SLEEP_TIME:int:10}
+      use_mech_marketplace: ${USE_MECH_MARKETPLACE:bool:true}
+      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x650C77F49cFa69e2AC1990A6B4585C322B012D0d","priority_mech_service_id":194,"response_timeout":300,"use_dynamic_mech_selection":false}}
+      agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
+      use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
+      valid_mechs: ${VALID_MECHS:list:["0x650c77f49cfa69e2ac1990a6b4585c322b012d0d"]}
+      penalize_mech_time_window: ${MECH_PENALIZE_TIME_WINDOW:int:1800}
+      deliveries_lookback_days: ${MECH_DELIVERIES_LOOKBACK_DAYS:int:30}
       store_path: ${STORE_PATH:str:/data/}
       assets_info_filename: ${ASSETS_INFO_FILENAME:str:assets.json}
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}

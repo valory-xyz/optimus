@@ -53,6 +53,8 @@ from packages.valory.skills.liquidity_trader_abci.states.final_rounds import (
     FinishedDecisionMakingRound,
     FinishedEvaluateStrategyRound,
     FinishedTxPreparationRound,
+    FinishedWithMechRequestRound,
+    FinishedWithMechResponsePollRound,
 )
 from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
     GetPositionsRound,
@@ -173,6 +175,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONE: GetPositionsRound,
             Event.STAKING_KPI_MET: GetPositionsRound,
             Event.SETTLE: FinishedCheckStakingKPIMetRound,
+            Event.MECH_REQUEST_NEEDED: FinishedWithMechRequestRound,
             Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,
             Event.NO_MAJORITY: CheckStakingKPIMetRound,
             Event.STAKING_KPI_NOT_MET: GetPositionsRound,
@@ -208,6 +211,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ACTION_EXECUTED: DecisionMakingRound,
             Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
+            Event.MECH_REQUEST_TX_EXECUTED: FinishedWithMechResponsePollRound,
             Event.TRANSFER_COMPLETED: FetchStrategiesRound,
             Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
@@ -232,6 +236,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedDecisionMakingRound: {},
         FinishedCallCheckpointRound: {},
         FinishedCheckStakingKPIMetRound: {},
+        FinishedWithMechRequestRound: {},
+        FinishedWithMechResponsePollRound: {},
         FailedMultiplexerRound: {},
     }
     final_states: Set[AppState] = {
@@ -240,6 +246,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
         FinishedCallCheckpointRound,
         FinishedCheckStakingKPIMetRound,
+        FinishedWithMechRequestRound,
+        FinishedWithMechResponsePollRound,
         FailedMultiplexerRound,
     }
     event_to_timeout: Dict[Event, float] = {
@@ -252,6 +260,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             get_name(SynchronizedData.is_staking_kpi_met),
             get_name(SynchronizedData.period_number_at_last_cp),
             get_name(SynchronizedData.selected_protocols),
+            # Keep the /healthcheck activity-target signal stable across period
+            # transitions until CheckStakingKPIMetRound recomputes it.
+            get_name(SynchronizedData.is_activity_target_met),
+            get_name(SynchronizedData.activity_target),
+            get_name(SynchronizedData.activity_completed),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
@@ -268,6 +281,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedCheckStakingKPIMetRound: {
             get_name(SynchronizedData.most_voted_tx_hash)
         },
+        FinishedWithMechRequestRound: {get_name(SynchronizedData.mech_requests)},
+        FinishedWithMechResponsePollRound: set(),
         FailedMultiplexerRound: set(),
         FinishedEvaluateStrategyRound: set(),
         FinishedDecisionMakingRound: set(),

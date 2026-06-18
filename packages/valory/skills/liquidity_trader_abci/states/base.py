@@ -83,6 +83,11 @@ class Event(Enum):
     ACTION_EXECUTED = "action_executed"
     CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
     VANITY_TX_EXECUTED = "vanity_tx_executed"
+    # New staking regime: the producer owes a mech-marketplace request (hands off
+    # to the composed mech_interact_abci legs); and the post-settlement routing
+    # back to the staking loop after that request's tx settles.
+    MECH_REQUEST_NEEDED = "mech_request_needed"
+    MECH_REQUEST_TX_EXECUTED = "mech_request_tx_executed"
     TRANSFER_COMPLETED = "transfer_completed"
     WITHDRAWAL_COMPLETED = "withdrawal_completed"
     WITHDRAWAL_INITIATED = "withdrawal_initiated"
@@ -225,6 +230,40 @@ class SynchronizedData(BaseSynchronizedData):
     def is_staking_kpi_met(self) -> Optional[bool]:
         """Get kpi met for the day."""
         return cast(int, self.db.get("is_staking_kpi_met", False))  # type: ignore[return-value]
+
+    @property
+    def mech_requests(self) -> str:
+        """Serialized list of pending mech requests (consumed by mech_interact_abci).
+
+        The producer (``CheckStakingKPIMetBehaviour`` on the new staking regime)
+        writes a JSON list of one ``MechMetadata`` here; the composed
+        ``mech_interact_abci`` ``MechRequestRound`` reads the same db key. An
+        empty/``None`` value means no request is owed this visit.
+
+        :return: the JSON-serialized list of pending mech requests.
+        """
+        return cast(str, self.db.get("mech_requests", "[]") or "[]")
+
+    @property
+    def is_activity_target_met(self) -> Optional[bool]:
+        """Off-chain activity-target signal for Pearl auto-run rotation.
+
+        ``None`` on the old regime / unstaked (the concept does not apply);
+        ``bool`` on the new regime once computed.
+
+        :return: the activity-target signal, or ``None`` when not applicable.
+        """
+        return cast(Optional[bool], self.db.get("is_activity_target_met", None))
+
+    @property
+    def activity_target(self) -> Optional[int]:
+        """Per-epoch mech-request target (new regime only; else ``None``)."""
+        return cast(Optional[int], self.db.get("activity_target", None))
+
+    @property
+    def activity_completed(self) -> Optional[int]:
+        """Mech requests completed since the last checkpoint (new regime; else ``None``)."""
+        return cast(Optional[int], self.db.get("activity_completed", None))
 
     @property
     def chain_id(self) -> Optional[str]:

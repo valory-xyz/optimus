@@ -280,7 +280,11 @@ POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
 WRITE_MODE = "w"
 
-# Whitelist of allowed token addresses for each chain with their symbols
+# Investable whitelist: token addresses (with symbols) the agent is allowed to
+# ENTER new positions with, per chain. This is the gate consumed by the
+# strategy / investability path (evaluate_strategy). To stop investing in an
+# asset, remove it here -- but if existing agents may still HOLD it, also add it
+# to LEGACY_HELD_ASSETS below so it stays detectable, convertible and priceable.
 WHITELISTED_ASSETS = {
     "mode": {
         # MODE tokens - stablecoins
@@ -316,6 +320,30 @@ WHITELISTED_ASSETS = {
         "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
         "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
     },
+}
+
+# Assets that are no longer investable (intentionally absent from
+# WHITELISTED_ASSETS) but may still sit in an existing agent's Safe. They are
+# excluded from new investment yet must remain (a) detectable by the on-chain
+# balance backstop and last-known-balance tracker, (b) convertible by the
+# withdraw sweep-to-USDC fallback, and (c) priceable via COIN_ID_MAPPING. Drop
+# an entry here once on-chain balances for it have reached zero.
+LEGACY_HELD_ASSETS: Dict[str, Dict[str, str]] = {
+    # oUSDT was removed from the Optimism investable whitelist, but existing
+    # optimus agents may still hold it.
+    "optimism": {
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+    },
+}
+
+# Detection / sweep set: every investable asset PLUS any legacy held asset for
+# the chain. Consumed by the on-chain balance backstop
+# (_supplement_with_onchain_whitelisted_balances), the last-known-balance
+# tracker, and the withdraw sweep-to-USDC fallback. Always a superset of
+# WHITELISTED_ASSETS.
+HELD_ASSETS: Dict[str, Dict[str, str]] = {
+    chain: {**assets, **LEGACY_HELD_ASSETS.get(chain, {})}
+    for chain, assets in WHITELISTED_ASSETS.items()
 }
 
 COIN_ID_MAPPING = {
@@ -587,7 +615,7 @@ class LiquidityTraderBaseBehaviour(
         if native_balance is not None:
             current[ZERO_ADDRESS.lower()] = int(native_balance)
 
-        for token_addr, _symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+        for token_addr, _symbol in HELD_ASSETS.get(chain, {}).items():
             token_balance = yield from self._get_token_balance(
                 chain, safe_address, token_addr
             )
@@ -859,11 +887,12 @@ class LiquidityTraderBaseBehaviour(
                         }
                     )
 
-        # On-chain backstop for whitelisted ERC20s and native ETH. Catches the
-        # case where SafeApi is unavailable (e.g. monthly quota exceeded) or
-        # returns an incomplete trusted-token list. Covers every entry in
-        # WHITELISTED_ASSETS[chain]. Reward tokens (OLAS, VELO) are disjoint
-        # from the whitelist and handled by _fetch_reward_balances below.
+        # On-chain backstop for held ERC20s and native ETH. Catches the case
+        # where SafeApi is unavailable (e.g. monthly quota exceeded) or returns
+        # an incomplete trusted-token list. Covers every entry in
+        # HELD_ASSETS[chain] (the investable whitelist plus legacy held assets),
+        # so already-held but de-whitelisted tokens stay visible. Reward tokens
+        # (OLAS, VELO) are disjoint and handled by _fetch_reward_balances below.
         yield from self._supplement_with_onchain_whitelisted_balances(
             chain, safe_address, balances
         )
@@ -3402,9 +3431,9 @@ class LiquidityTraderBaseBehaviour(
         safe_address: str,
         balances: List[Dict[str, Any]],
     ) -> Generator[None, None, None]:
-        """Add on-chain balances for whitelisted assets not present in ``balances``.
+        """Add on-chain balances for held assets not present in ``balances``.
 
-        Mutates ``balances`` in place. For each entry in ``WHITELISTED_ASSETS[chain]``
+        Mutates ``balances`` in place. For each entry in ``HELD_ASSETS[chain]``
         plus native ETH, appends an entry sourced from on-chain reads when:
         - the address is not already in ``balances`` (case-insensitive match), and
         - the on-chain balance is strictly positive.
@@ -3448,7 +3477,7 @@ class LiquidityTraderBaseBehaviour(
                     f"Error reading native balance on {chain}: {str(e)}"
                 )
 
-        for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+        for whitelisted_addr, symbol in HELD_ASSETS.get(chain, {}).items():
             key = whitelisted_addr.lower()
             if key in already_have:
                 continue

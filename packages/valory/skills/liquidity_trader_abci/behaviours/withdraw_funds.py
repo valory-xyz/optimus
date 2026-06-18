@@ -25,9 +25,9 @@ from typing import Any, Dict, Generator, List, Optional, Set
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
+    HELD_ASSETS,
     LiquidityTraderBaseBehaviour,
     PositionStatus,
-    WHITELISTED_ASSETS,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import WithdrawFundsPayload
 from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
@@ -419,7 +419,9 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             tokens_to_swap[token_address] = asset.get("asset") or ""
 
         if safe_address:
-            for whitelisted_addr, symbol in WHITELISTED_ASSETS.get(chain, {}).items():
+            # Sweep the held/detection set (HELD_ASSETS), not just the investable
+            # whitelist, so already-held but de-whitelisted tokens still convert.
+            for whitelisted_addr, symbol in HELD_ASSETS.get(chain, {}).items():
                 key = whitelisted_addr.lower()
                 if key in (usdc_lc, olas_lc) or key in seen:
                     continue

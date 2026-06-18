@@ -1580,6 +1580,11 @@ class LiquidityTraderBaseBehaviour(
             checker_address,
             str(MechActivityContract.contract_id),
             "version",
+            # The activity checker lives on the staking chain (Optimism), not the
+            # default ledger (ethereum mainnet). Without this the read hits
+            # mainnet, finds no contract, and the regime is mis-cached as OLD —
+            # the dispatcher consumes ``chain_id`` to select the RPC.
+            chain_id=self.params.staking_chain,
         )
         if response_msg.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
             self.context.logger.warning(
@@ -1650,17 +1655,31 @@ class LiquidityTraderBaseBehaviour(
             return None
         return 1 if is_new else 0
 
-    def _is_staking_kpi_met(self) -> Generator[None, None, Optional[bool]]:
-        """Return whether the staking KPI has been met (only for staked services)."""
+    def _is_staking_kpi_met(
+        self,
+    ) -> Generator[None, None, Tuple[Optional[bool], Optional[int]]]:
+        """Return ``(kpi_met, nonces_since_last_cp)`` for a staked service.
+
+        Both elements are read from a SINGLE on-chain snapshot so the KPI verdict
+        and the activity-counter delta (reused for the /healthcheck signal) can
+        never disagree. ``kpi_met`` is ``None`` — and the delta with it — when the
+        service is not STAKED, when ``min_num_of_safe_tx_required`` is unknown, or
+        when the nonce read fails transiently; the caller must treat any ``None``
+        verdict as "undetermined", not "not met".
+
+        :yield: contract API messages while reading the activity counter.
+        :return: ``(kpi_met, nonces_since_last_cp)``; ``(None, None)`` when the
+            verdict cannot be computed.
+        """
         if self.synchronized_data.service_staking_state != StakingState.STAKED.value:
-            return None
+            return None, None
 
         min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
         if min_num_of_safe_tx_required is None:
             self.context.logger.error(
                 "Error calculating min number of safe tx required."
             )
-            return None
+            return None, None
 
         multisig_nonces_since_last_cp = (
             yield from self._get_multisig_nonces_since_last_cp(
@@ -1671,12 +1690,10 @@ class LiquidityTraderBaseBehaviour(
             )
         )
         if multisig_nonces_since_last_cp is None:
-            return None
+            return None, None
 
-        if multisig_nonces_since_last_cp >= min_num_of_safe_tx_required:
-            return True
-
-        return False
+        kpi_met = multisig_nonces_since_last_cp >= min_num_of_safe_tx_required
+        return kpi_met, multisig_nonces_since_last_cp
 
     def _get_multisig_nonces(
         self, chain: str, multisig: str

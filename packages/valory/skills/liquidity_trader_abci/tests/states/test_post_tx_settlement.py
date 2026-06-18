@@ -46,6 +46,10 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
 from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
     WithdrawFundsRound,
 )
+from packages.valory.skills.mech_interact_abci.states.purchase_subscription import (
+    MechPurchaseSubscriptionRound,
+)
+from packages.valory.skills.mech_interact_abci.states.request import MechRequestRound
 
 
 def test_import() -> None:
@@ -82,6 +86,24 @@ class TestPostTxSettlementRound:
         assert result is not None
         _, event = result
         assert event == Event.VANITY_TX_EXECUTED
+
+    def test_end_block_mech_request_tx_executed(self) -> None:
+        """New-regime activity tx (MechRequestRound) maps to MECH_REQUEST_TX_EXECUTED."""
+        round_obj = self._make_round_with_submitter(MechRequestRound.auto_round_id())
+        result = round_obj.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.MECH_REQUEST_TX_EXECUTED
+
+    def test_end_block_mech_subscription_tx_executed(self) -> None:
+        """Subscription purchase round maps back to the staking loop, not UNRECOGNIZED."""
+        round_obj = self._make_round_with_submitter(
+            MechPurchaseSubscriptionRound.auto_round_id()
+        )
+        result = round_obj.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.MECH_REQUEST_TX_EXECUTED
 
     def test_end_block_action_executed(self) -> None:
         """Test end_block returns ACTION_EXECUTED for DecisionMakingRound."""

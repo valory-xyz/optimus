@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeibt3kwd66adgm36omlgk7copa22y76bm22ocziqwzedhd52phblta
+agent: valory/optimus:0.1.0:bafybeih6qjze7wxb24lbane5tnewc3dd7jn32bv4zdyzburottxjfybn4m
 number_of_agents: 1
 deployment:
   agent:
@@ -55,7 +55,7 @@ models:
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
-      multisend_address: ${MECH_MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
+      multisend_address: ${MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
       termination_sleep: ${TERMINATION_SLEEP:int:900}
       reset_pause_duration: ${RESET_PAUSE_DURATION:int:30}
       on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
@@ -94,7 +94,7 @@ models:
       mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x650C77F49cFa69e2AC1990A6B4585C322B012D0d","priority_mech_service_id":194,"response_timeout":300,"use_dynamic_mech_selection":false}}
       agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
-      valid_mechs: ${VALID_MECHS:list:["0x650c77f49cfa69e2ac1990a6b4585c322b012d0d"]}
+      valid_mechs: ${VALID_MECHS:list:["0x650C77F49cFa69e2AC1990A6B4585C322B012D0d"]}
       penalize_mech_time_window: ${MECH_PENALIZE_TIME_WINDOW:int:1800}
       deliveries_lookback_days: ${MECH_DELIVERIES_LOOKBACK_DAYS:int:30}
       store_path: ${STORE_PATH:str:/data/}

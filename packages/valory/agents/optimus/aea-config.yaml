@@ -36,7 +36,7 @@ contracts:
 - valory/velodrome_voter:0.1.0:bafybeieawpdivhzrbjk6ivsrncxah5y5gbb32qxmrcb2dxmw55ev7gowda
 - valory/velodrome_cl_gauge:0.1.0:bafybeicqjs5styv3qubfd7askc6nnd2hrwqlawd6b7rvzyvp2ycbenensm
 - valory/balancer_queries:0.1.0:bafybeieopocjnprwfazmacrgr4n6up2p2warpq7seiwhocb5f2uy4mrmrq
-- valory/mech_activity:0.1.0:bafybeidxvrhal6baxkvynsfyyuaeiamjfdgznsvqmcgnmdjuviat76qjea
+- valory/mech_activity:0.1.0:bafybeigycloyodu27j763cft673aookhzqxnn2sf2cdccoh4hvb5zxcq3i
 - valory/mech_marketplace_legacy:0.1.0:bafybeifkolgdeaoiveuppykvxkvja7c7pphn6jyivnk6x3bjl72rqpsogm
 - valory/mech:0.1.0:bafybeid2v3rotkylgln5w2udm3nnmsrnw4g4nlkbwhqfwbte4kwlxup5l4
 - valory/mech_mm:0.1.0:bafybeiaez7w5ssgcmt5fqbue4oywhxmcojrnxqimzksuojsksxwaqvwo5u
@@ -68,9 +68,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
-- valory/liquidity_trader_abci:0.1.0:bafybeigrcdspt2rv3wdq2ktbnbneronafg43i2r3vdcuq6viq26yqs34ty
+- valory/liquidity_trader_abci:0.1.0:bafybeigu6qbtkz2qlldiyf2hadm74mnprx77kbthpfypunjo3ttkda53f4
 - valory/mech_interact_abci:0.1.0:bafybeidnmszufszq3ro4ebgrqzmhqgctrsc6sykeanfsbvotghvt2cgfsy
-- valory/optimus_abci:0.1.0:bafybeidplgcv2bhlprk6i55kpxehgxni77snqxomnelwy57wtvxquwmu3u
+- valory/optimus_abci:0.1.0:bafybeiae4fsterw7q7nqocve6brpqxkbdsulal7i4rtd6jbduzxdiwzoai
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
@@ -251,7 +251,7 @@ models:
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
-      multisend_address: ${MECH_MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
+      multisend_address: ${MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
       termination_sleep: ${int:900}
       init_fallback_gas: ${int:0}
       keeper_allowed_retries: 3
@@ -332,7 +332,7 @@ models:
       mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x650C77F49cFa69e2AC1990A6B4585C322B012D0d","priority_mech_service_id":194,"response_timeout":300,"use_dynamic_mech_selection":false}}
       agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
-      valid_mechs: ${VALID_MECHS:list:["0x650c77f49cfa69e2ac1990a6b4585c322b012d0d"]}
+      valid_mechs: ${VALID_MECHS:list:["0x650C77F49cFa69e2AC1990A6B4585C322B012D0d"]}
       penalize_mech_time_window: ${MECH_PENALIZE_TIME_WINDOW:int:1800}
       deliveries_lookback_days: ${MECH_DELIVERIES_LOOKBACK_DAYS:int:30}
       store_path: ${STORE_PATH:str:/data}

@@ -8,9 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeib2lkiwxprt6amwngykykattz5xzdk5uoujqiirssthirtn37dv2e
   build/MechActivity.json: bafybeih2rrbduwvmxd3c3v52uekgqnm2akl4uvst7sf3grjrlokf72jw6m
-  contract.py: bafybeifjtsapockgxglkxpfikd36zo3ogcvzzsztv3jybyqwbhvwpyblgu
+  contract.py: bafybeid4doxv2rhiskwsqhwu6lijc6h3idfhuwsoje67gscpnzj6ftbqlm
   tests/__init__.py: bafybeigwx4nxux6pd4bi5yhwdpjo3gy3rbljmgj55lih4dhwmwzoqk4lh4
-  tests/test_contract.py: bafybeigelzhqlaca7j4tb7jdy4zhpkza2swne7wis3syfqrpc32yv4mt7u
+  tests/test_contract.py: bafybeibnrrejenvowyxqfrujjxxngate7s32eubhsqosmt6yxl4nkig2wm
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: MechActivityContract

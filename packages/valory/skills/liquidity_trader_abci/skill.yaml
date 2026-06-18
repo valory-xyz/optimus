@@ -8,9 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/base.py: bafybeidztcqgcuo527sbapiuiw36vbe5s63krpc6q5onakn3d7yb4jmkly
+  behaviours/base.py: bafybeigd63zztymqw4uryjdev6r3za5d4cu2bxfknfwtnh5kgmjddfjyfq
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
-  behaviours/check_staking_kpi_met.py: bafybeifvr2eittw2pfx6flukwtq2ve3nu7gthf2ah34kroevdzvqmrjkcy
+  behaviours/check_staking_kpi_met.py: bafybeie2t3xld2b547anuzymu4g56ive3mteqkegabpkeskwnbuicgtyse
   behaviours/decision_making.py: bafybeiecevpplgg23gptaexr6kp4opddeydms5lzziuehtngdxxc3mayw4
   behaviours/evaluate_strategy.py: bafybeigvd26lxpdq27nfj2jvyexmvfpch7wqlo772rahvil6nvek26axp4
   behaviours/fetch_strategies.py: bafybeie6hdsyh2z3x7borxqwzeddyoigbavl4piyohjuxuotiyz6jwfrfy
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeig57bdh2mlaedqiiudsiuwhtn6cpzzn6elbn5sanphkv3czn5kmfe
+  models.py: bafybeihdkdetmh45xkfbug4brq7mwaz56y7agje6l5p4jq5slervlacjqu
   payloads.py: bafybeidwg6bku6corwcamdnja2pz562qfzq54rvusbwki26xa2nuommbwe
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -41,14 +41,14 @@ fingerprint:
   states/fetch_strategies.py: bafybeiekd4tfz2bhwpgkdbh64bhx7qgmpfh3s7dsh6ywdspjqbrf5lepo4
   states/final_rounds.py: bafybeid3xx6ca43osktdmi256pwzjxoiygvgbiefjocp4lhcaiqswjymne
   states/get_positions.py: bafybeifazqmgjmsb7nczhxnlw2zu3njh2wupndzjngx5hxmzhpb4uvwpxm
-  states/post_tx_settlement.py: bafybeih7xgjd7452fhyg4s2xhjehl5hb74s32eybak2zgn6houu3m4zdee
+  states/post_tx_settlement.py: bafybeibjndwwsj6c2batnrgf4dpj3ymuwat5bb2yjoawffr5as6u4e35ue
   states/withdraw_funds.py: bafybeicqj3a5eqiceakfg7ukdhw4mhjk2h3aa6xygcl65m2qqaj3kfabdy
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
-  tests/behaviours/test_base.py: bafybeie5yonca4huz2ccdvzlnb5mh36kfaogajbvocttsqvbwez66taosy
+  tests/behaviours/test_base.py: bafybeif32gqzt37cgvmjfklyu3srd7sdlzsbimpeokrihwyppddxcgrsmy
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
-  tests/behaviours/test_check_staking_kpi_met.py: bafybeicjobrd76p7p6oqki6griyd5lympknrzj4bgzdwahfnxx4wt547hy
+  tests/behaviours/test_check_staking_kpi_met.py: bafybeiaqg5prkuqvvcn4xhukmnf5hjgel5qeuatous4rkgbw7d22pguydu
   tests/behaviours/test_decision_making.py: bafybeigs63ccyv6nivol2p4nqxvhfn6obkukib2kgaa5hzrhtje564ziuu
   tests/behaviours/test_evaluate_strategy.py: bafybeies3glm2jbmt7v2ejwu2fgter2elqjq5k7e6nqclrkdplinzwsj4i
   tests/behaviours/test_fetch_strategies.py: bafybeiedaqglddur5ghqjgmtzc5p6gvcazp4a2oldzpkygeuivkyjpggum
@@ -71,7 +71,7 @@ fingerprint:
   tests/states/test_fetch_strategies.py: bafybeieciu5qoegm6bfaizozk2fekjv5ng7jzyeyjqq25ehgrewf2xjpza
   tests/states/test_final_rounds.py: bafybeibsmzvrwa3ulgyu63tlbvxv3iswl5jxnw652ycxkbg4u2azb5ikx4
   tests/states/test_get_positions.py: bafybeih26ivewifofz4cspbalc4m5y7qvbzkhq7hw7v4nsan3lq7xzww5q
-  tests/states/test_post_tx_settlement.py: bafybeifhigg6wf5s3d2gaqhbzsnye7tn4mhf25ytxh4c6qodk257xkd2zm
+  tests/states/test_post_tx_settlement.py: bafybeidk4ckry6y3lenx2uunviwq52zzzdqwdzbnonntne7h6kn3m3rh3q
   tests/states/test_withdraw_funds.py: bafybeicnuwhfgrzdyhvoutngnj2dgnd3vfs4kmmpf63plyus6uboesj754
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
@@ -99,7 +99,7 @@ contracts:
 - valory/balancer_vault:0.1.0:bafybeibsuv7k2c5cft3bvukr54qmsz6v4tme5wfqgp7wdntpo45nilnmiu
 - valory/balancer_queries:0.1.0:bafybeieopocjnprwfazmacrgr4n6up2p2warpq7seiwhocb5f2uy4mrmrq
 - valory/erc20:0.1.0:bafybeig4tin5v5ahiiz4fysocl7gjhpjtgzko3w6cr2iz3q5a4bxutwewu
-- valory/mech_activity:0.1.0:bafybeidxvrhal6baxkvynsfyyuaeiamjfdgznsvqmcgnmdjuviat76qjea
+- valory/mech_activity:0.1.0:bafybeigycloyodu27j763cft673aookhzqxnn2sf2cdccoh4hvb5zxcq3i
 - valory/multisend:0.1.0:bafybeidl74hh6g34kgxay3fzapz26dhfmc6s2kjnt6edmaxgrklhge3omy
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeifhbvpt7kpik23kzmwd5svrlbskjwd2tkxio44nqds6uzgekr2mra
 - valory/uniswap_v3_pool:0.1.0:bafybeihetalg6kgk4f2rbqn4eptp6y7esnckabrhpygs527evukhy2of7u

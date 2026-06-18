@@ -473,8 +473,10 @@ class Params(BaseParams):
         self.activity_target: int = self._ensure("activity_target", kwargs, int)
         # The fixed tool string and static prompt the producer puts on the single
         # mech request fired to tick ``mapRequestCounts`` on the new regime. The
-        # response is discarded (the Response leg is not composed); these only
-        # need to be a valid tool/prompt the configured priority mech serves.
+        # Response leg is composed (poll-then-discard); the response content is
+        # discarded after polling — only the on-chain liveness tick matters — so
+        # these only need to be a valid tool/prompt the configured priority mech
+        # serves.
         self.mech_tool: str = self._ensure("mech_tool", kwargs, str)
         self.mech_request_prompt: str = self._ensure("mech_request_prompt", kwargs, str)
         self.store_path: Path = self.get_store_path(kwargs)

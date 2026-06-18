@@ -37,7 +37,13 @@ _NO_SUCH_FUNCTION = (BadFunctionCallOutput, ContractLogicError)
 
 
 class MechActivityContract(Contract):
-    """The Service Staking contract."""
+    """Wrapper around the Mech activity-checker contract.
+
+    Reads the ``VERSION``/``activityChecker``/``livenessRatio`` getters used to
+    detect the staking regime. Genuinely-absent getters are swallowed
+    (``data=None``); transient RPC/connection failures propagate so the caller
+    retries rather than mis-classifying the checker.
+    """
 
     contract_id = PublicId.from_str("valory/mech_activity:0.1.0")
 
@@ -47,10 +53,21 @@ class MechActivityContract(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
     ) -> JSONLike:
-        """Retrieve the liveness ratio."""
+        """Retrieve the liveness ratio.
+
+        ``data=None`` means the ``livenessRatio`` getter is genuinely absent.
+        Only ``_NO_SUCH_FUNCTION`` is swallowed; transient RPC/connection
+        failures are re-raised so the caller can retry.
+
+        :param ledger_api: the ledger API object.
+        :param contract_address: the activity checker contract address.
+        :return: a ``{"data": <liveness ratio or None>}`` mapping.
+        """
         contract = cls.get_instance(ledger_api, contract_address)
-        liveness_ratio = contract.functions.livenessRatio().call()
-        return dict(data=liveness_ratio)
+        try:
+            return dict(data=contract.functions.livenessRatio().call())
+        except _NO_SUCH_FUNCTION:
+            return dict(data=None)
 
     @classmethod
     def get_activity_checker(

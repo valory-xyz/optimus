@@ -1974,41 +1974,41 @@ class TestIsStakingKpiMet:
     """Test _is_staking_kpi_met generator."""
 
     def test_not_staked(self) -> None:
-        """Test not staked."""
+        """Not staked → (None, None)."""
         b = _make_behaviour()
         b.synchronized_data.service_staking_state = StakingState.UNSTAKED.value  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
-        assert result is None
+        assert result == (None, None)
 
     def test_no_min_tx(self) -> None:
-        """Test no min tx."""
+        """Missing min-tx requirement → (None, None)."""
         b = _make_behaviour()
         b.synchronized_data.min_num_of_safe_tx_required = None  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
-        assert result is None
+        assert result == (None, None)
 
     def test_kpi_met(self) -> None:
-        """Test kpi met."""
+        """KPI met → (True, delta) from a single read."""
         b = _make_behaviour()
         b._get_multisig_nonces_since_last_cp = _make_gen(10)  # type: ignore[assignment,method-assign]
         b.synchronized_data.min_num_of_safe_tx_required = 5  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
-        assert result is True
+        assert result == (True, 10)
 
     def test_kpi_not_met(self) -> None:
-        """Test kpi not met."""
+        """KPI not met → (False, delta) from a single read."""
         b = _make_behaviour()
         b._get_multisig_nonces_since_last_cp = _make_gen(2)  # type: ignore[assignment,method-assign]
         b.synchronized_data.min_num_of_safe_tx_required = 5  # type: ignore[misc]
         result = _exhaust(b._is_staking_kpi_met())
-        assert result is False
+        assert result == (False, 2)
 
     def test_nonces_none(self) -> None:
-        """Test nonces none."""
+        """Transient nonce-read failure → (None, None)."""
         b = _make_behaviour()
         b._get_multisig_nonces_since_last_cp = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._is_staking_kpi_met())
-        assert result is None
+        assert result == (None, None)
 
 
 class TestMultisigNonces:
@@ -2041,6 +2041,23 @@ class TestMultisigNonces:
         """Test get nonces empty."""
         b = _make_behaviour()
         b.contract_interact = _make_gen([])  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._get_multisig_nonces("optimism", "0xMultisig"))
+        assert result is None
+
+    def test_get_nonces_index_out_of_range_fails_safe(self) -> None:
+        """New regime expects index 1 but the array is too short -> None (fail safe)."""
+        b = _make_behaviour()
+        b.contract_interact = _make_gen([42])  # type: ignore[assignment,method-assign]
+        b._is_new_staking_regime = _make_gen(True)  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._get_multisig_nonces("optimism", "0xMultisig"))
+        assert result is None
+        b.context.logger.error.assert_called()
+
+    def test_get_nonces_regime_undetermined(self) -> None:
+        """A transient regime read (None index) short-circuits to None."""
+        b = _make_behaviour()
+        b.contract_interact = _make_gen([42, 7])  # type: ignore[assignment,method-assign]
+        b._is_new_staking_regime = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_multisig_nonces("optimism", "0xMultisig"))
         assert result is None
 
@@ -2080,6 +2097,29 @@ class TestMultisigNonces:
         b = _make_behaviour()
         b._get_multisig_nonces = _make_gen(50)  # type: ignore[assignment,method-assign]
         b._get_service_info = _make_gen(None)  # type: ignore[assignment,method-assign]
+        result = _exhaust(
+            b._get_multisig_nonces_since_last_cp("optimism", "0xMultisig")
+        )
+        assert result is None
+
+    def test_nonces_since_last_cp_snapshot_index_out_of_range(self) -> None:
+        """New regime needs snapshot index 1 but service_info[2] is too short -> None."""
+        b = _make_behaviour()
+        b._get_multisig_nonces = _make_gen(50)  # type: ignore[assignment,method-assign]
+        b._get_service_info = _make_gen((0, 0, (40,)))  # type: ignore[assignment,method-assign]
+        b._is_new_staking_regime = _make_gen(True)  # type: ignore[assignment,method-assign]
+        result = _exhaust(
+            b._get_multisig_nonces_since_last_cp("optimism", "0xMultisig")
+        )
+        assert result is None
+        b.context.logger.error.assert_called()
+
+    def test_nonces_since_last_cp_regime_undetermined(self) -> None:
+        """A transient regime read (None index) for the snapshot returns None."""
+        b = _make_behaviour()
+        b._get_multisig_nonces = _make_gen(50)  # type: ignore[assignment,method-assign]
+        b._get_service_info = _make_gen((0, 0, (40, 35)))  # type: ignore[assignment,method-assign]
+        b._is_new_staking_regime = _make_gen(None)  # type: ignore[assignment,method-assign]
         result = _exhaust(
             b._get_multisig_nonces_since_last_cp("optimism", "0xMultisig")
         )
@@ -5758,6 +5798,28 @@ class TestStakingRegimeDetection:
         version, ok = _exhaust(b._get_checker_version("0xchecker"))
         assert version == "0.2.0"
         assert ok is True
+
+    def test_get_checker_version_dispatches_to_staking_chain(self) -> None:
+        """The VERSION read targets the staking chain, not the default ledger.
+
+        Regression for the critical bug where the read defaulted to ethereum
+        mainnet (no contract there) and the regime was mis-cached as OLD. We
+        assert on the dispatched ``chain_id`` kwarg, not on a stubbed return.
+        """
+        from packages.valory.protocols.contract_api import ContractApiMessage
+
+        b = _make_behaviour()
+        b.params.staking_chain = "optimism"
+        captured: dict = {}
+
+        def _capture(*args, **kwargs):
+            captured.update(kwargs)
+            yield
+            return self._resp(ContractApiMessage.Performative.RAW_TRANSACTION, "0.2.0")
+
+        b.get_contract_api_response = _capture  # type: ignore[assignment,method-assign]
+        _exhaust(b._get_checker_version("0xchecker"))
+        assert captured.get("chain_id") == "optimism"
 
     def test_get_checker_version_transient_failure(self) -> None:
         """A non-RAW_TRANSACTION performative yields ``(None, False)`` (retry)."""

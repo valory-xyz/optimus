@@ -54,6 +54,59 @@ class TestMechActivityContract:
         assert result == {"data": 42}
         mock_contract_instance.functions.livenessRatio.assert_called_once()
 
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            BadFunctionCallOutput("empty data"),
+            ContractLogicError("execution reverted"),
+        ],
+    )
+    def test_liveness_ratio_absent_returns_none(self, exc: Exception) -> None:
+        """A genuine missing-function failure degrades to ``data=None``."""
+        mock_ledger_api = MagicMock()
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.livenessRatio.return_value.call.side_effect = (
+            exc
+        )
+
+        with patch.object(
+            MechActivityContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = MechActivityContract.liveness_ratio(
+                ledger_api=mock_ledger_api,
+                contract_address="0x1234567890abcdef1234567890abcdef12345678",
+            )
+
+        assert result == {"data": None}
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            ConnectionError("RPC unavailable"),
+            ValueError("Skipping the filtering operation as the RPC is misbehaving."),
+        ],
+    )
+    def test_liveness_ratio_transient_error_propagates(self, exc: Exception) -> None:
+        """A transient RPC/connection error must NOT be swallowed as ``None``."""
+        mock_ledger_api = MagicMock()
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.livenessRatio.return_value.call.side_effect = (
+            exc
+        )
+
+        with patch.object(
+            MechActivityContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            with pytest.raises(type(exc)):
+                MechActivityContract.liveness_ratio(
+                    ledger_api=mock_ledger_api,
+                    contract_address="0x1234567890abcdef1234567890abcdef12345678",
+                )
+
     def test_get_activity_checker(self) -> None:
         """get_activity_checker returns the activity checker address on the staking contract."""
         checker = "0x3514EeA47C03dF8d9FdD68A469908755d2870c48"

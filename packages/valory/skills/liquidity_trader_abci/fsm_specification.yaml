@@ -30,6 +30,7 @@ final_states:
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
 - FinishedWithMechRequestRound
+- FinishedWithMechResponsePollRound
 label: LiquidityTraderAbciApp
 start_states:
 - CallCheckpointRound
@@ -52,6 +53,7 @@ states:
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
 - FinishedWithMechRequestRound
+- FinishedWithMechResponsePollRound
 - GetPositionsRound
 - PostTxSettlementRound
 - WithdrawFundsRound
@@ -101,7 +103,7 @@ transition_func:
     (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
-    (PostTxSettlementRound, MECH_REQUEST_TX_EXECUTED): CheckStakingKPIMetRound
+    (PostTxSettlementRound, MECH_REQUEST_TX_EXECUTED): FinishedWithMechResponsePollRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound

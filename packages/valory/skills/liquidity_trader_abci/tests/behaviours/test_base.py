@@ -5742,8 +5742,6 @@ class TestStakingRegimeDetection:
     @staticmethod
     def _resp(performative, data=None):
         """Build a mocked contract-api response message."""
-        from packages.valory.protocols.contract_api import ContractApiMessage
-
         resp = MagicMock()
         resp.performative = performative
         resp.raw_transaction.body = {"data": data}

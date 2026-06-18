@@ -1912,11 +1912,11 @@ class TestWhitelistInvariants:
         assert {a.lower() for a in WHITELISTED_ASSETS["base"]} == self.BASE_INVESTABLE
 
     def test_ousdt_is_not_investable_on_optimism(self) -> None:
-        """oUSDT is excluded from the investable whitelist (no new investment)."""
+        """Legacy oUSDT is excluded from the investable whitelist (no new investment)."""
         assert self.OUSDT not in {a.lower() for a in WHITELISTED_ASSETS["optimism"]}
 
     def test_ousdt_remains_in_optimism_held_set(self) -> None:
-        """oUSDT stays in the held/sweep set so existing holdings convert."""
+        """Legacy oUSDT stays in the held/sweep set so existing holdings convert."""
         assert self.OUSDT in {a.lower() for a in HELD_ASSETS["optimism"]}
         assert self.OUSDT in LEGACY_HELD_ASSETS["optimism"]
 

@@ -89,6 +89,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - done: 2.
             - staking kpi met: 2.
             - settle: 12.
+            - mech request needed: 13.
             - round timeout: 1.
             - no majority: 1.
             - staking kpi not met: 2.
@@ -120,10 +121,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - action executed: 4.
             - checkpoint tx executed: 0.
             - vanity tx executed: 1.
+            - mech request tx executed: 14.
             - transfer completed: 6.
             - withdrawal completed: 6.
             - round timeout: 5.
-            - unrecognized: 13.
+            - unrecognized: 15.
             - no majority: 5.
         6. FetchStrategiesRound
             - done: 0.
@@ -141,9 +143,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         10. FinishedDecisionMakingRound
         11. FinishedCallCheckpointRound
         12. FinishedCheckStakingKPIMetRound
-        13. FailedMultiplexerRound
+        13. FinishedWithMechRequestRound
+        14. FinishedWithMechResponsePollRound
+        15. FailedMultiplexerRound
 
-    Final states: {FailedMultiplexerRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedTxPreparationRound}
+    Final states: {FailedMultiplexerRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedTxPreparationRound, FinishedWithMechRequestRound, FinishedWithMechResponsePollRound}
 
     Timeouts:
         round timeout: 30.0

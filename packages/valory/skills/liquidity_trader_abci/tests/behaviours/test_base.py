@@ -1630,7 +1630,7 @@ class TestGetSafeBalancesFromSafeApi:
         """End-to-end backstop integration when SafeApi returns partial data.
 
         SafeApi returns only ETH; the real backstop adds the whitelisted
-        ERC20s (including oUSDT) on top, without duplicating ETH.
+        ERC20s (including sDAI) on top, without duplicating ETH.
 
         This guards the ordering and dedup contract between
         ``_get_safe_balances_from_safe_api`` and the live
@@ -1648,31 +1648,31 @@ class TestGetSafeBalancesFromSafeApi:
         )
         # Backstop runs for real. Stub RPC reads so on-chain says:
         # native ETH 999 (won't be added — ETH already came from SafeApi)
-        # oUSDT 5_000_000 (will be added by backstop)
+        # sDAI 5_000_000 (will be added by backstop)
         # everything else: 0
-        OUSDT = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+        SDAI = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
         b._get_native_balance = _make_gen(999)  # type: ignore[assignment,method-assign]
 
         def fake_token_balance(chain: Any, account: Any, address: Any) -> Any:
             yield
-            return 5_000_000 if (address or "").lower() == OUSDT else 0
+            return 5_000_000 if (address or "").lower() == SDAI else 0
 
         b._get_token_balance = fake_token_balance  # type: ignore[assignment,method-assign]
 
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         symbols = [r["asset_symbol"] for r in result]
         eth_entries = [r for r in result if r["asset_symbol"] == "ETH"]
-        ousdt_entries = [r for r in result if r["asset_symbol"] == "oUSDT"]
+        sdai_entries = [r for r in result if r["asset_symbol"] == "sDAI"]
         # ETH from SafeApi is preserved; backstop did not duplicate it.
         assert len(eth_entries) == 1
         assert (
             eth_entries[0]["balance"] == 1_000_000_000_000_000
         )  # SafeApi value, not 999
-        # oUSDT picked up by the backstop.
-        assert len(ousdt_entries) == 1
-        assert ousdt_entries[0]["balance"] == 5_000_000
+        # sDAI picked up by the backstop.
+        assert len(sdai_entries) == 1
+        assert sdai_entries[0]["balance"] == 5_000_000
         # No other whitelisted token was added (all returned 0 on-chain).
-        assert sorted(symbols) == ["ETH", "oUSDT"]
+        assert sorted(symbols) == ["ETH", "sDAI"]
 
 
 class TestSupplementWithOnchainWhitelistedBalances:

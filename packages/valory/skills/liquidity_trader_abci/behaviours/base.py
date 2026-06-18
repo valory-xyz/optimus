@@ -302,32 +302,19 @@ WHITELISTED_ASSETS = {
     "optimism": {
         # Optimism tokens - stablecoins
         "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",
-        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
-        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
-        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
+        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
     },
     "base": {
         # Base tokens - stablecoins
         "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
-        "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
         "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
         "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
-        # Tier-1 stablecoin additions from the Base/Aerodrome LpSugar whitelist
-        # sweep: each is $1-pegged, has a CoinGecko coin id for pricing, and pairs
-        # with a whitelisted anchor (USDC; eUSD also pairs frxUSD). A pool is only
-        # investable when every token in it is whitelisted, so each unlocks real
-        # Aerodrome depth. Ordered by safety x liquidity.
-        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
-        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
         "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
-        "0x4621b7a9c75199271f773ebd9a499dbd165c3191": "DOLA",
-        "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186": "MUSD",
-        "0x35e5db674d8e93a03d814fa0ada70731efe8a4b9": "USR",
-        "0x04d5ddf5f3a8939889f11e97f8c4bb48317f1938": "USDz",
-        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
     },
 }
 
@@ -875,9 +862,8 @@ class LiquidityTraderBaseBehaviour(
         # On-chain backstop for whitelisted ERC20s and native ETH. Catches the
         # case where SafeApi is unavailable (e.g. monthly quota exceeded) or
         # returns an incomplete trusted-token list. Covers every entry in
-        # WHITELISTED_ASSETS[chain] including oUSDT, which used to be fetched
-        # separately. Reward tokens (OLAS, VELO) are disjoint from the
-        # whitelist and handled by _fetch_reward_balances below.
+        # WHITELISTED_ASSETS[chain]. Reward tokens (OLAS, VELO) are disjoint
+        # from the whitelist and handled by _fetch_reward_balances below.
         yield from self._supplement_with_onchain_whitelisted_balances(
             chain, safe_address, balances
         )

@@ -685,17 +685,17 @@ class TestPrepareSwapToUsdcActionsStandard:
 
     def test_safe_held_backstop_picks_up_idle_token(self) -> None:
         """Empty portfolio_breakdown but safe holds a whitelisted token: queue the swap."""
-        # Real WHITELISTED_ASSETS["optimism"] entry: oUSDT.
-        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
-        obj = self._make_obj(balances={ousdt: 5_000_000})
+        # Real WHITELISTED_ASSETS["optimism"] entry: sDAI.
+        sdai = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
+        obj = self._make_obj(balances={sdai: 5_000_000})
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
         portfolio = {"portfolio_breakdown": []}
         result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
         assert len(result) == 1
-        # Verify the swap was built for oUSDT, not for some unrelated token.
+        # Verify the swap was built for sDAI, not for some unrelated token.
         kwargs = obj._build_swap_to_usdc_action.call_args.kwargs
-        assert kwargs["from_token_address"].lower() == ousdt
+        assert kwargs["from_token_address"].lower() == sdai
 
     def test_safe_held_backstop_skips_zero_balance_tokens(self) -> None:
         """Whitelisted tokens with zero balance must not be queued."""
@@ -710,13 +710,13 @@ class TestPrepareSwapToUsdcActionsStandard:
     def test_safe_held_backstop_dedupes_against_portfolio(self) -> None:
         """A token already queued from portfolio_breakdown is not re-queued from the # noqa: D205,D209
         on-chain backstop."""
-        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
-        obj = self._make_obj(balances={ousdt: 5_000_000})
+        sdai = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
+        obj = self._make_obj(balances={sdai: 5_000_000})
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
         portfolio = {
             "portfolio_breakdown": [
-                {"asset": "oUSDT", "address": ousdt, "value_usd": 50},
+                {"asset": "sDAI", "address": sdai, "value_usd": 50},
             ]
         }
         result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))
@@ -752,8 +752,8 @@ class TestPrepareSwapToUsdcActionsStandard:
 
     def test_safe_held_backstop_skips_dust_below_one_token_unit(self) -> None:
         """Balance below one whole token unit is skipped as dust."""
-        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
-        obj = self._make_obj(balances={ousdt: 999_999}, decimals=6)
+        sdai = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
+        obj = self._make_obj(balances={sdai: 999_999}, decimals=6)
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
         portfolio = {"portfolio_breakdown": []}
@@ -763,8 +763,8 @@ class TestPrepareSwapToUsdcActionsStandard:
 
     def test_safe_held_backstop_skips_when_decimals_unavailable(self) -> None:
         """Token is skipped when _get_token_decimals returns None."""
-        ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
-        obj = self._make_obj(balances={ousdt: 5_000_000})
+        sdai = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
+        obj = self._make_obj(balances={sdai: 5_000_000})
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
         def fake_decimals_none(chain, asset_address):
@@ -780,14 +780,14 @@ class TestPrepareSwapToUsdcActionsStandard:
 
     def test_safe_held_backstop_dedupes_mixed_case_address(self) -> None:
         """Mixed-case portfolio address dedupes against lowercase whitelist."""
-        ousdt_lower = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
-        ousdt_upper = ousdt_lower.upper().replace("0X", "0x")
-        obj = self._make_obj(balances={ousdt_lower: 5_000_000}, decimals=6)
+        sdai_lower = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
+        sdai_upper = sdai_lower.upper().replace("0X", "0x")
+        obj = self._make_obj(balances={sdai_lower: 5_000_000}, decimals=6)
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
 
         portfolio = {
             "portfolio_breakdown": [
-                {"asset": "oUSDT", "address": ousdt_upper, "value_usd": 50},
+                {"asset": "sDAI", "address": sdai_upper, "value_usd": 50},
             ]
         }
         result = _drive(obj._prepare_swap_to_usdc_actions_standard(portfolio))

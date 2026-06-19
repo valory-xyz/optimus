@@ -39,6 +39,7 @@ from packages.valory.connections.kv_store.connection import (
     PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
 )
 from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
+from packages.valory.contracts.mech_activity.contract import MechActivityContract
 from packages.valory.contracts.staking_activity_checker.contract import (
     StakingActivityCheckerContract,
 )
@@ -79,6 +80,12 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 # A safety margin in case there is a delay between the moment the KPI condition is
 # satisfied, and the moment where the checkpoint is called.
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
+# Activity-checker ``VERSION()`` value that marks the decoupled-activity
+# (``RequesterActivityCheckerV2``) staking regime. On this regime the on-chain
+# activity counter is mech-marketplace requests (``mapRequestCounts``), not Safe
+# nonces. Exact match — a future version is deliberately treated as old until the
+# agent learns to recognise it.
+NEW_STAKING_CHECKER_VERSION = "0.2.0"
 MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
 MAX_RETRIES_FOR_STATUS_CHECK = 5
@@ -1566,17 +1573,128 @@ class LiquidityTraderBaseBehaviour(
 
         return liveness_period
 
-    def _is_staking_kpi_met(self) -> Generator[None, None, Optional[bool]]:
-        """Return whether the staking KPI has been met (only for staked services)."""
-        if self.synchronized_data.service_staking_state != StakingState.STAKED.value:
+    def _get_checker_version(
+        self, checker_address: str
+    ) -> Generator[None, None, Tuple[Optional[str], bool]]:
+        """Read ``VERSION()`` off the activity checker.
+
+        Returns ``(version, read_ok)``. ``read_ok`` is ``False`` on a transient
+        RPC/connection failure — the caller must retry, not cache. When
+        ``read_ok`` is ``True``, ``version`` is the string (a new checker) or
+        ``None`` when the ``VERSION`` getter is genuinely absent (an old
+        checker). The contract layer swallows only "no such function" and
+        re-raises transient errors, which surface here as a non-RAW_TRANSACTION
+        performative; we must NOT treat those as "old".
+
+        :param checker_address: the activity-checker contract address.
+        :yield: contract API messages while awaiting the version read.
+        :return: a ``(version_or_none, read_ok)`` tuple.
+        """
+        response_msg = yield from self.get_contract_api_response(
+            ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            checker_address,
+            str(MechActivityContract.contract_id),
+            "version",
+            # The activity checker lives on the staking chain (Optimism), not the
+            # default ledger (ethereum mainnet). Without this the read hits
+            # mainnet, finds no contract, and the regime is mis-cached as OLD —
+            # the dispatcher consumes ``chain_id`` to select the RPC.
+            chain_id=self.params.staking_chain,
+        )
+        if response_msg.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
+            self.context.logger.warning(
+                f"Transient failure reading activity-checker VERSION at "
+                f"{checker_address}: {response_msg.performative}; will retry "
+                "next period rather than assuming the old staking regime"
+            )
+            return None, False
+        version = response_msg.raw_transaction.body.get("data")
+        return version, True
+
+    def _is_new_staking_regime(self) -> Generator[None, None, Optional[bool]]:
+        """Whether the service runs against the new (decoupled-activity) regime.
+
+        Detected by the activity-checker ``VERSION() == "0.2.0"``
+        (``RequesterActivityCheckerV2``), on which the on-chain activity counter
+        is mech-marketplace requests rather than Safe nonces. The result is
+        cached on the shared state once resolved (the contract a service runs
+        against does not change without a Pearl restart, which resets the
+        process). Returns ``None`` on a transient read failure WITHOUT caching,
+        so the caller retries next period instead of latching the old regime —
+        which would resume vanity txs on a new contract and never tick
+        ``mapRequestCounts``.
+
+        :yield: contract API messages while awaiting the version read.
+        :return: ``True``/``False`` once resolved, or ``None`` while a transient
+            read prevents a confident decision.
+        """
+        cached = self.context.state.staking_regime_is_new
+        if cached is not None:
+            return cached
+
+        checker = self.params.staking_activity_checker_contract_address
+        if not checker or checker == ZERO_ADDRESS:
+            # No activity checker configured ⇒ old-style staking contract.
+            self.context.state.staking_regime_is_new = False
+            return False
+
+        version, read_ok = yield from self._get_checker_version(checker)
+        if not read_ok:
             return None
+
+        is_new = version == NEW_STAKING_CHECKER_VERSION
+        self.context.state.staking_regime_is_new = is_new
+        self.context.logger.info(
+            f"Staking regime: {'NEW' if is_new else 'OLD'} "
+            f"(checker={checker}, VERSION={version})"
+        )
+        return is_new
+
+    def _staking_nonce_index(self) -> Generator[None, None, Optional[int]]:
+        """Regime-dependent index into the activity counter arrays.
+
+        Both ``getMultisigNonces(safe)`` and the checkpoint snapshot
+        ``getServiceInfo()[2]`` are ``[safe.nonce(), mapRequestCounts]`` on the
+        new (V2) regime. The KPI delta must read the SAME index at both sites
+        (see ``_get_multisig_nonces`` and ``_get_multisig_nonces_since_last_cp``)
+        or it would compute ``mapRequestCounts_now − safe_nonce_at_cp`` and drift
+        true/false at random. Old regime ⇒ index 0 (Safe nonce); new regime ⇒
+        index 1 (``mapRequestCounts``). Returns ``None`` on a transient
+        regime-read failure so the caller retries.
+
+        :yield: contract API messages while resolving the staking regime.
+        :return: the array index, or ``None`` while the regime is undetermined.
+        """
+        is_new = yield from self._is_new_staking_regime()
+        if is_new is None:
+            return None
+        return 1 if is_new else 0
+
+    def _is_staking_kpi_met(
+        self,
+    ) -> Generator[None, None, Tuple[Optional[bool], Optional[int]]]:
+        """Return ``(kpi_met, nonces_since_last_cp)`` for a staked service.
+
+        Both elements are read from a SINGLE on-chain snapshot so the KPI verdict
+        and the activity-counter delta (reused for the /healthcheck signal) can
+        never disagree. ``kpi_met`` is ``None`` — and the delta with it — when the
+        service is not STAKED, when ``min_num_of_safe_tx_required`` is unknown, or
+        when the nonce read fails transiently; the caller must treat any ``None``
+        verdict as "undetermined", not "not met".
+
+        :yield: contract API messages while reading the activity counter.
+        :return: ``(kpi_met, nonces_since_last_cp)``; ``(None, None)`` when the
+            verdict cannot be computed.
+        """
+        if self.synchronized_data.service_staking_state != StakingState.STAKED.value:
+            return None, None
 
         min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
         if min_num_of_safe_tx_required is None:
             self.context.logger.error(
                 "Error calculating min number of safe tx required."
             )
-            return None
+            return None, None
 
         multisig_nonces_since_last_cp = (
             yield from self._get_multisig_nonces_since_last_cp(
@@ -1587,12 +1705,10 @@ class LiquidityTraderBaseBehaviour(
             )
         )
         if multisig_nonces_since_last_cp is None:
-            return None
+            return None, None
 
-        if multisig_nonces_since_last_cp >= min_num_of_safe_tx_required:
-            return True
-
-        return False
+        kpi_met = multisig_nonces_since_last_cp >= min_num_of_safe_tx_required
+        return kpi_met, multisig_nonces_since_last_cp
 
     def _get_multisig_nonces(
         self, chain: str, multisig: str
@@ -1608,7 +1724,18 @@ class LiquidityTraderBaseBehaviour(
         )
         if multisig_nonces is None or len(multisig_nonces) == 0:
             return None
-        return multisig_nonces[0]
+        index = yield from self._staking_nonce_index()
+        if index is None:
+            return None
+        if index >= len(multisig_nonces):
+            # New regime expected ``mapRequestCounts`` at index 1 but the array
+            # is unexpectedly short; fail safe rather than read a wrong slot.
+            self.context.logger.error(
+                f"getMultisigNonces returned {multisig_nonces}; no index "
+                f"{index} for the detected staking regime"
+            )
+            return None
+        return multisig_nonces[index]
 
     def _get_multisig_nonces_since_last_cp(
         self, chain: str, multisig: str
@@ -1622,7 +1749,18 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.error(f"Error fetching service info {service_info}")
             return None
 
-        multisig_nonces_on_last_checkpoint = service_info[2][0]
+        index = yield from self._staking_nonce_index()
+        if index is None:
+            return None
+        if index >= len(service_info[2]):
+            # Snapshot array shorter than the regime-required index; fail safe so
+            # the KPI delta is never computed against a mismatched slot.
+            self.context.logger.error(
+                f"service_info[2]={service_info[2]} has no index {index} "
+                "for the detected staking regime"
+            )
+            return None
+        multisig_nonces_on_last_checkpoint = service_info[2][index]
 
         multisig_nonces_since_last_cp = (
             multisig_nonces - multisig_nonces_on_last_checkpoint

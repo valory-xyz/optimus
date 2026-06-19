@@ -19,8 +19,11 @@
 
 """This module contains the behaviour for checking is staking kpi is met for the 'liquidity_trader_abci' skill."""
 
+import json
+from dataclasses import asdict
 from statistics import median
 from typing import Generator, NamedTuple, Optional, Type
+from uuid import uuid4
 
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -44,6 +47,7 @@ from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met i
     CheckStakingKPIMetRound,
     Event,
 )
+from packages.valory.skills.mech_interact_abci.states.base import MechMetadata
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -92,9 +96,48 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 return
 
             vanity_tx_hex = None
-            is_staking_kpi_met = yield from self._is_staking_kpi_met()
+            mech_requests_json = None
+            is_activity_target_met = None
+            activity_target = None
+            activity_completed = None
+
+            multisig = self.params.safe_contract_addresses.get(
+                self.params.staking_chain
+            )
+            # Single on-chain read: the KPI verdict and the activity-counter
+            # delta come from the same snapshot, so the /healthcheck signal can
+            # never disagree with the KPI decision.
+            is_staking_kpi_met, multisig_nonces_since_last_cp = (
+                yield from self._is_staking_kpi_met()
+            )
+
+            # ``is_staking_kpi_met`` is ``None`` whenever the verdict cannot be
+            # computed — service not STAKED, ``min_num_of_safe_tx_required``
+            # unknown, or a transient nonce-read failure. When it is not ``None``
+            # the delta is populated too; compute the activity-target signal for
+            # the /healthcheck endpoint, on the new staking regime only (``None``
+            # on the old regime / undetermined — see §5.4).
+            # A non-None verdict guarantees ``multisig_nonces_since_last_cp`` is an
+            # integer (``_is_staking_kpi_met`` returns ``(None, None)`` otherwise),
+            # so it is safe to use directly below without re-guarding for ``None``.
+            is_new_regime = None
+            if is_staking_kpi_met is not None:
+                is_new_regime = yield from self._is_new_staking_regime()
+                if is_new_regime:
+                    activity_target = self.params.activity_target
+                    activity_completed = multisig_nonces_since_last_cp
+                    is_activity_target_met = (
+                        multisig_nonces_since_last_cp >= activity_target
+                    )
+
             if is_staking_kpi_met is None:
-                self.context.logger.error("Error checking if staking KPI is met.")
+                # Most commonly the service is simply not staked, which is a
+                # normal steady state — keep it quiet. A genuine read failure on
+                # a staked service is logged at ERROR inside ``_is_staking_kpi_met``.
+                self.context.logger.info(
+                    "Staking KPI undetermined (service not staked or counter "
+                    "unavailable); skipping activity tx this period."
+                )
             elif is_staking_kpi_met is True:
                 self.context.logger.info("KPI already met for the day!")
             else:
@@ -105,68 +148,103 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if is_period_threshold_exceeded:
+                    # A False verdict guarantees ``_is_staking_kpi_met`` saw a
+                    # non-None ``min_num_of_safe_tx_required`` and an integer nonce
+                    # delta, so both are safe to use directly here.
                     min_num_of_safe_tx_required = (
                         self.synchronized_data.min_num_of_safe_tx_required
                     )
-                    multisig_nonces_since_last_cp = (
-                        yield from self._get_multisig_nonces_since_last_cp(
-                            chain=self.params.staking_chain,  # type: ignore[arg-type]
-                            multisig=self.params.safe_contract_addresses.get(
-                                self.params.staking_chain
-                            ),
-                        )
+                    num_of_tx_left_to_meet_kpi = (
+                        min_num_of_safe_tx_required - multisig_nonces_since_last_cp
                     )
-                    if (
-                        multisig_nonces_since_last_cp is not None
-                        and min_num_of_safe_tx_required is not None
-                    ):
-                        num_of_tx_left_to_meet_kpi = (
-                            min_num_of_safe_tx_required - multisig_nonces_since_last_cp
+                    if num_of_tx_left_to_meet_kpi > 0:
+                        self.context.logger.info(
+                            f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
                         )
-                        if num_of_tx_left_to_meet_kpi > 0:
-                            self.context.logger.info(
-                                f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
+                        signal = self._real_tx_cost_vs_balance(
+                            chain=self.params.staking_chain  # type: ignore[arg-type]
+                        )
+                        if (
+                            signal is not None
+                            and signal.eoa_balance < signal.recent_real_tx_cost
+                        ):
+                            # Padding the activity counter while the EOA cannot
+                            # fund a real on-chain action hides the funding alert
+                            # behind a green staking KPI. The mech request also
+                            # costs real gas (+ USDC), so suppressing it here is
+                            # even more correct than for the old vanity tx.
+                            self.context.logger.warning(
+                                f"activity tx suppressed: agent EOA balance "
+                                f"{signal.eoa_balance} wei on "
+                                f"{self.params.staking_chain} is below the "
+                                f"recent real-tx cost "
+                                f"{signal.recent_real_tx_cost} wei; fund EOA "
+                                f"to restore staking activity"
                             )
-                            signal = self._real_tx_cost_vs_balance(
+                        elif is_new_regime is None:
+                            # Regime undetermined (transient VERSION read);
+                            # neither fire a mech request nor a vanity tx — retry
+                            # next period rather than tick the wrong counter.
+                            self.context.logger.warning(
+                                "Staking regime undetermined this period; "
+                                "deferring activity tx until it resolves"
+                            )
+                        elif is_new_regime:
+                            # New regime: hand off to mech_interact_abci with a
+                            # single static mech request (ticks mapRequestCounts
+                            # on the marketplace).
+                            self.context.logger.info(
+                                "Preparing mech-marketplace activity request.."
+                            )
+                            mech_requests_json = self._build_mech_request_metadata()
+                        else:
+                            # Old regime: keep the existing vanity Safe tx.
+                            self.context.logger.info("Preparing vanity tx..")
+                            vanity_tx_hex = yield from self._prepare_vanity_tx(
                                 chain=self.params.staking_chain  # type: ignore[arg-type]
                             )
-                            if (
-                                signal is not None
-                                and signal.eoa_balance < signal.recent_real_tx_cost
-                            ):
-                                # Padding the multisig nonce with vanity txs
-                                # while the EOA cannot fund a real on-chain
-                                # action hides the funding alert behind a
-                                # green staking KPI.
-                                self.context.logger.warning(
-                                    f"vanity-tx suppressed: agent EOA balance "
-                                    f"{signal.eoa_balance} wei on "
-                                    f"{self.params.staking_chain} is below the "
-                                    f"recent real-tx cost "
-                                    f"{signal.recent_real_tx_cost} wei; fund EOA "
-                                    f"to restore staking activity"
-                                )
-                            else:
-                                self.context.logger.info("Preparing vanity tx..")
-                                vanity_tx_hex = yield from self._prepare_vanity_tx(
-                                    chain=self.params.staking_chain  # type: ignore[arg-type]
-                                )
-                                self.context.logger.info(f"tx hash: {vanity_tx_hex}")
+                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(
                 self.context.agent_address,
                 tx_submitter,
                 vanity_tx_hex,
-                self.params.safe_contract_addresses.get(self.params.staking_chain),
+                multisig,
                 self.params.staking_chain,
                 is_staking_kpi_met,
+                mech_requests=mech_requests_json,
+                is_activity_target_met=is_activity_target_met,
+                activity_target=activity_target,
+                activity_completed=activity_completed,
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
+
+    def _build_mech_request_metadata(self) -> str:
+        """Build the JSON payload of one ``MechMetadata`` for the activity request.
+
+        On the new staking regime the agent ticks the on-chain activity counter
+        by sending a real ``MechMarketplace.request(...)`` instead of an empty
+        vanity Safe tx. We inject a single static request (fixed tool + static
+        prompt) for the composed ``mech_interact_abci`` legs to build and settle;
+        the Response leg IS composed (poll-then-discard), but the response
+        *content* is discarded after polling — only the on-chain liveness tick
+        matters, not the mech's answer — so the prompt/tool only need to be valid
+        for the configured priority mech. A fresh ``uuid4`` nonce keeps each
+        request distinct.
+
+        :return: a JSON list containing one serialized ``MechMetadata``.
+        """
+        request = MechMetadata(
+            nonce=str(uuid4()),
+            tool=self.params.mech_tool,
+            prompt=self.params.mech_request_prompt,
+        )
+        return json.dumps([asdict(request)], sort_keys=True)
 
     def _real_tx_cost_vs_balance(self, chain: str) -> Optional[_FundingSignal]:
         """Read the agent EOA balance and recent real-tx cost on ``chain``.

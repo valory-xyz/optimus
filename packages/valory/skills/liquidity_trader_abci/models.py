@@ -176,6 +176,15 @@ class SharedState(BaseSharedState):
         # Per-endpoint circuit breakers for external dependencies.
         self._endpoint_breakers: Dict[str, EndpointCircuitBreaker] = {}
         self._endpoint_breakers_lock = threading.Lock()
+        # Staking-regime detection cache (new == RequesterActivityCheckerV2).
+        # ``None`` means "not yet detected". Cached on the shared state (not on
+        # the behaviour) so it survives behaviour re-instantiation within a
+        # period; the activity-checker contract a service runs against does not
+        # change without a Pearl restart, which resets this process. This field
+        # MUST live on the live shared-state class — in the composed
+        # ``optimus_abci`` app the instantiated ``SharedState`` subclasses this
+        # one, so placing it here keeps it reachable via ``context.state``.
+        self.staking_regime_is_new: Optional[bool] = None
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""
@@ -456,6 +465,20 @@ class Params(BaseParams):
         self.staking_threshold_period = self._ensure(
             "staking_threshold_period", kwargs, int
         )
+        # New-staking-regime (RequesterActivityCheckerV2) activity target: the
+        # per-epoch number of mech-marketplace requests the agent works toward.
+        # Independent of the on-chain liveness KPI (normalised to ~1 on the new
+        # contracts). Optimus/Basius default: 1. Feeds ``is_activity_target_met``
+        # in /healthcheck (the Pearl auto-run rotation signal).
+        self.activity_target: int = self._ensure("activity_target", kwargs, int)
+        # The fixed tool string and static prompt the producer puts on the single
+        # mech request fired to tick ``mapRequestCounts`` on the new regime. The
+        # Response leg is composed (poll-then-discard); the response content is
+        # discarded after polling — only the on-chain liveness tick matters — so
+        # these only need to be a valid tool/prompt the configured priority mech
+        # serves.
+        self.mech_tool: str = self._ensure("mech_tool", kwargs, str)
+        self.mech_request_prompt: str = self._ensure("mech_request_prompt", kwargs, str)
         self.store_path: Path = self.get_store_path(kwargs)
         self.assets_info_filename: str = self._ensure(
             "assets_info_filename", kwargs, str

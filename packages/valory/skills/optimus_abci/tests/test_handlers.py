@@ -2356,6 +2356,74 @@ class TestHttpHandlerMethods:
             handler._handle_get_health(MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
 
+    def test_handle_get_health_agent_health_propagates(self) -> None:
+        """The four staking-activity keys propagate verbatim into the health JSON."""
+        from datetime import datetime
+
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        mock_round_seq = MagicMock()
+        mock_round_seq._last_round_transition_timestamp = datetime.now()
+        mock_round_seq.block_stall_deadline_expired = False
+        mock_round_seq._abci_app = None
+        ctx.state.round_sequence = mock_round_seq
+        ctx.state.agent_reasoning = None
+        ctx.params.reset_pause_duration = 10
+        mock_synced = MagicMock()
+        mock_synced.period_count = 5
+        mock_synced.is_staking_kpi_met = True
+        mock_synced.is_activity_target_met = True
+        mock_synced.activity_target = 1
+        mock_synced.activity_completed = 3
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
+        ):
+            handler._handle_get_health(MagicMock(), MagicMock())
+        call_data = handler._send_ok_response.call_args[0][2]
+        assert call_data["agent_health"] == {
+            "is_staking_kpi_met": True,
+            "is_activity_target_met": True,
+            "activity_target": 1,
+            "activity_completed": 3,
+        }
+
+    def test_handle_get_health_agent_health_new_regime_not_yet_met(self) -> None:
+        """New regime, KPI behind: ``is_activity_target_met=False`` reaches Pearl.
+
+        Pearl reads ``is_activity_target_met`` to decide rotation; a ``False``
+        here must propagate so it keeps the agent running rather than rotating.
+        """
+        from datetime import datetime
+
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        mock_round_seq = MagicMock()
+        mock_round_seq._last_round_transition_timestamp = datetime.now()
+        mock_round_seq.block_stall_deadline_expired = False
+        mock_round_seq._abci_app = None
+        ctx.state.round_sequence = mock_round_seq
+        ctx.state.agent_reasoning = None
+        ctx.params.reset_pause_duration = 10
+        mock_synced = MagicMock()
+        mock_synced.period_count = 5
+        mock_synced.is_staking_kpi_met = False
+        mock_synced.is_activity_target_met = False
+        mock_synced.activity_target = 1
+        mock_synced.activity_completed = 0
+        with patch.object(
+            type(handler),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=mock_synced,
+        ):
+            handler._handle_get_health(MagicMock(), MagicMock())
+        call_data = handler._send_ok_response.call_args[0][2]
+        assert call_data["agent_health"]["is_activity_target_met"] is False
+        assert call_data["agent_health"]["activity_completed"] == 0
+
     def test_handle_get_health_no_transition(self) -> None:
         """Test _handle_get_health when no transition timestamp."""
         handler, ctx = _make_http_handler()
@@ -4222,6 +4290,12 @@ class TestHttpHandlerMethods:
         handler._send_ok_response.assert_called_once()
         call_data = handler._send_ok_response.call_args[0][2]
         assert call_data["period"] is None
+        assert call_data["agent_health"] == {
+            "is_staking_kpi_met": None,
+            "is_activity_target_met": None,
+            "activity_target": None,
+            "activity_completed": None,
+        }
 
     def test_handle_get_health_pre_fsm_value_error(self) -> None:
         """Test _handle_get_health when synchronized_data raises ValueError (pre-FSM)."""
@@ -4242,6 +4316,12 @@ class TestHttpHandlerMethods:
         handler._send_ok_response.assert_called_once()
         call_data = handler._send_ok_response.call_args[0][2]
         assert call_data["period"] is None
+        assert call_data["agent_health"] == {
+            "is_staking_kpi_met": None,
+            "is_activity_target_met": None,
+            "activity_target": None,
+            "activity_completed": None,
+        }
 
     def test_handle_get_health_tm_unhealthy_is_none(self) -> None:
         """Test _handle_get_health when is_tm_unhealthy is None reports is_tm_healthy as None."""

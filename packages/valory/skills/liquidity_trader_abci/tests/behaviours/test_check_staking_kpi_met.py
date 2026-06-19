@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+import json
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.funds_manager.behaviours import (
@@ -29,6 +30,7 @@ from packages.valory.skills.funds_manager.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
+    _FundingSignal,
 )
 
 _AGENT_EOA = "0xagent"
@@ -102,6 +104,32 @@ def _drive(gen):
             return exc.value
 
 
+def _gen_value(value):
+    """Build a generator-function stub that yields once then returns ``value``."""
+
+    def _gen(*args, **kwargs):
+        yield
+        return value
+
+    return _gen
+
+
+def _stub_staking_reads(obj, *, regime=False):
+    """Stub the regime read the staked path performs.
+
+    Whenever the service is staked, ``async_act`` resolves the staking regime
+    (``_is_new_staking_regime``) to compute the activity-target status before the
+    vanity/mech branch. Tests that only stub ``_is_staking_kpi_met`` would
+    otherwise hit a real read or a truthy ``MagicMock`` regime; stub it to a
+    deterministic value. (The nonce delta now comes from ``_is_staking_kpi_met``'s
+    tuple, so no separate nonce stub is needed.)
+
+    :param obj: the behaviour under test.
+    :param regime: value returned by ``_is_new_staking_regime``.
+    """
+    obj._is_new_staking_regime = _gen_value(regime)
+
+
 def _call_signal(obj, params_mock, chain="optimism"):
     """Call ``_real_tx_cost_vs_balance`` directly with ``params`` patched.
 
@@ -163,8 +191,8 @@ def _run_async_act(obj, params_mock, synced_mock):
 class TestCheckStakingKPIMetBehaviour:
     """Tests for CheckStakingKPIMetBehaviour."""
 
-    def test_async_act_kpi_check_error(self) -> None:
-        """Test async_act when _is_staking_kpi_met returns None."""
+    def test_async_act_kpi_undetermined(self) -> None:
+        """An undetermined verdict (None, None) skips quietly at INFO, no tx."""
         obj = _make_behaviour()
         params_mock = MagicMock()
         params_mock.staking_chain = "optimism"
@@ -174,11 +202,11 @@ class TestCheckStakingKPIMetBehaviour:
         def fake_is_kpi_met():
             """Fake is kpi met."""
             yield
-            return None
+            return None, None
 
         obj._is_staking_kpi_met = fake_is_kpi_met
         _run_async_act(obj, params_mock, synced_mock)
-        obj.context.logger.error.assert_called()
+        obj.context.logger.info.assert_called()
         obj.set_done.assert_called_once()
 
     def test_async_act_kpi_already_met(self) -> None:
@@ -192,9 +220,10 @@ class TestCheckStakingKPIMetBehaviour:
         def fake_is_kpi_met():
             """Fake is kpi met."""
             yield
-            return True
+            return True, 10
 
         obj._is_staking_kpi_met = fake_is_kpi_met
+        _stub_staking_reads(obj)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
@@ -213,9 +242,10 @@ class TestCheckStakingKPIMetBehaviour:
         def fake_is_kpi_met():
             """Fake is kpi met."""
             yield
-            return False
+            return False, 0
 
         obj._is_staking_kpi_met = fake_is_kpi_met
+        _stub_staking_reads(obj)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
@@ -233,14 +263,9 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.min_num_of_safe_tx_required = 5
 
         def fake_is_kpi_met():
-            """Fake is kpi met."""
+            """Fake is kpi met (verdict + nonce delta from one read)."""
             yield
-            return False
-
-        def fake_get_nonces(chain, multisig):
-            """Fake get nonces."""
-            yield
-            return 2
+            return False, 2
 
         def fake_prepare_vanity_tx(chain):
             """Fake prepare vanity tx."""
@@ -248,36 +273,8 @@ class TestCheckStakingKPIMetBehaviour:
             return "0xvanity_hash"
 
         obj._is_staking_kpi_met = fake_is_kpi_met
-        obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        obj._is_new_staking_regime = _gen_value(False)  # old regime -> vanity path
         obj._prepare_vanity_tx = fake_prepare_vanity_tx
-        _run_async_act(obj, params_mock, synced_mock)
-        obj.set_done.assert_called_once()
-
-    def test_async_act_kpi_not_met_nonces_none(self) -> None:
-        """Test async_act when nonces or min_num is None."""
-        obj = _make_behaviour()
-        params_mock = MagicMock()
-        params_mock.staking_chain = "optimism"
-        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
-        params_mock.staking_threshold_period = 10
-
-        synced_mock = MagicMock()
-        synced_mock.period_count = 20
-        synced_mock.period_number_at_last_cp = 0
-        synced_mock.min_num_of_safe_tx_required = None
-
-        def fake_is_kpi_met():
-            """Fake is kpi met."""
-            yield
-            return False
-
-        def fake_get_nonces(chain, multisig):
-            """Fake get nonces."""
-            yield
-            return None
-
-        obj._is_staking_kpi_met = fake_is_kpi_met
-        obj._get_multisig_nonces_since_last_cp = fake_get_nonces
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
 
@@ -295,19 +292,170 @@ class TestCheckStakingKPIMetBehaviour:
         synced_mock.min_num_of_safe_tx_required = 5
 
         def fake_is_kpi_met():
-            """Fake is kpi met."""
+            """Fake is kpi met (delta already exceeds the requirement)."""
             yield
-            return False
-
-        def fake_get_nonces(chain, multisig):
-            """Fake get nonces."""
-            yield
-            return 10  # 5 - 10 = -5
+            return False, 10  # 5 - 10 = -5
 
         obj._is_staking_kpi_met = fake_is_kpi_met
-        obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        obj._is_new_staking_regime = _gen_value(False)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
+
+
+class TestMechRequestPath:
+    """The new staking regime fires a mech request instead of a vanity tx."""
+
+    def _capture_payload(self, obj, params_mock, synced_mock):
+        """Drive async_act capturing the emitted payload."""
+        captured = {}
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        def fake_wait():
+            yield
+
+        with (
+            patch.object(
+                type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+            ),
+            patch.object(
+                type(obj),
+                "synchronized_data",
+                new_callable=PropertyMock,
+                return_value=synced_mock,
+            ),
+        ):
+            obj.context.benchmark_tool.measure.return_value = MagicMock()
+            obj.context.agent_address = "0xagent"
+            obj.send_a2a_transaction = fake_send
+            obj.wait_until_round_end = fake_wait
+            obj.set_done = MagicMock()
+            _drive(obj.async_act())
+        return captured["payload"]
+
+    def test_new_regime_injects_mech_request_and_no_vanity_tx(self) -> None:
+        """New regime, KPI unmet, tx owed -> payload carries one mech request."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        params_mock.staking_threshold_period = 10
+        params_mock.activity_target = 1
+        params_mock.mech_tool = "openai-gpt-4o-2024-08-06"
+        params_mock.mech_request_prompt = "ping"
+
+        synced_mock = MagicMock()
+        synced_mock.period_count = 20
+        synced_mock.period_number_at_last_cp = 0
+        synced_mock.min_num_of_safe_tx_required = 5
+
+        obj._is_staking_kpi_met = _gen_value((False, 2))
+        obj._is_new_staking_regime = _gen_value(True)
+        # The funding gate must allow the request (no gas records -> fails open).
+        obj.gas_cost_tracker.data = {}
+
+        # A vanity tx must NOT be prepared on the new regime.
+        obj._prepare_vanity_tx = MagicMock(
+            side_effect=AssertionError("vanity tx must not run on the new regime")
+        )
+
+        payload = self._capture_payload(obj, params_mock, synced_mock)
+
+        assert payload.tx_hash is None  # no vanity tx
+        requests = json.loads(payload.mech_requests)
+        assert len(requests) == 1
+        assert requests[0]["tool"] == "openai-gpt-4o-2024-08-06"
+        assert requests[0]["prompt"] == "ping"
+        assert requests[0]["nonce"]
+        # Activity-target signal populated on the new regime.
+        assert payload.activity_target == 1
+        assert payload.activity_completed == 2
+        assert payload.is_activity_target_met is True
+
+    def test_regime_undetermined_skips_both_txs(self) -> None:
+        """A transient regime read (None) fires neither a mech nor a vanity tx."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        params_mock.staking_threshold_period = 10
+
+        synced_mock = MagicMock()
+        synced_mock.period_count = 20
+        synced_mock.period_number_at_last_cp = 0
+        synced_mock.min_num_of_safe_tx_required = 5
+
+        obj._is_staking_kpi_met = _gen_value((False, 2))
+        obj._is_new_staking_regime = _gen_value(None)  # transient/undetermined
+        obj.gas_cost_tracker.data = {}
+        obj._prepare_vanity_tx = MagicMock(
+            side_effect=AssertionError("no vanity tx when regime is undetermined")
+        )
+
+        payload = self._capture_payload(obj, params_mock, synced_mock)
+
+        assert payload.tx_hash is None
+        assert payload.mech_requests is None
+        # Activity status not populated when the regime is undetermined.
+        assert payload.is_activity_target_met is None
+        obj.context.logger.warning.assert_called()
+
+    def test_new_regime_funding_guard_suppresses_mech_request(self) -> None:
+        """New regime + EOA below recent real-tx cost -> mech request suppressed.
+
+        The funding guard fires before the regime branch, so an under-funded EOA
+        must suppress the mech request just as it suppresses the old vanity tx —
+        no tx of either kind is built and the warning names the funding shortfall.
+        """
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        params_mock.staking_threshold_period = 10
+        params_mock.activity_target = 1
+
+        synced_mock = MagicMock()
+        synced_mock.period_count = 20
+        synced_mock.period_number_at_last_cp = 0
+        synced_mock.min_num_of_safe_tx_required = 5
+
+        obj._is_staking_kpi_met = _gen_value((False, 2))
+        obj._is_new_staking_regime = _gen_value(True)  # new regime
+        # Force the funding gate to report balance < recent real-tx cost.
+        obj._real_tx_cost_vs_balance = MagicMock(  # type: ignore[assignment,method-assign]
+            return_value=_FundingSignal(eoa_balance=1, recent_real_tx_cost=10**18)
+        )
+        obj._build_mech_request_metadata = MagicMock(  # type: ignore[assignment,method-assign]
+            side_effect=AssertionError(
+                "mech request must be suppressed when EOA under-funded"
+            )
+        )
+        obj._prepare_vanity_tx = MagicMock(
+            side_effect=AssertionError("no vanity tx on the new regime")
+        )
+
+        payload = self._capture_payload(obj, params_mock, synced_mock)
+
+        assert payload.tx_hash is None
+        assert payload.mech_requests is None
+        obj.context.logger.warning.assert_called()
+
+    def test_build_mech_request_metadata_shape(self) -> None:
+        """_build_mech_request_metadata emits exactly one well-formed MechMetadata."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.mech_tool = "tool-x"
+        params_mock.mech_request_prompt = "prompt-y"
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            payload = json.loads(obj._build_mech_request_metadata())
+        assert len(payload) == 1
+        assert payload[0]["tool"] == "tool-x"
+        assert payload[0]["prompt"] == "prompt-y"
+        assert isinstance(payload[0]["nonce"], str) and payload[0]["nonce"]
 
 
 class TestCheckStakingKPIMetWithdrawalGate:
@@ -367,7 +515,7 @@ class TestCheckStakingKPIMetWithdrawalGate:
         def fake_is_kpi_met():
             """Fake is kpi met."""
             yield
-            return True
+            return True, 10
 
         def fake_send(payload):
             """Fake send."""
@@ -380,6 +528,7 @@ class TestCheckStakingKPIMetWithdrawalGate:
 
         obj._read_investing_paused = fake_read_investing_paused
         obj._is_staking_kpi_met = fake_is_kpi_met
+        _stub_staking_reads(obj)
         obj.send_a2a_transaction = fake_send
         obj.wait_until_round_end = fake_wait
         obj.set_done = MagicMock()
@@ -510,14 +659,11 @@ class TestVanityTxFundingGate:
 
         def fake_is_kpi_met():
             yield
-            return False
-
-        def fake_get_nonces(chain, multisig):
-            yield
-            return 2
+            return False, 2
 
         obj._is_staking_kpi_met = fake_is_kpi_met
-        obj._get_multisig_nonces_since_last_cp = fake_get_nonces
+        # Old regime: the funding gate guards the vanity-tx path.
+        obj._is_new_staking_regime = _gen_value(False)
         obj.gas_cost_tracker = MagicMock()
         obj.gas_cost_tracker.data = {}
         return obj

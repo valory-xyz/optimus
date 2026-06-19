@@ -40,6 +40,19 @@ from packages.valory.skills.liquidity_trader_abci.models import (
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     Event as LiquidityTraderEvent,
 )
+from packages.valory.skills.mech_interact_abci.models import (
+    MechResponseSpecs as BaseMechResponseSpecs,
+)
+from packages.valory.skills.mech_interact_abci.models import (
+    MechToolsSpecs as BaseMechToolsSpecs,
+)
+from packages.valory.skills.mech_interact_abci.models import (
+    MechsSubgraph as BaseMechsSubgraph,
+)
+from packages.valory.skills.mech_interact_abci.models import Params as MechParams
+from packages.valory.skills.mech_interact_abci.models import (
+    SharedState as MechSharedState,
+)
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
 from packages.valory.skills.registration_abci.rounds import Event as RegistrationEvent
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
@@ -70,6 +83,13 @@ BenchmarkTool = BaseBenchmarkTool
 
 RandomnessApi = BaseRandomnessApi
 
+# Re-exports so skill.yaml can resolve the mech_interact_abci API-spec models on
+# this composition skill's `models` module (the mech behaviours read them via
+# ``self.context.mech_response`` / ``mech_tools`` / ``mechs_subgraph``).
+MechResponseSpecs = BaseMechResponseSpecs
+MechToolsSpecs = BaseMechToolsSpecs
+MechsSubgraph = BaseMechsSubgraph
+
 MARGIN = 5
 MULTIPLIER = 40
 
@@ -77,8 +97,14 @@ MULTIPLIER = 40
 class Params(  # pylint: disable=too-many-ancestors
     TerminationParams,
     LiquidityTraderParams,
+    MechParams,
 ):
-    """A model to represent params for multiple abci apps."""
+    """A model to represent params for multiple abci apps.
+
+    Also mixes in ``MechParams`` so the composed ``mech_interact_abci``
+    behaviours can read their marketplace/request config off the single shared
+    ``self.context.params`` in this composition skill.
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Init"""
@@ -86,8 +112,13 @@ class Params(  # pylint: disable=too-many-ancestors
         super().__init__(*args, **kwargs)
 
 
-class SharedState(BaseSharedState):
-    """Keep the current shared state of the skill."""
+class SharedState(BaseSharedState, MechSharedState):
+    """Keep the current shared state of the skill.
+
+    Mixes in the ``mech_interact_abci`` shared state so the composed mech
+    behaviours can use ``penalized_mechs`` / ``last_called_mech`` /
+    ``last_failure_reason`` off the single live ``self.context.state``.
+    """
 
     abci_app_cls = OptimusAbciApp  # type: ignore
 

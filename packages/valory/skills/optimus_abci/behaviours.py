@@ -28,6 +28,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.behaviours.round_behaviour import (
     LiquidityTraderRoundBehaviour,
 )
+from packages.valory.skills.mech_interact_abci.behaviours.round_behaviour import (
+    MechInteractRoundBehaviour,
+)
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
 from packages.valory.skills.registration_abci.behaviours import (
     AgentRegistrationRoundBehaviour,
@@ -56,5 +59,6 @@ class OptimusConsensusBehaviour(AbstractRoundBehaviour):
         *TransactionSettlementRoundBehaviour.behaviours,
         *TerminationAbciBehaviours.behaviours,
         *LiquidityTraderRoundBehaviour.behaviours,
+        *MechInteractRoundBehaviour.behaviours,
     }
     background_behaviours_cls = {BackgroundBehaviour}

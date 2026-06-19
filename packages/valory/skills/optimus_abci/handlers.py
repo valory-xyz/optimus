@@ -1600,6 +1600,27 @@ class HttpHandler(BaseHttpHandler):
         except (AttributeError, ValueError):
             period = None
 
+        # Staking activity signal for Pearl auto-run rotation (new staking
+        # regime). ``is_activity_target_met`` is the rotation/stop signal Pearl
+        # reads; Pearl (not the agent) enacts the stop. On the old regime /
+        # unstaked these are ``None`` (the off-chain target concept does not
+        # apply) — see §5.4. The four keys mirror trader PR #993 so Pearl/FE read
+        # the same contract.
+        try:
+            agent_health = {
+                "is_staking_kpi_met": self.synchronized_data.is_staking_kpi_met,
+                "is_activity_target_met": self.synchronized_data.is_activity_target_met,
+                "activity_target": self.synchronized_data.activity_target,
+                "activity_completed": self.synchronized_data.activity_completed,
+            }
+        except (AttributeError, ValueError):
+            agent_health = {
+                "is_staking_kpi_met": None,
+                "is_activity_target_met": None,
+                "activity_target": None,
+                "activity_completed": None,
+            }
+
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
             "is_tm_healthy": (
@@ -1611,6 +1632,7 @@ class HttpHandler(BaseHttpHandler):
             "rounds": rounds,
             "is_transitioning_fast": is_transitioning_fast,
             "rounds_info": self.rounds_info,
+            "agent_health": agent_health,
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)

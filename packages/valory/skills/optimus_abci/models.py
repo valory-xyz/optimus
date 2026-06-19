@@ -95,15 +95,24 @@ MULTIPLIER = 40
 
 
 class Params(  # pylint: disable=too-many-ancestors
+    MechParams,
     TerminationParams,
     LiquidityTraderParams,
-    MechParams,
 ):
     """A model to represent params for multiple abci apps.
 
     Also mixes in ``MechParams`` so the composed ``mech_interact_abci``
     behaviours can read their marketplace/request config off the single shared
     ``self.context.params`` in this composition skill.
+
+    ``MechParams`` is listed first on purpose. Both it and ``TerminationParams``
+    consume ``multisend_address``, but ``TerminationParams`` reads it via
+    ``_ensure`` (which *pops* the key off ``kwargs``) while ``MechParams`` reads
+    it non-destructively via ``kwargs.get``. With ``TerminationParams`` ahead of
+    ``MechParams`` in the MRO the pop runs first, so ``MechParams`` sees ``None``
+    and ``enforce(multisend_address is not None)`` raises "Multisend address not
+    specified!" at agent load. Running ``MechParams`` first lets it read the
+    value before ``TerminationParams`` pops it.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

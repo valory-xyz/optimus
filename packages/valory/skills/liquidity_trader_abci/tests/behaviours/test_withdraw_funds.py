@@ -684,8 +684,9 @@ class TestPrepareSwapToUsdcActionsStandard:
         assert len(result) == 1
 
     def test_safe_held_backstop_picks_up_idle_token(self) -> None:
-        """Empty portfolio_breakdown but safe holds a whitelisted token: queue the swap."""
-        # Real WHITELISTED_ASSETS["optimism"] entry: oUSDT.
+        """Empty portfolio_breakdown but safe holds a token in HELD_ASSETS: queue the swap."""
+        # Legacy-held HELD_ASSETS["optimism"] entry: oUSDT (de-whitelisted but
+        # still swept so existing holdings convert).
         ousdt = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
         obj = self._make_obj(balances={ousdt: 5_000_000})
         obj._build_swap_to_usdc_action = MagicMock(return_value={"action": "swap"})
@@ -779,7 +780,7 @@ class TestPrepareSwapToUsdcActionsStandard:
         assert len(result) == 0
 
     def test_safe_held_backstop_dedupes_mixed_case_address(self) -> None:
-        """Mixed-case portfolio address dedupes against lowercase whitelist."""
+        """Mixed-case portfolio address dedupes against lowercase held set."""
         ousdt_lower = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
         ousdt_upper = ousdt_lower.upper().replace("0X", "0x")
         obj = self._make_obj(balances={ousdt_lower: 5_000_000}, decimals=6)

@@ -33,6 +33,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     ETH_REMAINING_KEY,
     GasCostTracker,
+    HELD_ASSETS,
+    LEGACY_HELD_ASSETS,
     LiquidityTraderBaseBehaviour,
     MIN_TIME_IN_POSITION,
     NEW_STAKING_CHECKER_VERSION,
@@ -1630,8 +1632,9 @@ class TestGetSafeBalancesFromSafeApi:
     def test_backstop_integrates_when_safeapi_partial(self) -> None:
         """End-to-end backstop integration when SafeApi returns partial data.
 
-        SafeApi returns only ETH; the real backstop adds the whitelisted
-        ERC20s (including oUSDT) on top, without duplicating ETH.
+        SafeApi returns only ETH; the real backstop adds the held ERC20s
+        (including legacy-held oUSDT, de-whitelisted but still in HELD_ASSETS)
+        on top, without duplicating ETH.
 
         This guards the ordering and dedup contract between
         ``_get_safe_balances_from_safe_api`` and the live
@@ -1669,10 +1672,10 @@ class TestGetSafeBalancesFromSafeApi:
         assert (
             eth_entries[0]["balance"] == 1_000_000_000_000_000
         )  # SafeApi value, not 999
-        # oUSDT picked up by the backstop.
+        # Legacy-held oUSDT picked up by the backstop via HELD_ASSETS.
         assert len(ousdt_entries) == 1
         assert ousdt_entries[0]["balance"] == 5_000_000
-        # No other whitelisted token was added (all returned 0 on-chain).
+        # No other held token was added (all returned 0 on-chain).
         assert sorted(symbols) == ["ETH", "oUSDT"]
 
 
@@ -1726,9 +1729,7 @@ class TestSupplementWithOnchainWhitelistedBalances:
         # Per-address fake pins the symbol-to-address mapping: a mismatch in the
         # loop (wrong key, short-circuit, swapped symbol) would surface as a
         # missing/incorrect balance in the asserted dict.
-        expected = {
-            addr: i + 1 for i, addr in enumerate(WHITELISTED_ASSETS["optimism"])
-        }
+        expected = {addr: i + 1 for i, addr in enumerate(HELD_ASSETS["optimism"])}
 
         def fake_token_balance(
             chain: str, account: str, address: str
@@ -1747,9 +1748,9 @@ class TestSupplementWithOnchainWhitelistedBalances:
         # Pin: every whitelisted entry must be present with the exact balance
         # produced by the per-address fake (catches loop short-circuit and
         # symbol/address mapping swaps).
-        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
+        assert len(balances) == len(HELD_ASSETS["optimism"])
         balance_by_address = {entry["address"].lower(): entry for entry in balances}
-        for address, symbol in WHITELISTED_ASSETS["optimism"].items():
+        for address, symbol in HELD_ASSETS["optimism"].items():
             entry = balance_by_address[address.lower()]
             assert entry["asset_symbol"] == symbol
             assert entry["asset_type"] == "erc_20"
@@ -1814,7 +1815,7 @@ class TestSupplementWithOnchainWhitelistedBalances:
         """
         b = _make_behaviour()
         b._get_native_balance = _make_gen(0)  # type: ignore[assignment,method-assign]
-        addresses = list(WHITELISTED_ASSETS["optimism"].keys())
+        addresses = list(HELD_ASSETS["optimism"].keys())
         failing_address = addresses[0]
 
         def flaky_token_balance(
@@ -1858,7 +1859,7 @@ class TestSupplementWithOnchainWhitelistedBalances:
         )
         # No ETH entry, but every whitelisted ERC20 made it.
         assert not any(entry["asset_symbol"] == "ETH" for entry in balances)
-        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
+        assert len(balances) == len(HELD_ASSETS["optimism"])
 
     def test_native_none_does_not_block_erc20s(self) -> None:
         """A native None read is logged and skipped; ERC20 backstop still runs."""
@@ -1872,7 +1873,59 @@ class TestSupplementWithOnchainWhitelistedBalances:
             )
         )
         assert not any(entry["asset_symbol"] == "ETH" for entry in balances)
-        assert len(balances) == len(WHITELISTED_ASSETS["optimism"])
+        assert len(balances) == len(HELD_ASSETS["optimism"])
+
+
+class TestWhitelistInvariants:
+    """Pin the curated investable whitelist and the held/sweep superset.
+
+    The behavioural tests iterate these dicts dynamically, so they adapt to any
+    contents and would not catch a mistyped address or an accidental re-add.
+    These assertions pin the exact membership and the investable-vs-held split.
+    """
+
+    # Lowercased; symbols in comments for reviewer legibility.
+    OPTIMISM_INVESTABLE = {
+        "0x0b2c639c533813f4aa9d7837caf62653d097ff85",  # USDC (native)
+        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3",  # sDAI
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071",  # USDT0
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607",  # USDC.e
+        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",  # USDT (bridged)
+    }
+    BASE_INVESTABLE = {
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",  # USDC (native)
+        "0x03569cc076654f82679c4ba2124d64774781b01d",  # BOLD
+        "0x526728dbc96689597f85ae4cd716d4f7fccbae9d",  # msUSD
+        "0xe5020a6d073a794b6e7f05678707de47986fb0b6",  # frxUSD
+        "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4",  # eUSD
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215",  # axlUSDC
+    }
+    OUSDT = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
+
+    def test_optimism_investable_set_is_exact(self) -> None:
+        """Optimism investable whitelist is exactly the curated five."""
+        assert {a.lower() for a in WHITELISTED_ASSETS["optimism"]} == (
+            self.OPTIMISM_INVESTABLE
+        )
+
+    def test_base_investable_set_is_exact(self) -> None:
+        """Base investable whitelist is exactly the curated six."""
+        assert {a.lower() for a in WHITELISTED_ASSETS["base"]} == self.BASE_INVESTABLE
+
+    def test_ousdt_is_not_investable_on_optimism(self) -> None:
+        """Legacy oUSDT is excluded from the investable whitelist (no new investment)."""
+        assert self.OUSDT not in {a.lower() for a in WHITELISTED_ASSETS["optimism"]}
+
+    def test_ousdt_remains_in_optimism_held_set(self) -> None:
+        """Legacy oUSDT stays in the held/sweep set so existing holdings convert."""
+        assert self.OUSDT in {a.lower() for a in HELD_ASSETS["optimism"]}
+        assert self.OUSDT in LEGACY_HELD_ASSETS["optimism"]
+
+    def test_held_assets_is_superset_of_investable(self) -> None:
+        """HELD_ASSETS is always a superset of the investable whitelist."""
+        for chain, investable in WHITELISTED_ASSETS.items():
+            held = {a.lower() for a in HELD_ASSETS[chain]}
+            assert {a.lower() for a in investable}.issubset(held)
 
 
 class TestGetModeBalances:

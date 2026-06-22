@@ -68,9 +68,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
-- valory/liquidity_trader_abci:0.1.0:bafybeid6mul7gkwnusgbquoqau5lrncq7trxbdytsgtw724o7snhuioseq
+- valory/liquidity_trader_abci:0.1.0:bafybeie2dbrd52jdhbkyed2yiznmzgvyf6gtvyr5raaiofidgn7ry2a5ci
 - valory/mech_interact_abci:0.1.0:bafybeidnmszufszq3ro4ebgrqzmhqgctrsc6sykeanfsbvotghvt2cgfsy
-- valory/optimus_abci:0.1.0:bafybeifne3lrjcnotv3fwz3p7iu3qf4pcbhuxyt5dz65irn4tsa2gqdcd4
+- valory/optimus_abci:0.1.0:bafybeiemjkzl2m4ynpfgnqnnode2tqd7hoiagrfyhnegg3ignyrmjtk3dm
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
@@ -251,7 +251,7 @@ models:
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
-      multisend_address: ${MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
+      multisend_address: ${MULTISEND_ADDRESS:str:0x998739BFdAAdde7C933B942a68053933098f9EDa}
       termination_sleep: ${int:900}
       init_fallback_gas: ${int:0}
       keeper_allowed_retries: 3
@@ -321,18 +321,18 @@ models:
       staking_threshold_period: ${int:5}
       activity_target: ${ACTIVITY_TARGET:int:1}
       mech_tool: ${MECH_TOOL:str:openai-gpt-4o-2024-08-06}
-      mech_request_prompt: ${MECH_REQUEST_PROMPT:str:Optimus staking activity request.}
+      mech_request_prompt: ${MECH_REQUEST_PROMPT:str:Basius staking activity request.}
       multisend_batch_size: ${MECH_MULTISEND_BATCH_SIZE:int:1}
-      mech_contract_address: ${MECH_CONTRACT_ADDRESS:str:0x650C77F49cFa69e2AC1990A6B4585C322B012D0d}
+      mech_contract_address: ${MECH_CONTRACT_ADDRESS:str:0xe535D7AcDEeD905dddcb5443f41980436833cA2B}
       ipfs_address: ${MECH_IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
-      mech_chain_id: ${MECH_CHAIN_ID:str:optimism}
+      mech_chain_id: ${MECH_CHAIN_ID:str:base}
       mech_wrapped_native_token_address: ${MECH_WRAPPED_NATIVE_TOKEN_ADDRESS:str:0x4200000000000000000000000000000000000006}
       mech_interaction_sleep_time: ${MECH_INTERACTION_SLEEP_TIME:int:10}
       use_mech_marketplace: ${USE_MECH_MARKETPLACE:bool:true}
-      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x650C77F49cFa69e2AC1990A6B4585C322B012D0d","priority_mech_service_id":194,"response_timeout":300,"use_dynamic_mech_selection":false}}
+      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0xf24eE42edA0fc9b33B7D41B06Ee8ccD2Ef7C5020","priority_mech_address":"0xe535D7AcDEeD905dddcb5443f41980436833cA2B","priority_mech_service_id":112,"response_timeout":300,"use_dynamic_mech_selection":false}}
       agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
-      valid_mechs: ${VALID_MECHS:list:["0x650C77F49cFa69e2AC1990A6B4585C322B012D0d"]}
+      valid_mechs: ${VALID_MECHS:list:["0xe535D7AcDEeD905dddcb5443f41980436833cA2B"]}
       penalize_mech_time_window: ${MECH_PENALIZE_TIME_WINDOW:int:1800}
       deliveries_lookback_days: ${MECH_DELIVERIES_LOOKBACK_DAYS:int:30}
       store_path: ${STORE_PATH:str:/data}

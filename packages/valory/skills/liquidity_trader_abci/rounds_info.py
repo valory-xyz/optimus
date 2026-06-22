@@ -70,6 +70,31 @@ ROUNDS_INFO = {
         "description": "The agent reviews its positions and checks the balances of all assets it manages.",
         "transitions": {},
     },
+    "MechInformationRound": {
+        "name": "Fetching mech's information",
+        "description": "Fetches the mech's information",
+        "transitions": {},
+    },
+    "MechPurchaseSubscriptionRound": {
+        "name": "Preparing subscription purchase",
+        "description": "Prepares a purchase needed for accessing external data services.",
+        "transitions": {},
+    },
+    "MechRequestRound": {
+        "name": "Requesting outcome data",
+        "description": "Asks an external service for information needed to resolve a trade.",
+        "transitions": {},
+    },
+    "MechResponseRound": {
+        "name": "Receiving outcome data",
+        "description": "Collects outcome information from the external service.",
+        "transitions": {},
+    },
+    "MechVersionDetectionRound": {
+        "name": "Detecting the priority mech's version.",
+        "description": "Detect the version of the priority mech (Legacy, Legacy Mech Marketplace, Mech Marketplace)",
+        "transitions": {},
+    },
     "PostTxSettlementRound": {
         "name": "Reviewing results",
         "description": "The agent reviews its activity and prepares for the next step.",

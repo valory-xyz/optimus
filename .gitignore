@@ -27,8 +27,10 @@ packages/valory/skills/*
 packages/valory/skills/funds_manager/
 
 !packages/valory/agents/optimus
+!packages/valory/agents/basius
 !packages/valory/services/optimus
 !packages/valory/services/optimus_pearl
+!packages/valory/services/basius
 !packages/valory/skills/liquidity_trader_abci
 !packages/valory/skills/optimus_abci
 

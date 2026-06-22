@@ -194,11 +194,18 @@ build-agent-runner-mac: uv-install  agent
 	./dist/agent_runner_bin$(EXE_SUFFIX) --version
 
 
+# Multiple dev agents (e.g. optimus and basius) share the same skill code,
+# so the release binary is built once against optimus and re-used. Pearl
+# downloads the actual agent it wants at install time via the service
+# template hash. Override RELEASE_AGENT_PUBLIC_ID locally if you need to
+# build against a different agent.
+RELEASE_AGENT_PUBLIC_ID ?= agent/valory/optimus/0.1.0
+
 ./hash_id: ./packages/packages.json
-	cat ./packages/packages.json | jq -r '.dev | to_entries[] | select(.key | startswith("agent/")) | .value' > ./hash_id
+	cat ./packages/packages.json | jq -r --arg agent_key '$(RELEASE_AGENT_PUBLIC_ID)' '.dev[$$agent_key]' > ./hash_id
 
 ./agent_id: ./packages/packages.json
-	cat ./packages/packages.json | jq -r '.dev | to_entries[] | select(.key | startswith("agent/")) | .key | sub("^agent/"; "")' > ./agent_id
+	echo '$(RELEASE_AGENT_PUBLIC_ID)' | sed 's|^agent/||' > ./agent_id
 
 ./agent.zip: ./agent
 	zip -r ./agent.zip ./agent

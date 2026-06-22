@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeihukrzz7fkwe3oz7qduycz65xmwpmkjqki44j5cjjnsnfp2i2nrci
+agent: valory/basius:0.1.0:bafybeigskcttlkr7v6xhcfukjakidyjjrhwcniwlfjawsts5iwjirktfxq
 number_of_agents: 1
 deployment:
   agent:
@@ -55,7 +55,7 @@ models:
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
-      multisend_address: ${MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
+      multisend_address: ${MULTISEND_ADDRESS:str:0x998739BFdAAdde7C933B942a68053933098f9EDa}
       termination_sleep: ${TERMINATION_SLEEP:int:900}
       reset_pause_duration: ${RESET_PAUSE_DURATION:int:30}
       on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
@@ -83,7 +83,7 @@ models:
       staking_threshold_period: ${STAKING_THRESHOLD_PERIOD:int:5}
       activity_target: ${ACTIVITY_TARGET:int:1}
       mech_tool: ${MECH_TOOL:str:openai-gpt-4o-2024-08-06}
-      mech_request_prompt: ${MECH_REQUEST_PROMPT:str:Optimus staking activity request.}
+      mech_request_prompt: ${MECH_REQUEST_PROMPT:str:Basius staking activity request.}
       multisend_batch_size: ${MECH_MULTISEND_BATCH_SIZE:int:1}
       mech_contract_address: ${MECH_CONTRACT_ADDRESS:str:0xe535D7AcDEeD905dddcb5443f41980436833cA2B}
       ipfs_address: ${MECH_IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}

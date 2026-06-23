@@ -2085,6 +2085,29 @@ class TestUpdatePositionWithCurrentValue:
         _drive(gen)
         assert pos["cost_recovered"] is True
 
+    def test_not_recovered_with_float_entry_cost(self):
+        """Recovery progress computes when entry_cost is the float shape persisted in production."""
+        obj = _mk()
+        obj._get_current_timestamp = lambda: 1000
+        obj._calculate_corrected_yield = _gen_return(Decimal("0.001"))
+        pos = {
+            "pool_address": "0xP",
+            "amount0": 100,
+            "amount1": 200,
+            "entry_cost": 0.006419,
+        }
+        gen = obj._update_position_with_current_value(
+            pos,
+            Decimal("500"),
+            "optimism",
+            user_balances={"0xT0": Decimal(1)},
+            token_info={},
+            token_prices={},
+        )
+        _drive(gen)
+        assert pos["cost_recovered"] is False
+        assert pos["yield_usd"] == 0.001
+
 
 class TestCalculateCorrectedYield:
     """TestCalculateCorrectedYield."""

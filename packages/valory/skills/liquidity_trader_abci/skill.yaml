@@ -8,12 +8,12 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/base.py: bafybeiea47xmdlyof3zhfp57fty2i5jzodlnyvvm2w5izhsngx3yvhj2n4
+  behaviours/base.py: bafybeigm5opkgzya2pdnlgbzl6izk3ubzrma3sdw43f3dowezqdfbydpme
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
-  behaviours/check_staking_kpi_met.py: bafybeie2t3xld2b547anuzymu4g56ive3mteqkegabpkeskwnbuicgtyse
+  behaviours/check_staking_kpi_met.py: bafybeihrv4hj5jg26jdjcippi6rknqi5erzstfbpjetvzobsm3xwuo7ykm
   behaviours/decision_making.py: bafybeiecevpplgg23gptaexr6kp4opddeydms5lzziuehtngdxxc3mayw4
   behaviours/evaluate_strategy.py: bafybeigvd26lxpdq27nfj2jvyexmvfpch7wqlo772rahvil6nvek26axp4
-  behaviours/fetch_strategies.py: bafybeie6hdsyh2z3x7borxqwzeddyoigbavl4piyohjuxuotiyz6jwfrfy
+  behaviours/fetch_strategies.py: bafybeihbo4blzpdezityxhvdtwntzewalfro6uomjkigs4x66apnnteqgm
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeia2fn7abt7zjifitv34vwylohqmuk5r7ptkdk62oeemg66v3klfii
   behaviours/round_behaviour.py: bafybeiafqu4chrxrtxqijd22h6xim4sbon5j4rz3any3vfpbi3qhsovyua
@@ -24,7 +24,7 @@ fingerprint:
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
   models.py: bafybeihdkdetmh45xkfbug4brq7mwaz56y7agje6l5p4jq5slervlacjqu
-  payloads.py: bafybeidwg6bku6corwcamdnja2pz562qfzq54rvusbwki26xa2nuommbwe
+  payloads.py: bafybeibvbjcwglyx3gasmx56u3nwneoxbkvefrry7pmguuayi3nlsa47oe
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
   pools/balancer.py: bafybeicmjq7itdf6hnsmbhxktb42ghzbdwmll56o66ex2ids6oiiql56ki
@@ -48,10 +48,10 @@ fingerprint:
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
   tests/behaviours/test_base.py: bafybeidmu5v6ljffq5akbzqopw6tvn7jtrtrseduwwpfwuqs3gs7c646jm
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
-  tests/behaviours/test_check_staking_kpi_met.py: bafybeiaqg5prkuqvvcn4xhukmnf5hjgel5qeuatous4rkgbw7d22pguydu
+  tests/behaviours/test_check_staking_kpi_met.py: bafybeidcud7pqdkjmmimdrbn2ygndsf46aqs4rvfse5zinryes6lgxoz7u
   tests/behaviours/test_decision_making.py: bafybeigs63ccyv6nivol2p4nqxvhfn6obkukib2kgaa5hzrhtje564ziuu
   tests/behaviours/test_evaluate_strategy.py: bafybeies3glm2jbmt7v2ejwu2fgter2elqjq5k7e6nqclrkdplinzwsj4i
-  tests/behaviours/test_fetch_strategies.py: bafybeiedaqglddur5ghqjgmtzc5p6gvcazp4a2oldzpkygeuivkyjpggum
+  tests/behaviours/test_fetch_strategies.py: bafybeihlgbn3qqxbgrcfczg3cjhfx4vcteap4fdkfsswetuszbtgijkoju
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeigievecybq7geucnqou7av3rrqsnjitgxydbo6fjopmki34n74q5u
   tests/behaviours/test_round_behaviour.py: bafybeibwy6np27mile6hf72nfjh65qsvegzedmsyeskfeprdwfvjbe77jq
@@ -65,7 +65,7 @@ fingerprint:
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/states/test_base.py: bafybeigqdgbcey6ltlpffm6a44tnvkc66ivcth7u3dmezp4e3abd7o6fgq
   tests/states/test_call_checkpoint.py: bafybeihsjabiftgu4hikk3igo2roewspk6cscyy6cukaao254ntc6osmkm
-  tests/states/test_check_staking_kpi_met.py: bafybeihtiz26s453kpjqdfqev33v5dv76ckmsieyuzjuorvddv3f7jannu
+  tests/states/test_check_staking_kpi_met.py: bafybeiadut4fztomwycefpcjhdzuox6tikolc4kieqy4cpk6xyoo23ksgq
   tests/states/test_decision_making.py: bafybeieiec5lfahn6sar4tnpwj77cbhikif4zsu5m7jii5w4x6qiuzvcby
   tests/states/test_evaluate_strategy.py: bafybeibh6usboloxzg2zjo2jx2ciqgy2znzl5a2canjz4dd5t3z5dayw2u
   tests/states/test_fetch_strategies.py: bafybeieciu5qoegm6bfaizozk2fekjv5ng7jzyeyjqq25ehgrewf2xjpza

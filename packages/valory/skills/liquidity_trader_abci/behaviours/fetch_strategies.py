@@ -1480,10 +1480,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     else:
                         position["cost_recovered"] = False
                         position["yield_usd"] = float(yield_usd)
+                        entry_cost_dec = Decimal(str(entry_cost))
                         recovery_percentage = (
-                            (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
+                            (yield_usd / entry_cost_dec) * 100
+                            if entry_cost_dec > 0
+                            else Decimal(0)
                         )
-                        remaining_yield_needed = entry_cost - yield_usd
+                        remaining_yield_needed = entry_cost_dec - yield_usd
                         self.context.logger.info(
                             f"Position {position.get('pool_address')} cost recovery progress: "
                             f"{recovery_percentage:.1f}% (${yield_usd:.2f}/${entry_cost:.2f}), "

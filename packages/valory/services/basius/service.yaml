@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeigki6o6zw7nm53xm7vfxd2npy5qkxukfnmjfgrexkddsra3rbgnxi
+agent: valory/basius:0.1.0:bafybeierqtcvug7p4g4w6hdzl3ja2avvsdsbnj2zskyzztmbzwuvaanwbq
 number_of_agents: 1
 deployment:
   agent:
@@ -157,6 +157,9 @@ models:
       coingecko_server_base_url: ${COINGECKO_SERVER_BASE_URL:str:https://api.coingecko.com}
       coingecko_x402_server_base_url: ${COINGECKO_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
       network_selector: ${GENAI_NETWORK_SELECTOR:str:base}
+  mechs_subgraph:
+    args:
+      url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-base}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

@@ -161,27 +161,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                         self.context.logger.info(
                             f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
                         )
-                        signal = self._real_tx_cost_vs_balance(
-                            chain=self.params.staking_chain  # type: ignore[arg-type]
-                        )
-                        if (
-                            signal is not None
-                            and signal.eoa_balance < signal.recent_real_tx_cost
-                        ):
-                            # Padding the activity counter while the EOA cannot
-                            # fund a real on-chain action hides the funding alert
-                            # behind a green staking KPI. The mech request also
-                            # costs real gas (+ USDC), so suppressing it here is
-                            # even more correct than for the old vanity tx.
-                            self.context.logger.warning(
-                                f"activity tx suppressed: agent EOA balance "
-                                f"{signal.eoa_balance} wei on "
-                                f"{self.params.staking_chain} is below the "
-                                f"recent real-tx cost "
-                                f"{signal.recent_real_tx_cost} wei; fund EOA "
-                                f"to restore staking activity"
-                            )
-                        elif is_new_regime is None:
+                        if is_new_regime is None:
                             # Regime undetermined (transient VERSION read);
                             # neither fire a mech request nor a vanity tx — retry
                             # next period rather than tick the wrong counter.
@@ -198,12 +178,30 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             )
                             mech_requests_json = self._build_mech_request_metadata()
                         else:
-                            # Old regime: keep the existing vanity Safe tx.
-                            self.context.logger.info("Preparing vanity tx..")
-                            vanity_tx_hex = yield from self._prepare_vanity_tx(
+                            # Old regime: keep the existing vanity Safe tx, gated
+                            # by the EOA-funded check so vanity activity does not
+                            # hide a funding alert behind a green staking KPI.
+                            signal = self._real_tx_cost_vs_balance(
                                 chain=self.params.staking_chain  # type: ignore[arg-type]
                             )
-                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
+                            if (
+                                signal is not None
+                                and signal.eoa_balance < signal.recent_real_tx_cost
+                            ):
+                                self.context.logger.warning(
+                                    f"vanity tx suppressed: agent EOA balance "
+                                    f"{signal.eoa_balance} wei on "
+                                    f"{self.params.staking_chain} is below the "
+                                    f"recent real-tx cost "
+                                    f"{signal.recent_real_tx_cost} wei; fund EOA "
+                                    f"to restore staking activity"
+                                )
+                            else:
+                                self.context.logger.info("Preparing vanity tx..")
+                                vanity_tx_hex = yield from self._prepare_vanity_tx(
+                                    chain=self.params.staking_chain  # type: ignore[arg-type]
+                                )
+                                self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(

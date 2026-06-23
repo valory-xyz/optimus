@@ -21,10 +21,15 @@
 
 # pylint: skip-file
 
+from dataclasses import fields
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.abstract_round_abci.base import (
+    BaseTxPayload,
     CollectSameUntilThresholdRound,
+)
+from packages.valory.skills.liquidity_trader_abci.payloads import (
+    CheckStakingKPIMetPayload,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
@@ -33,6 +38,27 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
 from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import (
     CheckStakingKPIMetRound,
 )
+
+
+def _payload_values_with_event(event_value):
+    """Build a payload-values tuple in declaration order with ``event`` set.
+
+    Mirrors ``BaseTxPayload.values`` (drops the 3 base fields). Resolves
+    ``event``'s position from ``fields()`` so the test stays correct if the
+    payload's field order is reordered again later.
+
+    :param event_value: the value to write into the ``event`` slot.
+    :return: payload-values tuple with ``event_value`` at the ``event`` slot
+        and ``None`` everywhere else.
+    """
+    non_base = [
+        f.name
+        for f in fields(CheckStakingKPIMetPayload)
+        if f.name not in {f.name for f in fields(BaseTxPayload)}
+    ]
+    values = [None] * len(non_base)
+    values[non_base.index("event")] = event_value
+    return tuple(values)
 
 
 def test_import() -> None:
@@ -56,14 +82,7 @@ class TestCheckStakingKPIMetRound:
         """Pre-super peek returns WITHDRAWAL_INITIATED when consensus payload tags it."""
         round_obj = self._stub_round(
             threshold=True,
-            payload_values=(
-                None,
-                None,
-                None,
-                None,
-                None,
-                Event.WITHDRAWAL_INITIATED.value,
-            ),
+            payload_values=_payload_values_with_event(Event.WITHDRAWAL_INITIATED.value),
         )
         mock_synced = MagicMock(spec=SynchronizedData)
         type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
@@ -219,3 +238,82 @@ class TestCheckStakingKPIMetRound:
         ):
             result = round_obj.end_block()
         assert result == (mock_synced, Event.STAKING_KPI_MET)
+
+
+def test_payload_values_align_with_selection_key() -> None:
+    """Projected payload values must land under their same-named selection_key.
+
+    CollectSameUntilThresholdRound projects consensus into the db via
+    ``dict(zip(selection_key, payload.values))``. ``payload.values`` walks the
+    dataclass fields in declaration order. Any field in the payload that is not
+    in selection_key (notably ``event``) MUST sit at the end of the declaration
+    so the trailing zip-truncation drops it cleanly; otherwise every later
+    selection_key entry inherits the wrong value, and the
+    ``MECH_REQUEST_NEEDED`` branch silently sees ``mech_requests=None`` even
+    when the producer built a real request.
+    """
+    mech_json = '[{"prompt": "p", "tool": "t", "nonce": "n"}]'
+    payload = CheckStakingKPIMetPayload(
+        sender="0xagent",
+        tx_submitter="kpi_round",
+        tx_hash=None,
+        safe_contract_address="0xsafe",
+        chain_id="base",
+        is_staking_kpi_met=False,
+        mech_requests=mech_json,
+        is_activity_target_met=False,
+        activity_target=2,
+        activity_completed=0,
+    )
+
+    projected = dict(zip(CheckStakingKPIMetRound.selection_key, payload.values))
+
+    assert projected["mech_requests"] == mech_json
+    assert projected["is_activity_target_met"] is False
+    assert projected["activity_target"] == 2
+    assert projected["activity_completed"] == 0
+
+
+def test_end_block_emits_mech_request_needed_via_real_payload_projection() -> None:
+    """A real payload projected via the round's selection_key emits MECH_REQUEST_NEEDED.
+
+    The earlier tests in this module set ``mock_synced.mech_requests`` directly,
+    which skips the payload->db projection where the production bug actually
+    lived. This test populates the SynchronizedData stand-in from the same
+    ``dict(zip(selection_key, payload.values))`` the parent class uses, so a
+    future field-order drift between payload and selection_key resurfaces here
+    as a failure rather than as a silent ``STAKING_KPI_NOT_MET`` regression.
+    """
+    mech_json = '[{"prompt": "p", "tool": "t", "nonce": "n"}]'
+    payload = CheckStakingKPIMetPayload(
+        sender="0xagent",
+        tx_submitter="kpi_round",
+        tx_hash=None,
+        safe_contract_address="0xsafe",
+        chain_id="base",
+        is_staking_kpi_met=False,
+        mech_requests=mech_json,
+        is_activity_target_met=False,
+        activity_target=2,
+        activity_completed=0,
+    )
+    projected = dict(zip(CheckStakingKPIMetRound.selection_key, payload.values))
+
+    synced = MagicMock(spec=SynchronizedData)
+    for name, value in projected.items():
+        setattr(synced, name, value)
+
+    round_obj = object.__new__(CheckStakingKPIMetRound)
+    type(round_obj).threshold_reached = PropertyMock(return_value=False)
+    type(round_obj).synchronized_data = PropertyMock(return_value=synced)
+
+    with patch.object(
+        CollectSameUntilThresholdRound,
+        "end_block",
+        return_value=(synced, Event.DONE),
+    ):
+        result = round_obj.end_block()
+
+    assert result is not None
+    _, event = result
+    assert event == Event.MECH_REQUEST_NEEDED

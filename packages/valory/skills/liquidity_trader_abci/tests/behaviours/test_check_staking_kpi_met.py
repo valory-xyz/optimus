@@ -402,12 +402,14 @@ class TestMechRequestPath:
         assert payload.is_activity_target_met is None
         obj.context.logger.warning.assert_called()
 
-    def test_new_regime_funding_guard_suppresses_mech_request(self) -> None:
-        """New regime + EOA below recent real-tx cost -> mech request suppressed.
+    def test_new_regime_fires_mech_request_regardless_of_eoa_balance(self) -> None:
+        """New regime mech request is independent of the EOA gas-funding gate.
 
-        The funding guard fires before the regime branch, so an under-funded EOA
-        must suppress the mech request just as it suppresses the old vanity tx —
-        no tx of either kind is built and the warning names the funding shortfall.
+        The EOA-vs-recent-real-tx-cost gate guarded the old vanity Safe tx (where
+        padding the activity counter could hide a funding alert behind a green
+        KPI). Mech-marketplace requests are settled via the safe and paid in
+        USDC, not native gas, so an under-funded EOA must not block the activity
+        tick. Verifies the gate is removed from the new-regime branch.
         """
         obj = _make_behaviour()
         params_mock = MagicMock()
@@ -415,6 +417,8 @@ class TestMechRequestPath:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
         params_mock.activity_target = 1
+        params_mock.mech_tool = "openai-gpt-4o-2024-08-06"
+        params_mock.mech_request_prompt = "ping"
 
         synced_mock = MagicMock()
         synced_mock.period_count = 20
@@ -422,15 +426,10 @@ class TestMechRequestPath:
         synced_mock.min_num_of_safe_tx_required = 5
 
         obj._is_staking_kpi_met = _gen_value((False, 2))
-        obj._is_new_staking_regime = _gen_value(True)  # new regime
-        # Force the funding gate to report balance < recent real-tx cost.
+        obj._is_new_staking_regime = _gen_value(True)
+        # Even with a clearly under-funded EOA, the new-regime mech path fires.
         obj._real_tx_cost_vs_balance = MagicMock(  # type: ignore[assignment,method-assign]
             return_value=_FundingSignal(eoa_balance=1, recent_real_tx_cost=10**18)
-        )
-        obj._build_mech_request_metadata = MagicMock(  # type: ignore[assignment,method-assign]
-            side_effect=AssertionError(
-                "mech request must be suppressed when EOA under-funded"
-            )
         )
         obj._prepare_vanity_tx = MagicMock(
             side_effect=AssertionError("no vanity tx on the new regime")
@@ -439,8 +438,10 @@ class TestMechRequestPath:
         payload = self._capture_payload(obj, params_mock, synced_mock)
 
         assert payload.tx_hash is None
-        assert payload.mech_requests is None
-        obj.context.logger.warning.assert_called()
+        requests = json.loads(payload.mech_requests)
+        assert len(requests) == 1
+        assert requests[0]["tool"] == "openai-gpt-4o-2024-08-06"
+        assert requests[0]["prompt"] == "ping"
 
     def test_build_mech_request_metadata_shape(self) -> None:
         """_build_mech_request_metadata emits exactly one well-formed MechMetadata."""

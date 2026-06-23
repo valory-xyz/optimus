@@ -49,7 +49,6 @@ class CheckStakingKPIMetPayload(MultisigTxPayload):
     """A transaction payload for the CheckStakingKPIMetRound."""
 
     is_staking_kpi_met: Optional[bool]
-    event: Optional[str] = None
     # New staking regime: a JSON list of one ``MechMetadata`` to hand off to the
     # composed mech_interact_abci legs (``None`` when no request is owed). Always
     # carried so it overwrites any stale db value from a prior MechRequestRound.
@@ -59,6 +58,13 @@ class CheckStakingKPIMetPayload(MultisigTxPayload):
     is_activity_target_met: Optional[bool] = None
     activity_target: Optional[int] = None
     activity_completed: Optional[int] = None
+    # Field order matters: ``event`` must remain the last declared field so
+    # ``zip(selection_key, payload.values)`` (see ``CollectSameUntilThresholdRound.end_block``)
+    # aligns each selection_key entry with its same-named payload position. The
+    # round's selection_key intentionally omits ``event``; with ``event`` last,
+    # ``zip`` truncates the trailing value cleanly. Reordering any earlier
+    # field would silently shift db keys and break the MECH_REQUEST_NEEDED branch.
+    event: Optional[str] = None
 
 
 @dataclass(frozen=True)

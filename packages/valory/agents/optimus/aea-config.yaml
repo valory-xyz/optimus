@@ -226,6 +226,9 @@ models:
       coingecko_server_base_url: ${str:https://api.coingecko.com}
       coingecko_x402_server_base_url: ${str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
       network_selector: ${str:optimism}
+  mechs_subgraph:
+    args:
+      url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}
   params:
     args:
       cleanup_history_depth: 1
@@ -372,3 +375,10 @@ models:
       safe_api_url: ${SAFE_API_URL:str:https://rpc-gate.autonolas.tech/safe/tx-service}
       safe_api_chain_slugs: ${SAFE_API_CHAIN_SLUGS:str:{"optimism":"oeth","base":"base"}}
       mode_native_explorer_url: ${MODE_NATIVE_EXPLORER_URL:str:https://explorer.mode.network/api}
+---
+public_id: valory/mech_interact_abci:0.1.0
+type: skill
+models:
+  mechs_subgraph:
+    args:
+      url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}

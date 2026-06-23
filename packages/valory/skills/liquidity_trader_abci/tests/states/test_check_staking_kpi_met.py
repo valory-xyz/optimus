@@ -46,9 +46,14 @@ def _payload_values_with_event(event_value):
     Mirrors ``BaseTxPayload.values`` (drops the 3 base fields). Resolves
     ``event``'s position from ``fields()`` so the test stays correct if the
     payload's field order is reordered again later.
+
+    :param event_value: the value to write into the ``event`` slot.
+    :return: payload-values tuple with ``event_value`` at the ``event`` slot
+        and ``None`` everywhere else.
     """
     non_base = [
-        f.name for f in fields(CheckStakingKPIMetPayload)
+        f.name
+        for f in fields(CheckStakingKPIMetPayload)
         if f.name not in {f.name for f in fields(BaseTxPayload)}
     ]
     values = [None] * len(non_base)
@@ -77,9 +82,7 @@ class TestCheckStakingKPIMetRound:
         """Pre-super peek returns WITHDRAWAL_INITIATED when consensus payload tags it."""
         round_obj = self._stub_round(
             threshold=True,
-            payload_values=_payload_values_with_event(
-                Event.WITHDRAWAL_INITIATED.value
-            ),
+            payload_values=_payload_values_with_event(Event.WITHDRAWAL_INITIATED.value),
         )
         mock_synced = MagicMock(spec=SynchronizedData)
         type(round_obj).synchronized_data = PropertyMock(return_value=mock_synced)
@@ -238,8 +241,7 @@ class TestCheckStakingKPIMetRound:
 
 
 def test_payload_values_align_with_selection_key() -> None:
-    """payload.values projected via the round's selection_key must place each
-    field's value under its same-named key.
+    """Projected payload values must land under their same-named selection_key.
 
     CollectSameUntilThresholdRound projects consensus into the db via
     ``dict(zip(selection_key, payload.values))``. ``payload.values`` walks the
@@ -273,8 +275,7 @@ def test_payload_values_align_with_selection_key() -> None:
 
 
 def test_end_block_emits_mech_request_needed_via_real_payload_projection() -> None:
-    """End-to-end: a real payload + the round's real selection_key + the round's
-    real end_block branching together produce ``MECH_REQUEST_NEEDED``.
+    """A real payload projected via the round's selection_key emits MECH_REQUEST_NEEDED.
 
     The earlier tests in this module set ``mock_synced.mech_requests`` directly,
     which skips the payload->db projection where the production bug actually

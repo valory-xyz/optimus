@@ -201,9 +201,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                                 vanity_tx_hex = yield from self._prepare_vanity_tx(
                                     chain=self.params.staking_chain  # type: ignore[arg-type]
                                 )
-                                self.context.logger.info(
-                                    f"tx hash: {vanity_tx_hex}"
-                                )
+                                self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(

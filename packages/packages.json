@@ -26,9 +26,9 @@
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeigoe5msyzv2ompaxvhyijqf54666nltucnblqzuezysfesnzsjip4",
         "skill/valory/optimus_abci/0.1.0": "bafybeihoneiqnskjd7eskcngaauypulhoqh5apvklrkbz6irpnt2556qnm",
         "agent/valory/optimus/0.1.0": "bafybeifcj4v3lke5l7ovizcqglcplfdngiszgil2cplq2l4sq652b47jaq",
-        "agent/valory/basius/0.1.0": "bafybeierqtcvug7p4g4w6hdzl3ja2avvsdsbnj2zskyzztmbzwuvaanwbq",
+        "agent/valory/basius/0.1.0": "bafybeibdbc374femx4tfusgpjoncupng7iklqloiuyayb3irjazpnlunmi",
         "service/valory/optimus/0.1.0": "bafybeih5u7loukh2eah24dvshbebulsy425fcsjarncssrvx6i37h7ejqm",
-        "service/valory/basius/0.1.0": "bafybeicp74th4cghtcnk4nvdhfnxwodwuuv3vrisk6ijetf7ausk7xsama"
+        "service/valory/basius/0.1.0": "bafybeiaxwi4vmgdutut3acfzudqahveck3alk54frx2xjsx3tranwavnfy"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeihpghd65qeiepn5e4r4btqprghv44qgssoqtw26gwdch4bmlpnbfq
+agent: valory/optimus:0.1.0:bafybeidz5eak46gw4dyn6nwqf6e5kal4pj47hzn4aphiel7wdqmv6cmhli
 number_of_agents: 1
 deployment:
   agent:
@@ -157,13 +157,6 @@ models:
       coingecko_server_base_url: ${COINGECKO_SERVER_BASE_URL:str:https://api.coingecko.com}
       coingecko_x402_server_base_url: ${COINGECKO_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
       network_selector: ${GENAI_NETWORK_SELECTOR:str:optimism}
-  mechs_subgraph:
-    args:
-      url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}
----
-public_id: valory/mech_interact_abci:0.1.0
-type: skill
-models:
   mechs_subgraph:
     args:
       url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}

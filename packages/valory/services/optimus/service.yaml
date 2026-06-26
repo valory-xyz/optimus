@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidz5eak46gw4dyn6nwqf6e5kal4pj47hzn4aphiel7wdqmv6cmhli
+agent: valory/optimus:0.1.0:bafybeie6xn3kpgk3tortldq3s3dekzhldfrzukf2hz3wdcj66wdzaoucm4
 number_of_agents: 1
 deployment:
   agent:
@@ -82,19 +82,19 @@ models:
       staking_activity_checker_contract_address: ${ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${STAKING_THRESHOLD_PERIOD:int:5}
       activity_target: ${ACTIVITY_TARGET:int:1}
-      mech_tool: ${MECH_TOOL:str:openai-gpt-4o-2024-08-06}
+      mech_tool: ${MECH_TOOL:str:prediction-offline}
       mech_request_prompt: ${MECH_REQUEST_PROMPT:str:Optimus staking activity request.}
       multisend_batch_size: ${MECH_MULTISEND_BATCH_SIZE:int:1}
-      mech_contract_address: ${MECH_CONTRACT_ADDRESS:str:0x650C77F49cFa69e2AC1990A6B4585C322B012D0d}
+      mech_contract_address: ${MECH_CONTRACT_ADDRESS:str:0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E}
       ipfs_address: ${MECH_IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
       mech_chain_id: ${MECH_CHAIN_ID:str:optimism}
       mech_wrapped_native_token_address: ${MECH_WRAPPED_NATIVE_TOKEN_ADDRESS:str:0x4200000000000000000000000000000000000006}
       mech_interaction_sleep_time: ${MECH_INTERACTION_SLEEP_TIME:int:10}
       use_mech_marketplace: ${USE_MECH_MARKETPLACE:bool:true}
-      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x650C77F49cFa69e2AC1990A6B4585C322B012D0d","priority_mech_service_id":194,"response_timeout":300,"use_dynamic_mech_selection":false}}
+      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E","priority_mech_service_id":195,"response_timeout":300,"use_dynamic_mech_selection":false}}
       agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
-      valid_mechs: ${VALID_MECHS:list:["0x650C77F49cFa69e2AC1990A6B4585C322B012D0d"]}
+      valid_mechs: ${VALID_MECHS:list:["0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E"]}
       penalize_mech_time_window: ${MECH_PENALIZE_TIME_WINDOW:int:1800}
       deliveries_lookback_days: ${MECH_DELIVERIES_LOOKBACK_DAYS:int:30}
       store_path: ${STORE_PATH:str:/data/}

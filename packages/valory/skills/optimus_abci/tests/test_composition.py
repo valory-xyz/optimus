@@ -64,6 +64,7 @@ def test_abci_app_transition_mapping_keys() -> None:
         # mech_interact_abci legs (new staking regime)
         LiquidityTraderAbci.FinishedWithMechRequestRound,
         LiquidityTraderAbci.FinishedWithMechResponsePollRound,
+        LiquidityTraderAbci.FinishedWithOffchainMechDepositSettledRound,
         MechFinalStates.FinishedMarketplaceLegacyDetectedRound,
         MechFinalStates.FinishedMechLegacyDetectedRound,
         MechFinalStates.FinishedMechInformationRound,
@@ -73,6 +74,9 @@ def test_abci_app_transition_mapping_keys() -> None:
         MechFinalStates.FinishedMechResponseRound,
         MechFinalStates.FinishedMechResponseTimeoutRound,
         MechFinalStates.FinishedMechRequestSkipRound,
+        MechFinalStates.FinishedOffchainMechRequestRound,
+        MechFinalStates.FinishedOffchainMechDepositNeededRound,
+        MechFinalStates.FailedOffchainMechRequestRound,
     }
     assert set(abci_app_transition_mapping.keys()) == expected_keys
 

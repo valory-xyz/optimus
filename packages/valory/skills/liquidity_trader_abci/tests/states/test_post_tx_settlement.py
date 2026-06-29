@@ -105,6 +105,26 @@ class TestPostTxSettlementRound:
         _, event = result
         assert event == Event.MECH_REQUEST_TX_EXECUTED
 
+    def test_end_block_offchain_mech_deposit_settled(self) -> None:
+        """Off-chain deposit retry sentinel maps to OFFCHAIN_MECH_DEPOSIT_SETTLED.
+
+        Without this dispatch the multiplexer would not recognise the
+        ``OFFCHAIN_DEPOSIT_TX_SUBMITTER`` sentinel and fall through to
+        ``Event.UNRECOGNIZED``, routing the settled deposit into
+        ``FailedMultiplexerRound`` and dropping the retry. The dedicated
+        event is what lets the composition route back into
+        ``MechRequestRound`` for ``_retry_pending`` to fire.
+        """
+        from packages.valory.skills.mech_interact_abci.states.request import (
+            OFFCHAIN_DEPOSIT_TX_SUBMITTER,
+        )
+
+        round_obj = self._make_round_with_submitter(OFFCHAIN_DEPOSIT_TX_SUBMITTER)
+        result = round_obj.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.OFFCHAIN_MECH_DEPOSIT_SETTLED
+
     def test_end_block_action_executed(self) -> None:
         """Test end_block returns ACTION_EXECUTED for DecisionMakingRound."""
         round_obj = self._make_round_with_submitter(DecisionMakingRound.auto_round_id())

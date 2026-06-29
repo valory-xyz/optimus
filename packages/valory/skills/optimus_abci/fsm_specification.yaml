@@ -18,8 +18,13 @@ alphabet_in:
 - NONE
 - NO_MAJORITY
 - NO_MARKETPLACE
+- OFFCHAIN_ALL_FAILED
+- OFFCHAIN_DEPOSIT_NEEDED
+- OFFCHAIN_DONE
+- OFFCHAIN_MECH_DEPOSIT_SETTLED
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
+- RESPONSE_ROUND_TIMEOUT
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
 - SERVICE_NOT_STAKED
@@ -148,11 +153,14 @@ transition_func:
     (MechRequestRound, BUY_SUBSCRIPTION): MechPurchaseSubscriptionRound
     (MechRequestRound, DONE): RandomnessTransactionSubmissionRound
     (MechRequestRound, NO_MAJORITY): MechRequestRound
+    (MechRequestRound, OFFCHAIN_ALL_FAILED): CheckStakingKPIMetRound
+    (MechRequestRound, OFFCHAIN_DEPOSIT_NEEDED): RandomnessTransactionSubmissionRound
+    (MechRequestRound, OFFCHAIN_DONE): MechResponseRound
     (MechRequestRound, ROUND_TIMEOUT): MechRequestRound
     (MechRequestRound, SKIP_REQUEST): GetPositionsRound
     (MechResponseRound, DONE): CheckStakingKPIMetRound
     (MechResponseRound, NO_MAJORITY): MechResponseRound
-    (MechResponseRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
+    (MechResponseRound, RESPONSE_ROUND_TIMEOUT): CheckStakingKPIMetRound
     (MechVersionDetectionRound, NO_MAJORITY): MechVersionDetectionRound
     (MechVersionDetectionRound, NO_MARKETPLACE): MechRequestRound
     (MechVersionDetectionRound, ROUND_TIMEOUT): MechVersionDetectionRound
@@ -162,6 +170,7 @@ transition_func:
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
     (PostTxSettlementRound, MECH_REQUEST_TX_EXECUTED): MechResponseRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
+    (PostTxSettlementRound, OFFCHAIN_MECH_DEPOSIT_SETTLED): MechRequestRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound

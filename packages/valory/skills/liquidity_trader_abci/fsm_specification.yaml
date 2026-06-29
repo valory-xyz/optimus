@@ -8,6 +8,7 @@ alphabet_in:
 - NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
 - NO_MAJORITY
+- OFFCHAIN_MECH_DEPOSIT_SETTLED
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
 - SERVICE_NOT_STAKED
@@ -31,6 +32,7 @@ final_states:
 - FinishedTxPreparationRound
 - FinishedWithMechRequestRound
 - FinishedWithMechResponsePollRound
+- FinishedWithOffchainMechDepositSettledRound
 label: LiquidityTraderAbciApp
 start_states:
 - CallCheckpointRound
@@ -54,6 +56,7 @@ states:
 - FinishedTxPreparationRound
 - FinishedWithMechRequestRound
 - FinishedWithMechResponsePollRound
+- FinishedWithOffchainMechDepositSettledRound
 - GetPositionsRound
 - PostTxSettlementRound
 - WithdrawFundsRound
@@ -105,6 +108,7 @@ transition_func:
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
     (PostTxSettlementRound, MECH_REQUEST_TX_EXECUTED): FinishedWithMechResponsePollRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
+    (PostTxSettlementRound, OFFCHAIN_MECH_DEPOSIT_SETTLED): FinishedWithOffchainMechDepositSettledRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound

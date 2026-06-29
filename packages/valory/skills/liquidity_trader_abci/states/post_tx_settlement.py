@@ -54,7 +54,10 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
 from packages.valory.skills.mech_interact_abci.states.purchase_subscription import (
     MechPurchaseSubscriptionRound,
 )
-from packages.valory.skills.mech_interact_abci.states.request import MechRequestRound
+from packages.valory.skills.mech_interact_abci.states.request import (
+    OFFCHAIN_DEPOSIT_TX_SUBMITTER,
+    MechRequestRound,
+)
 
 
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
@@ -81,6 +84,9 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                 # MechRequestRound, so it must map back to the staking loop or the
                 # multiplexer returns UNRECOGNIZED and the loop dies.
                 MechRequestRound.auto_round_id(): Event.MECH_REQUEST_TX_EXECUTED,
+                # Settled off-chain auto-deposit: re-enter MechRequestRound
+                # for ``_retry_pending``, not forward to MechResponseRound.
+                OFFCHAIN_DEPOSIT_TX_SUBMITTER: Event.OFFCHAIN_MECH_DEPOSIT_SETTLED,
                 # Defensive: if the priority mech is ever a subscription-type mech,
                 # the subscription purchase settles via MechPurchaseSubscriptionRound.
                 # Unreachable with the current USDC mech config, but mapped so the

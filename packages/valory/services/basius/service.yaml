@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeierqtcvug7p4g4w6hdzl3ja2avvsdsbnj2zskyzztmbzwuvaanwbq
+agent: valory/basius:0.1.0:bafybeiazct6l36ckwpsyjmgvqg3jddjcynx7epa5slefiuv2tstid3qqji
 number_of_agents: 1
 deployment:
   agent:
@@ -236,7 +236,7 @@ type: skill
 models:
   params:
     args:
-      fund_requirements: ${FUND_REQUIREMENTS:dict:{"base":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":200000000000000,"threshold":100000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0}}}}}
+      fund_requirements: ${FUND_REQUIREMENTS:dict:{"base":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":200000000000000,"threshold":100000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"topup":700000,"threshold":350000}}}}}
       rpc_urls:
         base: ${BASE_LEDGER_RPC:str:https://mainnet.base.org}
       safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"base":"0x0000000000000000000000000000000000000000"}}

@@ -192,9 +192,9 @@ type: skill
 models:
   params:
     args:
-      fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":200000000000000,"threshold":100000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0}}}}}
-      rpc_urls: ${dict:{"optimism":"https://mainnet.optimism.io"}}
-      safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
+      fund_requirements: ${dict:{"base":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":200000000000000,"threshold":100000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"topup":700000,"threshold":350000}}}}}
+      rpc_urls: ${dict:{"base":"https://mainnet.base.org"}}
+      safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"base":"0x0000000000000000000000000000000000000000"}}
 ---
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection

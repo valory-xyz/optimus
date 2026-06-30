@@ -123,10 +123,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - checkpoint tx executed: 0.
             - vanity tx executed: 1.
             - mech request tx executed: 14.
+            - offchain mech deposit settled: 15.
             - transfer completed: 6.
             - withdrawal completed: 6.
             - round timeout: 5.
-            - unrecognized: 15.
+            - unrecognized: 16.
             - no majority: 5.
         6. FetchStrategiesRound
             - done: 0.

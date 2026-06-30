@@ -55,8 +55,8 @@ from packages.valory.skills.mech_interact_abci.states.purchase_subscription impo
     MechPurchaseSubscriptionRound,
 )
 from packages.valory.skills.mech_interact_abci.states.request import (
-    OFFCHAIN_DEPOSIT_TX_SUBMITTER,
     MechRequestRound,
+    OFFCHAIN_DEPOSIT_TX_SUBMITTER,
 )
 
 

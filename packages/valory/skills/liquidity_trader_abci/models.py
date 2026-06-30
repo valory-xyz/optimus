@@ -43,9 +43,7 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
-from packages.valory.skills.abstract_round_abci.models import (
-    TypeCheckMixin,
-)
+from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
 HTTP_OK = [200, 201]

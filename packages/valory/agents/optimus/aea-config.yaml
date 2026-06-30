@@ -68,9 +68,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
-- valory/liquidity_trader_abci:0.1.0:bafybeib5bwqtjyzchb7rhpjgjfxh4ytnf5chcgcpc53m5kuu4spu4ogzvi
-- valory/mech_interact_abci:0.1.0:bafybeia74laxd7irlqqf5vgyxk7oqou7qg5473zsd23gz6kvp2h7vonopq
-- valory/optimus_abci:0.1.0:bafybeiazbq6i6ojl3mxsuhvb66lpjpdt3qfjgaxpcjpthvexrkkbnw6gtq
+- valory/liquidity_trader_abci:0.1.0:bafybeiconwfittassmui2g72ynsohicbup5f64ok3xwk3xam7sasmjqzzu
+- valory/mech_interact_abci:0.1.0:bafybeid7fnkae2a4rxm776kh2t5wml67wapzx232q2colin3xz3uzdb2eu
+- valory/optimus_abci:0.1.0:bafybeig77lcbczmncrcw3sbthzqsk3omw7cla7knxqkzbbzknoszuy2gku
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq

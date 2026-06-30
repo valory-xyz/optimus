@@ -41,7 +41,7 @@ fingerprint:
   states/fetch_strategies.py: bafybeiekd4tfz2bhwpgkdbh64bhx7qgmpfh3s7dsh6ywdspjqbrf5lepo4
   states/final_rounds.py: bafybeie5fugrecjd657y7mb73owjatohrbhch3pmbhgots466tto75fzly
   states/get_positions.py: bafybeifazqmgjmsb7nczhxnlw2zu3njh2wupndzjngx5hxmzhpb4uvwpxm
-  states/post_tx_settlement.py: bafybeievusmxzofg2sggire27rmigbcmmk42y7kdxzz6z6yu35vpyakcgi
+  states/post_tx_settlement.py: bafybeieydq7bcbklfurrrgqya3hkz2urtbn4dr42j2fvh2cfbkj6ci63ji
   states/withdraw_funds.py: bafybeicqj3a5eqiceakfg7ukdhw4mhjk2h3aa6xygcl65m2qqaj3kfabdy
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
@@ -71,7 +71,7 @@ fingerprint:
   tests/states/test_fetch_strategies.py: bafybeieciu5qoegm6bfaizozk2fekjv5ng7jzyeyjqq25ehgrewf2xjpza
   tests/states/test_final_rounds.py: bafybeibsmzvrwa3ulgyu63tlbvxv3iswl5jxnw652ycxkbg4u2azb5ikx4
   tests/states/test_get_positions.py: bafybeih26ivewifofz4cspbalc4m5y7qvbzkhq7hw7v4nsan3lq7xzww5q
-  tests/states/test_post_tx_settlement.py: bafybeihvmp36pvuylvqo4qxxj65s7lfel6tdbjueehyur2nuovqbptlk4e
+  tests/states/test_post_tx_settlement.py: bafybeieqvkkocxtfqvh4y5s3jj7rzsghllfdnaocfeivti6akt6o7kf7gy
   tests/states/test_withdraw_funds.py: bafybeicnuwhfgrzdyhvoutngnj2dgnd3vfs4kmmpf63plyus6uboesj754
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4

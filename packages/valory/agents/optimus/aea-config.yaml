@@ -68,9 +68,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/funds_manager:0.1.0:bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m
-- valory/liquidity_trader_abci:0.1.0:bafybeife6f226slrr5jssegy6xdu76y3pbd5ecva7surbcihtdnqtclgwe
+- valory/liquidity_trader_abci:0.1.0:bafybeiecojesfn27hvbc6ba2hr5hddfj3u5ziibvm6p6zthqlgirou3kz4
 - valory/mech_interact_abci:0.1.0:bafybeihhwzpa6x5ypth426tzd2zjsnys6jmjaab4zvk4edisetzktft754
-- valory/optimus_abci:0.1.0:bafybeid5zpcjoqpgjhgnl64j67faobj4xjhi7jpxf6orcfokx2gkwza724
+- valory/optimus_abci:0.1.0:bafybeiaaw4hawin4ekvbzkvr62znle7cj7cato4vrniucuxm5fu2osrq3y
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq

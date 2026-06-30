@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+from types import SimpleNamespace
 from unittest.mock import PropertyMock
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
@@ -67,6 +68,16 @@ class TestPostTxSettlementRound:
         synced = SynchronizedData(db=db)
         type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
         type(round_obj).synchronized_data = PropertyMock(return_value=synced)  # type: ignore[method-assign]
+        # ``end_block`` logs at WARNING on the UNRECOGNIZED branch via
+        # self.context.logger; stub a no-op logger so the call is safe.
+        round_obj.context = SimpleNamespace(  # type: ignore[attr-defined]
+            logger=SimpleNamespace(
+                warning=lambda *a, **k: None,
+                info=lambda *a, **k: None,
+                error=lambda *a, **k: None,
+                debug=lambda *a, **k: None,
+            )
+        )
         return round_obj
 
     def test_end_block_checkpoint_executed(self) -> None:

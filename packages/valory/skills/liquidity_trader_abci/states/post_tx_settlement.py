@@ -100,6 +100,19 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
             synced_data = SynchronizedData(self.synchronized_data.db)
             event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
 
+            # An unrecognized submitter sends the round to
+            # FailedMultiplexerRound and silently drops the settled tx —
+            # including the off-chain deposit, where the funds have moved
+            # but the retry never fires. Log the offending value at WARNING
+            # so the cause is visible in agent logs instead of only in raw
+            # Tendermint state.
+            if event == Event.UNRECOGNIZED:
+                self.context.logger.warning(
+                    f"PostTxSettlementRound: unrecognized tx_submitter "
+                    f"{synced_data.tx_submitter!r}; routing to "
+                    f"FailedMultiplexerRound. Settled tx is dropped."
+                )
+
             if event == Event.CHECKPOINT_TX_EXECUTED:
                 synced_data = synced_data.update(  # type: ignore[assignment]
                     synchronized_data_class=SynchronizedData,

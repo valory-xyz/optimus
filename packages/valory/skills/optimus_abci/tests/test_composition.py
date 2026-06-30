@@ -125,6 +125,31 @@ def test_abci_app_transition_mapping_specific_transitions() -> None:
         abci_app_transition_mapping[ResetAndPauseAbci.FinishedResetAndPauseErrorRound]
         == RegistrationAbci.RegistrationRound
     )
+    # Off-chain mech edges. Pin each target individually — a flat
+    # value-set assertion would let a silent swap (e.g. routing
+    # FinishedWithOffchainMechDepositSettledRound to MechResponseRound
+    # instead of MechRequestRound) pass, which would break the
+    # _retry_pending leg the executor depends on after deposit settlement.
+    assert (
+        abci_app_transition_mapping[
+            LiquidityTraderAbci.FinishedWithOffchainMechDepositSettledRound
+        ]
+        == MechRequestStates.MechRequestRound
+    )
+    assert (
+        abci_app_transition_mapping[MechFinalStates.FinishedOffchainMechRequestRound]
+        == MechResponseStates.MechResponseRound
+    )
+    assert (
+        abci_app_transition_mapping[
+            MechFinalStates.FinishedOffchainMechDepositNeededRound
+        ]
+        == TxSettlementAbci.RandomnessTransactionSubmissionRound
+    )
+    assert (
+        abci_app_transition_mapping[MechFinalStates.FailedOffchainMechRequestRound]
+        == LiquidityTraderAbci.CheckStakingKPIMetRound
+    )
 
 
 def test_termination_config() -> None:

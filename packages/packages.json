@@ -23,12 +23,12 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeicqjs5styv3qubfd7askc6nnd2hrwqlawd6b7rvzyvp2ycbenensm",
         "contract/valory/balancer_queries/0.1.0": "bafybeieopocjnprwfazmacrgr4n6up2p2warpq7seiwhocb5f2uy4mrmrq",
         "contract/valory/mech_activity/0.1.0": "bafybeigycloyodu27j763cft673aookhzqxnn2sf2cdccoh4hvb5zxcq3i",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiconwfittassmui2g72ynsohicbup5f64ok3xwk3xam7sasmjqzzu",
-        "skill/valory/optimus_abci/0.1.0": "bafybeig77lcbczmncrcw3sbthzqsk3omw7cla7knxqkzbbzknoszuy2gku",
-        "agent/valory/optimus/0.1.0": "bafybeihq4nonrlfpseloyyx4ig5gubhkzomdqsu4h7fn2owkycvsqt3aii",
-        "agent/valory/basius/0.1.0": "bafybeichftcxcy7liqyrduot2xdoh3cur6652xfeomsyh4bezkh674wad4",
-        "service/valory/optimus/0.1.0": "bafybeigswdmlfml3e2se26l4sjybrzrkvvdlqwluhdvuazuizeyjx5kt3e",
-        "service/valory/basius/0.1.0": "bafybeih6i4nzxxfsubrafaewkvxmcod2sinpq6qo5qeiqjofmuzili3i6y"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeife6f226slrr5jssegy6xdu76y3pbd5ecva7surbcihtdnqtclgwe",
+        "skill/valory/optimus_abci/0.1.0": "bafybeid5zpcjoqpgjhgnl64j67faobj4xjhi7jpxf6orcfokx2gkwza724",
+        "agent/valory/optimus/0.1.0": "bafybeicjhvv53qgz65im5ye72vxq2spfibusskbqdlzdos22nmmejjjr7q",
+        "agent/valory/basius/0.1.0": "bafybeihtsvikneuqtansi5a2ybbdckjya3hq3f76msb6xhrimzwodjaxde",
+        "service/valory/optimus/0.1.0": "bafybeihhpx2btc4s3t552tv5e4lj7ruewszyqvw5lczcttl2u5xjh4aaxe",
+        "service/valory/basius/0.1.0": "bafybeigw5joghzf47wsr7ppqncmn6kmkq72gvglmzh4zm6zhx4qc6r6vm4"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
@@ -83,6 +83,6 @@
         "skill/valory/reset_pause_abci/0.1.0": "bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki",
         "skill/valory/termination_abci/0.1.0": "bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq",
         "skill/valory/funds_manager/0.1.0": "bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m",
-        "skill/valory/mech_interact_abci/0.1.0": "bafybeid7fnkae2a4rxm776kh2t5wml67wapzx232q2colin3xz3uzdb2eu"
+        "skill/valory/mech_interact_abci/0.1.0": "bafybeihhwzpa6x5ypth426tzd2zjsnys6jmjaab4zvk4edisetzktft754"
     }
 }

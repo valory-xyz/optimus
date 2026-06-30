@@ -28,7 +28,9 @@ from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
-from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
+from packages.valory.skills.abstract_round_abci.handlers import (
+    AbstractResponseHandler,
+)
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )

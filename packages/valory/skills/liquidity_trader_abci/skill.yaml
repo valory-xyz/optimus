@@ -20,10 +20,10 @@ fingerprint:
   behaviours/withdraw_funds.py: bafybeiaekrve5ozaogcu6ufqcnkqgkapdtjrlknif3nswhu5xkl6r5eaxm
   dialogues.py: bafybeic5bdlovivzkv3jnj6khbs7tzukv64ucea7w7y3tn2tgsequb2u2i
   fsm_specification.yaml: bafybeidzk6mlxohyqmkdg4nvgkm7lr2bwsxd7na2xywjotxhzsymcdngsq
-  handlers.py: bafybeie6ehrtvautufazb27bpni6wogqnyynwcojy555sezo2umv6xcpey
+  handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeidz4blvzqptardkgu6hsfvzcno76teh7gghqyhyvkqbpvbwvkxypi
+  models.py: bafybeihdkdetmh45xkfbug4brq7mwaz56y7agje6l5p4jq5slervlacjqu
   payloads.py: bafybeibvbjcwglyx3gasmx56u3nwneoxbkvefrry7pmguuayi3nlsa47oe
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy

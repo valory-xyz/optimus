@@ -23,12 +23,12 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeicqjs5styv3qubfd7askc6nnd2hrwqlawd6b7rvzyvp2ycbenensm",
         "contract/valory/balancer_queries/0.1.0": "bafybeieopocjnprwfazmacrgr4n6up2p2warpq7seiwhocb5f2uy4mrmrq",
         "contract/valory/mech_activity/0.1.0": "bafybeigycloyodu27j763cft673aookhzqxnn2sf2cdccoh4hvb5zxcq3i",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeigoe5msyzv2ompaxvhyijqf54666nltucnblqzuezysfesnzsjip4",
-        "skill/valory/optimus_abci/0.1.0": "bafybeihoneiqnskjd7eskcngaauypulhoqh5apvklrkbz6irpnt2556qnm",
-        "agent/valory/optimus/0.1.0": "bafybeihyp7ae5tefto2jci2tksszoyjya7ls3hu3yyuyfbaahuqbkblbzm",
-        "agent/valory/basius/0.1.0": "bafybeiazct6l36ckwpsyjmgvqg3jddjcynx7epa5slefiuv2tstid3qqji",
-        "service/valory/optimus/0.1.0": "bafybeih52axldd5orb2pjavmxb6lxnke4tdggrlqotyk6oam6ipa5zeiyy",
-        "service/valory/basius/0.1.0": "bafybeieyje3avjjhlk2qtxswu7uvukaqnsvzmlfvgy3qzarxyv3cd6viru"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidzr3nv5oshlrbcl5jinq7fkwpdfys73ey35vochfcfzcygbghl7q",
+        "skill/valory/optimus_abci/0.1.0": "bafybeib5bacn4tt2r6tfxxsgqfh7mqy2lbir2gqcqod2qgdd5hjvlyfxlm",
+        "agent/valory/optimus/0.1.0": "bafybeidw3u5mfour45ri3cmkyf4mhzuhkr3rh2nncmavxynpuicy77vevi",
+        "agent/valory/basius/0.1.0": "bafybeihwecqcwwwqsk7ivtwmz4qzqhfmfjwaxf4ytwygascrq25viixjay",
+        "service/valory/optimus/0.1.0": "bafybeighm2wthhp473egkjjy5ecedtoakpie724nj354mirwfzycnx7cuq",
+        "service/valory/basius/0.1.0": "bafybeicizwmautiixcpjayhw3yzpn5emjscmvve55jpdn3lv3dbzkgwqpm"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
@@ -50,8 +50,11 @@
         "contract/valory/staking_activity_checker/0.1.0": "bafybeif7h7ewjdojrqjg6fps2t4navbftvnjn45zcpiza554xhefdhprwa",
         "contract/valory/staking_token/0.1.0": "bafybeiev2of6e273dcmm4vqh5lejurn26wbhw4jf4wdabghrfi6abv6sqa",
         "contract/valory/mech_marketplace_legacy/0.1.0": "bafybeifkolgdeaoiveuppykvxkvja7c7pphn6jyivnk6x3bjl72rqpsogm",
+        "contract/valory/mech_marketplace/0.1.0": "bafybeieadbmhzndxe6jcfwujcpjrljpc5kfwffkd3zzpg75uxksufn4l3i",
         "contract/valory/mech/0.1.0": "bafybeid2v3rotkylgln5w2udm3nnmsrnw4g4nlkbwhqfwbte4kwlxup5l4",
         "contract/valory/mech_mm/0.1.0": "bafybeiaez7w5ssgcmt5fqbue4oywhxmcojrnxqimzksuojsksxwaqvwo5u",
+        "contract/valory/balance_tracker_fixed_price_native/0.1.0": "bafybeifobvptvc7mkrztfij664dqqegl6qi32773zewvyuftes32faemw4",
+        "contract/valory/balance_tracker_fixed_price_token/0.1.0": "bafybeienpn5nb7mgiw5uitm5mjwcgc2xd7bzx5rxu2mqsvjziwvlg6poxa",
         "contract/valory/ierc1155/0.1.0": "bafybeif3wfclopxa3panep4xzgodlfclgypm3balncxyuxbhhvgz7imulq",
         "contract/valory/nvm_balance_tracker_token/0.1.0": "bafybeifwxkaobltpm77oh2b54kuclm4vtx2bzpuoowqfdemkex5gb5yyfa",
         "contract/valory/nvm_balance_tracker_native/0.1.0": "bafybeibou3doazirk637cyey4o33pz7fpdm4hsgdj7vd2kctuqxtjgnmla",
@@ -80,6 +83,6 @@
         "skill/valory/reset_pause_abci/0.1.0": "bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki",
         "skill/valory/termination_abci/0.1.0": "bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq",
         "skill/valory/funds_manager/0.1.0": "bafybeibne4vkmbper3ryn7q6kt7lclbyylgorziscyn6msr5qt46aihv4m",
-        "skill/valory/mech_interact_abci/0.1.0": "bafybeidnmszufszq3ro4ebgrqzmhqgctrsc6sykeanfsbvotghvt2cgfsy"
+        "skill/valory/mech_interact_abci/0.1.0": "bafybeihhwzpa6x5ypth426tzd2zjsnys6jmjaab4zvk4edisetzktft754"
     }
 }

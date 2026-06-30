@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+from types import SimpleNamespace
 from unittest.mock import PropertyMock
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
@@ -67,6 +68,16 @@ class TestPostTxSettlementRound:
         synced = SynchronizedData(db=db)
         type(round_obj).threshold_reached = PropertyMock(return_value=True)  # type: ignore[method-assign]
         type(round_obj).synchronized_data = PropertyMock(return_value=synced)  # type: ignore[method-assign]
+        # ``end_block`` logs at WARNING on the UNRECOGNIZED branch via
+        # self.context.logger; stub a no-op logger so the call is safe.
+        round_obj.context = SimpleNamespace(  # type: ignore[attr-defined]
+            logger=SimpleNamespace(
+                warning=lambda *a, **k: None,
+                info=lambda *a, **k: None,
+                error=lambda *a, **k: None,
+                debug=lambda *a, **k: None,
+            )
+        )
         return round_obj
 
     def test_end_block_checkpoint_executed(self) -> None:
@@ -104,6 +115,26 @@ class TestPostTxSettlementRound:
         assert result is not None
         _, event = result
         assert event == Event.MECH_REQUEST_TX_EXECUTED
+
+    def test_end_block_offchain_mech_deposit_settled(self) -> None:
+        """Off-chain deposit retry sentinel maps to OFFCHAIN_MECH_DEPOSIT_SETTLED.
+
+        Without this dispatch the multiplexer would not recognise the
+        ``OFFCHAIN_DEPOSIT_TX_SUBMITTER`` sentinel and fall through to
+        ``Event.UNRECOGNIZED``, routing the settled deposit into
+        ``FailedMultiplexerRound`` and dropping the retry. The dedicated
+        event is what lets the composition route back into
+        ``MechRequestRound`` for ``_retry_pending`` to fire.
+        """
+        from packages.valory.skills.mech_interact_abci.states.request import (
+            OFFCHAIN_DEPOSIT_TX_SUBMITTER,
+        )
+
+        round_obj = self._make_round_with_submitter(OFFCHAIN_DEPOSIT_TX_SUBMITTER)
+        result = round_obj.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.OFFCHAIN_MECH_DEPOSIT_SETTLED
 
     def test_end_block_action_executed(self) -> None:
         """Test end_block returns ACTION_EXECUTED for DecisionMakingRound."""

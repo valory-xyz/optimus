@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeiazct6l36ckwpsyjmgvqg3jddjcynx7epa5slefiuv2tstid3qqji
+agent: valory/basius:0.1.0:bafybeihwecqcwwwqsk7ivtwmz4qzqhfmfjwaxf4ytwygascrq25viixjay
 number_of_agents: 1
 deployment:
   agent:
@@ -91,7 +91,7 @@ models:
       mech_wrapped_native_token_address: ${MECH_WRAPPED_NATIVE_TOKEN_ADDRESS:str:0x4200000000000000000000000000000000000006}
       mech_interaction_sleep_time: ${MECH_INTERACTION_SLEEP_TIME:int:10}
       use_mech_marketplace: ${USE_MECH_MARKETPLACE:bool:true}
-      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0xf24eE42edA0fc9b33B7D41B06Ee8ccD2Ef7C5020","priority_mech_address":"0xe535D7AcDEeD905dddcb5443f41980436833cA2B","priority_mech_service_id":112,"response_timeout":300,"use_dynamic_mech_selection":false}}
+      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0xf24eE42edA0fc9b33B7D41B06Ee8ccD2Ef7C5020","priority_mech_address":"0xe535D7AcDEeD905dddcb5443f41980436833cA2B","priority_mech_service_id":112,"response_timeout":300,"use_dynamic_mech_selection":false,"use_offchain":false,"offchain_url":null,"offchain_deposit_target_calls":10,"auto_deposit_cap_per_cycle":5000000,"offchain_poll_interval_seconds":3.0,"offchain_poll_timeout_seconds":300.0,"offchain_failover_max_retries":2}}
       agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
       valid_mechs: ${VALID_MECHS:list:["0xe535D7AcDEeD905dddcb5443f41980436833cA2B"]}

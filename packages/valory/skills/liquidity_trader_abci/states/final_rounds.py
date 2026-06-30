@@ -55,6 +55,15 @@ class FinishedWithMechResponsePollRound(DegenerateRound):
     """
 
 
+class FinishedWithOffchainMechDepositSettledRound(DegenerateRound):
+    """Off-chain deposit just settled; composition remaps to MechRequestRound.
+
+    Distinct from ``FinishedWithMechResponsePollRound`` so the multiplexer
+    routes the settled deposit back into ``MechRequestRound`` (for
+    ``_retry_pending``) rather than forward to ``MechResponseRound``.
+    """
+
+
 class FinishedDecisionMakingRound(DegenerateRound):
     """FinishedDecisionMakingRound"""
 

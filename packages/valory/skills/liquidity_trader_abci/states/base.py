@@ -88,6 +88,10 @@ class Event(Enum):
     # back to the staking loop after that request's tx settles.
     MECH_REQUEST_NEEDED = "mech_request_needed"
     MECH_REQUEST_TX_EXECUTED = "mech_request_tx_executed"
+    # Settled off-chain auto-deposit: routes back into MechRequestRound for
+    # ``_retry_pending`` rather than forward to MechResponseRound. Keyed off
+    # the ``OFFCHAIN_DEPOSIT_TX_SUBMITTER`` sentinel from mech_interact_abci.
+    OFFCHAIN_MECH_DEPOSIT_SETTLED = "offchain_mech_deposit_settled"
     TRANSFER_COMPLETED = "transfer_completed"
     WITHDRAWAL_COMPLETED = "withdrawal_completed"
     WITHDRAWAL_INITIATED = "withdrawal_initiated"

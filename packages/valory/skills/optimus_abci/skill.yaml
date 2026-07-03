@@ -175,10 +175,10 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
-- valory/liquidity_trader_abci:0.1.0:bafybeibkbzj5bibucm4tebzilbuhlkba4lb6j2t4brx7pitstvstfkon6m
+- valory/liquidity_trader_abci:0.1.0:bafybeihz6nzj7h3l2dsq665j73y2uxn27wlu4tqphkibpgwu5gcae5emji
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/mech_interact_abci:0.1.0:bafybeicjuagucpt4veyqbjvo35alj672jl45xi3om4ok6ecbeb36rio7de
+- valory/mech_interact_abci:0.1.0:bafybeifwuwtsi5p7cnjvhf2jbg6oiviesgil3kus5bldukan2bxjycymje
 behaviours:
   main:
     args: {}

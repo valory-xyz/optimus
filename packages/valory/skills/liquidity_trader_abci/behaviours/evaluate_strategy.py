@@ -1380,11 +1380,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     asset_symbol = asset.get("asset_symbol")
                     balance = asset.get("balance", 0)
 
-                    # Skip if no balance or asset is whitelisted
+                    # Skip if no balance or asset is whitelisted. The native
+                    # token is always kept out of the USDC sweep (gas and mech
+                    # request fees); _apply_mech_fee_reserve handles the fee
+                    # reserve separately.
                     if (
                         balance <= 0
                         or asset_address in whitelisted_tokens
                         or asset_address == olas_token_address
+                        or asset_address == ZERO_ADDRESS.lower()
                     ):
                         continue
 
@@ -2488,7 +2492,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_investable_balance(
         self, chain: str, token_address: str, total_balance: int
     ) -> Generator[None, None, int]:
-        """Get the portion of token balance available for investment (total - reserved rewards - airdrop rewards)"""
+        """Get the portion of token balance available for investment (total - mech fee reserve - reserved rewards - airdrop rewards)"""
+
+        total_balance = self._apply_mech_fee_reserve(
+            chain, token_address, total_balance
+        )
 
         # Check if this is a reward token
         reward_addresses = REWARD_TOKEN_ADDRESSES.get(chain, {})

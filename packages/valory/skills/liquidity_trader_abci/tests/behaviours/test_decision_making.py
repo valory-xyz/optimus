@@ -27,6 +27,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
+from packages.valory.contracts.gnosis_safe.contract import SafeOperation
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     Decision,
@@ -39,6 +40,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.decision_making import (
     DecisionMakingBehaviour,
+)
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    VelodromePoolBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import Event
 
@@ -152,6 +156,11 @@ def _make_gen_none():
         return None
 
     return method
+
+
+def _fund_requirements(token: str, topup: int) -> dict:
+    """fund_requirements reserving ``topup`` of ``token`` in the optimism safe."""
+    return {"optimism": {"safe": {token: {"topup": topup, "threshold": 10}}}}
 
 
 def _make_gen_method_by_token(token_map):
@@ -2011,6 +2020,22 @@ class TestGetTokenBalancesAndCalculateAmounts:
         )
         assert result == (None, None, None)
 
+    @pytest.mark.parametrize(
+        ("reserved_token", "expected"),
+        [("0x1", [600, 1000]), ("0x2", [1000, 600])],
+    )
+    def test_mech_fee_reserve_deducted(self, reserved_token, expected):
+        """The safe topup from fund_requirements is kept out of the amounts."""
+        b = _make_behaviour()
+        b._get_balance = MagicMock(return_value=1000)
+        b.params.fund_requirements = _fund_requirements(reserved_token, 400)
+        result = _exhaust(
+            b._get_token_balances_and_calculate_amounts("optimism", ["0x1", "0x2"], [])
+        )
+        assert result[0] == expected
+        assert result[1] == expected[0]
+        assert result[2] == expected[1]
+
 
 class TestGetTokenBalances:
     """TestGetTokenBalances."""
@@ -2877,6 +2902,32 @@ class TestCalculateVelodromeInvestmentAmounts:
             )
         )
         assert result is None
+
+    @pytest.mark.parametrize(
+        ("reserved_token", "expected"),
+        # Balances are 600/1000 (or 1000/600) after the 400 reserve:
+        # total USD 1600, 50/50 targets of 800 capped at the balances.
+        [("0x1", [600, 800]), ("0x2", [800, 600])],
+    )
+    def test_mech_fee_reserve_deducted(self, reserved_token, expected):
+        """The mech fee reserve is excluded from the investable balances."""
+        b = _make_behaviour()
+        b._get_balance = MagicMock(return_value=1000)
+        b._get_token_decimals = _make_gen_method(0)
+        b._fetch_token_price = _make_gen_method(1.0)
+        b.params.fund_requirements = _fund_requirements(reserved_token, 400)
+        action = {
+            "token_requirements": {
+                "overall_token0_ratio": 0.5,
+                "overall_token1_ratio": 0.5,
+            }
+        }
+        result = _exhaust(
+            b._calculate_velodrome_investment_amounts(
+                action, "optimism", ["0x1", "0x2"], [], []
+            )
+        )
+        assert result == expected
 
     def test_decimals_none(self):
         """Test decimals none."""
@@ -3902,6 +3953,41 @@ class TestGetDepositTxHash:
         result = _exhaust(b.get_deposit_tx_hash(action, []))
         assert result == (None, None, None)
 
+    def test_balance_none(self):
+        """An undeterminable balance aborts before any amount is computed."""
+        b = _make_behaviour()
+        b._get_balance = MagicMock(return_value=None)
+        action = {
+            "chain": "optimism",
+            "token0": self.TOKEN_ADDR,
+            "pool_address": self.POOL_ADDR,
+            "relative_funds_percentage": 1.0,
+        }
+        result = _exhaust(b.get_deposit_tx_hash(action, []))
+        assert result == (None, None, None)
+
+    @pytest.mark.parametrize(
+        ("balance", "topup", "percentage"),
+        [
+            (300, 400, 1.0),  # balance below the reserve
+            (1000, 999, 0.5),  # small remainder rounds the amount to zero
+        ],
+    )
+    def test_balance_consumed_by_reserve(self, balance, topup, percentage):
+        """A reserve-induced zero amount skips the deposit with a warning."""
+        b = _make_behaviour()
+        b._get_balance = MagicMock(return_value=balance)
+        b.params.fund_requirements = _fund_requirements(self.TOKEN_ADDR, topup)
+        action = {
+            "chain": "optimism",
+            "token0": self.TOKEN_ADDR,
+            "pool_address": self.POOL_ADDR,
+            "relative_funds_percentage": percentage,
+        }
+        result = _exhaust(b.get_deposit_tx_hash(action, []))
+        assert result == (None, None, None)
+        assert b.context.logger.warning.called
+
     def test_success(self):
         """Test success."""
         b = _make_behaviour()
@@ -3918,6 +4004,31 @@ class TestGetDepositTxHash:
         }
         result = _exhaust(b.get_deposit_tx_hash(action, []))
         assert result[0] is not None
+
+    def test_mech_fee_reserve_deducted(self):
+        """The deposited amount excludes the mech fee reserve."""
+        b = _make_behaviour()
+        b._get_balance = MagicMock(return_value=1000)
+        b.params.fund_requirements = _fund_requirements(self.TOKEN_ADDR, 400)
+        captured = {}
+
+        def approval(*a, **kw):
+            """Record the approval kwargs."""
+            captured.update(kw)
+            yield
+            return {"operation": 0, "to": self.POOL_ADDR, "value": 0, "data": b"x"}
+
+        b.get_approval_tx_hash = approval
+        b.contract_interact = _make_gen_method("0x" + "ab" * 32)
+        action = {
+            "chain": "optimism",
+            "token0": self.TOKEN_ADDR,
+            "pool_address": self.POOL_ADDR,
+            "relative_funds_percentage": 1.0,
+        }
+        result = _exhaust(b.get_deposit_tx_hash(action, []))
+        assert result[0] is not None
+        assert captured["amount"] == 600
 
     def test_approval_fails(self):
         """Test approval fails."""
@@ -4540,6 +4651,13 @@ class TestFetchRoutes:
             {"chain": "optimism", "assets": [{"address": "0xT1", "balance": 10000}]}
         ]
 
+    @staticmethod
+    def _routes_response():
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.body = json.dumps({"routes": [{"steps": []}]})
+        return resp
+
     def test_no_balance(self):
         """Test no balance."""
         b = _make_behaviour()
@@ -4547,6 +4665,32 @@ class TestFetchRoutes:
         b._get_balance = MagicMock(return_value=None)
         result = _exhaust(b.fetch_routes([], self._base_action()))
         assert result is None
+
+    def test_mech_fee_reserve_caps_swap_amount(self):
+        """The mech fee reserve is excluded from the amount sent to the router."""
+        b = _make_behaviour()
+        b._read_investing_paused = _make_gen_method(False)
+        b._get_balance = MagicMock(return_value=10000)
+        b._get_token_decimals = _make_gen_method(18)
+        b.params.fund_requirements = _fund_requirements("0xT1", 4000)
+        b.get_http_response = _make_gen_method(self._routes_response())
+        action = self._base_action()
+        result = _exhaust(b.fetch_routes(self._positions(), action))
+        assert result is not None
+        assert action["amount"] == 6000
+
+    def test_mech_fee_reserve_bypassed_on_withdrawal(self):
+        """Withdrawals sweep the full balance, ignoring the reserve."""
+        b = _make_behaviour()
+        b._read_investing_paused = _make_gen_method(True)
+        b._get_balance = MagicMock(return_value=10000)
+        b._get_token_decimals = _make_gen_method(18)
+        b.params.fund_requirements = _fund_requirements("0xT1", 4000)
+        b.get_http_response = _make_gen_method(self._routes_response())
+        action = self._base_action()
+        result = _exhaust(b.fetch_routes(self._positions(), action))
+        assert result is not None
+        assert action["amount"] == 10000
 
     def test_zero_amount(self):
         """Test zero amount."""
@@ -4966,6 +5110,41 @@ class TestStakeUnstakeClaimStakingRewards:
         action = self._velodrome_action()
         result = _exhaust(b.get_unstake_lp_tokens_tx_hash(action))
         assert result[0] is not None
+
+    def test_unstake_non_cl_real_pool_passes_gauge_tx_bytes_to_safe(self):
+        """Run the real Velodrome pool unstake path, stubbing only the contract boundary.
+
+        The gauge wrapper returns tx data as bytes and those bytes must
+        reach the Safe transaction call unchanged.
+        """
+        b = _make_behaviour()
+        b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
+        b.pools = {"velodrome": VelodromePoolBehaviour}
+        withdraw_tx_data = bytes.fromhex("aabbccdd")
+        gauge_address = "0x" + "9a" * 20
+        responses = {
+            "gauges": gauge_address,
+            "balance_of": 500,
+            "withdraw": withdraw_tx_data,
+            "get_raw_safe_transaction_hash": "0x" + "ab" * 32,
+        }
+        safe_tx_calls = []
+
+        def contract_interact(*args: Any, **kwargs: Any) -> Any:
+            """Contract boundary stub keyed on the contract callable."""
+            yield
+            if kwargs["contract_callable"] == "get_raw_safe_transaction_hash":
+                safe_tx_calls.append(kwargs)
+            return responses[kwargs["contract_callable"]]
+
+        b.contract_interact = contract_interact
+        result = _exhaust(b.get_unstake_lp_tokens_tx_hash(self._velodrome_action()))
+        assert result[0] is not None
+        assert result[1] == "optimism"
+        assert len(safe_tx_calls) == 1
+        assert safe_tx_calls[0]["data"] == withdraw_tx_data
+        assert safe_tx_calls[0]["to_address"] == gauge_address
+        assert safe_tx_calls[0]["operation"] == SafeOperation.CALL.value
 
     def test_unstake_non_cl_no_staked(self):
         """Test unstake non cl no staked."""

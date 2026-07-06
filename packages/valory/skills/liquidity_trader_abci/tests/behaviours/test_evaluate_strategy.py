@@ -3291,25 +3291,22 @@ class TestGetInvestableBalance:
         result = _drive(b._get_investable_balance("optimism", "0x" + "ab" * 20, 1000))
         assert result == 1000
 
-    def test_mech_fee_reserve_deducted(self):
+    @pytest.mark.parametrize(
+        ("topup", "expected"),
+        [
+            (300, 700),  # reserve deducted from the balance
+            (1000, 0),  # reserve at or above the balance leaves nothing
+        ],
+    )
+    def test_mech_fee_reserve(self, topup, expected):
         """The safe topup from fund_requirements is excluded from investment."""
         b = _mk()
         token = "0x" + "ab" * 20
         b.params.fund_requirements = {
-            "optimism": {"safe": {token: {"topup": 300, "threshold": 10}}}
+            "optimism": {"safe": {token: {"topup": topup, "threshold": 10}}}
         }
         result = _drive(b._get_investable_balance("optimism", token, 1000))
-        assert result == 700
-
-    def test_mech_fee_reserve_exceeds_balance(self):
-        """A balance at or below the reserve is not investable at all."""
-        b = _mk()
-        token = "0x" + "ab" * 20
-        b.params.fund_requirements = {
-            "optimism": {"safe": {token: {"topup": 1000, "threshold": 10}}}
-        }
-        result = _drive(b._get_investable_balance("optimism", token, 1000))
-        assert result == 0
+        assert result == expected
 
     def test_pure_reward_token(self):
         """Test pure reward token."""

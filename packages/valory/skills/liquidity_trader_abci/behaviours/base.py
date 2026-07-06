@@ -1234,7 +1234,11 @@ class LiquidityTraderBaseBehaviour(
             if address.lower() == token.lower():
                 try:
                     return int(requirement.get("topup", 0))
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, AttributeError):
+                    self.context.logger.warning(
+                        f"Malformed fund_requirements safe entry on {chain} "
+                        f"for {token}: {requirement!r}; mech fee reserve disabled."
+                    )
                     return 0
         return 0
 

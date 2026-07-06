@@ -158,6 +158,11 @@ def _make_gen_none():
     return method
 
 
+def _fund_requirements(token: str, topup: int) -> dict:
+    """fund_requirements reserving ``topup`` of ``token`` in the optimism safe."""
+    return {"optimism": {"safe": {token: {"topup": topup, "threshold": 10}}}}
+
+
 def _make_gen_method_by_token(token_map):
     """Build a fake is_cl_token_staked that returns token_map[token_id]."""
 
@@ -2019,9 +2024,7 @@ class TestGetTokenBalancesAndCalculateAmounts:
         """The safe topup from fund_requirements is kept out of the amounts."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
-        b.params.fund_requirements = {
-            "optimism": {"safe": {"0x1": {"topup": 400, "threshold": 10}}}
-        }
+        b.params.fund_requirements = _fund_requirements("0x1", 400)
         result = _exhaust(
             b._get_token_balances_and_calculate_amounts("optimism", ["0x1", "0x2"], [])
         )
@@ -2902,9 +2905,7 @@ class TestCalculateVelodromeInvestmentAmounts:
         b._get_balance = MagicMock(return_value=1000)
         b._get_token_decimals = _make_gen_method(0)
         b._fetch_token_price = _make_gen_method(1.0)
-        b.params.fund_requirements = {
-            "optimism": {"safe": {"0x1": {"topup": 400, "threshold": 10}}}
-        }
+        b.params.fund_requirements = _fund_requirements("0x1", 400)
         action = {
             "token_requirements": {
                 "overall_token0_ratio": 0.5,
@@ -3944,6 +3945,19 @@ class TestGetDepositTxHash:
         result = _exhaust(b.get_deposit_tx_hash(action, []))
         assert result == (None, None, None)
 
+    def test_balance_none(self):
+        """An undeterminable balance aborts before any amount is computed."""
+        b = _make_behaviour()
+        b._get_balance = MagicMock(return_value=None)
+        action = {
+            "chain": "optimism",
+            "token0": self.TOKEN_ADDR,
+            "pool_address": self.POOL_ADDR,
+            "relative_funds_percentage": 1.0,
+        }
+        result = _exhaust(b.get_deposit_tx_hash(action, []))
+        assert result == (None, None, None)
+
     def test_success(self):
         """Test success."""
         b = _make_behaviour()
@@ -3965,9 +3979,7 @@ class TestGetDepositTxHash:
         """The deposited amount excludes the mech fee reserve."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
-        b.params.fund_requirements = {
-            "optimism": {"safe": {self.TOKEN_ADDR: {"topup": 400, "threshold": 10}}}
-        }
+        b.params.fund_requirements = _fund_requirements(self.TOKEN_ADDR, 400)
         captured = {}
 
         def approval(*a, **kw):
@@ -4609,7 +4621,8 @@ class TestFetchRoutes:
             {"chain": "optimism", "assets": [{"address": "0xT1", "balance": 10000}]}
         ]
 
-    def _routes_response(self):
+    @staticmethod
+    def _routes_response():
         resp = MagicMock()
         resp.status_code = 200
         resp.body = json.dumps({"routes": [{"steps": []}]})
@@ -4629,9 +4642,7 @@ class TestFetchRoutes:
         b._read_investing_paused = _make_gen_method(False)
         b._get_balance = MagicMock(return_value=10000)
         b._get_token_decimals = _make_gen_method(18)
-        b.params.fund_requirements = {
-            "optimism": {"safe": {"0xT1": {"topup": 4000, "threshold": 10}}}
-        }
+        b.params.fund_requirements = _fund_requirements("0xT1", 4000)
         b.get_http_response = _make_gen_method(self._routes_response())
         action = self._base_action()
         result = _exhaust(b.fetch_routes(self._positions(), action))
@@ -4644,9 +4655,7 @@ class TestFetchRoutes:
         b._read_investing_paused = _make_gen_method(True)
         b._get_balance = MagicMock(return_value=10000)
         b._get_token_decimals = _make_gen_method(18)
-        b.params.fund_requirements = {
-            "optimism": {"safe": {"0xT1": {"topup": 4000, "threshold": 10}}}
-        }
+        b.params.fund_requirements = _fund_requirements("0xT1", 4000)
         b.get_http_response = _make_gen_method(self._routes_response())
         action = self._base_action()
         result = _exhaust(b.fetch_routes(self._positions(), action))

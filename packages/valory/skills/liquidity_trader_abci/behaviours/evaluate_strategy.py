@@ -1380,9 +1380,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     asset_symbol = asset.get("asset_symbol")
                     balance = asset.get("balance", 0)
 
-                    # Skip if no balance or asset is whitelisted. Native ETH is
-                    # never swept: the safe pays mech request fees in native on
-                    # Base, so converting it would break staking KPI requests.
+                    # Skip if no balance or asset is whitelisted. The native
+                    # token is never swept: it is reserved for gas and, where
+                    # the mech charges in native, for mech request fees.
                     if (
                         balance <= 0
                         or asset_address in whitelisted_tokens

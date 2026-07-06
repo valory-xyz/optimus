@@ -8,11 +8,11 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/base.py: bafybeiejo5e2q54yt2tmsn3vsy6iidprsgneiztb7inyfuvcnotclcree4
+  behaviours/base.py: bafybeian2n4ob4o7icuz3suraa7pszrvemi4fr5xscunybcai3lmkvxvfi
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeicgcoqk45xn67ymbf2bmjdrmiafn7hqcrqkxppa3t26bixlpsmupi
   behaviours/decision_making.py: bafybeidar7ksuaqyg43m4epenqz5tvctic6syzxyo6bkynpaplqssmx6b4
-  behaviours/evaluate_strategy.py: bafybeihpzwvpqxjqr2gqbcpko6le3jx7xr3g4i7fxabiivpffewbqppone
+  behaviours/evaluate_strategy.py: bafybeicjsfpgzthad7dhrp3owklpgpwck3wcokzckukseuwle74w6gq7te
   behaviours/fetch_strategies.py: bafybeihbo4blzpdezityxhvdtwntzewalfro6uomjkigs4x66apnnteqgm
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeia2fn7abt7zjifitv34vwylohqmuk5r7ptkdk62oeemg66v3klfii
@@ -46,11 +46,11 @@ fingerprint:
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
-  tests/behaviours/test_base.py: bafybeihefdotpk2cvzyrxq4xodtayyccjivj3ennsw4kn5x2futxhrvjae
+  tests/behaviours/test_base.py: bafybeieoaxfldhj35mj63y5is75auywkidh6sqip6ese7wdfop2ptb2jxm
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeidcud7pqdkjmmimdrbn2ygndsf46aqs4rvfse5zinryes6lgxoz7u
-  tests/behaviours/test_decision_making.py: bafybeigbbk4ohzerw7655sgfqhpnp2z3lf2ddo3vo4mxz655b3up5rmwcy
-  tests/behaviours/test_evaluate_strategy.py: bafybeiegeypa7zafe4ex3kljxtcuxwei6iqltiihm7th7td6f65szll63i
+  tests/behaviours/test_decision_making.py: bafybeigwkixiwyo6nydbroqdwhopqhpujypdbqkx2ar5hkczlhbyiynnpq
+  tests/behaviours/test_evaluate_strategy.py: bafybeihfvpnx56ajddmmtrvm5pj2dgtrd54w3qhztgm2zdle5bnb2cpgf4
   tests/behaviours/test_fetch_strategies.py: bafybeihlgbn3qqxbgrcfczg3cjhfx4vcteap4fdkfsswetuszbtgijkoju
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeigievecybq7geucnqou7av3rrqsnjitgxydbo6fjopmki34n74q5u

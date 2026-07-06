@@ -2020,17 +2020,21 @@ class TestGetTokenBalancesAndCalculateAmounts:
         )
         assert result == (None, None, None)
 
-    def test_mech_fee_reserve_deducted(self):
+    @pytest.mark.parametrize(
+        ("reserved_token", "expected"),
+        [("0x1", [600, 1000]), ("0x2", [1000, 600])],
+    )
+    def test_mech_fee_reserve_deducted(self, reserved_token, expected):
         """The safe topup from fund_requirements is kept out of the amounts."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
-        b.params.fund_requirements = _fund_requirements("0x1", 400)
+        b.params.fund_requirements = _fund_requirements(reserved_token, 400)
         result = _exhaust(
             b._get_token_balances_and_calculate_amounts("optimism", ["0x1", "0x2"], [])
         )
-        assert result[0] == [600, 1000]
-        assert result[1] == 600
-        assert result[2] == 1000
+        assert result[0] == expected
+        assert result[1] == expected[0]
+        assert result[2] == expected[1]
 
 
 class TestGetTokenBalances:
@@ -3957,6 +3961,21 @@ class TestGetDepositTxHash:
         }
         result = _exhaust(b.get_deposit_tx_hash(action, []))
         assert result == (None, None, None)
+
+    def test_balance_fully_reserved(self):
+        """A balance at or below the mech fee reserve skips the deposit with a warning."""
+        b = _make_behaviour()
+        b._get_balance = MagicMock(return_value=300)
+        b.params.fund_requirements = _fund_requirements(self.TOKEN_ADDR, 400)
+        action = {
+            "chain": "optimism",
+            "token0": self.TOKEN_ADDR,
+            "pool_address": self.POOL_ADDR,
+            "relative_funds_percentage": 1.0,
+        }
+        result = _exhaust(b.get_deposit_tx_hash(action, []))
+        assert result == (None, None, None)
+        assert b.context.logger.warning.called
 
     def test_success(self):
         """Test success."""

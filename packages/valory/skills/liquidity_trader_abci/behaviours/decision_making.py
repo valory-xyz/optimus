@@ -1892,7 +1892,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Could not determine balance for {asset}")
             return None, None, None
 
+        raw_balance = token_balance
         token_balance = self._apply_mech_fee_reserve(chain, asset, token_balance)
+        if token_balance == 0 and raw_balance > 0:
+            self.context.logger.warning(
+                f"Balance of {asset} on {chain} is fully reserved for mech fees; "
+                "skipping deposit."
+            )
+            return None, None, None
         amount = int(min(token_balance * relative_funds_percentage, token_balance))
 
         safe_address = self.params.safe_contract_addresses.get(chain)

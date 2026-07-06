@@ -427,17 +427,27 @@ class TestMechFeeReserve:
         }
         assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
 
-    @pytest.mark.parametrize("topup", ["not-a-number", None])
+    @pytest.mark.parametrize("topup", ["not-a-number", None, -500, "-500"])
     def test_reserve_malformed_topup_warns_and_disables(self, topup: Any) -> None:
-        """A malformed topup disables the reserve and logs a warning."""
+        """A malformed or negative topup disables the reserve and logs a warning."""
         b = self._behaviour_with_requirements(topup)
         assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
         assert b.context.logger.warning.called
 
-    def test_reserve_non_dict_safe_entry_warns_and_disables(self) -> None:
-        """A non-dict safe entry disables the reserve and logs a warning."""
+    @pytest.mark.parametrize(
+        "fund_requirements",
+        [
+            {"base": {"safe": {TOKEN: 42}}},  # non-dict token entry
+            {"base": {"safe": "oops"}},  # non-dict safe container
+            {"base": "oops"},  # non-dict chain container
+        ],
+    )
+    def test_reserve_malformed_containers_warn_and_disable(
+        self, fund_requirements: Any
+    ) -> None:
+        """Any non-dict level of fund_requirements disables the reserve with a warning."""
         b = _make_behaviour()
-        b.context.params.fund_requirements = {"base": {"safe": {self.TOKEN: 42}}}
+        b.context.params.fund_requirements = fund_requirements
         assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
         assert b.context.logger.warning.called
 

@@ -2903,13 +2903,19 @@ class TestCalculateVelodromeInvestmentAmounts:
         )
         assert result is None
 
-    def test_mech_fee_reserve_deducted(self):
+    @pytest.mark.parametrize(
+        ("reserved_token", "expected"),
+        # Balances are 600/1000 (or 1000/600) after the 400 reserve:
+        # total USD 1600, 50/50 targets of 800 capped at the balances.
+        [("0x1", [600, 800]), ("0x2", [800, 600])],
+    )
+    def test_mech_fee_reserve_deducted(self, reserved_token, expected):
         """The mech fee reserve is excluded from the investable balances."""
         b = _make_behaviour()
         b._get_balance = MagicMock(return_value=1000)
         b._get_token_decimals = _make_gen_method(0)
         b._fetch_token_price = _make_gen_method(1.0)
-        b.params.fund_requirements = _fund_requirements("0x1", 400)
+        b.params.fund_requirements = _fund_requirements(reserved_token, 400)
         action = {
             "token_requirements": {
                 "overall_token0_ratio": 0.5,
@@ -2921,9 +2927,7 @@ class TestCalculateVelodromeInvestmentAmounts:
                 action, "optimism", ["0x1", "0x2"], [], []
             )
         )
-        # Balances are 600/1000 after the 400 reserve on token0:
-        # total USD 1600, 50/50 targets of 800 capped at the balances.
-        assert result == [600, 800]
+        assert result == expected
 
     def test_decimals_none(self):
         """Test decimals none."""
@@ -3962,16 +3966,23 @@ class TestGetDepositTxHash:
         result = _exhaust(b.get_deposit_tx_hash(action, []))
         assert result == (None, None, None)
 
-    def test_balance_fully_reserved(self):
-        """A balance at or below the mech fee reserve skips the deposit with a warning."""
+    @pytest.mark.parametrize(
+        ("balance", "topup", "percentage"),
+        [
+            (300, 400, 1.0),  # balance below the reserve
+            (1000, 999, 0.5),  # small remainder rounds the amount to zero
+        ],
+    )
+    def test_balance_consumed_by_reserve(self, balance, topup, percentage):
+        """A reserve-induced zero amount skips the deposit with a warning."""
         b = _make_behaviour()
-        b._get_balance = MagicMock(return_value=300)
-        b.params.fund_requirements = _fund_requirements(self.TOKEN_ADDR, 400)
+        b._get_balance = MagicMock(return_value=balance)
+        b.params.fund_requirements = _fund_requirements(self.TOKEN_ADDR, topup)
         action = {
             "chain": "optimism",
             "token0": self.TOKEN_ADDR,
             "pool_address": self.POOL_ADDR,
-            "relative_funds_percentage": 1.0,
+            "relative_funds_percentage": percentage,
         }
         result = _exhaust(b.get_deposit_tx_hash(action, []))
         assert result == (None, None, None)

@@ -1381,8 +1381,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     balance = asset.get("balance", 0)
 
                     # Skip if no balance or asset is whitelisted. The native
-                    # token is never swept: it is reserved for gas and, where
-                    # the mech charges in native, for mech request fees.
+                    # token is always kept out of the USDC sweep (gas and mech
+                    # request fees); _apply_mech_fee_reserve handles the fee
+                    # reserve separately.
                     if (
                         balance <= 0
                         or asset_address in whitelisted_tokens

@@ -1229,18 +1229,24 @@ class LiquidityTraderBaseBehaviour(
         :param token: token address; ``ZERO_ADDRESS`` for native.
         :return: reserved amount in wei/smallest unit, 0 if none configured.
         """
-        safe_requirements = self.params.fund_requirements.get(chain, {}).get("safe", {})
-        for address, requirement in safe_requirements.items():
-            if address.lower() == token.lower():
-                try:
-                    return int(requirement.get("topup", 0))
-                except (ValueError, TypeError, AttributeError):
-                    self.context.logger.warning(
-                        f"Malformed fund_requirements safe entry on {chain} "
-                        f"for {token}: {requirement!r}; mech fee reserve disabled."
-                    )
-                    return 0
-        return 0
+        try:
+            safe_requirements = self.params.fund_requirements.get(chain, {}).get(
+                "safe", {}
+            )
+            for address, requirement in safe_requirements.items():
+                if address.lower() != token.lower():
+                    continue
+                topup = int(requirement.get("topup", 0))
+                if topup < 0:
+                    raise ValueError(f"negative topup: {topup}")
+                return topup
+            return 0
+        except (ValueError, TypeError, AttributeError) as e:
+            self.context.logger.warning(
+                f"Malformed fund_requirements on {chain} for {token} ({e}); "
+                "mech fee reserve disabled."
+            )
+            return 0
 
     def _apply_mech_fee_reserve(self, chain: str, token: str, balance: int) -> int:
         """Return ``balance`` minus the mech fee reserve, floored at 0."""

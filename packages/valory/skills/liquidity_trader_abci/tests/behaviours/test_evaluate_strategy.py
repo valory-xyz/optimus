@@ -1032,6 +1032,36 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         result = self._call(b)
         assert result == []
 
+    def test_skips_native_eth(self):
+        """Native ETH in the safe is never swept to USDC."""
+        b = _mk()
+        b._get_usdc_address = MagicMock(return_value="0xusdc")
+        b._build_swap_to_usdc_action = MagicMock(
+            return_value={"action": "swap", "token": "ETH"}
+        )
+        synced_mock = MagicMock()
+        synced_mock.positions = [
+            {
+                "chain": "optimism",
+                "assets": [
+                    {
+                        "address": ZERO_ADDRESS,
+                        "asset_symbol": "ETH",
+                        "balance": 10**18,
+                    }
+                ],
+            }
+        ]
+        with patch.object(
+            type(b),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced_mock,
+        ):
+            result = self._call(b)
+        assert result == []
+        b._build_swap_to_usdc_action.assert_not_called()
+
 
 class TestCalculateAggregateTokenRatios:
     """Tests for _calculate_aggregate_token_ratios."""
@@ -3260,6 +3290,26 @@ class TestGetInvestableBalance:
         b = _mk()
         result = _drive(b._get_investable_balance("optimism", "0x" + "ab" * 20, 1000))
         assert result == 1000
+
+    def test_mech_fee_reserve_deducted(self):
+        """The safe topup from fund_requirements is excluded from investment."""
+        b = _mk()
+        token = "0x" + "ab" * 20
+        b.params.fund_requirements = {
+            "optimism": {"safe": {token: {"topup": 300, "threshold": 10}}}
+        }
+        result = _drive(b._get_investable_balance("optimism", token, 1000))
+        assert result == 700
+
+    def test_mech_fee_reserve_exceeds_balance(self):
+        """A balance at or below the reserve is not investable at all."""
+        b = _mk()
+        token = "0x" + "ab" * 20
+        b.params.fund_requirements = {
+            "optimism": {"safe": {token: {"topup": 1000, "threshold": 10}}}
+        }
+        result = _drive(b._get_investable_balance("optimism", token, 1000))
+        assert result == 0
 
     def test_pure_reward_token(self):
         """Test pure reward token."""

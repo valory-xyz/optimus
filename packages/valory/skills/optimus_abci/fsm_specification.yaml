@@ -24,7 +24,6 @@ alphabet_in:
 - OFFCHAIN_MECH_DEPOSIT_SETTLED
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
-- RESPONSE_ROUND_TIMEOUT
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
 - SERVICE_NOT_STAKED
@@ -160,7 +159,7 @@ transition_func:
     (MechRequestRound, SKIP_REQUEST): GetPositionsRound
     (MechResponseRound, DONE): CheckStakingKPIMetRound
     (MechResponseRound, NO_MAJORITY): MechResponseRound
-    (MechResponseRound, RESPONSE_ROUND_TIMEOUT): CheckStakingKPIMetRound
+    (MechResponseRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (MechVersionDetectionRound, NO_MAJORITY): MechVersionDetectionRound
     (MechVersionDetectionRound, NO_MARKETPLACE): MechRequestRound
     (MechVersionDetectionRound, ROUND_TIMEOUT): MechVersionDetectionRound

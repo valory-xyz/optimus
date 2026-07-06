@@ -38,11 +38,14 @@ packages/valory/contracts/erc20/
 packages/valory/contracts/staking_activity_checker/
 packages/valory/contracts/staking_token/
 packages/valory/contracts/mech_marketplace_legacy/
+packages/valory/contracts/mech_marketplace/
 packages/valory/contracts/mech/
 packages/valory/contracts/mech_mm/
 packages/valory/contracts/ierc1155/
 packages/valory/contracts/nvm_balance_tracker_token/
 packages/valory/contracts/nvm_balance_tracker_native/
+packages/valory/contracts/balance_tracker/
+packages/valory/contracts/balance_tracker_fixed_price_native/
 packages/valory/contracts/escrow_payment_condition/
 packages/valory/contracts/did_registry/
 packages/valory/contracts/nft_sales/

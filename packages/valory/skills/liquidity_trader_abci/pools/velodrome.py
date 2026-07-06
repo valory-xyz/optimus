@@ -2953,7 +2953,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"Successfully created unstake transaction for {amount} LP tokens"
         )
         return {
-            "tx_hash": bytes.fromhex(withdraw_tx_hash[2:]),
+            # the gauge wrapper's withdraw already returns tx data as bytes
+            "tx_hash": withdraw_tx_hash,
             "contract_address": gauge_address,
             "amount": amount,
             "success": True,

@@ -4741,17 +4741,23 @@ class TestUnstakeLpTokens:
         assert "withdraw" in result["error"].lower()
 
     def test_success(self) -> None:
-        """Happy path."""
+        """Happy path.
+
+        The gauge wrapper's withdraw returns tx data as bytes and the
+        result must carry those bytes through unchanged.
+        """
         b = make_behaviour()
         b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
-        b.contract_interact = make_contract_interact(["0xGauge", 200, "0xaabbccdd"])
+        withdraw_tx_data = bytes.fromhex("aabbccdd")
+        b.contract_interact = make_contract_interact(["0xGauge", 200, withdraw_tx_data])
         result = exhaust_generator(
             b.unstake_lp_tokens("0xLP", 100, chain="optimism", safe_address="0xSafe")
         )
         assert result["success"] is True
         assert result["is_multisend"] is False
         assert result["amount"] == 100
-        assert isinstance(result["tx_hash"], bytes)
+        assert result["contract_address"] == "0xGauge"
+        assert result["tx_hash"] == withdraw_tx_data
 
 
 class TestClaimRewards:

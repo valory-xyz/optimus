@@ -387,6 +387,86 @@ class TestGetBalance:
         assert b._get_balance("optimism", "0xabcd", positions) == 999
 
 
+class TestMechFeeReserve:
+    """Test _get_mech_fee_reserve and _apply_mech_fee_reserve."""
+
+    TOKEN = "0x" + "ab" * 20
+
+    def _behaviour_with_requirements(self, topup: Any) -> LiquidityTraderBaseBehaviour:
+        """Behaviour whose fund_requirements reserve ``topup`` for TOKEN on base."""
+        b = _make_behaviour()
+        b.context.params.fund_requirements = {
+            "base": {
+                "agent": {ZERO_ADDRESS: {"topup": 999, "threshold": 1}},
+                "safe": {self.TOKEN: {"topup": topup, "threshold": 350}},
+            }
+        }
+        return b
+
+    def test_reserve_from_safe_topup(self) -> None:
+        """The reserve equals the safe topup configured for the token."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._get_mech_fee_reserve("base", self.TOKEN) == 4000
+
+    def test_reserve_case_insensitive(self) -> None:
+        """Token address matching ignores case."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._get_mech_fee_reserve("base", self.TOKEN.upper()) == 4000
+
+    def test_reserve_unknown_chain(self) -> None:
+        """A chain without fund_requirements has no reserve."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._get_mech_fee_reserve("optimism", self.TOKEN) == 0
+
+    def test_reserve_token_not_configured(self) -> None:
+        """A token without a safe entry has no reserve."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._get_mech_fee_reserve("base", ZERO_ADDRESS) == 0
+
+    def test_reserve_ignores_agent_entries(self) -> None:
+        """Agent-level requirements never count as a safe reserve."""
+        b = _make_behaviour()
+        b.context.params.fund_requirements = {
+            "base": {"agent": {self.TOKEN: {"topup": 999, "threshold": 1}}}
+        }
+        assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
+
+    def test_reserve_invalid_topup_value(self) -> None:
+        """A non-numeric topup falls back to no reserve."""
+        b = self._behaviour_with_requirements("not-a-number")
+        assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
+
+    def test_reserve_none_topup_value(self) -> None:
+        """A None topup falls back to no reserve."""
+        b = self._behaviour_with_requirements(None)
+        assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
+
+    def test_apply_deducts_reserve(self) -> None:
+        """The spendable balance is total minus the reserve."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._apply_mech_fee_reserve("base", self.TOKEN, 10000) == 6000
+
+    def test_apply_floors_at_zero(self) -> None:
+        """A balance below the reserve yields zero, never negative."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._apply_mech_fee_reserve("base", self.TOKEN, 3999) == 0
+
+    def test_apply_balance_equal_to_reserve(self) -> None:
+        """A balance equal to the reserve is fully reserved."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._apply_mech_fee_reserve("base", self.TOKEN, 4000) == 0
+
+    def test_apply_without_reserve_returns_balance(self) -> None:
+        """Tokens without a configured reserve keep the full balance."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._apply_mech_fee_reserve("base", ZERO_ADDRESS, 10000) == 10000
+
+    def test_apply_zero_reserve_returns_balance(self) -> None:
+        """A zero topup means nothing is reserved."""
+        b = self._behaviour_with_requirements(0)
+        assert b._apply_mech_fee_reserve("base", self.TOKEN, 10000) == 10000
+
+
 class TestGetActiveLpAddresses:
     """Test _get_active_lp_addresses."""
 

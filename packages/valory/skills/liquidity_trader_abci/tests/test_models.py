@@ -595,6 +595,7 @@ class TestParams:
             "balancer_graphql_endpoints": json.dumps({}),
             "target_investment_chains": ["ethereum"],
             "staking_chain": "ethereum",
+            "fund_requirements": {},
             "file_hash_to_strategies": json.dumps({}),
             "strategies_kwargs": json.dumps({}),
             "available_protocols": ["balancerPool"],

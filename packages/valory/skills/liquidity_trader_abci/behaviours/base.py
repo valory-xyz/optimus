@@ -1217,6 +1217,40 @@ class LiquidityTraderBaseBehaviour(
 
         return None
 
+    def _get_mech_fee_reserve(self, chain: str, token: str) -> int:
+        """Get the safe-balance portion of ``token`` reserved for mech request fees.
+
+        The reserve is the safe topup declared in ``fund_requirements`` (the
+        same config the funds_manager skill reports to the operator for
+        refills). Reserving exactly the topup keeps the refilled amount out
+        of investments so mech payments can't be invested away.
+
+        :param chain: chain identifier (e.g. ``"base"``).
+        :param token: token address; ``ZERO_ADDRESS`` for native.
+        :return: reserved amount in wei/smallest unit, 0 if none configured.
+        """
+        safe_requirements = self.params.fund_requirements.get(chain, {}).get("safe", {})
+        for address, requirement in safe_requirements.items():
+            if address.lower() == token.lower():
+                try:
+                    return int(requirement.get("topup", 0))
+                except (ValueError, TypeError):
+                    return 0
+        return 0
+
+    def _apply_mech_fee_reserve(self, chain: str, token: str, balance: int) -> int:
+        """Return ``balance`` minus the mech fee reserve, floored at 0."""
+        reserve = self._get_mech_fee_reserve(chain, token)
+        if reserve <= 0:
+            return balance
+        spendable = max(0, balance - reserve)
+        if spendable != balance:
+            self.context.logger.info(
+                f"Mech fee reserve on {chain} for {token}: "
+                f"balance={balance}, reserved={reserve}, spendable={spendable}"
+            )
+        return spendable
+
     def _get_token_decimals(
         self, chain: str, asset_address: str
     ) -> Generator[None, None, Optional[int]]:

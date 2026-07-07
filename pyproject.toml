@@ -40,6 +40,7 @@ dependencies = [
     "certifi==2026.2.25",
     "hexbytes==1.3.1",
     "pyinstaller==6.19.0",
+    "cffi<2.1.0",
 ]
 
 [project.urls]

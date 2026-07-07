@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeic4nmsdjizfqn3wih4agxfak6novigjqe6huvo3fdv3xnydy2rydq
+agent: valory/optimus:0.1.0:bafybeia6xldvwdwfin4nxm7l6bg45vir6cszv3fo3crrzgldi6h36cb5sa
 number_of_agents: 1
 deployment:
   agent:
@@ -65,6 +65,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       round_timeout_seconds: 30.0
+      mech_interact_round_timeout_seconds: ${MECH_INTERACT_ROUND_TIMEOUT_SECONDS:int:900}
       service_id: optimus
       service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x48b6af7B12C71f09e2fC8aF4855De4Ff54e775cA}
       share_tm_config_on_startup: ${USE_ACN:bool:false}

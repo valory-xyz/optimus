@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeifa53dshw255knmjwq6kih3mm6tyta4dvlulc4vogt6fgg6xvyene
+agent: valory/basius:0.1.0:bafybeievwsxt66fveptpeiojbqtpg3o32w3dtmmfeovapbv5tkmspiqxry
 number_of_agents: 1
 deployment:
   agent:
@@ -65,6 +65,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       round_timeout_seconds: 30.0
+      mech_interact_round_timeout_seconds: ${MECH_INTERACT_ROUND_TIMEOUT_SECONDS:int:900}
       service_id: basius
       service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE}
       share_tm_config_on_startup: ${USE_ACN:bool:false}

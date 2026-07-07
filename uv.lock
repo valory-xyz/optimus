@@ -2404,6 +2404,7 @@ source = { editable = "." }
 dependencies = [
     { name = "asn1crypto" },
     { name = "certifi" },
+    { name = "cffi" },
     { name = "google-generativeai" },
     { name = "gql", extra = ["requests"] },
     { name = "grpcio" },
@@ -2444,6 +2445,7 @@ dev = [
 requires-dist = [
     { name = "asn1crypto", specifier = ">=1.4.0,<1.5.0" },
     { name = "certifi", specifier = "==2026.2.25" },
+    { name = "cffi", specifier = "<2.1.0" },
     { name = "google-generativeai", specifier = "==0.8.2" },
     { name = "gql", extras = ["requests"], specifier = "==3.5.0" },
     { name = "grpcio", specifier = "==1.78.0" },

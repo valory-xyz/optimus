@@ -21,7 +21,8 @@
 
 # pylint: skip-file
 
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock, call, patch
 
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
 from packages.valory.skills.optimus_abci.models import (
@@ -40,13 +41,21 @@ def test_import() -> None:
 class TestParams:
     """Test Params class."""
 
-    def test_init_extracts_service_endpoint_base(self) -> None:
-        """Test Params __init__ extracts service_endpoint_base."""
+    def test_init_extracts_service_endpoint_base_and_mech_timeout(self) -> None:
+        """Test Params __init__ extracts service_endpoint_base and mech_interact_round_timeout_seconds."""
         mock_context = MagicMock()
         mock_context.skill_id = "test_skill/test:0.1.0"
+
+        def _ensure_side_effect(name: str, _kwargs: Any, type_: Any) -> Any:
+            if name == "service_endpoint_base":
+                return "http://localhost:8000"
+            if name == "mech_interact_round_timeout_seconds":
+                return 900
+            raise AssertionError(f"Unexpected _ensure call for {name}")
+
         with (
             patch.object(
-                Params, "_ensure", return_value="http://localhost:8000"
+                Params, "_ensure", side_effect=_ensure_side_effect
             ) as mock_ensure,
             patch.object(Params.__bases__[0], "__init__", return_value=None),
         ):
@@ -54,16 +63,23 @@ class TestParams:
             params.__init__(  # type: ignore[misc]
                 skill_context=mock_context,
                 service_endpoint_base="http://localhost:8000",
+                mech_interact_round_timeout_seconds=900,
             )
-            mock_ensure.assert_called_once_with(
-                "service_endpoint_base",
-                {
-                    "skill_context": mock_context,
-                    "service_endpoint_base": "http://localhost:8000",
-                },
-                str,
-            )
+            expected_kwargs = {
+                "skill_context": mock_context,
+                "service_endpoint_base": "http://localhost:8000",
+                "mech_interact_round_timeout_seconds": 900,
+            }
+            assert mock_ensure.call_args_list == [
+                call("service_endpoint_base", expected_kwargs, str),
+                call(
+                    "mech_interact_round_timeout_seconds",
+                    expected_kwargs,
+                    type_=int,
+                ),
+            ]
             assert params.service_endpoint_base == "http://localhost:8000"
+            assert params.mech_interact_round_timeout_seconds == 900
 
 
 class TestSharedState:

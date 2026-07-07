@@ -53,6 +53,7 @@ from packages.valory.skills.mech_interact_abci.models import Params as MechParam
 from packages.valory.skills.mech_interact_abci.models import (
     SharedState as MechSharedState,
 )
+from packages.valory.skills.mech_interact_abci.rounds import Event as MechInteractEvent
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
 from packages.valory.skills.registration_abci.rounds import Event as RegistrationEvent
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
@@ -66,6 +67,7 @@ EventType = Union[
     Type[TransactionSettlementEvent],
     Type[ResetPauseEvent],
     Type[RegistrationEvent],
+    Type[MechInteractEvent],
 ]
 EventToTimeoutMappingType = Dict[
     Union[
@@ -73,6 +75,7 @@ EventToTimeoutMappingType = Dict[
         TransactionSettlementEvent,
         ResetPauseEvent,
         RegistrationEvent,
+        MechInteractEvent,
     ],
     float,
 ]
@@ -118,6 +121,9 @@ class Params(  # pylint: disable=too-many-ancestors
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Init"""
         self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
+        self.mech_interact_round_timeout_seconds: int = self._ensure(
+            "mech_interact_round_timeout_seconds", kwargs, type_=int
+        )
         super().__init__(*args, **kwargs)
 
 
@@ -150,6 +156,9 @@ class SharedState(BaseSharedState, MechSharedState):
         round_timeout_overrides = {
             cast(EventType, event).ROUND_TIMEOUT: round_timeout for event in events
         }
+        round_timeout_overrides[MechInteractEvent.ROUND_TIMEOUT] = (
+            self.params.mech_interact_round_timeout_seconds
+        )
         reset_pause_timeout = self.params.reset_pause_duration + MARGIN
         event_to_timeout_overrides: EventToTimeoutMappingType = {
             **round_timeout_overrides,

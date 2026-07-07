@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiesti3733fzubsk2wexse4pwrdovakbmrconnbvm5txqjutx4ubie
+agent: valory/optimus:0.1.0:bafybeihidpdpzchbxqnndnjgk4uqmhgzcjwgqsaafceux2a2hyraogjshq
 number_of_agents: 1
 deployment:
   agent:
@@ -65,6 +65,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       round_timeout_seconds: 30.0
+      mech_interact_round_timeout_seconds: ${MECH_INTERACT_ROUND_TIMEOUT_SECONDS:int:900}
       service_id: optimus
       service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x48b6af7B12C71f09e2fC8aF4855De4Ff54e775cA}
       share_tm_config_on_startup: ${USE_ACN:bool:false}
@@ -91,7 +92,7 @@ models:
       mech_wrapped_native_token_address: ${MECH_WRAPPED_NATIVE_TOKEN_ADDRESS:str:0x4200000000000000000000000000000000000006}
       mech_interaction_sleep_time: ${MECH_INTERACTION_SLEEP_TIME:int:10}
       use_mech_marketplace: ${USE_MECH_MARKETPLACE:bool:true}
-      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E","priority_mech_service_id":195,"response_timeout":300,"use_dynamic_mech_selection":false}}
+      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E","priority_mech_service_id":195,"response_timeout":300,"use_dynamic_mech_selection":false,"use_offchain":false,"offchain_url":null,"offchain_deposit_target_calls":10,"auto_deposit_cap_per_cycle":5000000,"offchain_poll_interval_seconds":3.0,"offchain_poll_timeout_seconds":300.0,"offchain_failover_max_retries":2}}
       agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
       valid_mechs: ${VALID_MECHS:list:["0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E"]}
@@ -114,7 +115,6 @@ models:
       allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism","mode"]}
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
-      fund_requirements: ${FUND_REQUIREMENTS:dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":200000000000000,"threshold":100000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0},"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85":{"topup":700000,"threshold":350000}}}}}
       initial_assets: ${INITIAL_ASSETS:str:{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"}}}
       file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeib2szveecjhwlu5aeww5umtso5sm4btogsrjuqg4tk5uormjmsppi":"max_apr_selection","bafybeiaktss4rvsyiqg43yauc3aj5mq3ztysgqopc2dvxkslswj25kdtcm":"balancer_pools_search","bafybeiglbwfrhxbgqyyg6oniwur2x6sswmi5ed55crzvrhr3o7p5x3kmne":"uniswap_pools_search","bafybeifiotxje5ndkdj673oo2uxfpj76fd32qjp7tpxbbdmidbzcqna23a":"asset_lending","bafybeielyh7i7qjm54h3tne4gcgiuqutqavmczoqc6bguupqnnjzwjtvm4":"velodrome_pools_search"}}
       strategies_kwargs: ${STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"velodrome_pools_search":{"graphql_endpoint":"https://gateway.thegraph.com/api/b8e4cf1b314c67d2a0109325046a7464/subgraphs/id/A4Y1A82YhSLTn998BVVELC8eWzhi992k4ZitByvssxqA"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}

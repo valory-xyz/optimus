@@ -74,6 +74,14 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     # No request built (should not happen — the producer always injects one):
     # fall back to normal trading.
     MechFinalStates.FinishedMechRequestSkipRound: LiquidityTraderAbci.GetPositionsRound,
+    # Off-chain mech_interact_abci edges. Happy path skips settlement and
+    # polls HTTP. Deposit-needed settles via TxSettlement; the off-chain
+    # ``tx_submitter`` sentinel routes the settled deposit back into
+    # MechRequestRound where ``_retry_pending`` re-POSTs the cached request.
+    MechFinalStates.FinishedOffchainMechRequestRound: MechResponseStates.MechResponseRound,
+    MechFinalStates.FinishedOffchainMechDepositNeededRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
+    LiquidityTraderAbci.FinishedWithOffchainMechDepositSettledRound: MechRequestStates.MechRequestRound,
+    MechFinalStates.FailedOffchainMechRequestRound: LiquidityTraderAbci.CheckStakingKPIMetRound,
 }
 
 termination_config = BackgroundAppConfig(

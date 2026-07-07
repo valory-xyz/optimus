@@ -54,7 +54,10 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
 from packages.valory.skills.mech_interact_abci.states.purchase_subscription import (
     MechPurchaseSubscriptionRound,
 )
-from packages.valory.skills.mech_interact_abci.states.request import MechRequestRound
+from packages.valory.skills.mech_interact_abci.states.request import (
+    MechRequestRound,
+    OFFCHAIN_DEPOSIT_TX_SUBMITTER,
+)
 
 
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
@@ -81,6 +84,9 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                 # MechRequestRound, so it must map back to the staking loop or the
                 # multiplexer returns UNRECOGNIZED and the loop dies.
                 MechRequestRound.auto_round_id(): Event.MECH_REQUEST_TX_EXECUTED,
+                # Settled off-chain auto-deposit: re-enter MechRequestRound
+                # for ``_retry_pending``, not forward to MechResponseRound.
+                OFFCHAIN_DEPOSIT_TX_SUBMITTER: Event.OFFCHAIN_MECH_DEPOSIT_SETTLED,
                 # Defensive: if the priority mech is ever a subscription-type mech,
                 # the subscription purchase settles via MechPurchaseSubscriptionRound.
                 # Unreachable with the current USDC mech config, but mapped so the
@@ -93,6 +99,19 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
             synced_data = SynchronizedData(self.synchronized_data.db)
             event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
+
+            # An unrecognized submitter sends the round to
+            # FailedMultiplexerRound and silently drops the settled tx —
+            # including the off-chain deposit, where the funds have moved
+            # but the retry never fires. Log the offending value at WARNING
+            # so the cause is visible in agent logs instead of only in raw
+            # Tendermint state.
+            if event == Event.UNRECOGNIZED:
+                self.context.logger.warning(
+                    f"PostTxSettlementRound: unrecognized tx_submitter "
+                    f"{synced_data.tx_submitter!r}; routing to "
+                    f"FailedMultiplexerRound. Settled tx is dropped."
+                )
 
             if event == Event.CHECKPOINT_TX_EXECUTED:
                 synced_data = synced_data.update(  # type: ignore[assignment]

@@ -1232,6 +1232,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # Fetch balances and prices to compute total USD principal slice
         token0_balance = self._get_balance(chain, assets[0], positions) or 0
         token1_balance = self._get_balance(chain, assets[1], positions) or 0
+        token0_balance = self._apply_mech_fee_reserve(chain, assets[0], token0_balance)
+        token1_balance = self._apply_mech_fee_reserve(chain, assets[1], token1_balance)
 
         # Get decimals
         token0_decimals = yield from self._get_token_decimals(chain, assets[0])
@@ -1331,6 +1333,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if token0_balance is None or token1_balance is None:
                 self.context.logger.error("Balance for one or more tokens is None")
                 return None, None, None
+
+            token0_balance = self._apply_mech_fee_reserve(
+                chain, assets[0], token0_balance
+            )
+            token1_balance = self._apply_mech_fee_reserve(
+                chain, assets[1], token1_balance
+            )
 
             # Calculate max_amounts_in based on whether max_investment_amounts are provided
             if max_investment_amounts:
@@ -1879,7 +1888,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
         token_balance = self._get_balance(chain, asset, positions)
+        if token_balance is None:
+            self.context.logger.error(f"Could not determine balance for {asset}")
+            return None, None, None
+
+        raw_balance = token_balance
+        token_balance = self._apply_mech_fee_reserve(chain, asset, token_balance)
         amount = int(min(token_balance * relative_funds_percentage, token_balance))
+        if amount == 0 and token_balance < raw_balance:
+            self.context.logger.warning(
+                f"Deposit amount for {asset} on {chain} is zero after the "
+                "mech fee reserve; skipping deposit."
+            )
+            return None, None, None
 
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address
@@ -2612,6 +2633,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Could not determine available amount for {from_token_symbol} on chain {from_chain}"
             )
             return None
+
+        # Withdrawals must sweep everything, including the mech fee reserve.
+        if not investing_paused:
+            available_amount = self._apply_mech_fee_reserve(
+                from_chain, from_token_address, available_amount
+            )
 
         # Calculate the amount to swap based on the available amount and funds percentage
         snapshot_balance = action.get("source_initial_balance")

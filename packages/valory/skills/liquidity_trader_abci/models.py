@@ -522,6 +522,12 @@ class Params(BaseParams):
         self.staking_chain: Optional[str] = self._ensure(
             "staking_chain", kwargs, Optional[str]
         )
+        # Same shape as the funds_manager skill's fund_requirements. The safe
+        # topups double as mech-fee reserves: that portion of the safe balance
+        # is excluded from investment so refills aren't invested away.
+        self.fund_requirements: Dict[str, Any] = self._ensure(
+            "fund_requirements", kwargs, Dict[str, Any]
+        )
         self.file_hash_to_strategies = json.loads(
             self._ensure("file_hash_to_strategies", kwargs, str)
         )

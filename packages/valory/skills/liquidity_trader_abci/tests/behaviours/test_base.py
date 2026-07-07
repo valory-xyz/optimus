@@ -28,6 +28,8 @@ import time
 from typing import Any, Generator, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
+
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     AIRDROP_TOTAL_KEY,
     Action,
@@ -385,6 +387,88 @@ class TestGetBalance:
             }
         ]
         assert b._get_balance("optimism", "0xabcd", positions) == 999
+
+
+class TestMechFeeReserve:
+    """Test _get_mech_fee_reserve and _apply_mech_fee_reserve."""
+
+    TOKEN = "0x" + "ab" * 20
+
+    def _behaviour_with_requirements(self, topup: Any) -> LiquidityTraderBaseBehaviour:
+        """Behaviour whose fund_requirements reserve ``topup`` for TOKEN on base."""
+        b = _make_behaviour()
+        b.context.params.fund_requirements = {
+            "base": {
+                "agent": {ZERO_ADDRESS: {"topup": 999, "threshold": 1}},
+                "safe": {self.TOKEN: {"topup": topup, "threshold": 350}},
+            }
+        }
+        return b
+
+    @pytest.mark.parametrize(
+        ("chain", "token", "expected"),
+        [
+            ("base", TOKEN, 4000),  # safe topup configured for the token
+            ("base", TOKEN.upper(), 4000),  # address matching ignores case
+            ("optimism", TOKEN, 0),  # chain without fund_requirements
+            ("base", ZERO_ADDRESS, 0),  # token without a safe entry
+        ],
+    )
+    def test_reserve_lookup(self, chain: str, token: str, expected: int) -> None:
+        """The reserve is the safe topup for the token, 0 when unconfigured."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._get_mech_fee_reserve(chain, token) == expected
+
+    def test_reserve_ignores_agent_entries(self) -> None:
+        """Agent-level requirements never count as a safe reserve."""
+        b = _make_behaviour()
+        b.context.params.fund_requirements = {
+            "base": {"agent": {self.TOKEN: {"topup": 999, "threshold": 1}}}
+        }
+        assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
+
+    @pytest.mark.parametrize("topup", ["not-a-number", None, -500, "-500"])
+    def test_reserve_malformed_topup_warns_and_disables(self, topup: Any) -> None:
+        """A malformed or negative topup disables the reserve and logs a warning."""
+        b = self._behaviour_with_requirements(topup)
+        assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
+        assert b.context.logger.warning.called
+
+    @pytest.mark.parametrize(
+        "fund_requirements",
+        [
+            {"base": {"safe": {TOKEN: 42}}},  # non-dict token entry
+            {"base": {"safe": "oops"}},  # non-dict safe container
+            {"base": "oops"},  # non-dict chain container
+        ],
+    )
+    def test_reserve_malformed_containers_warn_and_disable(
+        self, fund_requirements: Any
+    ) -> None:
+        """Any non-dict level of fund_requirements disables the reserve with a warning."""
+        b = _make_behaviour()
+        b.context.params.fund_requirements = fund_requirements
+        assert b._get_mech_fee_reserve("base", self.TOKEN) == 0
+        assert b.context.logger.warning.called
+
+    @pytest.mark.parametrize(
+        ("topup", "balance", "expected"),
+        [
+            (4000, 10000, 6000),  # reserve deducted from balance
+            (4000, 3999, 0),  # balance below reserve floors at zero
+            (4000, 4000, 0),  # balance equal to reserve is fully reserved
+            (0, 10000, 10000),  # zero topup reserves nothing
+        ],
+    )
+    def test_apply_reserve(self, topup: int, balance: int, expected: int) -> None:
+        """The spendable balance is total minus the reserve, floored at zero."""
+        b = self._behaviour_with_requirements(topup)
+        assert b._apply_mech_fee_reserve("base", self.TOKEN, balance) == expected
+
+    def test_apply_without_reserve_returns_balance(self) -> None:
+        """Tokens without a configured reserve keep the full balance."""
+        b = self._behaviour_with_requirements(4000)
+        assert b._apply_mech_fee_reserve("base", ZERO_ADDRESS, 10000) == 10000
 
 
 class TestGetActiveLpAddresses:

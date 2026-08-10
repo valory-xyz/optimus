@@ -176,10 +176,10 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
-- valory/liquidity_trader_abci:0.1.0:bafybeid37vydz5bwad4m7qt72rdpozkkvlgd7ge4oa5gqqw7v2yzpjypbe
+- valory/liquidity_trader_abci:0.1.0:bafybeidumahmmpiximajwjaqd2n6gj67mexozcbw2wdere7y6bukae5k7q
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/mech_interact_abci:0.1.0:bafybeifbkpgivxjexlhrptn2iaju7vyzeusevvucsin6tbjwveniykad2q
+- valory/mech_interact_abci:0.1.0:bafybeic5xfxdod5l56o7aojdamojnvi562nql2mlah73bf47d4guz4xnwi
 behaviours:
   main:
     args: {}
@@ -347,13 +347,13 @@ models:
         priority_mech_service_id: 194
         response_timeout: 300
         use_dynamic_mech_selection: false
-        use_offchain: false
         offchain_url: null
-        offchain_deposit_target_calls: 10
         auto_deposit_cap_per_cycle: 5000000
         offchain_poll_interval_seconds: 3.0
         offchain_poll_timeout_seconds: 300.0
         offchain_failover_max_retries: 2
+      use_offchain: false
+      offchain_deposit_target_calls: 10
       agent_registry_address: '0x0000000000000000000000000000000000000000'
       use_acn_for_delivers: false
       valid_mechs:

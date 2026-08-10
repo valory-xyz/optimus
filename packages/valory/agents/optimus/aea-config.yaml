@@ -71,9 +71,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeid37vydz5bwad4m7qt72rdpozkkvlgd7ge4oa5gqqw7v2yzpjypbe
-- valory/mech_interact_abci:0.1.0:bafybeifbkpgivxjexlhrptn2iaju7vyzeusevvucsin6tbjwveniykad2q
-- valory/optimus_abci:0.1.0:bafybeie4hwrhuijqwqe5klnq5i3m5yruok4flni4yioiotccsybydv6vzm
+- valory/liquidity_trader_abci:0.1.0:bafybeidumahmmpiximajwjaqd2n6gj67mexozcbw2wdere7y6bukae5k7q
+- valory/mech_interact_abci:0.1.0:bafybeic5xfxdod5l56o7aojdamojnvi562nql2mlah73bf47d4guz4xnwi
+- valory/optimus_abci:0.1.0:bafybeihidmxwhpfjvltyrhyirbcofu2wtmlgnjilp3ukuxyirofyyrujhu
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
@@ -337,6 +337,8 @@ models:
       mech_interaction_sleep_time: ${MECH_INTERACTION_SLEEP_TIME:int:10}
       use_mech_marketplace: ${USE_MECH_MARKETPLACE:bool:true}
       mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E","priority_mech_service_id":195,"response_timeout":300,"use_dynamic_mech_selection":false}}
+      use_offchain: ${USE_OFFCHAIN:bool:false}
+      offchain_deposit_target_calls: ${OFFCHAIN_DEPOSIT_TARGET_CALLS:int:10}
       agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
       valid_mechs: ${VALID_MECHS:list:["0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E"]}

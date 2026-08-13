@@ -27,8 +27,8 @@
         "skill/valory/optimus_abci/0.1.0": "bafybeicnggl4ltr7ovph2545sgpmikdpy4sfolx2stsq472tayffocf6xe",
         "agent/valory/optimus/0.1.0": "bafybeihksainrc4b2vgmgtkc6qanryuug3zlgc2oqca2qz5w4ccedqkury",
         "agent/valory/basius/0.1.0": "bafybeihd64d5cjl2pgkveirvwmz7in2ryqecxlogfjpk2xhqgm5kkg2kem",
-        "service/valory/optimus/0.1.0": "bafybeifrbk2wrlnimzun3ckhwzk4r75jxoceapsjiztkylvugcv4l2r6ui",
-        "service/valory/basius/0.1.0": "bafybeichuqgphtbfkrs5aqt3vuypkefzziwx3trzfi4cynwu5hwt72uhqu"
+        "service/valory/optimus/0.1.0": "bafybeigkqmzkry6ntm267tatsfi4eqcgqmaxm5yle7rscipp4stc37xixe",
+        "service/valory/basius/0.1.0": "bafybeiauuasd2lnxgpgo6epcdq5vrzqw7m364ojd64kmy2dxbflvmb5vhe"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

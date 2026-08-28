@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeic3n3mfjco7utxbuscc43eeoxob6jkurrhq7qlaltjrowrpqnxitu
+agent: valory/optimus:0.1.0:bafybeif2uhvhtwezmosefoxcpeqijzlp4kqkjgu4slivp5amksf6okygsu
 number_of_agents: 1
 deployment:
   agent:
@@ -29,54 +29,54 @@ models:
     args:
       setup:
         all_participants: ${ALL_PARTICIPANTS:list:[]}
-        consensus_threshold: null
+        consensus_threshold: ${CONSENSUS_THRESHOLD:int:null}
         safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
       genesis_config:
-        genesis_time: '2022-09-26T00:00:00.000000000Z'
-        chain_id: chain-c4daS1
+        genesis_time: ${GENESIS_TIME:str:2022-09-26T00:00:00.000000000Z}
+        chain_id: ${GENESIS_CHAIN_ID:str:chain-c4daS1}
         consensus_params:
           block:
-            max_bytes: '22020096'
-            max_gas: '-1'
-            time_iota_ms: '1000'
+            max_bytes: ${GENESIS_BLOCK_MAX_BYTES:str:22020096}
+            max_gas: ${GENESIS_BLOCK_MAX_GAS:str:-1}
+            time_iota_ms: ${GENESIS_BLOCK_TIME_IOTA_MS:str:1000}
           evidence:
-            max_age_num_blocks: '100000'
-            max_age_duration: '172800000000000'
-            max_bytes: '1048576'
+            max_age_num_blocks: ${GENESIS_EVIDENCE_MAX_AGE_NUM_BLOCKS:str:100000}
+            max_age_duration: ${GENESIS_EVIDENCE_MAX_AGE_DURATION:str:172800000000000}
+            max_bytes: ${GENESIS_EVIDENCE_MAX_BYTES:str:1048576}
           validator:
             pub_key_types:
             - ed25519
           version: {}
-        voting_power: '10'
-      cleanup_history_depth: 1
-      cleanup_history_depth_current: null
-      drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
+        voting_power: ${GENESIS_VOTING_POWER:str:10}
+      cleanup_history_depth: ${CLEANUP_HISTORY_DEPTH:int:1}
+      cleanup_history_depth_current: ${CLEANUP_HISTORY_DEPTH_CURRENT:int:null}
+      drand_public_key: ${DRAND_PUBLIC_KEY:str:868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31}
       earliest_block_to_monitor: ${EARLIEST_BLOCK_TO_MONITOR:int:8053690}
-      keeper_timeout: 30.0
-      max_attempts: 10
-      max_healthcheck: 120
+      keeper_timeout: ${KEEPER_TIMEOUT:float:30.0}
+      max_attempts: ${MAX_ATTEMPTS:int:10}
+      max_healthcheck: ${MAX_HEALTHCHECK:int:120}
       multisend_address: ${MULTISEND_ADDRESS:str:0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD}
       termination_sleep: ${TERMINATION_SLEEP:int:900}
       reset_pause_duration: ${RESET_PAUSE_DURATION:int:30}
       on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
       reset_tendermint_after: ${RESET_TENDERMINT_AFTER:int:30}
-      retry_attempts: 400
-      retry_timeout: 3
-      request_retry_delay: 1.0
-      request_timeout: 10.0
-      round_timeout_seconds: 30.0
+      retry_attempts: ${RETRY_ATTEMPTS:int:400}
+      retry_timeout: ${RETRY_TIMEOUT:int:3}
+      request_retry_delay: ${REQUEST_RETRY_DELAY:float:1.0}
+      request_timeout: ${REQUEST_TIMEOUT:float:10.0}
+      round_timeout_seconds: ${ROUND_TIMEOUT_SECONDS:float:30.0}
       mech_interact_round_timeout_seconds: ${MECH_INTERACT_ROUND_TIMEOUT_SECONDS:int:900}
-      service_id: optimus
+      service_id: ${SERVICE_ID:str:optimus}
       service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x48b6af7B12C71f09e2fC8aF4855De4Ff54e775cA}
       share_tm_config_on_startup: ${USE_ACN:bool:false}
-      sleep_time: 1
-      tendermint_check_sleep_delay: 3
+      sleep_time: ${SLEEP_TIME:int:1}
+      tendermint_check_sleep_delay: ${TENDERMINT_CHECK_SLEEP_DELAY:int:3}
       tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
-      tendermint_max_retries: 5
+      tendermint_max_retries: ${TENDERMINT_MAX_RETRIES:int:5}
       tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
-      tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:}
-      tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:}
-      tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:}
+      tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:null}
+      tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:null}
+      tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:null}
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
       safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}}
       staking_token_contract_address: ${STAKING_TOKEN_CONTRACT_ADDRESS:str:0x88996bbdE7f982D93214881756840cE2c77C4992}
@@ -225,8 +225,8 @@ type: connection
 config:
   host: ${HTTP_SERVER_HOST:str:0.0.0.0}
   port: ${HTTP_SERVER_PORT:int:8716}
-  ssl_cert: ${SSL_CERT_PATH:str:}
-  ssl_key: ${SSL_KEY_PATH:str:}
+  ssl_cert: ${SSL_CERT_PATH:str:null}
+  ssl_key: ${SSL_KEY_PATH:str:null}
   timeout: ${TIMEOUT:int:30}
 ---
 public_id: valory/kv_store:0.1.0

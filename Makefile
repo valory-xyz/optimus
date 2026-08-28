@@ -92,6 +92,7 @@ common-checks-2:
 	tox -qq -e check-abciapp-specs
 	tox -qq -e check-dependencies
 	tox -qq -e check-handlers
+	tomte tox -qq -e analyse-service
 
 .PHONY: all-checks
 all-checks: format code-checks security generators common-checks-1 common-checks-2
@@ -112,6 +113,7 @@ ci-linter-checks:
 	tox -qq -e check-abci-docstrings
 	tox -qq -e check-abciapp-specs
 	tox -qq -e check-handlers
+	tomte tox -qq -e analyse-service
 
 .PHONY: fix-abci-app-specs
 fix-abci-app-specs:

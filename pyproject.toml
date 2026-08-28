@@ -10,9 +10,9 @@ requires-python = "<3.15,>=3.10"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    "open-autonomy[cli]==0.21.26",
-    "open-aea-test-autonomy==0.21.26",
-    "open-aea-helpers==0.21.26",
+    "open-autonomy[cli]==0.21.28",
+    "open-aea-test-autonomy==0.21.28",
+    "open-aea-helpers==0.21.28",
     "open-aea==2.2.9",
     "open-aea-ledger-ethereum==2.2.9",
     "open-aea-ledger-cosmos==2.2.9",
@@ -48,13 +48,13 @@ Repository = "https://github.com/valory-xyz/optimus"
 
 [dependency-groups]
 dev = [
-    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@v0.7.0",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@v0.7.2",
 ]
 
 [tool.uv]
 default-groups = "all"
 prerelease = "allow"
-# cffi 2.1.0 (transitive via cryptography << open-aea-ledger-solana)
+# cffi 2.1.0 (transitive via cryptography)
 # reports its license as MIT-0, which tomte's PARANOID liccheck rejects.
 # Constrain to the previous minor until the tomte allowlist covers MIT-0.
 override-dependencies = ["cffi<2.1"]
@@ -79,7 +79,7 @@ gitleaks_extra_paths = [
     "packages/valory/skills/.*_abci/.*-ui-build/.*",
     "packages/valory/skills/.*_abci/.*-ui/assets/.*",
 ]
-tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@v0.7.0"
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@v0.7.2"
 
 [tool.uv.build-backend]
 module-name = ["packages"]

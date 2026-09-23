@@ -146,6 +146,40 @@ BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
 ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
 WEB3_HTTP_TIMEOUT_SECONDS = 30
+
+# Gas units a LiFi ETH->USDC swap costs on Optimism. Used only when the live
+# estimate fails and LiFi's own gasLimit is absent. This is a gas LIMIT and is
+# deliberately not ESTIMATED_GAS_PER_TX, which is a cost in wei: multiplying
+# that by a gas price is a unit error.
+X402_SWAP_FALLBACK_GAS = 500000
+
+# Swap cycles of ETH headroom to request when a top-up swap cannot be afforded.
+# _inject_x402_eth_deficit reports the bare shortfall and Pearl pre-fills
+# exactly what is reported, so asking for a single cycle's worth funds one swap
+# and returns the agent EOA to near-zero ETH, producing a funding prompt every
+# swap cycle. Three is taken from the field evidence on OPE-1940: ~0.0003 ETH
+# restored a stuck agent whose swap was worth ~0.00009 ETH.
+X402_SWAP_CYCLES_OF_HEADROOM = 3
+
+# Absolute floor for a reported x402 ETH deficit, in wei (0.0003 ETH) - the
+# amount that field-restored the OPE-1940 reporter's agent. The ETH value of a
+# fixed-USDC swap rises as the ETH price falls, so this is sized against a
+# conservative $1500/ETH: at that price a 0.25 USDC swap is worth ~0.000167
+# ETH, so the floor still clears one swap plus gas. Re-size this constant and
+# this comment together if that price stops being conservative.
+X402_ETH_DEFICIT_FLOOR_WEI = 300000000000000
+
+# Error substrings meaning the swap failed because the agent EOA cannot afford
+# it, as opposed to the RPC being unreachable. Node clients do not agree on the
+# wording and a silent miss here reports no deficit at all, so keep the set in
+# one greppable place. "EVM error: OutOfFunds" is what the OPE-1940 bundle
+# carries and what the original two-substring check missed. Matched lowercased.
+X402_INSUFFICIENT_FUNDS_ERRORS = (
+    "return amount is not enough",
+    "execution reverted",
+    "outoffunds",
+    "insufficient funds",
+)
 WEB3_READ_RETRY_ATTEMPTS = 3
 WEB3_READ_RETRY_INITIAL_DELAY = 1.0
 
@@ -159,6 +193,46 @@ _WITHDRAWAL_WRITE_LOCK = threading.Lock()
 _TRANSIENT_HTTP_STATUS_RE = re.compile(
     r"\b(408|429|500|502|503|504|520|521|522|523|524|525)\b"
 )
+
+
+def _tx_request_value_wei(tx_request: Dict) -> int:
+    """Read a LiFi transactionRequest ``value`` as wei, accepting hex or int.
+
+    :param tx_request: the ``transactionRequest`` object from a LiFi quote.
+    :return: the transaction value in wei.
+    """
+    value = tx_request["value"]
+    return int(value, 16) if isinstance(value, str) else value
+
+
+def _tx_request_gas_limit(tx_request: Dict) -> Optional[int]:
+    """Read LiFi's own route-specific ``gasLimit`` from a transactionRequest.
+
+    LiFi conventionally returns a gas limit alongside the calldata, but nothing
+    in this repo relied on it before, so it is treated as optional: callers
+    fall back to ``X402_SWAP_FALLBACK_GAS`` when it is absent or unparseable.
+
+    :param tx_request: the ``transactionRequest`` object from a LiFi quote.
+    :return: the gas limit, or ``None`` when LiFi did not supply a usable one.
+    """
+    raw = tx_request.get("gasLimit")
+    if raw is None:
+        return None
+    try:
+        gas_limit = int(raw, 16) if isinstance(raw, str) else int(raw)
+    except (TypeError, ValueError):
+        return None
+    return gas_limit if gas_limit > 0 else None
+
+
+def _is_insufficient_funds_error(error_str: str) -> bool:
+    """Classify a gas-estimation error as a funds failure or an infra failure.
+
+    :param error_str: the exception text raised by the gas estimation call.
+    :return: True when the text names a funding shortfall.
+    """
+    lowered = error_str.lower()
+    return any(marker in lowered for marker in X402_INSUFFICIENT_FUNDS_ERRORS)
 
 
 def _is_transient_web3_error(exc: BaseException) -> bool:
@@ -771,21 +845,28 @@ class HttpHandler(BaseHttpHandler):
         tx_request: Dict,
         eoa_address: str,
         chain: str,
-    ) -> Optional[int]:
-        """Estimate gas for a transaction"""
+    ) -> Tuple[Optional[int], bool]:
+        """Estimate gas for a transaction.
+
+        The classification is returned rather than only logged: the caller has
+        to tell "the EOA cannot afford this swap" from "the RPC is unreachable"
+        to decide whether reporting a funding deficit is honest.
+
+        :param tx_request: the ``transactionRequest`` object from a LiFi quote.
+        :param eoa_address: the address the swap would be sent from.
+        :param chain: the chain to estimate on.
+        :return: the buffered gas limit (``None`` on failure), and whether the
+            failure was a funding shortfall rather than an infrastructure one.
+        """
         try:
             w3 = self._get_web3_instance(chain)
             if not w3:
                 self.context.logger.error(
                     "Failed to get Web3 instance for gas estimation"
                 )
-                return None
+                return None, False
 
-            tx_value = (
-                int(tx_request["value"], 16)
-                if isinstance(tx_request["value"], str)
-                else tx_request["value"]
-            )
+            tx_value = _tx_request_value_wei(tx_request)
 
             # Prepare transaction data for gas estimation
             tx_data_for_estimation = {
@@ -803,20 +884,105 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.info(
                 f"Estimated gas: {estimated_gas}, with 20% buffer: {tx_gas}"
             )
-            return tx_gas
+            return tx_gas, False
 
         except Exception as e:
             error_str = str(e)
-            if (
-                "Return amount is not enough" in error_str
-                or "execution reverted" in error_str
-            ):
+            insufficient_funds = _is_insufficient_funds_error(error_str)
+            if insufficient_funds:
                 self.context.logger.info(
                     "Insufficient ETH for swap, wait for agent EOA to be funded"
                 )
 
             self.context.logger.error(f"{error_str=}")
+            return None, insufficient_funds
+
+    def _get_native_balance(self, address: str, chain: str) -> Optional[int]:
+        """Get an address' native token balance in wei.
+
+        :param address: the address to read.
+        :param chain: the chain to read it on.
+        :return: the balance in wei, or ``None`` when it could not be read.
+        """
+        try:
+            w3 = self._get_web3_instance(chain)
+            if not w3:
+                return None
+            return self._call_web3_with_breaker(
+                chain, w3.eth.get_balance, Web3.to_checksum_address(address)
+            )
+        except CircuitBreakerOpenError:
+            self.context.logger.error(
+                f"native-balance-breaker-open chain={chain}; skipping balance read"
+            )
             return None
+        except Exception as e:
+            self.context.logger.error(f"Error checking native balance: {str(e)}")
+            return None
+
+    def _record_x402_topup_outcome(
+        self, sufficient: bool, eth_deficit: Optional[int], reason: str
+    ) -> None:
+        """Record the outcome of an x402 top-up attempt on the shared state.
+
+        Every exit of :meth:`_ensure_sufficient_funds_for_x402_payments` routes
+        through here, so that an exit added later cannot silently omit the
+        deficit - which is the defect behind OPE-1940, where the failed
+        gas-estimate path returned without ever setting the field and
+        /funds-status therefore reported no shortfall at all.
+
+        :param sufficient: value for ``sufficient_funds_for_x402_payments``.
+        :param eth_deficit: ETH shortfall in wei to report, ``0`` to clear a
+            previously reported one, or ``None`` to leave the last reported
+            value untouched. ``None`` is for infrastructure failures, where the
+            agent does not know whether funds are short and asking the user for
+            money would be wrong.
+        :param reason: short description of the exit, for the log line.
+        """
+        self.shared_state.sufficient_funds_for_x402_payments = sufficient
+        if eth_deficit is None:
+            self.context.logger.info(
+                f"x402 top-up outcome: {reason}; x402_eth_deficit left unchanged"
+            )
+            return
+        self.shared_state.x402_eth_deficit = eth_deficit
+        self.context.logger.info(
+            f"x402 top-up outcome: {reason}; x402_eth_deficit={eth_deficit}"
+        )
+
+    def _size_x402_eth_deficit(self, single_cycle_wei: int) -> int:
+        """Scale one swap cycle's ETH cost into the figure to report.
+
+        :param single_cycle_wei: ETH cost of a single top-up swap, in wei.
+        :return: the headroom-sized deficit to report, never below the floor.
+        """
+        return max(
+            single_cycle_wei * X402_SWAP_CYCLES_OF_HEADROOM,
+            X402_ETH_DEFICIT_FLOOR_WEI,
+        )
+
+    def _x402_floor_deficit_if_unfunded(
+        self, eoa_address: str, chain: str
+    ) -> Optional[int]:
+        """Report the deficit floor only when the agent EOA is below it.
+
+        Used on the exits where no quote is available, so there is no swap cost
+        to size from. A LiFi outage on a funded agent is an infrastructure
+        failure and must not be shown to the user as a funding shortfall, so
+        nothing is reported unless the EOA's own ETH is below the floor.
+
+        :param eoa_address: the agent EOA.
+        :param chain: the chain to read the balance on.
+        :return: the floor in wei, or ``None`` to report nothing.
+        """
+        balance = self._get_native_balance(eoa_address, chain)
+        if balance is None or balance >= X402_ETH_DEFICIT_FLOOR_WEI:
+            return None
+        self.context.logger.info(
+            f"Agent EOA native balance {balance} is below the x402 deficit floor "
+            f"{X402_ETH_DEFICIT_FLOOR_WEI}; reporting the floor"
+        )
+        return X402_ETH_DEFICIT_FLOOR_WEI
 
     def _ensure_sufficient_funds_for_x402_payments(self) -> Any:
         """Ensure agent EOA has at sufficient funds for x402 requests payments"""
@@ -832,13 +998,16 @@ class HttpHandler(BaseHttpHandler):
             eoa_account = self._get_eoa_account()
             if not eoa_account:
                 self.context.logger.error("Failed to get EOA account")
+                self._record_x402_topup_outcome(False, None, "no EOA account")
                 return False
             eoa_address = eoa_account.address
 
             usdc_address = USDC_ADDRESSES.get(chain.lower())
             if not usdc_address:
                 self.context.logger.error(f"No USDC address for {chain}")
-                self.shared_state.sufficient_funds_for_x402_payments = False
+                self._record_x402_topup_outcome(
+                    False, None, f"no USDC address for {chain}"
+                )
                 return
 
             try:
@@ -850,12 +1019,20 @@ class HttpHandler(BaseHttpHandler):
                     f"x402-funds-check-breaker-open chain={chain}; "
                     "marking x402 funds insufficient until recovery"
                 )
-                self.shared_state.sufficient_funds_for_x402_payments = False
+                self._record_x402_topup_outcome(
+                    False, None, "USDC balance circuit breaker open"
+                )
                 return
 
             if usdc_balance is None:
                 self.context.logger.warning("Could not check USDC balance, skipping")
-                self.shared_state.sufficient_funds_for_x402_payments = True
+                # NOTE(OPE-1940): this optimistic default lets prompt handling
+                # proceed through a transient RPC failure, but a persistently
+                # failing balance check then looks healthy. Left as-is here and
+                # tracked separately; changing it is not a reporting fix.
+                self._record_x402_topup_outcome(
+                    True, None, "USDC balance unavailable"
+                )
                 return
 
             threshold = self.context.params.x402_payment_requirements.get(
@@ -869,7 +1046,12 @@ class HttpHandler(BaseHttpHandler):
                 self.context.logger.info(
                     f"USDC balance sufficient: {usdc_balance} USDC (threshold: {threshold})"
                 )
-                self.shared_state.sufficient_funds_for_x402_payments = True
+                # Clearing here, not only on a completed swap, is what stops a
+                # deficit reported by an earlier cycle outliving the shortfall:
+                # an agent rescued by a direct USDC transfer takes this exit
+                # forever after, and Pearl would keep asking for ETH it no
+                # longer needs.
+                self._record_x402_topup_outcome(True, 0, "USDC balance sufficient")
                 return
 
             self.context.logger.info(
@@ -885,32 +1067,61 @@ class HttpHandler(BaseHttpHandler):
             )
             if not quote:
                 self.context.logger.error("Failed to get LiFi quote")
-                self.shared_state.sufficient_funds_for_x402_payments = False
+                self._record_x402_topup_outcome(
+                    False,
+                    self._x402_floor_deficit_if_unfunded(eoa_address, chain),
+                    "LiFi quote unavailable",
+                )
                 return
 
             tx_request = quote.get("transactionRequest")
             if not tx_request:
                 self.context.logger.error("No transactionRequest in quote")
-                self.shared_state.sufficient_funds_for_x402_payments = False
+                self._record_x402_topup_outcome(
+                    False,
+                    self._x402_floor_deficit_if_unfunded(eoa_address, chain),
+                    "LiFi quote carried no transactionRequest",
+                )
                 return
 
             nonce, gas_price = self._get_nonce_and_gas_web3(eoa_address, chain)
             if nonce is None or gas_price is None:
                 self.context.logger.error("Failed to get nonce or gas price")
-                self.shared_state.sufficient_funds_for_x402_payments = False
+                self._record_x402_topup_outcome(
+                    False, None, "nonce or gas price unavailable"
+                )
                 return
 
-            tx_gas = self._estimate_gas(tx_request, eoa_address, chain)
+            tx_value = _tx_request_value_wei(tx_request)
+
+            tx_gas, insufficient_funds = self._estimate_gas(
+                tx_request, eoa_address, chain
+            )
             if tx_gas is None:
                 self.context.logger.error("Failed to estimate gas for transaction")
-                self.shared_state.sufficient_funds_for_x402_payments = False
+                if not insufficient_funds:
+                    self._record_x402_topup_outcome(
+                        False, None, "gas estimation failed (infrastructure)"
+                    )
+                    return
+                # The swap is unaffordable and there is no live estimate to
+                # price it with, so fall back to LiFi's own route-specific gas
+                # limit and then to a swap-sized constant. Both are gas limits,
+                # so multiplying by gas_price is dimensionally correct.
+                fallback_gas = (
+                    _tx_request_gas_limit(tx_request) or X402_SWAP_FALLBACK_GAS
+                )
+                fallback_deficit = self._size_x402_eth_deficit(
+                    fallback_gas * gas_price + tx_value
+                )
+                self._record_x402_topup_outcome(
+                    False,
+                    fallback_deficit,
+                    f"gas estimation failed for lack of funds "
+                    f"(fallback_gas={fallback_gas}, gas_price={gas_price}, "
+                    f"tx_value={tx_value})",
+                )
                 return
-
-            tx_value = (
-                int(tx_request["value"], 16)
-                if isinstance(tx_request["value"], str)
-                else tx_request["value"]
-            )
 
             # Calculate total ETH needed for the swap (gas cost + tx value)
             total_eth_needed = tx_gas * gas_price + tx_value
@@ -935,11 +1146,11 @@ class HttpHandler(BaseHttpHandler):
 
             if not tx_hash:
                 self.context.logger.error("Failed to submit transaction")
-                self.shared_state.sufficient_funds_for_x402_payments = False
                 # Store the ETH deficit so funds-status can request a top-up
-                self.shared_state.x402_eth_deficit = total_eth_needed
-                self.context.logger.info(
-                    f"Stored x402_eth_deficit={total_eth_needed} for funds-status"
+                self._record_x402_topup_outcome(
+                    False,
+                    self._size_x402_eth_deficit(total_eth_needed),
+                    "swap submission failed",
                 )
                 return
 
@@ -950,27 +1161,28 @@ class HttpHandler(BaseHttpHandler):
 
             if not tx_successful:
                 self.context.logger.error(f"Transaction {tx_hash} failed or timed out")
-                self.shared_state.sufficient_funds_for_x402_payments = False
                 # Store the ETH deficit so funds-status can request a top-up
-                self.shared_state.x402_eth_deficit = total_eth_needed
-                self.context.logger.info(
-                    f"Stored x402_eth_deficit={total_eth_needed} for funds-status"
+                self._record_x402_topup_outcome(
+                    False,
+                    self._size_x402_eth_deficit(total_eth_needed),
+                    "swap transaction failed or timed out",
                 )
                 return
 
             self.context.logger.info(
                 f"ETH to USDC swap completed successfully: {tx_hash}"
             )
-            self.shared_state.sufficient_funds_for_x402_payments = True
             # Clear the stored deficit on success
-            self.shared_state.x402_eth_deficit = 0
+            self._record_x402_topup_outcome(True, 0, "swap completed")
             return
 
         except Exception as e:
             self.context.logger.error(
                 f"Error in checking funds for x402 payments: {str(e)}"
             )
-            self.shared_state.sufficient_funds_for_x402_payments = False
+            self._record_x402_topup_outcome(
+                False, None, f"unexpected error: {str(e)}"
+            )
             return
         finally:
             _X402_TOPUP_LOCK.release()

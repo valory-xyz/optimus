@@ -146,6 +146,8 @@ BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
 ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
 WEB3_HTTP_TIMEOUT_SECONDS = 30
+WEB3_READ_RETRY_ATTEMPTS = 3
+WEB3_READ_RETRY_INITIAL_DELAY = 1.0
 
 # Gas units a LiFi ETH->USDC swap costs on Optimism. Used only when the live
 # estimate fails and LiFi's own gasLimit is absent. This is a gas LIMIT and is
@@ -180,8 +182,6 @@ X402_INSUFFICIENT_FUNDS_ERRORS = (
     "outoffunds",
     "insufficient funds",
 )
-WEB3_READ_RETRY_ATTEMPTS = 3
-WEB3_READ_RETRY_INITIAL_DELAY = 1.0
 
 # Module-level locks gate fire-and-forget executor submissions so that
 # duplicate concurrent invocations short-circuit instead of running twice.

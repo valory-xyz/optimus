@@ -73,7 +73,7 @@ skills:
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
 - valory/liquidity_trader_abci:0.1.0:bafybeifsnnuis2uvtb6b552zjec52sqjmdr3ehznzn7id4znxhk4rzx77y
 - valory/mech_interact_abci:0.1.0:bafybeif3cnuns2i7xh2wyrpj45xdmkjkgqpy72ox66tijtbf5okn2l2iiu
-- valory/optimus_abci:0.1.0:bafybeih2n7w2n3ntfoybe5awtv2jhngwfaeklbbqxazhjxpbzragncifka
+- valory/optimus_abci:0.1.0:bafybeidxswhi6kh6d6q4ibt7oz5dzh5os5rlxspzd5bs6vhpdaqlagzzqa
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi

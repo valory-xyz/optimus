@@ -62,6 +62,18 @@ class TestSharedState:
         assert state.req_to_callback == {}
         assert state.agent_reasoning == ""
 
+    def test_x402_fields_have_defaults(self) -> None:
+        """The x402 top-up fields exist on a freshly constructed SharedState.
+
+        Regression for OPE-1940: these were attached dynamically on the first
+        top-up attempt, so a stuck agent's state carried no trace of them and
+        the funds-status reader could not tell "no deficit" from "never ran".
+        """
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        assert state.x402_eth_deficit == 0
+        assert state.sufficient_funds_for_x402_payments is True
+
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""
         mock_context = MagicMock()

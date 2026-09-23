@@ -1109,9 +1109,24 @@ class HttpHandler(BaseHttpHandler):
                 fallback_gas = (
                     _tx_request_gas_limit(tx_request) or X402_SWAP_FALLBACK_GAS
                 )
-                fallback_deficit = self._size_x402_eth_deficit(
-                    fallback_gas * gas_price + tx_value
-                )
+                single_cycle_wei = fallback_gas * gas_price + tx_value
+                # The classifier keys off error text, and "execution reverted"
+                # or a LiFi slippage revert can hit a fully funded EOA. Check
+                # the balance before asking the user for money: if the EOA can
+                # already afford one swap, more ETH will not fix this and the
+                # failure is reported as infrastructure. An unreadable balance
+                # keeps the classifier's verdict.
+                native_balance = self._get_native_balance(eoa_address, chain)
+                if native_balance is not None and native_balance >= single_cycle_wei:
+                    self._record_x402_topup_outcome(
+                        False,
+                        None,
+                        f"gas estimation failed with funds-like error but agent "
+                        f"EOA balance {native_balance} covers one swap "
+                        f"({single_cycle_wei}); treated as infrastructure",
+                    )
+                    return
+                fallback_deficit = self._size_x402_eth_deficit(single_cycle_wei)
                 self._record_x402_topup_outcome(
                     False,
                     fallback_deficit,

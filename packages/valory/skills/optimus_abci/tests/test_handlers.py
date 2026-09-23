@@ -3824,6 +3824,8 @@ class TestHttpHandlerMethods:
             }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, gas_price))
+        # An empty EOA, so a funds-classified estimate failure is a real one.
+        handler._get_native_balance = MagicMock(return_value=0)
         return handler, ctx
 
     def test_estimate_gas_classifies_out_of_funds(self) -> None:
@@ -4000,6 +4002,50 @@ class TestHttpHandlerMethods:
             handler._ensure_sufficient_funds_for_x402_payments()
         assert mock_ss.sufficient_funds_for_x402_payments is False
         assert mock_ss.x402_eth_deficit == 4242
+
+    def test_funds_classified_failure_on_funded_agent_reports_nothing(self) -> None:
+        """A revert on an EOA that can afford the swap is not a funds failure.
+
+        "execution reverted" and LiFi's slippage revert match the funds
+        classifier but can hit a fully funded EOA; asking the user for ETH
+        would not fix them, so the deficit must be left untouched.
+        """
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        single_cycle = handlers_mod.X402_SWAP_FALLBACK_GAS * 1000 + 256
+        handler._get_native_balance = MagicMock(return_value=single_cycle)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 4242
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.sufficient_funds_for_x402_payments is False
+        assert mock_ss.x402_eth_deficit == 4242
+
+    def test_funds_classified_failure_with_unreadable_balance_reports(self) -> None:
+        """When the balance cannot be read the classifier's verdict stands."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        handler._get_native_balance = MagicMock(return_value=None)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 0
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        expected = max(
+            (handlers_mod.X402_SWAP_FALLBACK_GAS * 1000 + 256)
+            * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM,
+            handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI,
+        )
+        assert mock_ss.x402_eth_deficit == expected
 
     def test_ensure_sufficient_funds_sufficient_balance_clears_stale_deficit(
         self,

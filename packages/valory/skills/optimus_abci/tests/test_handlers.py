@@ -3958,7 +3958,7 @@ class TestHttpHandlerMethods:
         assert mock_ss.x402_eth_deficit >= handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI
 
     def test_ensure_sufficient_funds_prefers_lifi_gas_limit(self) -> None:
-        """LiFi's own route-specific gasLimit is used when the quote carries one."""
+        """The route-specific gasLimit from LiFi is used when the quote has one."""
         from packages.valory.skills.optimus_abci import handlers as handlers_mod
 
         gas_price = 10**9
@@ -4082,16 +4082,26 @@ class TestHttpHandlerMethods:
         )
 
         cases = [
-            ("breaker", lambda h: setattr(
-                h, "_check_usdc_balance",
-                MagicMock(side_effect=CircuitBreakerOpenError("optimism")),
-            )),
-            ("none_balance", lambda h: setattr(
-                h, "_check_usdc_balance", MagicMock(return_value=None)
-            )),
-            ("no_nonce", lambda h: setattr(
-                h, "_get_nonce_and_gas_web3", MagicMock(return_value=(None, None))
-            )),
+            (
+                "breaker",
+                lambda h: setattr(
+                    h,
+                    "_check_usdc_balance",
+                    MagicMock(side_effect=CircuitBreakerOpenError("optimism")),
+                ),
+            ),
+            (
+                "none_balance",
+                lambda h: setattr(
+                    h, "_check_usdc_balance", MagicMock(return_value=None)
+                ),
+            ),
+            (
+                "no_nonce",
+                lambda h: setattr(
+                    h, "_get_nonce_and_gas_web3", MagicMock(return_value=(None, None))
+                ),
+            ),
         ]
         for name, prime in cases:
             handler, _ = self._x402_swap_handler()
@@ -4128,7 +4138,7 @@ class TestHttpHandlerMethods:
             assert handler._get_native_balance("0xaddr", "optimism") is None
 
     def test_tx_request_gas_limit_parsing(self) -> None:
-        """LiFi's gasLimit is optional and defensively parsed."""
+        """The gasLimit from LiFi is optional and defensively parsed."""
         from packages.valory.skills.optimus_abci import handlers as handlers_mod
 
         parse = handlers_mod._tx_request_gas_limit
@@ -4159,9 +4169,7 @@ class TestHttpHandlerMethods:
         mock_fund_req = MagicMock()
         mock_fund_req.get_response_body.return_value = {
             "optimism": {
-                "0xagent": {
-                    ZERO_ADDRESS: {"balance": "63882783972811", "deficit": "0"}
-                }
+                "0xagent": {ZERO_ADDRESS: {"balance": "63882783972811", "deficit": "0"}}
             }
         }
         with (

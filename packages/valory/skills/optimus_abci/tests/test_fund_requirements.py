@@ -32,7 +32,6 @@ from typing import Dict
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[5]
 SERVICE_YAML = REPO_ROOT / "packages/valory/services/optimus/service.yaml"
 AGENT_YAML = REPO_ROOT / "packages/valory/agents/optimus/aea-config.yaml"

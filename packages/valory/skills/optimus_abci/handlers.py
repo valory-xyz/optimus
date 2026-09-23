@@ -1030,9 +1030,7 @@ class HttpHandler(BaseHttpHandler):
                 # proceed through a transient RPC failure, but a persistently
                 # failing balance check then looks healthy. Left as-is here and
                 # tracked separately; changing it is not a reporting fix.
-                self._record_x402_topup_outcome(
-                    True, None, "USDC balance unavailable"
-                )
+                self._record_x402_topup_outcome(True, None, "USDC balance unavailable")
                 return
 
             threshold = self.context.params.x402_payment_requirements.get(
@@ -1180,9 +1178,7 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(
                 f"Error in checking funds for x402 payments: {str(e)}"
             )
-            self._record_x402_topup_outcome(
-                False, None, f"unexpected error: {str(e)}"
-            )
+            self._record_x402_topup_outcome(False, None, f"unexpected error: {str(e)}")
             return
         finally:
             _X402_TOPUP_LOCK.release()

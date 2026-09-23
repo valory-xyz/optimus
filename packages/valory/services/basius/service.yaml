@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeiagwnl2sod5dv6tvwdokoiucwbgwg7ytpb6z7jedg72mkpfyw2b7e
+agent: valory/basius:0.1.0:bafybeic2s2u4xgqjrvlrr43offml3kuv7gu57ytk3rhic3yf5dk7n5izde
 number_of_agents: 1
 deployment:
   agent:
@@ -160,6 +160,9 @@ models:
       coingecko_server_base_url: ${COINGECKO_SERVER_BASE_URL:str:https://api.coingecko.com}
       coingecko_x402_server_base_url: ${COINGECKO_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
       network_selector: ${GENAI_NETWORK_SELECTOR:str:base}
+      use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
+      mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
+      mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
   mechs_subgraph:
     args:
       url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-base}
@@ -219,6 +222,11 @@ config:
   genai_api_key: ${GENAI_API_KEY:str:""}
   use_x402: ${USE_X402:bool:true}
   genai_x402_server_base_url: ${GENAI_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/gemini/base/v1beta}
+  use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
+  mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
+  mech_chain: ${MECH_CHAIN:str:base}
+  mech_safe_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"base":"0x0000000000000000000000000000000000000000"}}
+  mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

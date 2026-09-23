@@ -32,6 +32,7 @@ import requests
 from aea.skills.base import Model, SkillContext
 from eth_account import Account
 
+from packages.valory.connections.x402.clients.mech import mech_requests
 from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.skills.abstract_round_abci.models import (
     BaseParams,
@@ -343,6 +344,16 @@ class Coingecko(Model, TypeCheckMixin):
         self.coingecko_x402_server_base_url = self._ensure(
             "coingecko_x402_server_base_url", kwargs, str
         ).format(chain=self.network_selector)
+        # Mech-marketplace path (Safe-signed requests settled in batches by
+        # the facilitator) instead of x402 EIP-3009 transfers. Only
+        # consulted when use_x402 is on.
+        self.use_mech_facilitator = self._ensure("use_mech_facilitator", kwargs, bool)
+        self.mech_facilitator_base_url = self._ensure(
+            "mech_facilitator_base_url", kwargs, str
+        )
+        self.mech_max_delivery_rate: Optional[int] = kwargs.pop(
+            "mech_max_delivery_rate", None
+        )
         self.coin_from_address_endpoint: str = self._ensure(
             "coin_from_address_endpoint", kwargs, str
         )
@@ -358,6 +369,34 @@ class Coingecko(Model, TypeCheckMixin):
         self.rate_limiter._remaining_limit = 0
         self.rate_limiter._last_request_time = time()
 
+    @property
+    def paid_proxy_base_url(self) -> str:
+        """Base URL paid CoinGecko calls are built on (x402 proxy or facilitator origin)."""
+        if self.use_mech_facilitator:
+            return self.mech_facilitator_base_url.rstrip("/")
+        return self.coingecko_x402_server_base_url
+
+    def paid_session(self, signer: Optional[Account]) -> requests.Session:
+        """Return the session that pays for CoinGecko calls.
+
+        :param signer: the agent EOA; the sole owner of the Safe on the mech path.
+        :return: an x402 session, or a mech-marketplace session when enabled.
+        """
+        if not self.use_mech_facilitator:
+            return x402_requests(account=signer)
+        chain = self.network_selector
+        safe_address = self.context.params.safe_contract_addresses.get(chain)
+        if not safe_address:
+            raise ValueError(f"no Safe address configured for chain {chain!r}")
+        return mech_requests(
+            signer,
+            safe_address=safe_address,
+            chain=chain,
+            api="coingecko",
+            facilitator_base_url=self.mech_facilitator_base_url,
+            max_delivery_rate=self.mech_max_delivery_rate,
+        )
+
     def request(
         self,
         endpoint: str,
@@ -365,13 +404,16 @@ class Coingecko(Model, TypeCheckMixin):
         x402_signer: Optional[Account],
     ) -> Tuple[bool, Dict]:
         """Make a request to the Coingecko Proxied API if x402."""
+        url = (
+            self.paid_proxy_base_url
+            if self.use_x402
+            else self.coingecko_server_base_url
+        ) + endpoint
         try:
             if self.use_x402:
-                session = x402_requests(account=x402_signer)
-                url = self.coingecko_x402_server_base_url + endpoint
+                session = self.paid_session(x402_signer)
             else:
                 session = requests.Session()
-                url = self.coingecko_server_base_url + endpoint
 
             with session:
                 response = session.get(

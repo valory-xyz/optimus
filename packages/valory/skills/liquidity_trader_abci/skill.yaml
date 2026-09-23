@@ -12,7 +12,7 @@ fingerprint:
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeicgcoqk45xn67ymbf2bmjdrmiafn7hqcrqkxppa3t26bixlpsmupi
   behaviours/decision_making.py: bafybeiegwhchjw3gzq6ej7v5bl3jtrpkvf6x5zbwribcbwp75iwzsc3js4
-  behaviours/evaluate_strategy.py: bafybeigyoh2qklj6vb2ocgkzc7nmpky274qud5pcfvyiaqahfnnl2ganqi
+  behaviours/evaluate_strategy.py: bafybeifdgoysjjk2jiq5w3nr5p2kmre36yvmu4h5jump4ysqoyaw3rp6r4
   behaviours/fetch_strategies.py: bafybeihbo4blzpdezityxhvdtwntzewalfro6uomjkigs4x66apnnteqgm
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeia2fn7abt7zjifitv34vwylohqmuk5r7ptkdk62oeemg66v3klfii
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiamqzx7oa64wajjt5znaojtq7xqwzarnslzfzrzxlmoiy75iqmp6m
+  models.py: bafybeict6tic7nsqqxanz2azpx4yvqriyzdzuhjuv4vjtldz4ct26ah56u
   payloads.py: bafybeibvbjcwglyx3gasmx56u3nwneoxbkvefrry7pmguuayi3nlsa47oe
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -76,7 +76,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeigot3xdbx2eyplcmrjgugloouu36xe4oxjgqxla3t5rh77aveskpm
+  tests/test_models.py: bafybeifxrwevbh7bkl66hrauyszvvsqwzeddeb2ll6qsyjc6d4nkdv4v24
   tests/test_payloads.py: bafybeihgckap5l6g7gmj2g7bon4zp5oc23mo55pt32hstznwobfb24cifq
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
   tests/test_rounds.py: bafybeihkb4qxrwbmdnointbjelwttrw6styzs4rodmlbcnnaglvvqkczom
@@ -92,7 +92,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeicqjg3d6pnlcsu4442qt5tmsjqkqdtc3ulvbjgoh53jyr7z3lbqqi
+- valory/x402:0.1.0:bafybeia5oziihd5xt7amyv227olzq6ycgtx7kdrxoff2xqirkmabl57yhi
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/balancer_weighted_pool:0.1.0:bafybeigmfzch747wwo3ahtea2g52qqraig2ixlofsnncs6spz2aemc7aju
@@ -360,6 +360,9 @@ models:
       coingecko_server_base_url: https://api.coingecko.com
       coingecko_x402_server_base_url: https://x402.olas.autonolas.tech/v1/coingecko/{chain}
       network_selector: optimism
+      use_mech_facilitator: false
+      mech_facilitator_base_url: https://x402.olas.autonolas.tech
+      mech_max_delivery_rate: null
     class_name: Coingecko
   requests:
     args: {}

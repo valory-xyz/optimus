@@ -14,9 +14,9 @@ connections:
 - valory/ipfs:0.1.0:bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
-- valory/genai:0.1.0:bafybeighrq424xlroekehgk2oaqxkvziq22gffqzodm4ynhjgzhch4pcq4
+- valory/genai:0.1.0:bafybeiacfqkjrbtxhxhb4wszf4pj3uxif6kzwtiyidgnrpcbsmltuu2rwe
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeicqjg3d6pnlcsu4442qt5tmsjqkqdtc3ulvbjgoh53jyr7z3lbqqi
+- valory/x402:0.1.0:bafybeia5oziihd5xt7amyv227olzq6ycgtx7kdrxoff2xqirkmabl57yhi
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeigr6ugkp6bxwnbkecktotekcjihabb6eudh3bgcnjfdorwosygile
@@ -71,9 +71,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeiebquiptocr4viciitd6hqj6ja2gqgjmii3kacfbswtc74ahiqd5i
+- valory/liquidity_trader_abci:0.1.0:bafybeibmzr42doeekcr33tcfuckt57cdohnvzhyzk45inqcrdx45aktfde
 - valory/mech_interact_abci:0.1.0:bafybeif3cnuns2i7xh2wyrpj45xdmkjkgqpy72ox66tijtbf5okn2l2iiu
-- valory/optimus_abci:0.1.0:bafybeidpvhaawwdfjdxj755blndvtuos5ex3mglvdok5gduokfztqfsjti
+- valory/optimus_abci:0.1.0:bafybeibcqljxjdiw4ule3hnurqaxyyzqzuv6ttexogjeegmlcwgbdchuzu
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
@@ -189,6 +189,11 @@ config:
   genai_api_key: ${str:""}
   use_x402: ${bool:true}
   genai_x402_server_base_url: ${str:https://x402.olas.autonolas.tech/v1/gemini/optimism/v1beta}
+  use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
+  mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
+  mech_chain: ${MECH_CHAIN:str:optimism}
+  mech_safe_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
+  mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
 ---
 public_id: valory/funds_manager:0.1.0
 type: skill
@@ -229,6 +234,9 @@ models:
       coingecko_server_base_url: ${str:https://api.coingecko.com}
       coingecko_x402_server_base_url: ${str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
       network_selector: ${str:optimism}
+      use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
+      mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
+      mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
   mechs_subgraph:
     args:
       url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}

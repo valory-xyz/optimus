@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeif2uhvhtwezmosefoxcpeqijzlp4kqkjgu4slivp5amksf6okygsu
+agent: valory/optimus:0.1.0:bafybeiburujvgddqfuulswnhsm42zyy3yiin7bs2edhqfcrufefq7bq7aa
 number_of_agents: 1
 deployment:
   agent:
@@ -160,6 +160,9 @@ models:
       coingecko_server_base_url: ${COINGECKO_SERVER_BASE_URL:str:https://api.coingecko.com}
       coingecko_x402_server_base_url: ${COINGECKO_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
       network_selector: ${GENAI_NETWORK_SELECTOR:str:optimism}
+      use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
+      mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
+      mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
   mechs_subgraph:
     args:
       url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}
@@ -219,6 +222,11 @@ config:
   genai_api_key: ${GENAI_API_KEY:str:""}
   use_x402: ${USE_X402:bool:true}
   genai_x402_server_base_url: ${GENAI_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/gemini/optimism/v1beta}
+  use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
+  mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
+  mech_chain: ${MECH_CHAIN:str:optimism}
+  mech_safe_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
+  mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

@@ -14,9 +14,9 @@ connections:
 - valory/ipfs:0.1.0:bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
-- valory/genai:0.1.0:bafybeiddflgcsyiqotoiig4jaogyclq5uh3mz45ufwl7udn3yxwtmxjbty
+- valory/genai:0.1.0:bafybeid4xkktdgvmyjtwxwza7ktoonnzf4hivqf3fbju6cnvbhexbqwhki
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeic4ftfiajvt47utlneha5izj55235dial3722ebekx2pqrmwhxz5u
+- valory/x402:0.1.0:bafybeif4beaxi4pjxgg2voslnolj3hacn3ztdvrloi6ygekdlt45yjhetm
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeigr6ugkp6bxwnbkecktotekcjihabb6eudh3bgcnjfdorwosygile
@@ -71,9 +71,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeic4z5yn42shbhriaelkyw5tf2lc5dksj5pzqmwejcq5fuiwjlo3de
+- valory/liquidity_trader_abci:0.1.0:bafybeibenyiq25qdxcxr3bwxhntmu3wrtlgpakqjwmxrinwjgnmyjfsxha
 - valory/mech_interact_abci:0.1.0:bafybeif3cnuns2i7xh2wyrpj45xdmkjkgqpy72ox66tijtbf5okn2l2iiu
-- valory/optimus_abci:0.1.0:bafybeicbuu4yn3xmmir6xyyz3qe3veh7f4z5rq6dud3yf2moq2ph77x7yi
+- valory/optimus_abci:0.1.0:bafybeib2iwvm2ulbwhes6zm4orumciszpxt2pulzlwp2jmchzrogicivp4
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi

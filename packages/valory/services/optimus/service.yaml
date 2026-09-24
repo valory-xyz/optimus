@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeia4kn4543yrpuwwwwfvbj7igtiflgqonmexlr3fzqlt52cua6msau
+agent: valory/optimus:0.1.0:bafybeie2b4ixjet2fepikqxghg3ofzyt2belgc7oexptatjqb7mpycbuxq
 number_of_agents: 1
 deployment:
   agent:
@@ -162,7 +162,7 @@ models:
       network_selector: ${GENAI_NETWORK_SELECTOR:str:optimism}
       use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
       mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
-      mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
+      mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
   mechs_subgraph:
     args:
       url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}
@@ -226,7 +226,7 @@ config:
   mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
   mech_chain: ${MECH_CHAIN:str:optimism}
   mech_safe_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
-  mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
+  mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

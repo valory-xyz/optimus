@@ -71,9 +71,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeif3sve7pp7gjhbncovdthmxe32gvdjjvpbq7wizuseozgdykcyvmi
+- valory/liquidity_trader_abci:0.1.0:bafybeihlwvocdhpx4t7jpnmvdafwjyzp5evjzq2ozombf7unvf57d2vfqe
 - valory/mech_interact_abci:0.1.0:bafybeif3cnuns2i7xh2wyrpj45xdmkjkgqpy72ox66tijtbf5okn2l2iiu
-- valory/optimus_abci:0.1.0:bafybeihiiryuircfwnvau4gepy5ffiwie7xrrlkkgq5sggdn2udu4izmfy
+- valory/optimus_abci:0.1.0:bafybeidu2dxtzsoiotxihhdgmkcwqesomiqnex6aishw2kirdo2bb3edg4
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
@@ -193,7 +193,7 @@ config:
   mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
   mech_chain: ${MECH_CHAIN:str:optimism}
   mech_safe_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
-  mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
+  mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
 ---
 public_id: valory/funds_manager:0.1.0
 type: skill
@@ -236,7 +236,7 @@ models:
       network_selector: ${str:optimism}
       use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
       mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
-      mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:null}
+      mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
   mechs_subgraph:
     args:
       url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-base}

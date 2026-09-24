@@ -362,7 +362,7 @@ models:
       network_selector: optimism
       use_mech_facilitator: false
       mech_facilitator_base_url: https://x402.olas.autonolas.tech
-      mech_max_delivery_rate: null
+      mech_max_delivery_rate: 100000
     class_name: Coingecko
   requests:
     args: {}

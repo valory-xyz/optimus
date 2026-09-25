@@ -14,9 +14,9 @@ connections:
 - valory/ipfs:0.1.0:bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
-- valory/genai:0.1.0:bafybeighrq424xlroekehgk2oaqxkvziq22gffqzodm4ynhjgzhch4pcq4
+- valory/genai:0.1.0:bafybeiepkg3her6gqboosaz5djtjhbip67piqhncarskgew667mgr6thtm
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeicqjg3d6pnlcsu4442qt5tmsjqkqdtc3ulvbjgoh53jyr7z3lbqqi
+- valory/x402:0.1.0:bafybeiaaf54m66o7vlbypkrx6qfw5ifroik6xoxzdyojqzwkd6dmheqmzu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeigr6ugkp6bxwnbkecktotekcjihabb6eudh3bgcnjfdorwosygile
@@ -71,9 +71,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeidmno36h2nhsj3vvg2o2kehvyw6isr6yxtfnqm4my7xunkksdvihq
+- valory/liquidity_trader_abci:0.1.0:bafybeifs6h66rkdzphqoxe37zn7l6voot5ajrhlow76purg6jhmc5tgr6a
 - valory/mech_interact_abci:0.1.0:bafybeifhlr7bzgo7s465ie3icfj3wibsujf4tisf4wfwbhvvz6g4fnu6ka
-- valory/optimus_abci:0.1.0:bafybeidyij5353sujk3jn5h2m6j57yw7iz7cheh2vi63ld3cm5avkumlha
+- valory/optimus_abci:0.1.0:bafybeieoktj6bm7m64al4fc5cuvtu5vwx3vp3y7zhjk2eq653fuf2dokgu
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi

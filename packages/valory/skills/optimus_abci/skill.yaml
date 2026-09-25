@@ -61,7 +61,7 @@ fingerprint:
   composition.py: bafybeib2yw3dmzozf54wrzlvxodn7v54hmxw4ujagmat7yoew6gzpc5kcu
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeibgt34fhvrbi4e34fquuufpsxspddcklwg4ou45xqzh42pdva3spe
-  handlers.py: bafybeien3bmll7zyhee553juk4igyoieuof6nad4t5eqgsmciyoh3cgmnm
+  handlers.py: bafybeifasuyek72bh7y4ntlw7q766uqw3kcsh5egmwpveqdhzllddr6hva
   models.py: bafybeigryecguc3oygxsdq2sxk7v47yzpb6tr3t7vibm7aguqp4qfrl27q
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -159,7 +159,7 @@ fingerprint:
   tests/test_composition.py: bafybeiclmo66qwqfdt7kww3xsixcg3gonurqixpms3rhpdzwf3h3yvenyy
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeibudqpyoeipqi2h4lbbnjnvwb5f53v5o2ztvubtsk5ueuyy4murhu
+  tests/test_handlers.py: bafybeieyr2y2ihyuhid46uflqzf4f7amihjbjur532rlo5oy6m7cjy5ati
   tests/test_models.py: bafybeicd4c67rhyr5utoldx22i2baxxtg4ehkfhzgovfnssi57tw43htpa
   tests/test_prompts.py: bafybeibpbnuqhgntud3jiw4fjq77tffdcjoczg4mwu2qryka7vt7g5rl7i
 fingerprint_ignore_patterns: []
@@ -177,7 +177,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
-- valory/liquidity_trader_abci:0.1.0:bafybeiawjbgfmfp44ypptx7y7gfoc6ik6dgwk7sozbcpbsztwycv4m6taa
+- valory/liquidity_trader_abci:0.1.0:bafybeidmno36h2nhsj3vvg2o2kehvyw6isr6yxtfnqm4my7xunkksdvihq
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
 - valory/mech_interact_abci:0.1.0:bafybeifhlr7bzgo7s465ie3icfj3wibsujf4tisf4wfwbhvvz6g4fnu6ka

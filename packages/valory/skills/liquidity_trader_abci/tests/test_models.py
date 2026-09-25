@@ -72,7 +72,7 @@ class TestSharedState:
         mock_context = MagicMock()
         state = SharedState(name="state", skill_context=mock_context)
         assert state.x402_eth_deficit == 0
-        assert state.sufficient_funds_for_x402_payments is True
+        assert state.sufficient_funds_for_x402_payments is False
 
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""

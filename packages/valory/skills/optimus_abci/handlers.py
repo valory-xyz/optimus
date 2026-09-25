@@ -153,7 +153,20 @@ WEB3_READ_RETRY_INITIAL_DELAY = 1.0
 # estimate fails and LiFi's own gasLimit is absent. This is a gas LIMIT and is
 # deliberately not ESTIMATED_GAS_PER_TX, which is a cost in wei: multiplying
 # that by a gas price is a unit error.
+#
+# The gas_price it is multiplied by comes from w3.eth.gas_price, which on an
+# OP-stack chain is the L2 execution price only: it excludes the L1 data fee,
+# usually the larger half of a swap's bill. The product is therefore a lower
+# bound on the real cost, and X402_ETH_DEFICIT_FLOOR_WEI below is what keeps
+# the reported figure honest. Do not lower the floor on the assumption that
+# this formula stands on its own.
 X402_SWAP_FALLBACK_GAS = 500000
+
+# Upper bound accepted for LiFi's own gasLimit. Anything above it is treated
+# as a broken upstream response (bug, unit confusion, hostile value) and the
+# fallback constant is used instead, so a bogus figure cannot flow into an
+# absurd reported deficit that Pearl would pre-fill.
+X402_LIFI_GAS_LIMIT_CAP = 10 * X402_SWAP_FALLBACK_GAS
 
 # Swap cycles of ETH headroom to request when a top-up swap cannot be afforded.
 # _inject_x402_eth_deficit reports the bare shortfall and Pearl pre-fills
@@ -210,7 +223,8 @@ def _tx_request_gas_limit(tx_request: Dict) -> Optional[int]:
 
     LiFi conventionally returns a gas limit alongside the calldata, but nothing
     in this repo relied on it before, so it is treated as optional: callers
-    fall back to ``X402_SWAP_FALLBACK_GAS`` when it is absent or unparseable.
+    fall back to ``X402_SWAP_FALLBACK_GAS`` when it is absent, unparseable, or
+    above ``X402_LIFI_GAS_LIMIT_CAP``.
 
     :param tx_request: the ``transactionRequest`` object from a LiFi quote.
     :return: the gas limit, or ``None`` when LiFi did not supply a usable one.
@@ -222,7 +236,7 @@ def _tx_request_gas_limit(tx_request: Dict) -> Optional[int]:
         gas_limit = int(raw, 16) if isinstance(raw, str) else int(raw)
     except (TypeError, ValueError):
         return None
-    return gas_limit if gas_limit > 0 else None
+    return gas_limit if 0 < gas_limit <= X402_LIFI_GAS_LIMIT_CAP else None
 
 
 def _is_insufficient_funds_error(error_str: str) -> bool:
@@ -976,6 +990,12 @@ class HttpHandler(BaseHttpHandler):
         :return: the floor in wei, or ``None`` to report nothing.
         """
         balance = self._get_native_balance(eoa_address, chain)
+        # Deliberately asymmetric with the gas-estimate branch of
+        # _ensure_sufficient_funds_for_x402_payments: there, an unreadable
+        # balance keeps the classifier's verdict because the RPC has just
+        # named a shortfall. Here no error hinted at one, so the balance read
+        # is the only evidence there is; if it fails, report nothing rather
+        # than guess. Both behaviours are pinned by tests.
         if balance is None or balance >= X402_ETH_DEFICIT_FLOOR_WEI:
             return None
         self.context.logger.info(
@@ -1026,10 +1046,12 @@ class HttpHandler(BaseHttpHandler):
 
             if usdc_balance is None:
                 self.context.logger.warning("Could not check USDC balance, skipping")
-                # NOTE(OPE-1940): this optimistic default lets prompt handling
-                # proceed through a transient RPC failure, but a persistently
-                # failing balance check then looks healthy. Left as-is here and
-                # tracked separately; changing it is not a reporting fix.
+                # NOTE(OPE-1940 / follow-up #378): this optimistic default lets
+                # prompt handling proceed through a transient RPC failure, but a
+                # persistently failing balance check then looks healthy. Left
+                # as-is here and tracked in
+                # https://github.com/valory-xyz/optimus/issues/378; changing it
+                # is not a reporting fix.
                 self._record_x402_topup_outcome(True, None, "USDC balance unavailable")
                 return
 
@@ -1115,7 +1137,11 @@ class HttpHandler(BaseHttpHandler):
                 # the balance before asking the user for money: if the EOA can
                 # already afford one swap, more ETH will not fix this and the
                 # failure is reported as infrastructure. An unreadable balance
-                # keeps the classifier's verdict.
+                # keeps the classifier's verdict: the RPC has just named a
+                # shortfall, so the balance read is only a cross-check. This is
+                # deliberately the opposite of _x402_floor_deficit_if_unfunded,
+                # where the balance read is the only evidence and an unreadable
+                # one reports nothing. Both behaviours are pinned by tests.
                 native_balance = self._get_native_balance(eoa_address, chain)
                 if native_balance is not None and native_balance >= single_cycle_wei:
                     self._record_x402_topup_outcome(

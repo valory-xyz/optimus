@@ -4194,6 +4194,41 @@ class TestHttpHandlerMethods:
         assert parse({"gasLimit": 100000}) == 100000
         assert parse({"gasLimit": "not-a-number"}) is None
         assert parse({"gasLimit": 0}) is None
+        # A bogus upstream value must not flow into the reported deficit.
+        cap = handlers_mod.X402_LIFI_GAS_LIMIT_CAP
+        assert parse({"gasLimit": cap}) == cap
+        assert parse({"gasLimit": cap + 1}) is None
+        assert parse({"gasLimit": hex(cap + 1)}) is None
+
+    def test_oversized_lifi_gas_limit_falls_back_to_constant(self) -> None:
+        """A LiFi gasLimit above the cap is ignored in favour of the constant."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._get_lifi_quote_sync = MagicMock(
+            return_value={
+                "transactionRequest": {
+                    "to": "0x1",
+                    "data": "0x",
+                    "value": 256,
+                    "gasLimit": handlers_mod.X402_LIFI_GAS_LIMIT_CAP * 1000,
+                }
+            }
+        )
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 0
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        expected = max(
+            (handlers_mod.X402_SWAP_FALLBACK_GAS * 1000 + 256)
+            * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM,
+            handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI,
+        )
+        assert mock_ss.x402_eth_deficit == expected
 
     def test_funds_status_surfaces_the_x402_deficit(self) -> None:
         """The endpoint reports the shortfall the reported agent never showed.

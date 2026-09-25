@@ -193,8 +193,12 @@ class SharedState(BaseSharedState):
         # them with defaults (rather than attaching them dynamically on the
         # first top-up attempt) is what makes "the agent never reported a
         # deficit" distinguishable from "the agent reported no deficit".
+        # ``sufficient_funds_for_x402_payments`` defaults to False because
+        # unknown has always meant not sufficient: the handler's setup() sets
+        # it False before the first background check, and its only reader
+        # falls back to False when the attribute is missing.
         self.x402_eth_deficit: int = 0
-        self.sufficient_funds_for_x402_payments: bool = True
+        self.sufficient_funds_for_x402_payments: bool = False
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""

@@ -407,6 +407,7 @@ class TestCoingecko:
             "credits": 10000,
             "use_x402": False,
             "network_selector": "optimism",
+            "mech_chain": "optimism",
             "coingecko_server_base_url": "https://api.coingecko.com",
             "coingecko_x402_server_base_url": "https://x402.example.com/{chain}",
             "coin_from_address_endpoint": "/api/v3/coins/{platform}/contract/{address}",
@@ -426,6 +427,7 @@ class TestCoingecko:
         assert cg.rate_limited_code == 429
         assert cg.use_x402 is False
         assert cg.network_selector == "optimism"
+        assert cg.mech_chain == "optimism"
         assert isinstance(cg.rate_limiter, CoingeckoRateLimiter)
         assert cg.chain_to_platform_id_mapping == {"ethereum": "ethereum"}
 
@@ -535,12 +537,16 @@ class TestCoingecko:
     def test_request_with_mech_flag_uses_a_mech_session_against_the_facilitator(
         self,
     ) -> None:
-        """Mech path: the Safe comes from params, the URL hangs off the facilitator."""
+        """Mech path: chain and Safe follow mech_chain, not the x402 network selector."""
         mock_context = MagicMock()
-        mock_context.params.safe_contract_addresses = {"optimism": "0x" + "11" * 20}
+        mock_context.params.safe_contract_addresses = {
+            "optimism": "0x" + "11" * 20,
+            "gnosis": "0x" + "22" * 20,
+        }
         kwargs = self._make_kwargs()
         kwargs["use_x402"] = True
         kwargs["use_mech_facilitator"] = True
+        kwargs["mech_chain"] = "Gnosis"
         kwargs["mech_max_delivery_rate"] = 6000
         cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
         signer = MagicMock()
@@ -567,8 +573,8 @@ class TestCoingecko:
         mock_x402.assert_not_called()
         mock_mech.assert_called_once_with(
             signer,
-            safe_address="0x" + "11" * 20,
-            chain="optimism",
+            safe_address="0x" + "22" * 20,
+            chain="gnosis",
             api="coingecko",
             facilitator_base_url="https://facilitator.example",
             max_delivery_rate=6000,

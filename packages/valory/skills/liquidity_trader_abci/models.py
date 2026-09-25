@@ -338,6 +338,9 @@ class Coingecko(Model, TypeCheckMixin):
         self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
         self.network_selector = self._ensure("network_selector", kwargs, str)
+        # The chain whose Safe pays on the mech path; the same setting the
+        # genai connection uses, so chat and CoinGecko pay from one Safe.
+        self.mech_chain = self._ensure("mech_chain", kwargs, str)
         self.coingecko_server_base_url = self._ensure(
             "coingecko_server_base_url", kwargs, str
         )
@@ -384,7 +387,7 @@ class Coingecko(Model, TypeCheckMixin):
         """
         if not self.use_mech_facilitator:
             return x402_requests(account=signer)
-        chain = self.network_selector
+        chain = self.mech_chain.lower()
         safe_address = self.context.params.safe_contract_addresses.get(chain)
         if not safe_address:
             raise ValueError(f"no Safe address configured for chain {chain!r}")

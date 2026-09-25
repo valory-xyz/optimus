@@ -407,9 +407,13 @@ class TestCoingecko:
             "credits": 10000,
             "use_x402": False,
             "network_selector": "optimism",
+            "mech_chain": "optimism",
             "coingecko_server_base_url": "https://api.coingecko.com",
             "coingecko_x402_server_base_url": "https://x402.example.com/{chain}",
             "coin_from_address_endpoint": "/api/v3/coins/{platform}/contract/{address}",
+            "use_mech_facilitator": False,
+            "mech_facilitator_base_url": "https://facilitator.example",
+            "mech_max_delivery_rate": None,
         }
 
     def test_initialization(self) -> None:
@@ -423,6 +427,7 @@ class TestCoingecko:
         assert cg.rate_limited_code == 429
         assert cg.use_x402 is False
         assert cg.network_selector == "optimism"
+        assert cg.mech_chain == "optimism"
         assert isinstance(cg.rate_limiter, CoingeckoRateLimiter)
         assert cg.chain_to_platform_id_mapping == {"ethereum": "ethereum"}
 
@@ -495,6 +500,159 @@ class TestCoingecko:
 
         assert success is True
         assert data == {"price": 1.0}
+
+    def test_request_with_flag_off_uses_the_x402_session_and_proxy(self) -> None:
+        """Default: the x402 session against the x402 proxy URL, unchanged."""
+        mock_context = MagicMock()
+        kwargs = self._make_kwargs()
+        kwargs["use_x402"] = True
+        cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"price": 1.0}
+
+        with (
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.models.x402_requests"
+            ) as mock_x402,
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.models.mech_requests"
+            ) as mock_mech,
+        ):
+            mock_session = MagicMock()
+            mock_session.__enter__ = MagicMock(return_value=mock_session)
+            mock_session.__exit__ = MagicMock(return_value=False)
+            mock_session.get.return_value = mock_response
+            mock_x402.return_value = mock_session
+
+            success, _ = cg.request("/test", {}, MagicMock())
+
+        assert success is True
+        mock_mech.assert_not_called()
+        assert cg.paid_proxy_base_url == "https://x402.example.com/optimism"
+        assert (
+            mock_session.get.call_args.args[0]
+            == "https://x402.example.com/optimism/test"
+        )
+
+    def test_request_with_mech_flag_uses_a_mech_session_against_the_facilitator(
+        self,
+    ) -> None:
+        """Mech path: chain and Safe follow mech_chain, not the x402 network selector."""
+        mock_context = MagicMock()
+        mock_context.params.request_timeout = 10.0
+        mock_context.params.safe_contract_addresses = {
+            "optimism": "0x" + "11" * 20,
+            "gnosis": "0x" + "22" * 20,
+        }
+        kwargs = self._make_kwargs()
+        kwargs["use_x402"] = True
+        kwargs["use_mech_facilitator"] = True
+        kwargs["mech_chain"] = "Gnosis"
+        kwargs["mech_max_delivery_rate"] = 6000
+        cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+        signer = MagicMock()
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"price": 1.0}
+
+        with (
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.models.mech_requests"
+            ) as mock_mech,
+            patch(
+                "packages.valory.skills.liquidity_trader_abci.models.x402_requests"
+            ) as mock_x402,
+        ):
+            mock_session = MagicMock()
+            mock_session.__enter__ = MagicMock(return_value=mock_session)
+            mock_session.__exit__ = MagicMock(return_value=False)
+            mock_session.get.return_value = mock_response
+            mock_mech.return_value = mock_session
+
+            success, data = cg.request("/api/v3/simple/price", {}, signer)
+
+        assert (success, data) == (True, {"price": 1.0})
+        mock_x402.assert_not_called()
+        mock_mech.assert_called_once_with(
+            signer,
+            safe_address="0x" + "22" * 20,
+            chain="gnosis",
+            api="coingecko",
+            facilitator_base_url="https://facilitator.example",
+            max_delivery_rate=6000,
+            total_deadline_secs=float(mock_context.params.request_timeout),
+        )
+        assert cg.paid_proxy_base_url == "https://facilitator.example"
+        assert mock_session.get.call_args.args[0] == (
+            "https://facilitator.example/api/v3/simple/price"
+        )
+
+    def test_mech_session_is_built_once_and_kept_open_across_requests(self) -> None:
+        """The mech session's replay memory only works if one session serves every call."""
+        mock_context = MagicMock()
+        mock_context.params.safe_contract_addresses = {"optimism": "0x" + "11" * 20}
+        kwargs = self._make_kwargs()
+        kwargs["use_x402"] = True
+        kwargs["use_mech_facilitator"] = True
+        kwargs["mech_max_delivery_rate"] = 6000
+        cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"price": 1.0}
+
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.mech_requests"
+        ) as mock_mech:
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_response
+            mock_mech.return_value = mock_session
+
+            first = cg.request("/api/v3/simple/price", {}, MagicMock())
+            second = cg.request("/api/v3/simple/price", {}, MagicMock())
+
+        assert first == second == (True, {"price": 1.0})
+        mock_mech.assert_called_once()
+        assert mock_session.get.call_count == 2
+        mock_session.close.assert_not_called()
+
+    def test_x402_session_is_closed_after_each_request(self) -> None:
+        """Only the mech session is long-lived; an x402 session is per call."""
+        mock_context = MagicMock()
+        kwargs = self._make_kwargs()
+        kwargs["use_x402"] = True
+        cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"price": 1.0}
+
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.x402_requests"
+        ) as mock_x402:
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_response
+            mock_x402.return_value = mock_session
+
+            assert cg.request("/api/v3/simple/price", {}, MagicMock()) == (
+                True,
+                {"price": 1.0},
+            )
+
+        mock_session.close.assert_called_once()
+
+    def test_request_with_mech_flag_but_no_safe_reports_the_failure(self) -> None:
+        """A missing Safe for the chain fails the call instead of signing for nobody."""
+        mock_context = MagicMock()
+        mock_context.params.safe_contract_addresses = {}
+        kwargs = self._make_kwargs()
+        kwargs["use_x402"] = True
+        kwargs["use_mech_facilitator"] = True
+        cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.mech_requests"
+        ) as mock_mech:
+            success, data = cg.request("/test", {}, MagicMock())
+
+        assert success is False
+        assert "no Safe address" in data["exception"]
+        mock_mech.assert_not_called()
 
     def test_request_failure_status_code(self) -> None:
         """Test request method with non-OK status code."""

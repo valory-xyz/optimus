@@ -164,7 +164,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
-- valory/genai:0.1.0:bafybeighrq424xlroekehgk2oaqxkvziq22gffqzodm4ynhjgzhch4pcq4
+- valory/genai:0.1.0:bafybeic5livnnfotcbsiblk33gbmyt37m2356w2aqp3niluhmk3lr2fu7a
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
 contracts: []
 protocols:
@@ -176,7 +176,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
-- valory/liquidity_trader_abci:0.1.0:bafybeiciyr2xp2dxerdautjp5paypdfeg3eduzlvgudkon4cs3rd63w7vm
+- valory/liquidity_trader_abci:0.1.0:bafybeib7jxgxfcgbwe22rqwv5ftakkrsbokqwyvwjhwl7xwstliuwbapg4
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
 - valory/mech_interact_abci:0.1.0:bafybeifhlr7bzgo7s465ie3icfj3wibsujf4tisf4wfwbhvvz6g4fnu6ka
@@ -439,6 +439,10 @@ models:
       coingecko_server_base_url: https://api.coingecko.com
       coingecko_x402_server_base_url: https://x402.olas.autonolas.tech/v1/coingecko/{chain}
       network_selector: optimism
+      mech_chain: optimism
+      use_mech_facilitator: false
+      mech_facilitator_base_url: https://x402.olas.autonolas.tech
+      mech_max_delivery_rate: 100000
     class_name: Coingecko
   randomness_api:
     args:

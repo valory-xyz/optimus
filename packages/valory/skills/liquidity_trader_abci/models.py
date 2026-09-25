@@ -360,6 +360,10 @@ class Coingecko(Model, TypeCheckMixin):
         self.coin_from_address_endpoint: str = self._ensure(
             "coin_from_address_endpoint", kwargs, str
         )
+        # Built once and reused: the mech adapter remembers a signed request
+        # whose outcome is unknown and replays it on the next identical
+        # call, which only works if one session serves every request.
+        self._mech_session: Optional[requests.Session] = None
         super().__init__(*args, **kwargs)
 
     def rate_limited_status_callback(self) -> None:
@@ -387,11 +391,13 @@ class Coingecko(Model, TypeCheckMixin):
         """
         if not self.use_mech_facilitator:
             return x402_requests(account=signer)
+        if self._mech_session is not None:
+            return self._mech_session
         chain = self.mech_chain.lower()
         safe_address = self.context.params.safe_contract_addresses.get(chain)
         if not safe_address:
             raise ValueError(f"no Safe address configured for chain {chain!r}")
-        return mech_requests(
+        self._mech_session = mech_requests(
             signer,
             safe_address=safe_address,
             chain=chain,
@@ -399,6 +405,7 @@ class Coingecko(Model, TypeCheckMixin):
             facilitator_base_url=self.mech_facilitator_base_url,
             max_delivery_rate=self.mech_max_delivery_rate,
         )
+        return self._mech_session
 
     def request(
         self,
@@ -418,12 +425,17 @@ class Coingecko(Model, TypeCheckMixin):
             else:
                 session = requests.Session()
 
-            with session:
+            # The mech session lives on across calls; the others are per call.
+            keep_open = self.use_x402 and self.use_mech_facilitator
+            try:
                 response = session.get(
                     url, headers=headers, timeout=self.context.params.request_timeout
                 )
                 success = response.status_code in HTTP_OK
                 return success, response.json()
+            finally:
+                if not keep_open:
+                    session.close()
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")
             return False, {"exception": str(exc)}

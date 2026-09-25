@@ -584,6 +584,56 @@ class TestCoingecko:
             "https://facilitator.example/api/v3/simple/price"
         )
 
+    def test_mech_session_is_built_once_and_kept_open_across_requests(self) -> None:
+        """The mech session's replay memory only works if one session serves every call."""
+        mock_context = MagicMock()
+        mock_context.params.safe_contract_addresses = {"optimism": "0x" + "11" * 20}
+        kwargs = self._make_kwargs()
+        kwargs["use_x402"] = True
+        kwargs["use_mech_facilitator"] = True
+        kwargs["mech_max_delivery_rate"] = 6000
+        cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"price": 1.0}
+
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.mech_requests"
+        ) as mock_mech:
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_response
+            mock_mech.return_value = mock_session
+
+            first = cg.request("/api/v3/simple/price", {}, MagicMock())
+            second = cg.request("/api/v3/simple/price", {}, MagicMock())
+
+        assert first == second == (True, {"price": 1.0})
+        mock_mech.assert_called_once()
+        assert mock_session.get.call_count == 2
+        mock_session.close.assert_not_called()
+
+    def test_x402_session_is_closed_after_each_request(self) -> None:
+        """Only the mech session is long-lived; an x402 session is per call."""
+        mock_context = MagicMock()
+        kwargs = self._make_kwargs()
+        kwargs["use_x402"] = True
+        cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"price": 1.0}
+
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.x402_requests"
+        ) as mock_x402:
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_response
+            mock_x402.return_value = mock_session
+
+            assert cg.request("/api/v3/simple/price", {}, MagicMock()) == (
+                True,
+                {"price": 1.0},
+            )
+
+        mock_session.close.assert_called_once()
+
     def test_request_with_mech_flag_but_no_safe_reports_the_failure(self) -> None:
         """A missing Safe for the chain fails the call instead of signing for nobody."""
         mock_context = MagicMock()

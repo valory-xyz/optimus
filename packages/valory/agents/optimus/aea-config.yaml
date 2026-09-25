@@ -71,13 +71,13 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeiciyr2xp2dxerdautjp5paypdfeg3eduzlvgudkon4cs3rd63w7vm
-- valory/mech_interact_abci:0.1.0:bafybeifhlr7bzgo7s465ie3icfj3wibsujf4tisf4wfwbhvvz6g4fnu6ka
-- valory/optimus_abci:0.1.0:bafybeifpfecsvyg7dlitzjqldc65raricfitvanzwc5je4n256p7selyku
+- valory/liquidity_trader_abci:0.1.0:bafybeifqqyawpql6taiecll2r42tpbt2b5wnaheyklvzkkvblz2t3tlbz4
+- valory/mech_interact_abci:0.1.0:bafybeihg52qu5er6l3tu54u32qfyajkrgkrdzrxgktuxlcrwvwmen6xoqa
+- valory/optimus_abci:0.1.0:bafybeiaiigmb2xkuo4tl4kdznnyl3u626o67q6fsc3iuahtv4rlems7wzm
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
-- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
+- valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
+- valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibfms3og3ppmwm6aworv7vrx5ifatcebzsycspqwgmkjbtomxl22y
 - valory/max_apr_selection:0.1.0:bafybeib2szveecjhwlu5aeww5umtso5sm4btogsrjuqg4tk5uormjmsppi

@@ -404,6 +404,10 @@ class Coingecko(Model, TypeCheckMixin):
             api="coingecko",
             facilitator_base_url=self.mech_facilitator_base_url,
             max_delivery_rate=self.mech_max_delivery_rate,
+            # These calls block a behaviour, so the mech path gets the same
+            # budget the plain one has: a busy Safe makes the call give up
+            # and be retried next round rather than stall the agent.
+            total_deadline_secs=float(self.context.params.request_timeout),
         )
         return self._mech_session
 

@@ -539,6 +539,7 @@ class TestCoingecko:
     ) -> None:
         """Mech path: chain and Safe follow mech_chain, not the x402 network selector."""
         mock_context = MagicMock()
+        mock_context.params.request_timeout = 10.0
         mock_context.params.safe_contract_addresses = {
             "optimism": "0x" + "11" * 20,
             "gnosis": "0x" + "22" * 20,
@@ -578,6 +579,7 @@ class TestCoingecko:
             api="coingecko",
             facilitator_base_url="https://facilitator.example",
             max_delivery_rate=6000,
+            total_deadline_secs=float(mock_context.params.request_timeout),
         )
         assert cg.paid_proxy_base_url == "https://facilitator.example"
         assert mock_session.get.call_args.args[0] == (

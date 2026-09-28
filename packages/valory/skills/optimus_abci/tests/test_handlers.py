@@ -1793,16 +1793,16 @@ class TestHttpHandlerMethods:
         assert result is False
 
     def test_estimate_gas_no_web3(self) -> None:
-        """Test _estimate_gas returns None when no web3 instance is available."""
+        """Test _estimate_gas reports no gas and no funds failure without web3."""
         handler, ctx = _make_http_handler()
         handler._get_web3_instance = MagicMock(return_value=None)
         result = handler._estimate_gas(
             {"value": "0x0", "to": "0x0", "data": "0x"}, "0xaddr", "optimism"
         )
-        assert result is None
+        assert result == (None, False)
 
     def test_estimate_gas_exception_return_amount(self) -> None:
-        """Test _estimate_gas returns None on 'Return amount' error."""
+        """Test _estimate_gas classifies a 'Return amount' error as a funds failure."""
         handler, ctx = _make_http_handler()
         mock_w3 = MagicMock()
         mock_w3.eth.estimate_gas.side_effect = Exception("Return amount is not enough")
@@ -1812,10 +1812,10 @@ class TestHttpHandlerMethods:
             "0x" + "0" * 40,
             "optimism",
         )
-        assert result is None
+        assert result == (None, True)
 
     def test_estimate_gas_exception_execution_reverted(self) -> None:
-        """Test _estimate_gas returns None on 'execution reverted' error."""
+        """Test _estimate_gas classifies 'execution reverted' as a funds failure."""
         handler, ctx = _make_http_handler()
         mock_w3 = MagicMock()
         mock_w3.eth.estimate_gas.side_effect = Exception("execution reverted")
@@ -1825,10 +1825,10 @@ class TestHttpHandlerMethods:
             "0x" + "0" * 40,
             "optimism",
         )
-        assert result is None
+        assert result == (None, True)
 
     def test_estimate_gas_generic_exception(self) -> None:
-        """Test _estimate_gas returns None on generic exception."""
+        """Test _estimate_gas classifies an unrecognised error as infrastructure."""
         handler, ctx = _make_http_handler()
         mock_w3 = MagicMock()
         mock_w3.eth.estimate_gas.side_effect = Exception("Unknown error")
@@ -1838,7 +1838,7 @@ class TestHttpHandlerMethods:
             "0x" + "0" * 40,
             "optimism",
         )
-        assert result is None
+        assert result == (None, False)
 
     def test_estimate_gas_success_hex_value(self) -> None:
         """Test _estimate_gas with hex value."""
@@ -1851,7 +1851,7 @@ class TestHttpHandlerMethods:
             "0x" + "0" * 40,
             "optimism",
         )
-        assert result == int(100000 * 1.2)
+        assert result == (int(100000 * 1.2), False)
 
     def test_estimate_gas_success_int_value(self) -> None:
         """Test _estimate_gas with int value."""
@@ -1864,7 +1864,7 @@ class TestHttpHandlerMethods:
             "0x" + "0" * 40,
             "optimism",
         )
-        assert result == int(100000 * 1.2)
+        assert result == (int(100000 * 1.2), False)
 
     def test_get_eoa_account_no_password_success(self) -> None:
         """Test _get_eoa_account with no password and valid key."""
@@ -3680,7 +3680,7 @@ class TestHttpHandlerMethods:
             }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
-        handler._estimate_gas = MagicMock(return_value=None)
+        handler._estimate_gas = MagicMock(return_value=(None, False))
         with patch.object(
             type(handler), "shared_state", new_callable=PropertyMock
         ) as mock_shared:
@@ -3691,6 +3691,8 @@ class TestHttpHandlerMethods:
 
     def test_ensure_sufficient_funds_swap_tx_fail(self) -> None:
         """Test _ensure_sufficient_funds when tx submission fails stores ETH deficit."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
         handler, ctx = _make_http_handler()
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
@@ -3705,7 +3707,7 @@ class TestHttpHandlerMethods:
             }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
-        handler._estimate_gas = MagicMock(return_value=21000)
+        handler._estimate_gas = MagicMock(return_value=(21000, False))
         handler._sign_and_submit_tx_web3 = MagicMock(return_value=None)
         with patch.object(
             type(handler), "shared_state", new_callable=PropertyMock
@@ -3718,11 +3720,14 @@ class TestHttpHandlerMethods:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
-            # value=0x100=256, gas=21000, gasPrice=1000 => total=21000*1000+256=21000256
-            assert mock_ss.x402_eth_deficit == 21000 * 1000 + 256
+            # value=0x100=256, gas=21000, gasPrice=1000 => total=21000*1000+256.
+            # Three cycles of that is far below the floor, so the floor wins.
+            assert mock_ss.x402_eth_deficit == handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI
 
     def test_ensure_sufficient_funds_swap_tx_not_successful(self) -> None:
         """Test _ensure_sufficient_funds when tx is not successful stores ETH deficit."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
         handler, ctx = _make_http_handler()
         ctx.params.target_investment_chains = ["optimism"]
         ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
@@ -3737,7 +3742,7 @@ class TestHttpHandlerMethods:
             }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
-        handler._estimate_gas = MagicMock(return_value=21000)
+        handler._estimate_gas = MagicMock(return_value=(21000, False))
         handler._sign_and_submit_tx_web3 = MagicMock(return_value="0xhash")
         handler._check_transaction_status = MagicMock(return_value=False)
         with patch.object(
@@ -3751,8 +3756,9 @@ class TestHttpHandlerMethods:
                 mock_web3.to_checksum_address = lambda x: x
                 handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
-            # value=256, gas=21000, gasPrice=1000 => total=21000*1000+256=21000256
-            assert mock_ss.x402_eth_deficit == 21000 * 1000 + 256
+            # value=256, gas=21000, gasPrice=1000 => total=21000*1000+256.
+            # Three cycles of that is far below the floor, so the floor wins.
+            assert mock_ss.x402_eth_deficit == handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI
 
     def test_ensure_sufficient_funds_swap_success(self) -> None:
         """Test _ensure_sufficient_funds when swap succeeds clears deficit."""
@@ -3770,7 +3776,7 @@ class TestHttpHandlerMethods:
             }
         )
         handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, 1000))
-        handler._estimate_gas = MagicMock(return_value=21000)
+        handler._estimate_gas = MagicMock(return_value=(21000, False))
         handler._sign_and_submit_tx_web3 = MagicMock(return_value="0xhash")
         handler._check_transaction_status = MagicMock(return_value=True)
         with patch.object(
@@ -3798,6 +3804,475 @@ class TestHttpHandlerMethods:
             mock_shared.return_value = mock_ss
             handler._ensure_sufficient_funds_for_x402_payments()
             assert mock_ss.sufficient_funds_for_x402_payments is False
+
+    # -- OPE-1940: deficit reporting on unaffordable x402 top-ups ------------
+
+    @staticmethod
+    def _x402_swap_handler(gas_price: int = 1000, tx_value: Any = 256) -> Any:
+        """Build a handler primed to reach the gas-estimate step of a swap."""
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
+        ctx.params.chain_to_chain_id_mapping = {"optimism": 10}
+        mock_account = MagicMock()
+        mock_account.address = "0xaddr"
+        handler._get_eoa_account = MagicMock(return_value=mock_account)
+        handler._check_usdc_balance = MagicMock(return_value=500)
+        handler._get_lifi_quote_sync = MagicMock(
+            return_value={
+                "transactionRequest": {"to": "0x1", "data": "0x", "value": tx_value}
+            }
+        )
+        handler._get_nonce_and_gas_web3 = MagicMock(return_value=(1, gas_price))
+        # An empty EOA, so a funds-classified estimate failure is a real one.
+        handler._get_native_balance = MagicMock(return_value=0)
+        return handler, ctx
+
+    def test_estimate_gas_classifies_out_of_funds(self) -> None:
+        """_estimate_gas must recognise the OutOfFunds text from ZD#1239."""
+        handler, _ = _make_http_handler()
+        handler._get_web3_instance = MagicMock(return_value=MagicMock())
+        handler._call_web3_with_breaker = MagicMock(
+            side_effect=Exception("EVM error: OutOfFunds")
+        )
+        with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3:
+            mock_web3.to_checksum_address = lambda x: x
+            tx_gas, insufficient = handler._estimate_gas(
+                {"to": "0x1", "data": "0x", "value": 0}, "0xaddr", "optimism"
+            )
+        assert tx_gas is None
+        assert insufficient is True
+
+    @pytest.mark.parametrize(
+        "error_text, expected_funds_failure",
+        [
+            ("EVM error: OutOfFunds", True),
+            ("Return amount is not enough", True),
+            ("execution reverted", True),
+            ("insufficient funds for gas * price + value", True),
+            ("Max retries exceeded with url: /rpc", False),
+        ],
+    )
+    def test_estimate_gas_error_classification(
+        self, error_text: str, expected_funds_failure: bool
+    ) -> None:
+        """The classifier separates funding shortfalls from infra failures."""
+        handler, _ = _make_http_handler()
+        handler._get_web3_instance = MagicMock(return_value=MagicMock())
+        handler._call_web3_with_breaker = MagicMock(side_effect=Exception(error_text))
+        with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3:
+            mock_web3.to_checksum_address = lambda x: x
+            tx_gas, insufficient = handler._estimate_gas(
+                {"to": "0x1", "data": "0x", "value": 0}, "0xaddr", "optimism"
+            )
+        assert tx_gas is None
+        assert insufficient is expected_funds_failure
+
+    def test_estimate_gas_no_web3_is_not_a_funds_failure(self) -> None:
+        """A missing Web3 instance is infrastructure, not a funding shortfall."""
+        handler, _ = _make_http_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        assert handler._estimate_gas({}, "0xaddr", "optimism") == (None, False)
+
+    def test_ensure_sufficient_funds_out_of_funds_sets_deficit(self) -> None:
+        """Regression for OPE-1940: the reported failure must set a deficit.
+
+        The gas estimate is driven through the real classifier with the exact
+        error text from the ZD#1239 bundle, so this fails if the match set
+        regresses rather than silently passing on a stand-in message.
+        """
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._get_web3_instance = MagicMock(return_value=MagicMock())
+        handler._call_web3_with_breaker = MagicMock(
+            side_effect=Exception("EVM error: OutOfFunds")
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 0
+            mock_shared.return_value = mock_ss
+            with patch(
+                "packages.valory.skills.optimus_abci.handlers.Web3"
+            ) as mock_web3:
+                mock_web3.to_checksum_address = lambda x: x
+                handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.sufficient_funds_for_x402_payments is False
+        assert mock_ss.x402_eth_deficit > 0
+        expected = max(
+            (handlers_mod.X402_SWAP_FALLBACK_GAS * 1000 + 256)
+            * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM,
+            handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI,
+        )
+        assert mock_ss.x402_eth_deficit == expected
+
+    def test_ensure_sufficient_funds_applies_swap_cycle_headroom(self) -> None:
+        """The reported figure covers N swap cycles, not one.
+
+        Uses a gas price high enough that the headroom multiple clears the
+        floor, so this asserts the multiplication rather than the clamp.
+        """
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        gas_price = 10**9
+        tx_value = 10**14
+        handler, _ = self._x402_swap_handler(gas_price=gas_price, tx_value=tx_value)
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        single_cycle = handlers_mod.X402_SWAP_FALLBACK_GAS * gas_price + tx_value
+        assert single_cycle * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM > (
+            handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI
+        ), "test inputs must clear the floor for this assertion to mean anything"
+        assert (
+            mock_ss.x402_eth_deficit
+            == single_cycle * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM
+        )
+
+    def test_x402_fallback_deficit_is_dimensionally_sane(self) -> None:
+        """The fallback figure lands near the ~0.0003 ETH that restored the agent.
+
+        A loose bound on purpose: the point is to fail loudly on a unit error,
+        such as multiplying a wei cost by a gas price.
+        """
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        # Representative Optimism values: ~0.001 gwei L2 gas price, and a
+        # 0.25 USDC swap worth ~0.00009 ETH.
+        gas_price = 10**6
+        tx_value = 90_000_000_000_000
+        handler, _ = self._x402_swap_handler(gas_price=gas_price, tx_value=tx_value)
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        field_confirmed = 300_000_000_000_000  # 0.0003 ETH
+        assert field_confirmed <= mock_ss.x402_eth_deficit <= field_confirmed * 10
+        assert mock_ss.x402_eth_deficit >= handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI
+
+    def test_ensure_sufficient_funds_prefers_lifi_gas_limit(self) -> None:
+        """The route-specific gasLimit from LiFi is used when the quote has one."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        gas_price = 10**9
+        tx_value = 10**14
+        lifi_gas_limit = 750000
+        handler, _ = self._x402_swap_handler(gas_price=gas_price, tx_value=tx_value)
+        handler._get_lifi_quote_sync = MagicMock(
+            return_value={
+                "transactionRequest": {
+                    "to": "0x1",
+                    "data": "0x",
+                    "value": tx_value,
+                    "gasLimit": hex(lifi_gas_limit),
+                }
+            }
+        )
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        expected = (
+            lifi_gas_limit * gas_price + tx_value
+        ) * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM
+        assert mock_ss.x402_eth_deficit == expected
+
+    def test_ensure_sufficient_funds_gas_infra_failure_reports_nothing(self) -> None:
+        """An infrastructure gas failure must not ask the user for money."""
+        handler, _ = self._x402_swap_handler()
+        handler._estimate_gas = MagicMock(return_value=(None, False))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 4242
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.sufficient_funds_for_x402_payments is False
+        assert mock_ss.x402_eth_deficit == 4242
+
+    def test_funds_classified_failure_on_funded_agent_reports_nothing(self) -> None:
+        """A revert on an EOA that can afford the swap is not a funds failure.
+
+        "execution reverted" and LiFi's slippage revert match the funds
+        classifier but can hit a fully funded EOA; asking the user for ETH
+        would not fix them, so the deficit must be left untouched.
+        """
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        single_cycle = handlers_mod.X402_SWAP_FALLBACK_GAS * 1000 + 256
+        handler._get_native_balance = MagicMock(return_value=single_cycle)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 4242
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.sufficient_funds_for_x402_payments is False
+        assert mock_ss.x402_eth_deficit == 4242
+
+    def test_funds_classified_failure_with_unreadable_balance_reports(self) -> None:
+        """When the balance cannot be read the classifier's verdict stands."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        handler._get_native_balance = MagicMock(return_value=None)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 0
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        expected = max(
+            (handlers_mod.X402_SWAP_FALLBACK_GAS * 1000 + 256)
+            * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM,
+            handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI,
+        )
+        assert mock_ss.x402_eth_deficit == expected
+
+    def test_ensure_sufficient_funds_sufficient_balance_clears_stale_deficit(
+        self,
+    ) -> None:
+        """A sufficient balance clears a deficit reported by an earlier cycle.
+
+        This is the field-confirmed workaround on OPE-1940: the user sends USDC
+        directly to the Agent Signer, so the swap never runs again and the
+        deficit would otherwise never be cleared.
+        """
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
+        mock_account = MagicMock()
+        mock_account.address = "0xaddr"
+        handler._get_eoa_account = MagicMock(return_value=mock_account)
+        handler._check_usdc_balance = MagicMock(return_value=2000)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 999999
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.sufficient_funds_for_x402_payments is True
+        assert mock_ss.x402_eth_deficit == 0
+
+    @pytest.mark.parametrize("native_balance", [None, 10**18])
+    def test_quote_failure_on_funded_agent_reports_nothing(
+        self, native_balance: Any
+    ) -> None:
+        """A LiFi outage on a funded agent is not a funding shortfall."""
+        handler, _ = self._x402_swap_handler()
+        handler._get_lifi_quote_sync = MagicMock(return_value=None)
+        handler._get_native_balance = MagicMock(return_value=native_balance)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 7
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.sufficient_funds_for_x402_payments is False
+        assert mock_ss.x402_eth_deficit == 7
+
+    def test_quote_failure_on_unfunded_agent_reports_the_floor(self) -> None:
+        """A LiFi outage on an agent below the floor does report the floor."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._get_lifi_quote_sync = MagicMock(return_value=None)
+        handler._get_native_balance = MagicMock(return_value=1)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.x402_eth_deficit == handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI
+
+    def test_quote_without_tx_request_uses_the_same_floor_rule(self) -> None:
+        """A malformed quote follows the quote-failure rule, not a bare return."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._get_lifi_quote_sync = MagicMock(return_value={"data": "some"})
+        handler._get_native_balance = MagicMock(return_value=1)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert mock_ss.x402_eth_deficit == handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI
+
+    def test_infrastructure_failures_leave_the_deficit_untouched(self) -> None:
+        """Breaker-open, unreadable balance and missing nonce report nothing."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CircuitBreakerOpenError,
+        )
+
+        cases = [
+            (
+                "breaker",
+                lambda h: setattr(
+                    h,
+                    "_check_usdc_balance",
+                    MagicMock(side_effect=CircuitBreakerOpenError("optimism")),
+                ),
+            ),
+            (
+                "none_balance",
+                lambda h: setattr(
+                    h, "_check_usdc_balance", MagicMock(return_value=None)
+                ),
+            ),
+            (
+                "no_nonce",
+                lambda h: setattr(
+                    h, "_get_nonce_and_gas_web3", MagicMock(return_value=(None, None))
+                ),
+            ),
+        ]
+        for name, prime in cases:
+            handler, _ = self._x402_swap_handler()
+            prime(handler)
+            with patch.object(
+                type(handler), "shared_state", new_callable=PropertyMock
+            ) as mock_shared:
+                mock_ss = MagicMock()
+                mock_ss.x402_eth_deficit = 1234
+                mock_shared.return_value = mock_ss
+                handler._ensure_sufficient_funds_for_x402_payments()
+            assert mock_ss.x402_eth_deficit == 1234, name
+
+    def test_get_native_balance_paths(self) -> None:
+        """_get_native_balance returns the balance, or None when unavailable."""
+        from packages.valory.skills.liquidity_trader_abci.models import (
+            CircuitBreakerOpenError,
+        )
+
+        handler, _ = _make_http_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        assert handler._get_native_balance("0xaddr", "optimism") is None
+
+        handler._get_web3_instance = MagicMock(return_value=MagicMock())
+        with patch("packages.valory.skills.optimus_abci.handlers.Web3") as mock_web3:
+            mock_web3.to_checksum_address = lambda x: x
+            handler._call_web3_with_breaker = MagicMock(return_value=42)
+            assert handler._get_native_balance("0xaddr", "optimism") == 42
+            handler._call_web3_with_breaker = MagicMock(
+                side_effect=CircuitBreakerOpenError("optimism")
+            )
+            assert handler._get_native_balance("0xaddr", "optimism") is None
+            handler._call_web3_with_breaker = MagicMock(side_effect=Exception("boom"))
+            assert handler._get_native_balance("0xaddr", "optimism") is None
+
+    def test_tx_request_gas_limit_parsing(self) -> None:
+        """The gasLimit from LiFi is optional and defensively parsed."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        parse = handlers_mod._tx_request_gas_limit
+        assert parse({}) is None
+        assert parse({"gasLimit": None}) is None
+        assert parse({"gasLimit": "0x186a0"}) == 100000
+        assert parse({"gasLimit": 100000}) == 100000
+        assert parse({"gasLimit": "not-a-number"}) is None
+        assert parse({"gasLimit": 0}) is None
+        # A bogus upstream value must not flow into the reported deficit.
+        cap = handlers_mod.X402_LIFI_GAS_LIMIT_CAP
+        assert parse({"gasLimit": cap}) == cap
+        assert parse({"gasLimit": cap + 1}) is None
+        assert parse({"gasLimit": hex(cap + 1)}) is None
+
+    def test_oversized_lifi_gas_limit_falls_back_to_constant(self) -> None:
+        """A LiFi gasLimit above the cap is ignored in favour of the constant."""
+        from packages.valory.skills.optimus_abci import handlers as handlers_mod
+
+        handler, _ = self._x402_swap_handler()
+        handler._get_lifi_quote_sync = MagicMock(
+            return_value={
+                "transactionRequest": {
+                    "to": "0x1",
+                    "data": "0x",
+                    "value": 256,
+                    "gasLimit": handlers_mod.X402_LIFI_GAS_LIMIT_CAP * 1000,
+                }
+            }
+        )
+        handler._estimate_gas = MagicMock(return_value=(None, True))
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 0
+            mock_shared.return_value = mock_ss
+            handler._ensure_sufficient_funds_for_x402_payments()
+        expected = max(
+            (handlers_mod.X402_SWAP_FALLBACK_GAS * 1000 + 256)
+            * handlers_mod.X402_SWAP_CYCLES_OF_HEADROOM,
+            handlers_mod.X402_ETH_DEFICIT_FLOOR_WEI,
+        )
+        assert mock_ss.x402_eth_deficit == expected
+
+    def test_funds_status_surfaces_the_x402_deficit(self) -> None:
+        """The endpoint reports the shortfall the reported agent never showed.
+
+        Drives _handle_get_funds_status with a standard deficit of "0" - the
+        exact shape from the ZD#1239 bundle - and a non-zero x402 deficit.
+        """
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
+        handler, ctx = _make_http_handler()
+        handler._send_ok_response = MagicMock()
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        ctx.params.use_x402 = False
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.agent_address = "0xagent"
+
+        mock_fund_req = MagicMock()
+        mock_fund_req.get_response_body.return_value = {
+            "optimism": {
+                "0xagent": {ZERO_ADDRESS: {"balance": "63882783972811", "deficit": "0"}}
+            }
+        }
+        with (
+            patch.object(
+                type(handler),
+                "funds_status",
+                new_callable=PropertyMock,
+                return_value=mock_fund_req,
+            ),
+            patch.object(
+                type(handler), "shared_state", new_callable=PropertyMock
+            ) as mock_shared,
+        ):
+            mock_ss = MagicMock()
+            mock_ss.x402_eth_deficit = 300_000_000_000_000
+            mock_shared.return_value = mock_ss
+            handler._handle_get_funds_status(MagicMock(), MagicMock())
+
+        body = handler._send_ok_response.call_args[0][2]
+        token_data = body["optimism"]["0xagent"][ZERO_ADDRESS]
+        assert int(token_data["deficit"]) == 300_000_000_000_000 - 63882783972811
+        assert int(token_data["deficit"]) > 0
 
     def test_inject_x402_eth_deficit_into_empty_response(self) -> None:
         """Test _inject_x402_eth_deficit adds deficit to empty response."""

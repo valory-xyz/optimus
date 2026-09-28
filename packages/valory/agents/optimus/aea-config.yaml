@@ -71,9 +71,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeib7jxgxfcgbwe22rqwv5ftakkrsbokqwyvwjhwl7xwstliuwbapg4
+- valory/liquidity_trader_abci:0.1.0:bafybeiabia4tb6yrffinr3dcgkg4ewmva37ovmykhikn645noqddmiidmm
 - valory/mech_interact_abci:0.1.0:bafybeifhlr7bzgo7s465ie3icfj3wibsujf4tisf4wfwbhvvz6g4fnu6ka
-- valory/optimus_abci:0.1.0:bafybeibkmi2st7shwm3v7jeiuczanlf533iwm6euqiz22cbubctcjneihu
+- valory/optimus_abci:0.1.0:bafybeihid3lgyw7f43c5d5svjqbnn36gduzhhmqdecwnsde326ooxqlawm
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
@@ -200,7 +200,7 @@ type: skill
 models:
   params:
     args:
-      fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":35000000000000,"threshold":17500000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0},"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85":{"topup":700000,"threshold":350000}}}}}
+      fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":400000000000000,"threshold":200000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0},"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85":{"topup":700000,"threshold":350000}}}}}
       rpc_urls: ${dict:{"optimism":"https://mainnet.optimism.io"}}
       safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
 ---

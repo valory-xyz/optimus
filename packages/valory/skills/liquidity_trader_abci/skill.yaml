@@ -99,7 +99,7 @@ contracts:
 - valory/balancer_vault:0.1.0:bafybeihpqc6hfzb6m2d3iwfqughartcqobfupciyki2lmvc4fgkuxio7by
 - valory/balancer_queries:0.1.0:bafybeihbexpjj6ho3ij7rxk4tzz3sowpa5ztawlf63y5fdmmom7xifpan4
 - valory/erc20:0.1.0:bafybeibpuyikvpmtaraca4lqokf3kf6jlpmafkqm6oixnps3ig23jfbllq
-- valory/mech_activity:0.1.0:bafybeienezl3yozrionpoyh75r54e24tjtnstxv674ru25lnosps3a7cr4
+- valory/mech_activity:0.1.0:bafybeifpthgtqxob46nyk7zw2enbihm4mzben5mbbwm7qdx4axzllwyy6u
 - valory/multisend:0.1.0:bafybeifqtf24h7lhhbairveqmq2klhvbswajmbpoyqj4xrgye7c22pxubi
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeib4gev4y35sjl2ie35mgdusssgsauriigmwrt3mbqs7tnbcf2qwya
 - valory/uniswap_v3_pool:0.1.0:bafybeidoj2wrbecxo6pljjjn2qnxhd4sboddqkvnghwghtjxwr77dt33ca
@@ -123,8 +123,8 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/mech_interact_abci:0.1.0:bafybeifhlr7bzgo7s465ie3icfj3wibsujf4tisf4wfwbhvvz6g4fnu6ka
-- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
+- valory/mech_interact_abci:0.1.0:bafybeihg52qu5er6l3tu54u32qfyajkrgkrdzrxgktuxlcrwvwmen6xoqa
+- valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
 behaviours:
   main:
     args: {}

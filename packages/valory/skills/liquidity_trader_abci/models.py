@@ -185,6 +185,20 @@ class SharedState(BaseSharedState):
         # ``optimus_abci`` app the instantiated ``SharedState`` subclasses this
         # one, so placing it here keeps it reachable via ``context.state``.
         self.staking_regime_is_new: Optional[bool] = None
+        # x402 top-up state, read by the optimus_abci HTTP handler and
+        # reported through /funds-status. Declared here for the same reason
+        # as ``staking_regime_is_new`` above: the composed ``optimus_abci``
+        # app instantiates a ``SharedState`` that subclasses this one, so a
+        # field declared here is reachable via ``context.state``. Declaring
+        # them with defaults (rather than attaching them dynamically on the
+        # first top-up attempt) is what makes "the agent never reported a
+        # deficit" distinguishable from "the agent reported no deficit".
+        # ``sufficient_funds_for_x402_payments`` defaults to False because
+        # unknown has always meant not sufficient: the handler's setup() sets
+        # it False before the first background check, and its only reader
+        # falls back to False when the attribute is missing.
+        self.x402_eth_deficit: int = 0
+        self.sufficient_funds_for_x402_payments: bool = False
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""

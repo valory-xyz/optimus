@@ -14,9 +14,9 @@ connections:
 - valory/ipfs:0.1.0:bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
-- valory/genai:0.1.0:bafybeighrq424xlroekehgk2oaqxkvziq22gffqzodm4ynhjgzhch4pcq4
+- valory/genai:0.1.0:bafybeiddvs3owwus2rmaayhmhcapkgm42iggav7smicqtigalt5cwekujy
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeicqjg3d6pnlcsu4442qt5tmsjqkqdtc3ulvbjgoh53jyr7z3lbqqi
+- valory/x402:0.1.0:bafybeicirpftb2tykxat6cu5rud3etmyy7ygdozmwtcxywzifn623rytfm
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeigr6ugkp6bxwnbkecktotekcjihabb6eudh3bgcnjfdorwosygile
@@ -71,9 +71,9 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeifqqyawpql6taiecll2r42tpbt2b5wnaheyklvzkkvblz2t3tlbz4
+- valory/liquidity_trader_abci:0.1.0:bafybeiax2lxvfclexltmvge3o2uddun4chckig5jjqu5cpmpzq67dnlifm
 - valory/mech_interact_abci:0.1.0:bafybeihg52qu5er6l3tu54u32qfyajkrgkrdzrxgktuxlcrwvwmen6xoqa
-- valory/optimus_abci:0.1.0:bafybeiaiigmb2xkuo4tl4kdznnyl3u626o67q6fsc3iuahtv4rlems7wzm
+- valory/optimus_abci:0.1.0:bafybeiehjdahh6x6mnuv4oxuehewr5neycpwr3wqeveruq4tw7yh3w7quy
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
@@ -195,7 +195,7 @@ type: skill
 models:
   params:
     args:
-      fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":35000000000000,"threshold":17500000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0},"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85":{"topup":700000,"threshold":350000}}}}}
+      fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":400000000000000,"threshold":200000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0},"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85":{"topup":700000,"threshold":350000}}}}}
       rpc_urls: ${dict:{"optimism":"https://mainnet.optimism.io"}}
       safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
 ---

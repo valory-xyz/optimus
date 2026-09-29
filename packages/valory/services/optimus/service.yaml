@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeig2btyt5wxuo6x55hkialfjx4itxdxymy3fx2xibomi2jq5feupim
+agent: valory/optimus:0.1.0:bafybeighyvuywm5irhphfhfjpznlwc6fsfavgoycz2sw4ppeck6tkel72i
 number_of_agents: 1
 deployment:
   agent:
@@ -164,6 +164,7 @@ models:
       use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
       mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
       mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
+      mech_request_timeout: ${MECH_REQUEST_TIMEOUT:float:180.0}
   mechs_subgraph:
     args:
       url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}

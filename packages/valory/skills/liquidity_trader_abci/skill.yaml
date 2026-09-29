@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeigjnfs3xrkp426gtavqckj2vzjcxk2qehd2ru2nkmh4aivoz342ri
+  models.py: bafybeib37fahndlueyphzwgrezejfjwtfoy7jsbaehhvlo3a6iybtpmiy4
   payloads.py: bafybeibvbjcwglyx3gasmx56u3nwneoxbkvefrry7pmguuayi3nlsa47oe
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -76,7 +76,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeif6rypjmvvwkicdkpprwimqrnldcgmrf2evrww23r73w57wixuria
+  tests/test_models.py: bafybeifgstbohs47lt52bnemgima5o2irldgosmcuunzrmgr7pcibputpm
   tests/test_payloads.py: bafybeihgckap5l6g7gmj2g7bon4zp5oc23mo55pt32hstznwobfb24cifq
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
   tests/test_rounds.py: bafybeihkb4qxrwbmdnointbjelwttrw6styzs4rodmlbcnnaglvvqkczom
@@ -364,6 +364,7 @@ models:
       use_mech_facilitator: false
       mech_facilitator_base_url: https://x402.olas.autonolas.tech
       mech_max_delivery_rate: 100000
+      mech_request_timeout: 180.0
     class_name: Coingecko
   requests:
     args: {}

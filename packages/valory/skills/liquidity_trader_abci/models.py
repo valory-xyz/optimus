@@ -352,8 +352,7 @@ class Coingecko(Model, TypeCheckMixin):
         self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
         self.network_selector = self._ensure("network_selector", kwargs, str)
-        # The chain whose Safe pays on the mech path; the same setting the
-        # genai connection uses, so chat and CoinGecko pay from one Safe.
+        # The Safe that pays on the mech path; shared with the genai connection.
         self.mech_chain = self._ensure("mech_chain", kwargs, str)
         self.coingecko_server_base_url = self._ensure(
             "coingecko_server_base_url", kwargs, str
@@ -361,9 +360,7 @@ class Coingecko(Model, TypeCheckMixin):
         self.coingecko_x402_server_base_url = self._ensure(
             "coingecko_x402_server_base_url", kwargs, str
         ).format(chain=self.network_selector)
-        # Mech-marketplace path (Safe-signed requests settled in batches by
-        # the facilitator) instead of x402 EIP-3009 transfers. Only
-        # consulted when use_x402 is on.
+        # Only consulted when use_x402 is on.
         self.use_mech_facilitator = self._ensure("use_mech_facilitator", kwargs, bool)
         self.mech_facilitator_base_url = self._ensure(
             "mech_facilitator_base_url", kwargs, str
@@ -371,12 +368,17 @@ class Coingecko(Model, TypeCheckMixin):
         self.mech_max_delivery_rate: Optional[int] = kwargs.pop(
             "mech_max_delivery_rate", None
         )
+        # The facilitator may hold one call for its admission wait and then
+        # its own upstream deadline, and it charges for a call it served
+        # even when the client walked away. So the mech path cannot borrow
+        # ``request_timeout``: giving up early pays for answers we discard.
+        self.mech_request_timeout: float = float(
+            kwargs.pop("mech_request_timeout", 180.0)
+        )
         self.coin_from_address_endpoint: str = self._ensure(
             "coin_from_address_endpoint", kwargs, str
         )
-        # Built once and reused: the mech adapter remembers a signed request
-        # whose outcome is unknown and replays it on the next identical
-        # call, which only works if one session serves every request.
+        # One session, or the adapter cannot replay an unresolved request.
         self._mech_session: Optional[requests.Session] = None
         super().__init__(*args, **kwargs)
 
@@ -418,10 +420,7 @@ class Coingecko(Model, TypeCheckMixin):
             api="coingecko",
             facilitator_base_url=self.mech_facilitator_base_url,
             max_delivery_rate=self.mech_max_delivery_rate,
-            # These calls block a behaviour, so the mech path gets the same
-            # budget the plain one has: a busy Safe makes the call give up
-            # and be retried next round rather than stall the agent.
-            total_deadline_secs=float(self.context.params.request_timeout),
+            total_deadline_secs=self.mech_request_timeout,
         )
         return self._mech_session
 

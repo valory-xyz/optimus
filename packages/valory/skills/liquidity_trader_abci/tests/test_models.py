@@ -591,8 +591,11 @@ class TestCoingecko:
             api="coingecko",
             facilitator_base_url="https://facilitator.example",
             max_delivery_rate=6000,
-            total_deadline_secs=float(mock_context.params.request_timeout),
+            total_deadline_secs=cg.mech_request_timeout,
         )
+        # Its own budget, not request_timeout: the facilitator charges for a
+        # call it served even when the client gave up waiting for it.
+        assert cg.mech_request_timeout > float(mock_context.params.request_timeout)
         assert cg.paid_proxy_base_url == "https://facilitator.example"
         assert mock_session.get.call_args.args[0] == (
             "https://facilitator.example/api/v3/simple/price"

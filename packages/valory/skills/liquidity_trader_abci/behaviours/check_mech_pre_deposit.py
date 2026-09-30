@@ -115,6 +115,18 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         """Return the Safe that pays, on the mech chain."""
         return self.params.safe_contract_addresses.get(self._chain)
 
+    @property
+    def _marketplace_address(self) -> Optional[str]:
+        """Return the configured mech marketplace on the mech chain.
+
+        :return: the marketplace address, or ``None`` when none is configured.
+
+        Configured rather than reported, because every address this behaviour
+        sends funds to is resolved from it. A marketplace named by the
+        facilitator's response would let that response choose the recipient.
+        """
+        return self.coingecko.mech_marketplace_addresses.get(self._chain)
+
     def _prepare_top_up(self) -> Generator[None, None, Optional[str]]:
         """Return a Safe tx that tops the pre-deposit up, or ``None``.
 
@@ -133,19 +145,24 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        info = yield from self._read_requester_info()
-        if info is None:
+        marketplace = self._marketplace_address
+        if not marketplace:
+            self.context.logger.warning(
+                f"No mech marketplace configured for {self._chain}; cannot "
+                "fund the mech pre-deposit."
+            )
             return None
 
-        try:
-            deposited = int(info["balance"])
-            marketplace = str(info["marketplace_address"])
-            payment_type = str(info["payment_type"])
-        except (KeyError, TypeError, ValueError) as exc:
-            self.context.logger.warning(
-                f"Facilitator requester info was missing what the deposit "
-                f"needs: {exc}"
-            )
+        payment_type = yield from self._read_payment_type()
+        if payment_type is None:
+            return None
+
+        tracker = yield from self._resolve_balance_tracker(marketplace, payment_type)
+        if tracker is None:
+            return None
+
+        deposited = yield from self._read_deposited(tracker, safe)
+        if deposited is None:
             return None
 
         floor = self.coingecko.mech_pre_deposit_floor
@@ -163,26 +180,23 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         if amount <= 0:
             return None
 
-        tracker = yield from self._resolve_balance_tracker(marketplace, payment_type)
-        if tracker is None:
-            return None
-
         self.context.logger.info(
             f"Mech pre-deposit {deposited} is below the floor {floor}; "
             f"depositing {amount} into {tracker}."
         )
         return (yield from self._build_deposit_tx(tracker, safe, amount))
 
-    def _read_requester_info(self) -> Generator[None, None, Optional[dict]]:
-        """Read what the facilitator reports for this Safe.
+    def _read_payment_type(self) -> Generator[None, None, Optional[str]]:
+        """Read the payment type of the mech the facilitator serves.
 
         :yield: the HTTP call.
-        :return: the decoded body, or ``None``.
+        :return: the payment type, or ``None`` when it is unreadable.
 
-        Taken from the facilitator rather than from configuration, because it
-        decides which marketplace and mech it serves and a configured address
-        can drift from that silently. The call is the framework's own helper,
-        so it yields rather than blocking the agent.
+        The one thing the facilitator is asked for, because it decides which
+        of the marketplace's mechs it serves and configuration would drift
+        from that silently. It only selects among the trackers the configured
+        marketplace has itself registered, and a tracker for a token the Safe
+        does not hold yields no deposit.
         """
         base = str(self.coingecko.mech_facilitator_base_url).rstrip("/")
         url = f"{base}/mech/{self._chain}/requester/{self._safe_address}"
@@ -194,12 +208,49 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
         try:
-            return dict(json.loads(response.body))
+            payment_type = dict(json.loads(response.body)).get("payment_type")
         except (ValueError, TypeError) as exc:
             self.context.logger.warning(
                 f"Facilitator requester info was not readable: {exc}"
             )
             return None
+        if not isinstance(payment_type, str) or not payment_type:
+            self.context.logger.warning(
+                f"Facilitator reported no usable payment type "
+                f"({payment_type!r}); skipping the pre-deposit check."
+            )
+            return None
+        return payment_type
+
+    def _read_deposited(
+        self, tracker: str, safe: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Read what the tracker holds for this Safe.
+
+        :param tracker: the balance tracker address.
+        :param safe: the Safe that pays.
+        :yield: the contract read.
+        :return: the deposited amount, or ``None`` when it is unreadable.
+
+        Read from the tracker rather than taken from the facilitator's
+        response, so the amount that decides whether to move funds comes from
+        the contract that holds them.
+        """
+        deposited = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=tracker,
+            contract_public_id=BalanceTrackerContract.contract_id,
+            contract_callable="get_requester_balance",
+            data_key="requester_balance",
+            requester=safe,
+            chain_id=self._chain,
+        )
+        if deposited is None:
+            self.context.logger.warning(
+                "Could not read the mech pre-deposit; skipping the check this "
+                "period."
+            )
+        return deposited
 
     def _resolve_balance_tracker(
         self, marketplace: str, payment_type: str
@@ -242,17 +293,18 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         :yield: the contract reads.
         :return: the settleable transaction hash, or ``None``.
 
-        A native tracker takes the deposit as transaction value. A token one
-        needs an allowance first, so the approve and the deposit go out as one
-        multisend: a deposit that lands without its approval reverts, and an
-        approval that lands without its deposit leaves the allowance standing.
+        The approve and the deposit go out as one multisend: a deposit that
+        lands without its approval reverts, and an approval that lands without
+        its deposit leaves the allowance standing.
 
-        The deposit never exceeds what the Safe holds. The shortfall is
-        computed from what the tracker reports, which says nothing about
-        whether the Safe has been funded yet, and a deposit above the balance
-        reverts on settlement instead of being refused here.
+        The deposit never exceeds what the Safe holds. The shortfall is read
+        from the tracker, which says nothing about whether the Safe has been
+        funded yet, and a deposit above the balance reverts on settlement
+        instead of being refused here.
         """
         token = yield from self._read_tracker_token(tracker)
+        if token is None:
+            return None
 
         available = yield from self._safe_balance(token, safe)
         if available is None:
@@ -279,16 +331,6 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("Could not encode the pre-deposit call.")
             return None
 
-        if token is None:
-            # Native tracker: the deposit carries its value directly.
-            return (
-                yield from self._safe_tx(
-                    to_address=tracker,
-                    data=deposit_data,
-                    value=amount,
-                )
-            )
-
         approve_data = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=token,
@@ -310,20 +352,16 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         )
 
     def _safe_balance(
-        self, token: Optional[str], safe: str
+        self, token: str, safe: str
     ) -> Generator[None, None, Optional[int]]:
-        """Return what the Safe holds of the tracker's payment asset.
+        """Return what the Safe holds of the tracker's token.
 
-        :param token: the tracker's token, or ``None`` for a native tracker.
+        :param token: the tracker's token.
         :param safe: the Safe that pays.
         :yield: the balance read.
         :return: the balance in base units, or ``None`` when it is unreadable.
         """
-        if token is None:
-            balance = yield from self._get_native_balance(self._chain, safe)
-        else:
-            balance = yield from self._get_token_balance(self._chain, safe, token)
-
+        balance = yield from self._get_token_balance(self._chain, safe, token)
         if balance is None:
             self.context.logger.warning(
                 "Could not read the Safe's payment-token balance; skipping the "
@@ -332,14 +370,16 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         return balance
 
     def _read_tracker_token(self, tracker: str) -> Generator[None, None, Optional[str]]:
-        """Return the token a tracker takes, or ``None`` when it is native.
+        """Return the token a tracker takes, or ``None`` when it takes none.
 
         :param tracker: the balance tracker address.
         :yield: the contract read.
-        :return: the token address, or ``None`` for a native tracker.
+        :return: the token address, or ``None``.
 
-        A native tracker has no ``token()``, so the read reverting is the
-        signal rather than an error.
+        Only a token tracker exposes ``token()``. The others hold a different
+        asset and take a deposit through a different call, so an unreadable
+        token means this behaviour cannot fund that tracker rather than that
+        the tracker is native.
         """
         token = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_STATE,
@@ -350,6 +390,11 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=self._chain,
         )
         if not token or token == ZERO_ADDRESS:
+            self.context.logger.warning(
+                f"Balance tracker {tracker} reports no ERC-20 token, so its "
+                "deposit call is not the one this behaviour builds; leaving "
+                "the mech pre-deposit alone."
+            )
             return None
         return str(token)
 

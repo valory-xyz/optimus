@@ -426,6 +426,7 @@ class TestCoingecko:
             "use_mech_facilitator": False,
             "mech_facilitator_base_url": "https://facilitator.example",
             "mech_max_delivery_rate": None,
+            "mech_marketplace_addresses": '{"optimism": "0xmarketplace"}',
             "mech_pre_deposit_floor": 150000,
             "mech_pre_deposit_target": 500000,
             "mech_pre_deposit_cap": 500000,
@@ -442,6 +443,20 @@ class TestCoingecko:
         assert isinstance(cg.mech_pre_deposit_floor, int)
         assert cg.mech_pre_deposit_target == 500000
         assert cg.mech_pre_deposit_cap == 500000
+
+    def test_the_marketplace_is_read_per_chain(self) -> None:
+        """Every address the top-up sends funds to resolves from this one."""
+        cg = Coingecko(
+            name="coingecko", skill_context=MagicMock(), **self._make_kwargs()
+        )
+        assert cg.mech_marketplace_addresses == {"optimism": "0xmarketplace"}
+
+    def test_no_marketplace_configured_leaves_the_mapping_empty(self) -> None:
+        """Left unset the deposit path has no trusted marketplace and skips."""
+        kwargs = self._make_kwargs()
+        kwargs.pop("mech_marketplace_addresses")
+        cg = Coingecko(name="coingecko", skill_context=MagicMock(), **kwargs)
+        assert cg.mech_marketplace_addresses == {}
 
     def test_pre_deposit_thresholds_default_to_no_top_up(self) -> None:
         """Left unset, the deposit path must ask for nothing rather than guess."""

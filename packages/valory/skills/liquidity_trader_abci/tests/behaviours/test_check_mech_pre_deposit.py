@@ -29,7 +29,6 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from packages.valory.contracts.gnosis_safe.contract import SafeOperation
-from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_mech_pre_deposit import (
     CheckMechPreDepositBehaviour,
 )
@@ -66,12 +65,14 @@ _TOKEN_CALL = "get_token_address"
 _MULTISEND_CALL = "get_tx_data"
 _SAFE_HASH_CALL = "get_raw_safe_transaction_hash"
 _BALANCE_CALL = "check_balance"
+_DEPOSITED_CALL = "get_requester_balance"
 
 # The key each contract callable actually puts its result under. A wrong
 # ``data_key`` reads ``None`` in production while a name-keyed stub would still
 # answer, so the stub checks it.
 _DATA_KEYS = {
     _TRACKER_CALL: "data",
+    _DEPOSITED_CALL: "requester_balance",
     _DEPOSIT_CALL: "data",
     _APPROVE_CALL: "data",
     _TOKEN_CALL: "token_address",
@@ -85,22 +86,21 @@ _DATA_KEYS = {
 _AMPLE_BALANCE = 100_000_000
 
 
-def _requester_info(
-    balance: int,
-    marketplace: str = _MARKETPLACE,
-    payment_type: str = _PAYMENT_TYPE,
-) -> bytes:
+def _requester_info(payment_type: str = _PAYMENT_TYPE) -> bytes:
     """Build the facilitator's requester-info body.
 
-    :param balance: what the balance tracker holds for this Safe.
-    :param marketplace: the marketplace the facilitator serves.
     :param payment_type: the mech's payment type.
     :return: the encoded response body.
+
+    The payment type is the only field the behaviour reads. Balance and
+    marketplace are present as the real endpoint returns them, and a test
+    that still passed if the behaviour started trusting them would miss the
+    point, so the on-chain reads are asserted instead.
     """
     return json.dumps(
         {
-            "balance": str(balance),
-            "marketplace_address": marketplace,
+            "balance": "999999999",
+            "marketplace_address": "0x" + "de" * 20,
             "payment_type": payment_type,
             "next_nonce": 7,
         }
@@ -115,24 +115,14 @@ def _token_answers(**overrides: Any) -> Dict[str, Any]:
     """
     answers: Dict[str, Any] = {
         _TRACKER_CALL: _TRACKER,
-        _DEPOSIT_CALL: _DEPOSIT_DATA,
+        _DEPOSITED_CALL: 0,
         _TOKEN_CALL: _TOKEN,
         _BALANCE_CALL: _AMPLE_BALANCE,
+        _DEPOSIT_CALL: _DEPOSIT_DATA,
         _APPROVE_CALL: _APPROVE_DATA,
         _MULTISEND_CALL: _MULTISEND_DATA,
         _SAFE_HASH_CALL: _SAFE_TX_HASH,
     }
-    answers.update(overrides)
-    return answers
-
-
-def _native_answers(**overrides: Any) -> Dict[str, Any]:
-    """Answers for a native-paid tracker, which reports no token.
-
-    :param overrides: contract callables to answer differently.
-    :return: the callable-to-answer mapping for ``_ContractStub``.
-    """
-    answers = _token_answers(**{_TOKEN_CALL: _ZERO})
     answers.update(overrides)
     return answers
 
@@ -260,6 +250,7 @@ def _coingecko(**overrides: Any) -> Coingecko:
         "use_mech_facilitator": True,
         "mech_facilitator_base_url": "https://facilitator.example/",
         "mech_max_delivery_rate": 100_000,
+        "mech_marketplace_addresses": json.dumps({_CHAIN: _MARKETPLACE}),
         "mech_pre_deposit_floor": _FLOOR,
         "mech_pre_deposit_target": _TARGET,
         "mech_pre_deposit_cap": _CAP,
@@ -268,42 +259,11 @@ def _coingecko(**overrides: Any) -> Coingecko:
     return Coingecko(name="coingecko", skill_context=MagicMock(), **kwargs)
 
 
-class _LedgerStub:
-    """Answer ``get_ledger_api_response`` with a native balance."""
-
-    def __init__(self, balance: Optional[int]) -> None:
-        """Initialise the stub.
-
-        :param balance: the balance to report, or ``None`` to fail the read.
-        """
-        self.balance = balance
-        self.accounts: List[str] = []
-
-    def __call__(self, **kwargs: Any) -> Any:
-        """Record the account and answer the read.
-
-        :param kwargs: the keyword arguments the behaviour passed.
-        :yield: once, as a real ledger read would.
-        :return: the ledger API message.
-        """
-        self.accounts.append(kwargs["account"])
-        yield
-        if self.balance is None:
-            return SimpleNamespace(
-                performative=LedgerApiMessage.Performative.ERROR, state=None
-            )
-        return SimpleNamespace(
-            performative=LedgerApiMessage.Performative.STATE,
-            state=SimpleNamespace(body={"get_balance_result": self.balance}),
-        )
-
-
 def _make_behaviour(
     contracts: Optional[_ContractStub] = None,
     http: Optional[_HttpStub] = None,
     investing_paused: bool = False,
     coingecko: Optional[Coingecko] = None,
-    native_balance: Optional[int] = _AMPLE_BALANCE,
 ) -> CheckMechPreDepositBehaviour:
     """Create the behaviour without ``__init__`` and stub only its boundaries.
 
@@ -315,8 +275,6 @@ def _make_behaviour(
     :param http: the facilitator-read stub.
     :param investing_paused: what the withdrawal gate reads.
     :param coingecko: the mech configuration model.
-    :param native_balance: what the Safe holds natively, or ``None`` to fail
-        that read.
     :return: the behaviour under test.
     """
     obj = object.__new__(CheckMechPreDepositBehaviour)
@@ -329,8 +287,7 @@ def _make_behaviour(
 
     obj._read_investing_paused = _paused
     obj.contract_interact = contracts or _ContractStub()
-    obj.get_http_response = http or _HttpStub(200, _requester_info(_TARGET))
-    obj.get_ledger_api_response = _LedgerStub(native_balance)
+    obj.get_http_response = http or _HttpStub(200, _requester_info())
     return obj
 
 
@@ -396,7 +353,7 @@ class TestNoTopUpNeeded:
 
     def test_disabled_facilitator_reads_nothing_at_all(self) -> None:
         """With the facilitator off there is no deposit to keep, so no reads."""
-        http = _HttpStub(200, _requester_info(0))
+        http = _HttpStub(200, _requester_info())
         contracts = _ContractStub()
         obj = _make_behaviour(
             contracts, http, coingecko=_coingecko(use_mech_facilitator=False)
@@ -410,31 +367,59 @@ class TestNoTopUpNeeded:
 
     def test_pre_deposit_at_the_floor_is_left_alone(self) -> None:
         """At exactly the floor the deposit still covers the next call."""
-        contracts = _ContractStub()
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(_FLOOR)))
+        contracts = _ContractStub(_token_answers(**{_DEPOSITED_CALL: _FLOOR}))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         payload = _run(obj, _params())
 
         assert payload.tx_hash is None
-        assert contracts.names == []
+        assert contracts.names == [_TRACKER_CALL, _DEPOSITED_CALL]
 
     def test_a_target_below_the_floor_deposits_nothing(self) -> None:
         """A target under the floor would ask for a non-positive deposit."""
-        contracts = _ContractStub()
+        contracts = _ContractStub(_token_answers(**{_DEPOSITED_CALL: _FLOOR - 1}))
         obj = _make_behaviour(
             contracts,
-            _HttpStub(200, _requester_info(_FLOOR - 1)),
+            _HttpStub(200, _requester_info()),
             coingecko=_coingecko(mech_pre_deposit_target=_FLOOR - 1),
         )
 
         payload = _run(obj, _params())
 
         assert payload.tx_hash is None
+        assert _DEPOSIT_CALL not in contracts.names
+
+    def test_an_unreadable_deposit_settles_nothing(self) -> None:
+        """A tracker that will not report the deposit is not topped up blind."""
+        contracts = _ContractStub(_token_answers(**{_DEPOSITED_CALL: None}))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
+
+        payload = _run(obj, _params())
+
+        assert payload.tx_hash is None
+        assert _DEPOSIT_CALL not in contracts.names
+        obj.context.logger.warning.assert_called()
+
+    def test_no_marketplace_configured_reads_nothing(self) -> None:
+        """Without a configured marketplace there is no trusted tracker to find."""
+        http = _HttpStub(200, _requester_info())
+        contracts = _ContractStub()
+        obj = _make_behaviour(
+            contracts,
+            http,
+            coingecko=_coingecko(mech_marketplace_addresses="{}"),
+        )
+
+        payload = _run(obj, _params())
+
+        assert payload.tx_hash is None
+        assert http.urls == []
         assert contracts.names == []
+        obj.context.logger.warning.assert_called()
 
     def test_missing_safe_for_the_mech_chain_reads_nothing(self) -> None:
         """Without a Safe on the mech chain there is nobody to deposit for."""
-        http = _HttpStub(200, _requester_info(0))
+        http = _HttpStub(200, _requester_info())
         obj = _make_behaviour(_ContractStub(), http)
 
         payload = _run(obj, _params(safe_contract_addresses={"base": _SAFE}))
@@ -445,7 +430,7 @@ class TestNoTopUpNeeded:
 
     def test_withdrawal_request_leaves_the_deposit_alone(self) -> None:
         """A pending withdrawal must not push the Safe's token into the tracker."""
-        http = _HttpStub(200, _requester_info(0))
+        http = _HttpStub(200, _requester_info())
         contracts = _ContractStub(_token_answers())
         obj = _make_behaviour(contracts, http, investing_paused=True)
 
@@ -463,8 +448,8 @@ class TestFacilitatorReadFailures:
 
     def test_the_requester_url_names_the_chain_and_the_safe(self) -> None:
         """The facilitator is asked about the Safe that pays, on the mech chain."""
-        http = _HttpStub(200, _requester_info(_TARGET))
-        obj = _make_behaviour(_ContractStub(), http)
+        http = _HttpStub(200, _requester_info())
+        obj = _make_behaviour(_ContractStub(_token_answers()), http)
 
         _run(obj, _params())
 
@@ -512,28 +497,17 @@ class TestFacilitatorReadFailures:
     @pytest.mark.parametrize(
         "body",
         [
-            json.dumps({"marketplace_address": _MARKETPLACE}).encode(),
-            json.dumps({"balance": "10", "payment_type": _PAYMENT_TYPE}).encode(),
-            json.dumps(
-                {
-                    "balance": "not a number",
-                    "marketplace_address": _MARKETPLACE,
-                    "payment_type": _PAYMENT_TYPE,
-                }
-            ).encode(),
-            json.dumps(
-                {
-                    "balance": None,
-                    "marketplace_address": _MARKETPLACE,
-                    "payment_type": _PAYMENT_TYPE,
-                }
-            ).encode(),
+            json.dumps({"balance": "10"}).encode(),
+            json.dumps({"payment_type": None}).encode(),
+            json.dumps({"payment_type": {"kind": "usdc"}}).encode(),
+            json.dumps({"payment_type": ""}).encode(),
+            json.dumps({"payment_type": 7}).encode(),
         ],
     )
-    def test_requester_info_missing_a_field_settles_nothing(self, body: bytes) -> None:
-        """Every field the deposit needs has to be present and numeric.
+    def test_a_missing_payment_type_settles_nothing(self, body: bytes) -> None:
+        """Without a payment type there is no tracker to resolve.
 
-        :param body: a response body missing or corrupting one field.
+        :param body: a response body missing or corrupting the payment type.
         """
         contracts = _ContractStub()
         obj = _make_behaviour(contracts, _HttpStub(200, body))
@@ -544,6 +518,44 @@ class TestFacilitatorReadFailures:
         assert contracts.names == []
         obj.context.logger.warning.assert_called()
 
+    def test_the_marketplace_comes_from_config_not_from_the_response(self) -> None:
+        """Every address funds are sent to is resolved from the marketplace.
+
+        A response naming its own marketplace would therefore choose the
+        recipient, so the configured one has to win.
+        """
+        contracts = _ContractStub(_token_answers())
+        hostile = json.dumps(
+            {
+                "payment_type": _PAYMENT_TYPE,
+                "marketplace_address": "0x" + "ee" * 20,
+                "balance": "0",
+            }
+        ).encode()
+        obj = _make_behaviour(contracts, _HttpStub(200, hostile))
+
+        _run(obj, _params())
+
+        assert contracts.kwargs_for(_TRACKER_CALL)["contract_address"] == _MARKETPLACE
+
+    def test_the_deposit_comes_from_the_tracker_not_from_the_response(self) -> None:
+        """The amount that decides whether to move funds comes from the contract.
+
+        A response claiming a healthy balance must not stop a needed top-up,
+        and one claiming an empty balance must not force an unneeded one.
+        """
+        contracts = _ContractStub(_token_answers(**{_DEPOSITED_CALL: _FLOOR}))
+        healthy_claim = json.dumps(
+            {"payment_type": _PAYMENT_TYPE, "balance": "0"}
+        ).encode()
+        obj = _make_behaviour(contracts, _HttpStub(200, healthy_claim))
+
+        payload = _run(obj, _params())
+
+        assert payload.tx_hash is None
+        assert contracts.kwargs_for(_DEPOSITED_CALL)["requester"] == _SAFE
+        assert contracts.kwargs_for(_DEPOSITED_CALL)["contract_address"] == _TRACKER
+
     @pytest.mark.parametrize("tracker", [_ZERO, "", None])
     def test_an_unregistered_payment_type_settles_nothing(self, tracker: Any) -> None:
         """No tracker for this payment type means nowhere to send the deposit.
@@ -551,7 +563,7 @@ class TestFacilitatorReadFailures:
         :param tracker: what the marketplace reports for the payment type.
         """
         contracts = _ContractStub(_token_answers(**{_TRACKER_CALL: tracker}))
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         payload = _run(obj, _params())
 
@@ -562,7 +574,7 @@ class TestFacilitatorReadFailures:
     def test_the_tracker_is_resolved_from_the_reported_payment_type(self) -> None:
         """Trackers are keyed by payment type, so the read must pass it through."""
         contracts = _ContractStub(_token_answers())
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         _run(obj, _params())
 
@@ -578,7 +590,7 @@ class TestTokenPaidTopUp:
     def test_a_short_deposit_settles_an_approve_and_deposit_multisend(self) -> None:
         """The multisend is the Safe's target, delegate-called, with no value."""
         contracts = _ContractStub(_token_answers())
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         payload = _run(obj, _params())
 
@@ -608,7 +620,7 @@ class TestTokenPaidTopUp:
     def test_the_approve_precedes_the_deposit_and_matches_its_amount(self) -> None:
         """A deposit without its allowance reverts, and a stale allowance lingers."""
         contracts = _ContractStub(_token_answers())
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         _run(obj, _params())
 
@@ -625,7 +637,7 @@ class TestTokenPaidTopUp:
     def test_the_deposit_credits_the_safe_rather_than_the_sender(self) -> None:
         """The marketplace debits the requester Safe, so it has to be the account."""
         contracts = _ContractStub(_token_answers())
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         _run(obj, _params())
 
@@ -651,10 +663,10 @@ class TestTokenPaidTopUp:
         :param cap: the per-cycle ceiling.
         :param expected: the amount the deposit must carry.
         """
-        contracts = _ContractStub(_token_answers())
+        contracts = _ContractStub(_token_answers(**{_DEPOSITED_CALL: deposited}))
         obj = _make_behaviour(
             contracts,
-            _HttpStub(200, _requester_info(deposited)),
+            _HttpStub(200, _requester_info()),
             coingecko=_coingecko(mech_pre_deposit_cap=cap),
         )
 
@@ -671,7 +683,7 @@ class TestTokenPaidTopUp:
         :param failing: the contract read that returns nothing.
         """
         contracts = _ContractStub(_token_answers(**{failing: None}))
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         payload = _run(obj, _params())
 
@@ -679,51 +691,31 @@ class TestTokenPaidTopUp:
         obj.context.logger.error.assert_called()
 
 
-class TestNativePaidTopUp:
-    """A native-paid tracker takes the deposit as transaction value."""
+class TestNonTokenTrackers:
+    """Only a token tracker takes the deposit this behaviour builds.
 
-    def test_a_native_tracker_sends_value_instead_of_approving(self) -> None:
-        """There is nothing to approve, and the value has to carry the amount."""
-        contracts = _ContractStub(_native_answers())
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+    A native tracker's ``depositFor`` takes the account alone and the amount
+    as transaction value, and the subscription trackers hold something else
+    again. Encoding a token deposit for any of them reverts on settlement, so
+    a tracker that does not report an ERC-20 token is left alone.
+    """
 
-        payload = _run(obj, _params())
+    @pytest.mark.parametrize("token", [_ZERO, "", None])
+    def test_a_tracker_without_a_token_is_left_alone(self, token: Any) -> None:
+        """A tracker whose ``token()`` read does not answer is skipped.
 
-        decoded = skill_input_hex_to_payload(payload.tx_hash)
-        assert decoded["to_address"] == _TRACKER
-        assert decoded["operation"] == SafeOperation.CALL.value
-        assert decoded["ether_value"] == _TARGET
-        assert decoded["data"] == _DEPOSIT_DATA
-        assert _APPROVE_CALL not in contracts.names
-        assert _MULTISEND_CALL not in contracts.names
-
-    def test_a_native_top_up_is_capped_the_same_way(self) -> None:
-        """The value sent is the capped amount, not the full shortfall."""
-        contracts = _ContractStub(_native_answers())
-        obj = _make_behaviour(
-            contracts,
-            _HttpStub(200, _requester_info(0)),
-            coingecko=_coingecko(mech_pre_deposit_cap=100_000),
-        )
-
-        payload = _run(obj, _params())
-
-        decoded = skill_input_hex_to_payload(payload.tx_hash)
-        assert decoded["ether_value"] == 100_000
-        assert contracts.kwargs_for(_DEPOSIT_CALL)["amount"] == 100_000
-
-    def test_a_native_safe_hash_failure_settles_nothing(self) -> None:
-        """The native path guards its Safe hash too.
-
-        Covers ``_safe_tx`` reached without the multisend in between.
+        :param token: what the tracker reports for its token.
         """
-        contracts = _ContractStub(_native_answers(**{_SAFE_HASH_CALL: None}))
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        contracts = _ContractStub(_token_answers(**{_TOKEN_CALL: token}))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         payload = _run(obj, _params())
 
         assert payload.tx_hash is None
-        obj.context.logger.error.assert_called()
+        assert _DEPOSIT_CALL not in contracts.names
+        assert _BALANCE_CALL not in contracts.names
+        assert _MULTISEND_CALL not in contracts.names
+        obj.context.logger.warning.assert_called()
 
 
 class TestSafeBalanceBound:
@@ -738,7 +730,7 @@ class TestSafeBalanceBound:
         """A Safe holding less than the shortfall deposits what it has."""
         held = 120_000
         contracts = _ContractStub(_token_answers(**{_BALANCE_CALL: held}))
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         payload = _run(obj, _params())
 
@@ -749,7 +741,7 @@ class TestSafeBalanceBound:
     def test_the_token_balance_is_read_for_the_safe_and_the_tracker_token(self) -> None:
         """The balance that matters is the Safe's, in the tracker's own token."""
         contracts = _ContractStub(_token_answers())
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         _run(obj, _params())
 
@@ -765,40 +757,7 @@ class TestSafeBalanceBound:
         :param held: what the token balance read reports.
         """
         contracts = _ContractStub(_token_answers(**{_BALANCE_CALL: held}))
-        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info(0)))
-
-        payload = _run(obj, _params())
-
-        assert payload.tx_hash is None
-        assert _DEPOSIT_CALL not in contracts.names
-        obj.context.logger.warning.assert_called()
-
-    def test_a_native_deposit_is_trimmed_to_the_safe_balance(self) -> None:
-        """The value sent can never exceed what the Safe holds natively."""
-        held = 90_000
-        contracts = _ContractStub(_native_answers())
-        obj = _make_behaviour(
-            contracts, _HttpStub(200, _requester_info(0)), native_balance=held
-        )
-
-        payload = _run(obj, _params())
-
-        decoded = skill_input_hex_to_payload(payload.tx_hash)
-        assert decoded["ether_value"] == held
-        assert contracts.kwargs_for(_DEPOSIT_CALL)["amount"] == held
-        assert obj.get_ledger_api_response.accounts == [_SAFE]
-        assert _BALANCE_CALL not in contracts.names
-
-    @pytest.mark.parametrize("held", [0, None])
-    def test_no_native_balance_settles_nothing(self, held: Any) -> None:
-        """An empty or unreadable native balance skips rather than deposits.
-
-        :param held: what the native balance read reports.
-        """
-        contracts = _ContractStub(_native_answers())
-        obj = _make_behaviour(
-            contracts, _HttpStub(200, _requester_info(0)), native_balance=held
-        )
+        obj = _make_behaviour(contracts, _HttpStub(200, _requester_info()))
 
         payload = _run(obj, _params())
 

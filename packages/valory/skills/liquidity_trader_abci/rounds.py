@@ -128,7 +128,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - action executed: 5.
             - checkpoint tx executed: 0.
             - vanity tx executed: 1.
-            - mech pre deposit tx executed: 2.
+            - mech pre deposit tx executed: 3.
             - transfer completed: 7.
             - withdrawal completed: 7.
             - round timeout: 6.
@@ -227,7 +227,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ACTION_EXECUTED: DecisionMakingRound,
             Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
-            Event.MECH_PRE_DEPOSIT_TX_EXECUTED: CheckMechPreDepositRound,
+            Event.MECH_PRE_DEPOSIT_TX_EXECUTED: GetPositionsRound,
             Event.TRANSFER_COMPLETED: FetchStrategiesRound,
             Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,

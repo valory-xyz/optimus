@@ -365,6 +365,12 @@ class Coingecko(Model, TypeCheckMixin):
         self.mech_facilitator_base_url = self._ensure(
             "mech_facilitator_base_url", kwargs, str
         )
+        # The marketplace whose balance tracker holds the pre-deposit. Every
+        # address the top-up sends funds to is resolved from this one, so it
+        # is configured rather than reported.
+        self.mech_marketplace_addresses: Dict[str, str] = json.loads(
+            str(kwargs.pop("mech_marketplace_addresses", "{}"))
+        )
         # Marketplace pre-deposit thresholds, in the payment token's base
         # units. The facilitator debits this pot rather than the Safe's own
         # balance, and only this agent can move funds between the two.

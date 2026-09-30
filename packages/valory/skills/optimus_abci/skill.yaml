@@ -165,7 +165,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
-- valory/genai:0.1.0:bafybeiaqv3wqjftirawipbdh3ncpkkbjm6f2f2mi6equxlbfstpe2tf4ny
+- valory/genai:0.1.0:bafybeifgaveaas6stm53d4eklbds4os7umvnivyldfpjac235hi2xt7sci
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
 contracts: []
 protocols:
@@ -177,7 +177,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
-- valory/liquidity_trader_abci:0.1.0:bafybeigzwfxjotqmvo4vm6c2vz53bs5h7yxnaqr2pipblvbajjpsag7anq
+- valory/liquidity_trader_abci:0.1.0:bafybeiapajffz3j2gltuatt5dnp5oahrxcs7mxf2apea2zieupgjrzb2au
 - valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
 behaviours:

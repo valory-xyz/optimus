@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeidjdmsv5apkzewuygxiwziwjhzfwaw6ljj4w2ypf3pd6prkplxkbu
+  models.py: bafybeiavrm4vbmino44owe7ao22l4eubehxkha6bxqnfq7vtzokwfwmaoi
   payloads.py: bafybeibsn2rifxr3v4solfbarft3mn5u2hdukhf4z53hkbi3mhfuviiuna
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -76,7 +76,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeifgstbohs47lt52bnemgima5o2irldgosmcuunzrmgr7pcibputpm
+  tests/test_models.py: bafybeiasp7dbxu464mskqpe4vhjbd5hql2hkfngefbi5qfri5ii6ulaorm
   tests/test_payloads.py: bafybeihgckap5l6g7gmj2g7bon4zp5oc23mo55pt32hstznwobfb24cifq
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
   tests/test_rounds.py: bafybeihkb4qxrwbmdnointbjelwttrw6styzs4rodmlbcnnaglvvqkczom
@@ -92,7 +92,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeifaff7zl7e7rq2xllba7xgu6yzfl5y7kkvdqrtvcus6y6h75j7ape
+- valory/x402:0.1.0:bafybeiej5h7yvc2ffnmfms4v4epqwnh73sup3y4prqp3wyiqqjxvyc3ksq
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/balancer_weighted_pool:0.1.0:bafybeigmfzch747wwo3ahtea2g52qqraig2ixlofsnncs6spz2aemc7aju

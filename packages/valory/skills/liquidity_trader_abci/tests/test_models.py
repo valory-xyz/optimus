@@ -516,6 +516,7 @@ class TestCoingecko:
     def test_request_with_flag_off_uses_the_x402_session_and_proxy(self) -> None:
         """Default: the x402 session against the x402 proxy URL, unchanged."""
         mock_context = MagicMock()
+        mock_context.params.request_timeout = 10.0
         kwargs = self._make_kwargs()
         kwargs["use_x402"] = True
         cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
@@ -545,6 +546,8 @@ class TestCoingecko:
             mock_session.get.call_args.args[0]
             == "https://x402.example.com/optimism/test"
         )
+        # Only the mech path gets the longer budget; this one is unchanged.
+        assert mock_session.get.call_args.kwargs["timeout"] == 10.0
 
     def test_request_with_mech_flag_uses_a_mech_session_against_the_facilitator(
         self,
@@ -593,9 +596,9 @@ class TestCoingecko:
             max_delivery_rate=6000,
             total_deadline_secs=cg.mech_request_timeout,
         )
-        # Its own budget, not request_timeout: the facilitator charges for a
-        # call it served even when the client gave up waiting for it.
+        # Its own budget, and the adapter clamps each POST's read at it.
         assert cg.mech_request_timeout > float(mock_context.params.request_timeout)
+        assert mock_session.get.call_args.kwargs["timeout"] == cg.mech_request_timeout
         assert cg.paid_proxy_base_url == "https://facilitator.example"
         assert mock_session.get.call_args.args[0] == (
             "https://facilitator.example/api/v3/simple/price"

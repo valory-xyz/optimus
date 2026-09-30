@@ -165,14 +165,20 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                                 "deferring activity tx until it resolves"
                             )
                         elif is_new_regime:
-                            # New regime counts mech-marketplace requests, and
-                            # the agent's paid CoinGecko and chat calls already
-                            # are marketplace requests, so the counter keeps
-                            # itself up without a request made purely to tick it.
-                            self.context.logger.info(
-                                "Staking KPI is short but the new regime counts "
-                                "marketplace requests, which the agent's paid "
-                                "API calls already make; nothing to do here."
+                            # The new regime counts marketplace requests, which
+                            # the agent's paid API calls are, so nothing is sent
+                            # purely to tick the counter. Nothing guarantees it
+                            # made enough of them, though: a day with investing
+                            # paused, the facilitator down or the deposit spent
+                            # makes none, and settlement is batched so recent
+                            # ones may not be counted yet. Short at the
+                            # threshold is worth seeing rather than accepting.
+                            self.context.logger.warning(
+                                "Staking KPI is short by "
+                                f"{num_of_tx_left_to_meet_kpi} and the new "
+                                "regime counts marketplace requests, which "
+                                "only the agent's paid API calls make. Nothing "
+                                "is sent to make up the difference."
                             )
                         else:
                             # Old regime: keep the existing vanity Safe tx, gated

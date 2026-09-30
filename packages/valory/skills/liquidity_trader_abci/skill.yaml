@@ -10,7 +10,7 @@ fingerprint:
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
   behaviours/base.py: bafybeickpsut7xknpqn5yjxu6laufnbszzoog6ugleuvhdpwvvnvhigfgi
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
-  behaviours/check_staking_kpi_met.py: bafybeier7xaiiwpetdolzga2hcwp5amorfankb4dsmgcmb6eununv4q4em
+  behaviours/check_staking_kpi_met.py: bafybeifhmelq3k5cewt3vmja7raigab7e5oo7zbdmrl74iwjoobkwmhe3q
   behaviours/decision_making.py: bafybeiegwhchjw3gzq6ej7v5bl3jtrpkvf6x5zbwribcbwp75iwzsc3js4
   behaviours/evaluate_strategy.py: bafybeifdgoysjjk2jiq5w3nr5p2kmre36yvmu4h5jump4ysqoyaw3rp6r4
   behaviours/fetch_strategies.py: bafybeihbo4blzpdezityxhvdtwntzewalfro6uomjkigs4x66apnnteqgm
@@ -48,7 +48,7 @@ fingerprint:
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
   tests/behaviours/test_base.py: bafybeigoflwkecpexeemnub2cio6sryftqjp5zbv7y3t7jp4jucyt5z3pu
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
-  tests/behaviours/test_check_staking_kpi_met.py: bafybeifongiysaqdisrh3p2oyflyck26473hz73jtrcgacf53kjivfhakm
+  tests/behaviours/test_check_staking_kpi_met.py: bafybeiacp4yac5raqxwhdwwlmpcdxrl4go2xzeilek6kykbmdjpgtxkt2e
   tests/behaviours/test_decision_making.py: bafybeihksu3ty7xossbcalev7kqwsvb4v4wlixqii4gctbeigcglfnueyq
   tests/behaviours/test_evaluate_strategy.py: bafybeihfvpnx56ajddmmtrvm5pj2dgtrd54w3qhztgm2zdle5bnb2cpgf4
   tests/behaviours/test_fetch_strategies.py: bafybeihlgbn3qqxbgrcfczg3cjhfx4vcteap4fdkfsswetuszbtgijkoju
@@ -92,7 +92,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeiej5h7yvc2ffnmfms4v4epqwnh73sup3y4prqp3wyiqqjxvyc3ksq
+- valory/x402:0.1.0:bafybeidb7enkwqxioybeognr6gbk7ngtbaegtuu7lon6ukujrodperhc7y
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/balancer_weighted_pool:0.1.0:bafybeigmfzch747wwo3ahtea2g52qqraig2ixlofsnncs6spz2aemc7aju

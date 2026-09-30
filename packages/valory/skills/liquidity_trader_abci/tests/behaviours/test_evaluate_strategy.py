@@ -372,6 +372,44 @@ class TestGetBestAvailableOpportunityYield:
         assert result is None
 
 
+class TestThePaidSessionNeverStopsTheAgent:
+    """Building it validates configuration and raises.
+
+    It is read inside the kwargs of a strategy run, so a raise there takes
+    the agent down. A misconfigured paid path is a reason to fall back to the
+    unpaid one for a cycle, not to stop trading.
+    """
+
+    def test_a_configuration_error_falls_back_instead_of_raising(self):
+        """No Safe for the mech chain, or a budget below the client minimum."""
+        b = _mk()
+        b.coingecko.use_x402 = True
+        b.coingecko.paid_session = MagicMock(
+            side_effect=ValueError("no Safe address configured for chain 'optimism'")
+        )
+
+        assert b._paid_session_or_none() is None
+        assert b.context.logger.error.called
+
+    def test_the_session_is_returned_when_it_builds(self):
+        """The fallback must not swallow the working path."""
+        b = _mk()
+        b.coingecko.use_x402 = True
+        session = MagicMock()
+        b.coingecko.paid_session = MagicMock(return_value=session)
+
+        assert b._paid_session_or_none() is session
+
+    def test_nothing_is_built_when_the_flag_is_off(self):
+        """Strategies then use the API key, as they always did."""
+        b = _mk()
+        b.coingecko.use_x402 = False
+        b.coingecko.paid_session = MagicMock()
+
+        assert b._paid_session_or_none() is None
+        b.coingecko.paid_session.assert_not_called()
+
+
 class TestCheckFunds:
     """Tests for check_funds."""
 

@@ -727,22 +727,9 @@ class HttpHandler(BaseHttpHandler):
             return None
 
     def _get_lifi_quote_sync(
-        self,
-        eoa_address: str,
-        chain: str,
-        usdc_address: str,
-        to_amount: str,
-        to_address: Optional[str] = None,
+        self, eoa_address: str, chain: str, usdc_address: str, to_amount: str
     ) -> Optional[Dict]:
-        """Get LiFi quote synchronously.
-
-        :param eoa_address: the account that funds and signs the swap.
-        :param chain: the chain to swap on.
-        :param usdc_address: the token to swap into.
-        :param to_amount: how much of that token to end up with.
-        :param to_address: where the swapped token lands; the EOA by default.
-        :return: the quote, or ``None``.
-        """
+        """Get LiFi quote synchronously."""
         try:
             raw_chain_id = self.context.params.chain_to_chain_id_mapping.get(
                 chain.lower()
@@ -759,7 +746,7 @@ class HttpHandler(BaseHttpHandler):
                 "fromToken": ZERO_ADDRESS,
                 "toToken": usdc_address,
                 "fromAddress": eoa_address,
-                "toAddress": to_address or eoa_address,
+                "toAddress": eoa_address,
                 "toAmount": to_amount,
                 "slippage": self.context.params.slippage_for_swap,
                 "integrator": "valory",
@@ -1034,17 +1021,6 @@ class HttpHandler(BaseHttpHandler):
                 self._record_x402_topup_outcome(False, None, "no EOA account")
                 return False
             eoa_address = eoa_account.address
-            # The marketplace debits the Safe's pre-deposit, so the Safe is
-            # what has to hold the payment token. The EOA still funds and
-            # signs the swap, so what must be funded externally is unchanged.
-            payment_account = self.context.params.safe_contract_addresses.get(chain)
-            if not payment_account:
-                self.context.logger.error(
-                    f"No Safe configured for {chain}; cannot top up the x402 "
-                    "payment balance."
-                )
-                self._record_x402_topup_outcome(False, None, f"no Safe for {chain}")
-                return False
 
             usdc_address = USDC_ADDRESSES.get(chain.lower())
             if not usdc_address:
@@ -1056,7 +1032,7 @@ class HttpHandler(BaseHttpHandler):
 
             try:
                 usdc_balance = self._check_usdc_balance(
-                    payment_account, chain, usdc_address
+                    eoa_address, chain, usdc_address
                 )
             except CircuitBreakerOpenError:
                 self.context.logger.error(
@@ -1107,11 +1083,7 @@ class HttpHandler(BaseHttpHandler):
             )
 
             quote = self._get_lifi_quote_sync(
-                eoa_address,
-                chain,
-                usdc_address,
-                top_up_usdc_amount,
-                to_address=payment_account,
+                eoa_address, chain, usdc_address, top_up_usdc_amount
             )
             if not quote:
                 self.context.logger.error("Failed to get LiFi quote")

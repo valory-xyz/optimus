@@ -3,12 +3,9 @@ alphabet_in:
 - CHECKPOINT_TX_EXECUTED
 - DONE
 - ERROR
-- MECH_REQUEST_NEEDED
-- MECH_REQUEST_TX_EXECUTED
 - NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
 - NO_MAJORITY
-- OFFCHAIN_MECH_DEPOSIT_SETTLED
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
 - SERVICE_NOT_STAKED
@@ -30,9 +27,6 @@ final_states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
-- FinishedWithMechRequestRound
-- FinishedWithMechResponsePollRound
-- FinishedWithOffchainMechDepositSettledRound
 label: LiquidityTraderAbciApp
 start_states:
 - CallCheckpointRound
@@ -54,9 +48,6 @@ states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
-- FinishedWithMechRequestRound
-- FinishedWithMechResponsePollRound
-- FinishedWithOffchainMechDepositSettledRound
 - GetPositionsRound
 - PostTxSettlementRound
 - WithdrawFundsRound
@@ -72,7 +63,6 @@ transition_func:
     (CallCheckpointRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CheckStakingKPIMetRound, DONE): GetPositionsRound
     (CheckStakingKPIMetRound, ERROR): GetPositionsRound
-    (CheckStakingKPIMetRound, MECH_REQUEST_NEEDED): FinishedWithMechRequestRound
     (CheckStakingKPIMetRound, NONE): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
@@ -106,9 +96,7 @@ transition_func:
     (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
-    (PostTxSettlementRound, MECH_REQUEST_TX_EXECUTED): FinishedWithMechResponsePollRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
-    (PostTxSettlementRound, OFFCHAIN_MECH_DEPOSIT_SETTLED): FinishedWithOffchainMechDepositSettledRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound

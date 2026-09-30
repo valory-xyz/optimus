@@ -10,7 +10,7 @@ fingerprint:
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
   behaviours/base.py: bafybeickpsut7xknpqn5yjxu6laufnbszzoog6ugleuvhdpwvvnvhigfgi
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
-  behaviours/check_staking_kpi_met.py: bafybeicgcoqk45xn67ymbf2bmjdrmiafn7hqcrqkxppa3t26bixlpsmupi
+  behaviours/check_staking_kpi_met.py: bafybeier7xaiiwpetdolzga2hcwp5amorfankb4dsmgcmb6eununv4q4em
   behaviours/decision_making.py: bafybeiegwhchjw3gzq6ej7v5bl3jtrpkvf6x5zbwribcbwp75iwzsc3js4
   behaviours/evaluate_strategy.py: bafybeifdgoysjjk2jiq5w3nr5p2kmre36yvmu4h5jump4ysqoyaw3rp6r4
   behaviours/fetch_strategies.py: bafybeihbo4blzpdezityxhvdtwntzewalfro6uomjkigs4x66apnnteqgm
@@ -19,36 +19,36 @@ fingerprint:
   behaviours/round_behaviour.py: bafybeiafqu4chrxrtxqijd22h6xim4sbon5j4rz3any3vfpbi3qhsovyua
   behaviours/withdraw_funds.py: bafybeiaekrve5ozaogcu6ufqcnkqgkapdtjrlknif3nswhu5xkl6r5eaxm
   dialogues.py: bafybeic5bdlovivzkv3jnj6khbs7tzukv64ucea7w7y3tn2tgsequb2u2i
-  fsm_specification.yaml: bafybeidzk6mlxohyqmkdg4nvgkm7lr2bwsxd7na2xywjotxhzsymcdngsq
+  fsm_specification.yaml: bafybeib2tuhdbygebur4i3vymsarxasxlmuumjfzbxzn2kua5ltl55zjra
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeib37fahndlueyphzwgrezejfjwtfoy7jsbaehhvlo3a6iybtpmiy4
-  payloads.py: bafybeibvbjcwglyx3gasmx56u3nwneoxbkvefrry7pmguuayi3nlsa47oe
+  models.py: bafybeidjdmsv5apkzewuygxiwziwjhzfwaw6ljj4w2ypf3pd6prkplxkbu
+  payloads.py: bafybeibsn2rifxr3v4solfbarft3mn5u2hdukhf4z53hkbi3mhfuviiuna
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
   pools/balancer.py: bafybeicmjq7itdf6hnsmbhxktb42ghzbdwmll56o66ex2ids6oiiql56ki
   pools/uniswap.py: bafybeihoegxrjsq6al3coxtrf5ljhewjz5m2py6nwwzefyoo7molc2fdsi
   pools/velodrome.py: bafybeidqjtx4jwwuj7vcf3jgefams23okjutwoyrvnsbdvkz5fhkmhi32a
-  rounds.py: bafybeibtmpce77rn63wvh756a2icvjgwtkp5nvjvsxywux6balm53n2e3e
+  rounds.py: bafybeicwba2thlza335j5inlvgqm4mnzc7ip3gitgpba6ojk4amshugnle
   rounds_info.py: bafybeignjqqq6gu6ptr3xi3uyls3troxakfojbeue4hqx2biqwrjutmasu
   states/__init__.py: bafybeie5h3g3ndkq4c7tnv6c25tp64fn3jwyaatsm4buwyz2qiakpecgoy
-  states/base.py: bafybeidrjvvsyc2ca5h57rqmesoomf76eu4rlvpjkcitrn3l25vgffkwbm
+  states/base.py: bafybeifzqtjzhwvhqvpij2vacvqwddf53tkbsdc22diytz2jhckm4fzjki
   states/call_checkpoint.py: bafybeiapxxksqtc646bvtvler7ck3zjcfij5keb5xsi3ebl5m7mrf6ohla
-  states/check_staking_kpi_met.py: bafybeifzwapyld5sdh5hiab4jk5valrxvokpnaneb5rx2vpsvrhcqg53u4
+  states/check_staking_kpi_met.py: bafybeigffbe3kxbr3m77zwdtxx3wdjgc3abkjk4eczuz4rgz6n3vn7w6sa
   states/decision_making.py: bafybeigbwyhxebjl7z2zcwgex3k65ffifw4hd4tdqmql4t3gm5vxaa2jhe
   states/evaluate_strategy.py: bafybeid56yh4ymoopp4rutwcuby73zoevycnmzntwywbfqryju4ryknn4i
   states/fetch_strategies.py: bafybeiekd4tfz2bhwpgkdbh64bhx7qgmpfh3s7dsh6ywdspjqbrf5lepo4
-  states/final_rounds.py: bafybeie5fugrecjd657y7mb73owjatohrbhch3pmbhgots466tto75fzly
+  states/final_rounds.py: bafybeibd74f6zchhxgv7lae5t7hfcyltxw57ropinpte4zmdtqcylvutpi
   states/get_positions.py: bafybeifazqmgjmsb7nczhxnlw2zu3njh2wupndzjngx5hxmzhpb4uvwpxm
-  states/post_tx_settlement.py: bafybeicrzsn52ll2la2cxmp4h3gd7kooaostutmrhwraugre25egzgct64
+  states/post_tx_settlement.py: bafybeib5mgmogujukgteoxzelf24vfn5pbbzwglrwl5uphdlp2wxfyzqja
   states/withdraw_funds.py: bafybeicqj3a5eqiceakfg7ukdhw4mhjk2h3aa6xygcl65m2qqaj3kfabdy
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
   tests/behaviours/test_base.py: bafybeigoflwkecpexeemnub2cio6sryftqjp5zbv7y3t7jp4jucyt5z3pu
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
-  tests/behaviours/test_check_staking_kpi_met.py: bafybeidcud7pqdkjmmimdrbn2ygndsf46aqs4rvfse5zinryes6lgxoz7u
+  tests/behaviours/test_check_staking_kpi_met.py: bafybeifongiysaqdisrh3p2oyflyck26473hz73jtrcgacf53kjivfhakm
   tests/behaviours/test_decision_making.py: bafybeihksu3ty7xossbcalev7kqwsvb4v4wlixqii4gctbeigcglfnueyq
   tests/behaviours/test_evaluate_strategy.py: bafybeihfvpnx56ajddmmtrvm5pj2dgtrd54w3qhztgm2zdle5bnb2cpgf4
   tests/behaviours/test_fetch_strategies.py: bafybeihlgbn3qqxbgrcfczg3cjhfx4vcteap4fdkfsswetuszbtgijkoju
@@ -63,15 +63,15 @@ fingerprint:
   tests/pools/test_uniswap.py: bafybeib5rnfzaya4an2t4odvca23ee5id7ejwbsjrfjnuy22jytg76b5qi
   tests/pools/test_velodrome.py: bafybeibolzkmx4ucuam4cfza4zpmchitdt6sa2n63cph5mwjn4xl5fy2ja
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
-  tests/states/test_base.py: bafybeigqdgbcey6ltlpffm6a44tnvkc66ivcth7u3dmezp4e3abd7o6fgq
+  tests/states/test_base.py: bafybeiev2rcguiurzv6es62usccfqy4i6g4sf6l2wspdpcv2225hridc4u
   tests/states/test_call_checkpoint.py: bafybeihsjabiftgu4hikk3igo2roewspk6cscyy6cukaao254ntc6osmkm
-  tests/states/test_check_staking_kpi_met.py: bafybeifw3zan4ps5mauxgx7f4r6mvxv26fdkky2evpehaifqitho2vuqgi
+  tests/states/test_check_staking_kpi_met.py: bafybeibznxe4r3yisisxvkeqgy7fsukutz6yztmen3arnroct7rjqlk5ty
   tests/states/test_decision_making.py: bafybeieiec5lfahn6sar4tnpwj77cbhikif4zsu5m7jii5w4x6qiuzvcby
   tests/states/test_evaluate_strategy.py: bafybeibh6usboloxzg2zjo2jx2ciqgy2znzl5a2canjz4dd5t3z5dayw2u
   tests/states/test_fetch_strategies.py: bafybeieciu5qoegm6bfaizozk2fekjv5ng7jzyeyjqq25ehgrewf2xjpza
   tests/states/test_final_rounds.py: bafybeibsmzvrwa3ulgyu63tlbvxv3iswl5jxnw652ycxkbg4u2azb5ikx4
   tests/states/test_get_positions.py: bafybeih26ivewifofz4cspbalc4m5y7qvbzkhq7hw7v4nsan3lq7xzww5q
-  tests/states/test_post_tx_settlement.py: bafybeieqvkkocxtfqvh4y5s3jj7rzsghllfdnaocfeivti6akt6o7kf7gy
+  tests/states/test_post_tx_settlement.py: bafybeidllqxg334jhk6ug76ndsjiuq76g55rmi7wso2ufidn22yn5ll3fa
   tests/states/test_withdraw_funds.py: bafybeicnuwhfgrzdyhvoutngnj2dgnd3vfs4kmmpf63plyus6uboesj754
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
@@ -92,7 +92,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeigzqv35geoylsrv43dha7xecrdbs6pltqpc2jesgk6zae7ubw3uym
+- valory/x402:0.1.0:bafybeifaff7zl7e7rq2xllba7xgu6yzfl5y7kkvdqrtvcus6y6h75j7ape
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/balancer_weighted_pool:0.1.0:bafybeigmfzch747wwo3ahtea2g52qqraig2ixlofsnncs6spz2aemc7aju
@@ -123,7 +123,6 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/mech_interact_abci:0.1.0:bafybeihg52qu5er6l3tu54u32qfyajkrgkrdzrxgktuxlcrwvwmen6xoqa
 - valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
 behaviours:
   main:
@@ -277,8 +276,6 @@ models:
       staking_activity_checker_contract_address: '0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68'
       staking_threshold_period: 5
       activity_target: 1
-      mech_tool: openai-gpt-4o-2024-08-06
-      mech_request_prompt: Optimus staking activity request.
       service_registry_contract_addresses: '{"optimism":"0x3d77596beb0f130a4415df3D2D8232B3d3D31e44","mode":"0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"}'
       store_path: data
       assets_info_filename: assets.json

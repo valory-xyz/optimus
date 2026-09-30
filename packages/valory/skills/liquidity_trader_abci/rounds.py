@@ -53,9 +53,6 @@ from packages.valory.skills.liquidity_trader_abci.states.final_rounds import (
     FinishedDecisionMakingRound,
     FinishedEvaluateStrategyRound,
     FinishedTxPreparationRound,
-    FinishedWithMechRequestRound,
-    FinishedWithMechResponsePollRound,
-    FinishedWithOffchainMechDepositSettledRound,
 )
 from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
     GetPositionsRound,
@@ -90,7 +87,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - done: 2.
             - staking kpi met: 2.
             - settle: 12.
-            - mech request needed: 13.
             - round timeout: 1.
             - no majority: 1.
             - staking kpi not met: 2.
@@ -122,12 +118,10 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             - action executed: 4.
             - checkpoint tx executed: 0.
             - vanity tx executed: 1.
-            - mech request tx executed: 14.
-            - offchain mech deposit settled: 15.
             - transfer completed: 6.
             - withdrawal completed: 6.
             - round timeout: 5.
-            - unrecognized: 16.
+            - unrecognized: 13.
             - no majority: 5.
         6. FetchStrategiesRound
             - done: 0.
@@ -145,12 +139,9 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         10. FinishedDecisionMakingRound
         11. FinishedCallCheckpointRound
         12. FinishedCheckStakingKPIMetRound
-        13. FinishedWithMechRequestRound
-        14. FinishedWithMechResponsePollRound
-        15. FinishedWithOffchainMechDepositSettledRound
-        16. FailedMultiplexerRound
+        13. FailedMultiplexerRound
 
-    Final states: {FailedMultiplexerRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedTxPreparationRound, FinishedWithMechRequestRound, FinishedWithMechResponsePollRound, FinishedWithOffchainMechDepositSettledRound}
+    Final states: {FailedMultiplexerRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedTxPreparationRound}
 
     Timeouts:
         round timeout: 30.0
@@ -182,7 +173,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONE: GetPositionsRound,
             Event.STAKING_KPI_MET: GetPositionsRound,
             Event.SETTLE: FinishedCheckStakingKPIMetRound,
-            Event.MECH_REQUEST_NEEDED: FinishedWithMechRequestRound,
             Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,
             Event.NO_MAJORITY: CheckStakingKPIMetRound,
             Event.STAKING_KPI_NOT_MET: GetPositionsRound,
@@ -218,8 +208,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ACTION_EXECUTED: DecisionMakingRound,
             Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
-            Event.MECH_REQUEST_TX_EXECUTED: FinishedWithMechResponsePollRound,
-            Event.OFFCHAIN_MECH_DEPOSIT_SETTLED: FinishedWithOffchainMechDepositSettledRound,
             Event.TRANSFER_COMPLETED: FetchStrategiesRound,
             Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
@@ -244,9 +232,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedDecisionMakingRound: {},
         FinishedCallCheckpointRound: {},
         FinishedCheckStakingKPIMetRound: {},
-        FinishedWithMechRequestRound: {},
-        FinishedWithMechResponsePollRound: {},
-        FinishedWithOffchainMechDepositSettledRound: {},
         FailedMultiplexerRound: {},
     }
     final_states: Set[AppState] = {
@@ -255,9 +240,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
         FinishedCallCheckpointRound,
         FinishedCheckStakingKPIMetRound,
-        FinishedWithMechRequestRound,
-        FinishedWithMechResponsePollRound,
-        FinishedWithOffchainMechDepositSettledRound,
         FailedMultiplexerRound,
     }
     event_to_timeout: Dict[Event, float] = {
@@ -291,9 +273,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedCheckStakingKPIMetRound: {
             get_name(SynchronizedData.most_voted_tx_hash)
         },
-        FinishedWithMechRequestRound: {get_name(SynchronizedData.mech_requests)},
-        FinishedWithMechResponsePollRound: set(),
-        FinishedWithOffchainMechDepositSettledRound: set(),
         FailedMultiplexerRound: set(),
         FinishedEvaluateStrategyRound: set(),
         FinishedDecisionMakingRound: set(),

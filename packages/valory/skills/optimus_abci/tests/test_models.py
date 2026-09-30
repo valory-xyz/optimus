@@ -41,16 +41,14 @@ def test_import() -> None:
 class TestParams:
     """Test Params class."""
 
-    def test_init_extracts_service_endpoint_base_and_mech_timeout(self) -> None:
-        """Test Params __init__ extracts service_endpoint_base and mech_interact_round_timeout_seconds."""
+    def test_init_extracts_service_endpoint_base(self) -> None:
+        """Params.__init__ reads service_endpoint_base off kwargs."""
         mock_context = MagicMock()
         mock_context.skill_id = "test_skill/test:0.1.0"
 
         def _ensure_side_effect(name: str, _kwargs: Any, type_: Any) -> Any:
             if name == "service_endpoint_base":
                 return "http://localhost:8000"
-            if name == "mech_interact_round_timeout_seconds":
-                return 900
             raise AssertionError(f"Unexpected _ensure call for {name}")
 
         with (
@@ -63,27 +61,15 @@ class TestParams:
             params.__init__(  # type: ignore[misc]
                 skill_context=mock_context,
                 service_endpoint_base="http://localhost:8000",
-                mech_interact_round_timeout_seconds=900,
             )
             expected_kwargs = {
                 "skill_context": mock_context,
                 "service_endpoint_base": "http://localhost:8000",
-                "mech_interact_round_timeout_seconds": 900,
             }
             assert mock_ensure.call_args_list == [
                 call("service_endpoint_base", expected_kwargs, str),
-                call(
-                    "mech_interact_round_timeout_seconds",
-                    expected_kwargs,
-                    type_=int,
-                ),
             ]
             assert params.service_endpoint_base == "http://localhost:8000"
-            assert params.mech_interact_round_timeout_seconds == 900
-
-
-class TestSharedState:
-    """Test SharedState class."""
 
     def test_initialization(self) -> None:
         """Test SharedState initialization."""

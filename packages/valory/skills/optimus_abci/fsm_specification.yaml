@@ -1,6 +1,5 @@
 alphabet_in:
 - ACTION_EXECUTED
-- BUY_SUBSCRIPTION
 - CHECKPOINT_TX_EXECUTED
 - CHECK_HISTORY
 - CHECK_LATE_ARRIVING_MESSAGE
@@ -11,32 +10,22 @@ alphabet_in:
 - FINALIZE_TIMEOUT
 - INCORRECT_SERIALIZATION
 - INSUFFICIENT_FUNDS
-- MECH_REQUEST_NEEDED
-- MECH_REQUEST_TX_EXECUTED
 - NEGATIVE
 - NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
 - NO_MAJORITY
-- NO_MARKETPLACE
-- OFFCHAIN_ALL_FAILED
-- OFFCHAIN_DEPOSIT_NEEDED
-- OFFCHAIN_DONE
-- OFFCHAIN_MECH_DEPOSIT_SETTLED
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
 - SERVICE_NOT_STAKED
 - SETTLE
-- SKIP_REQUEST
 - STAKING_KPI_MET
 - STAKING_KPI_NOT_MET
 - SUSPICIOUS_ACTIVITY
 - TRANSFER_COMPLETED
 - UNRECOGNIZED
 - UPDATE
-- V1
-- V2
 - VALIDATE_TIMEOUT
 - VANITY_TX_EXECUTED
 - WAIT
@@ -59,11 +48,6 @@ states:
 - FetchStrategiesRound
 - FinalizationRound
 - GetPositionsRound
-- MechInformationRound
-- MechPurchaseSubscriptionRound
-- MechRequestRound
-- MechResponseRound
-- MechVersionDetectionRound
 - PostTxSettlementRound
 - RandomnessTransactionSubmissionRound
 - RegistrationRound
@@ -94,7 +78,6 @@ transition_func:
     (CheckLateTxHashesRound, NO_MAJORITY): ResetAndPauseRound
     (CheckStakingKPIMetRound, DONE): GetPositionsRound
     (CheckStakingKPIMetRound, ERROR): GetPositionsRound
-    (CheckStakingKPIMetRound, MECH_REQUEST_NEEDED): MechVersionDetectionRound
     (CheckStakingKPIMetRound, NONE): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
@@ -141,35 +124,9 @@ transition_func:
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
     (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
-    (MechInformationRound, DONE): MechRequestRound
-    (MechInformationRound, NONE): MechVersionDetectionRound
-    (MechInformationRound, NO_MAJORITY): MechInformationRound
-    (MechInformationRound, ROUND_TIMEOUT): MechInformationRound
-    (MechPurchaseSubscriptionRound, DONE): RandomnessTransactionSubmissionRound
-    (MechPurchaseSubscriptionRound, NONE): MechPurchaseSubscriptionRound
-    (MechPurchaseSubscriptionRound, NO_MAJORITY): MechPurchaseSubscriptionRound
-    (MechPurchaseSubscriptionRound, ROUND_TIMEOUT): MechPurchaseSubscriptionRound
-    (MechRequestRound, BUY_SUBSCRIPTION): MechPurchaseSubscriptionRound
-    (MechRequestRound, DONE): RandomnessTransactionSubmissionRound
-    (MechRequestRound, NO_MAJORITY): MechRequestRound
-    (MechRequestRound, OFFCHAIN_ALL_FAILED): CheckStakingKPIMetRound
-    (MechRequestRound, OFFCHAIN_DEPOSIT_NEEDED): RandomnessTransactionSubmissionRound
-    (MechRequestRound, OFFCHAIN_DONE): MechResponseRound
-    (MechRequestRound, ROUND_TIMEOUT): MechRequestRound
-    (MechRequestRound, SKIP_REQUEST): GetPositionsRound
-    (MechResponseRound, DONE): CheckStakingKPIMetRound
-    (MechResponseRound, NO_MAJORITY): MechResponseRound
-    (MechResponseRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
-    (MechVersionDetectionRound, NO_MAJORITY): MechVersionDetectionRound
-    (MechVersionDetectionRound, NO_MARKETPLACE): MechRequestRound
-    (MechVersionDetectionRound, ROUND_TIMEOUT): MechVersionDetectionRound
-    (MechVersionDetectionRound, V1): MechRequestRound
-    (MechVersionDetectionRound, V2): MechInformationRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
-    (PostTxSettlementRound, MECH_REQUEST_TX_EXECUTED): MechResponseRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
-    (PostTxSettlementRound, OFFCHAIN_MECH_DEPOSIT_SETTLED): MechRequestRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound

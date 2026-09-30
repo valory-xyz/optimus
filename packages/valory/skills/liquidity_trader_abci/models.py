@@ -32,10 +32,7 @@ import requests
 from aea.skills.base import Model, SkillContext
 from eth_account import Account
 
-from packages.valory.connections.x402.clients.mech import (
-    mech_requests,
-    slot_registry,
-)
+from packages.valory.connections.x402.clients.mech import mech_requests
 from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.skills.abstract_round_abci.models import (
     BaseParams,
@@ -51,9 +48,6 @@ from packages.valory.skills.abstract_round_abci.models import (
     TypeCheckMixin,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
-from packages.valory.skills.mech_interact_abci.nonce_allocator import (
-    MECH_SLOT_REGISTRY,
-)
 
 HTTP_OK = [200, 201]
 MINUTE_UNIX = 60
@@ -164,12 +158,6 @@ class SharedState(BaseSharedState):
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""
         super().__init__(*args, skill_context=skill_context, **kwargs)
-        # The mech skill signs marketplace requests itself and the
-        # facilitator signs the paid API calls, both spending this Safe's
-        # slots, and neither can see the other's unsettled ones. Bound
-        # here because this is the skill that declares the facilitator
-        # client; ``mech_interact_abci`` reads it off the shared state.
-        skill_context.shared_state[MECH_SLOT_REGISTRY] = slot_registry()
         self.in_flight_req: bool = False
         self.strategy_to_filehash: Dict[str, str] = {}
         self.strategies_executables: Dict[str, Tuple[str, str]] = {}
@@ -563,8 +551,6 @@ class Params(BaseParams):
         # discarded after polling — only the on-chain liveness tick matters — so
         # these only need to be a valid tool/prompt the configured priority mech
         # serves.
-        self.mech_tool: str = self._ensure("mech_tool", kwargs, str)
-        self.mech_request_prompt: str = self._ensure("mech_request_prompt", kwargs, str)
         self.store_path: Path = self.get_store_path(kwargs)
         self.assets_info_filename: str = self._ensure(
             "assets_info_filename", kwargs, str

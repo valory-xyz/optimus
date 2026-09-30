@@ -21,7 +21,7 @@
 
 # pylint: skip-file
 
-import json
+from typing import Any
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from packages.valory.skills.funds_manager.behaviours import (
@@ -30,7 +30,6 @@ from packages.valory.skills.funds_manager.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
-    _FundingSignal,
 )
 
 _AGENT_EOA = "0xagent"
@@ -300,163 +299,6 @@ class TestCheckStakingKPIMetBehaviour:
         obj._is_new_staking_regime = _gen_value(False)
         _run_async_act(obj, params_mock, synced_mock)
         obj.set_done.assert_called_once()
-
-
-class TestMechRequestPath:
-    """The new staking regime fires a mech request instead of a vanity tx."""
-
-    def _capture_payload(self, obj, params_mock, synced_mock):
-        """Drive async_act capturing the emitted payload."""
-        captured = {}
-
-        def fake_send(payload):
-            captured["payload"] = payload
-            yield
-
-        def fake_wait():
-            yield
-
-        with (
-            patch.object(
-                type(obj), "params", new_callable=PropertyMock, return_value=params_mock
-            ),
-            patch.object(
-                type(obj),
-                "synchronized_data",
-                new_callable=PropertyMock,
-                return_value=synced_mock,
-            ),
-        ):
-            obj.context.benchmark_tool.measure.return_value = MagicMock()
-            obj.context.agent_address = "0xagent"
-            obj.send_a2a_transaction = fake_send
-            obj.wait_until_round_end = fake_wait
-            obj.set_done = MagicMock()
-            _drive(obj.async_act())
-        return captured["payload"]
-
-    def test_new_regime_injects_mech_request_and_no_vanity_tx(self) -> None:
-        """New regime, KPI unmet, tx owed -> payload carries one mech request."""
-        obj = _make_behaviour()
-        params_mock = MagicMock()
-        params_mock.staking_chain = "optimism"
-        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
-        params_mock.staking_threshold_period = 10
-        params_mock.activity_target = 1
-        params_mock.mech_tool = "openai-gpt-4o-2024-08-06"
-        params_mock.mech_request_prompt = "ping"
-
-        synced_mock = MagicMock()
-        synced_mock.period_count = 20
-        synced_mock.period_number_at_last_cp = 0
-        synced_mock.min_num_of_safe_tx_required = 5
-
-        obj._is_staking_kpi_met = _gen_value((False, 2))
-        obj._is_new_staking_regime = _gen_value(True)
-        # The funding gate must allow the request (no gas records -> fails open).
-        obj.gas_cost_tracker.data = {}
-
-        # A vanity tx must NOT be prepared on the new regime.
-        obj._prepare_vanity_tx = MagicMock(
-            side_effect=AssertionError("vanity tx must not run on the new regime")
-        )
-
-        payload = self._capture_payload(obj, params_mock, synced_mock)
-
-        assert payload.tx_hash is None  # no vanity tx
-        requests = json.loads(payload.mech_requests)
-        assert len(requests) == 1
-        assert requests[0]["tool"] == "openai-gpt-4o-2024-08-06"
-        assert requests[0]["prompt"] == "ping"
-        assert requests[0]["nonce"]
-        # Activity-target signal populated on the new regime.
-        assert payload.activity_target == 1
-        assert payload.activity_completed == 2
-        assert payload.is_activity_target_met is True
-
-    def test_regime_undetermined_skips_both_txs(self) -> None:
-        """A transient regime read (None) fires neither a mech nor a vanity tx."""
-        obj = _make_behaviour()
-        params_mock = MagicMock()
-        params_mock.staking_chain = "optimism"
-        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
-        params_mock.staking_threshold_period = 10
-
-        synced_mock = MagicMock()
-        synced_mock.period_count = 20
-        synced_mock.period_number_at_last_cp = 0
-        synced_mock.min_num_of_safe_tx_required = 5
-
-        obj._is_staking_kpi_met = _gen_value((False, 2))
-        obj._is_new_staking_regime = _gen_value(None)  # transient/undetermined
-        obj.gas_cost_tracker.data = {}
-        obj._prepare_vanity_tx = MagicMock(
-            side_effect=AssertionError("no vanity tx when regime is undetermined")
-        )
-
-        payload = self._capture_payload(obj, params_mock, synced_mock)
-
-        assert payload.tx_hash is None
-        assert payload.mech_requests is None
-        # Activity status not populated when the regime is undetermined.
-        assert payload.is_activity_target_met is None
-        obj.context.logger.warning.assert_called()
-
-    def test_new_regime_fires_mech_request_regardless_of_eoa_balance(self) -> None:
-        """New regime mech request is independent of the EOA gas-funding gate.
-
-        The EOA-vs-recent-real-tx-cost gate guarded the old vanity Safe tx (where
-        padding the activity counter could hide a funding alert behind a green
-        KPI). Mech-marketplace requests are settled via the safe and paid in
-        USDC, not native gas, so an under-funded EOA must not block the activity
-        tick. Verifies the gate is removed from the new-regime branch.
-        """
-        obj = _make_behaviour()
-        params_mock = MagicMock()
-        params_mock.staking_chain = "optimism"
-        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
-        params_mock.staking_threshold_period = 10
-        params_mock.activity_target = 1
-        params_mock.mech_tool = "openai-gpt-4o-2024-08-06"
-        params_mock.mech_request_prompt = "ping"
-
-        synced_mock = MagicMock()
-        synced_mock.period_count = 20
-        synced_mock.period_number_at_last_cp = 0
-        synced_mock.min_num_of_safe_tx_required = 5
-
-        obj._is_staking_kpi_met = _gen_value((False, 2))
-        obj._is_new_staking_regime = _gen_value(True)
-        # Even with a clearly under-funded EOA, the new-regime mech path fires.
-        obj._real_tx_cost_vs_balance = MagicMock(  # type: ignore[assignment,method-assign]
-            return_value=_FundingSignal(eoa_balance=1, recent_real_tx_cost=10**18)
-        )
-        obj._prepare_vanity_tx = MagicMock(
-            side_effect=AssertionError("no vanity tx on the new regime")
-        )
-
-        payload = self._capture_payload(obj, params_mock, synced_mock)
-
-        assert payload.tx_hash is None
-        requests = json.loads(payload.mech_requests)
-        assert len(requests) == 1
-        assert requests[0]["tool"] == "openai-gpt-4o-2024-08-06"
-        assert requests[0]["prompt"] == "ping"
-
-    def test_build_mech_request_metadata_shape(self) -> None:
-        """_build_mech_request_metadata emits exactly one well-formed MechMetadata."""
-        obj = _make_behaviour()
-        params_mock = MagicMock()
-        params_mock.mech_tool = "tool-x"
-        params_mock.mech_request_prompt = "prompt-y"
-        with patch.object(
-            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
-        ):
-            payload = json.loads(obj._build_mech_request_metadata())
-        assert len(payload) == 1
-        assert payload[0]["tool"] == "tool-x"
-        assert payload[0]["prompt"] == "prompt-y"
-        assert isinstance(payload[0]["nonce"], str) and payload[0]["nonce"]
 
 
 class TestCheckStakingKPIMetWithdrawalGate:
@@ -955,3 +797,73 @@ class TestRealTxCostVsBalance:
         assert signal is not None
         assert signal.eoa_balance == 200
         assert signal.recent_real_tx_cost == 200
+
+
+class TestTheNewRegimeSendsNoActivityTx:
+    """On the new regime the counter is mech-marketplace requests.
+
+    The agent's paid CoinGecko and chat calls already are marketplace
+    requests, so nothing is owed here. What must not happen is falling
+    through to the vanity Safe tx, which ticks Safe nonces: the old
+    regime's counter, not this one, so it would cost gas for nothing.
+    """
+
+    @staticmethod
+    def _behaviour(regime: Any):
+        obj = _make_behaviour()
+        obj.context.agent_address = _AGENT_EOA
+
+        def fake_is_kpi_met():
+            yield
+            return False, 2
+
+        obj._is_staking_kpi_met = fake_is_kpi_met
+        obj._is_new_staking_regime = _gen_value(regime)
+        obj.gas_cost_tracker = MagicMock()
+        obj.gas_cost_tracker.data = {}
+        obj.context.shared_state = {}
+        return obj
+
+    @staticmethod
+    def _params():
+        params = MagicMock()
+        params.staking_chain = "optimism"
+        params.safe_contract_addresses = {"optimism": "0xsafe"}
+        params.staking_threshold_period = 10
+        params.chain_to_chain_id_mapping = {"optimism": _OPTIMISM_CHAIN_ID}
+        # The new regime reads this to report progress on /healthcheck.
+        params.activity_target = 5
+        return params
+
+    @staticmethod
+    def _synced():
+        synced = MagicMock()
+        synced.period_count = 20
+        synced.period_number_at_last_cp = 0
+        synced.min_num_of_safe_tx_required = 5
+        return synced
+
+    def _drive(self, regime: Any) -> dict:
+        obj = self._behaviour(regime)
+        called = {"vanity": False}
+
+        def fake_prepare_vanity_tx(chain: Any) -> Any:
+            called["vanity"] = True
+            yield
+            return "0xvanity"
+
+        obj._prepare_vanity_tx = fake_prepare_vanity_tx
+        _run_async_act(obj, self._params(), self._synced())
+        return called
+
+    def test_the_new_regime_does_not_fall_through_to_the_vanity_safe_tx(self) -> None:
+        """That tx ticks Safe nonces, which this regime does not count."""
+        assert self._drive(True)["vanity"] is False
+
+    def test_an_undetermined_regime_sends_nothing_either(self) -> None:
+        """Guessing wrong here means gas spent on the counter nobody reads."""
+        assert self._drive(None)["vanity"] is False
+
+    def test_the_old_regime_still_sends_its_vanity_safe_tx(self) -> None:
+        """Its counter is Safe nonces, which the facilitator never moves."""
+        assert self._drive(False)["vanity"] is True

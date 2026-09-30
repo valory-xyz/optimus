@@ -32,10 +32,7 @@ import requests
 from aea.skills.base import Model, SkillContext
 from eth_account import Account
 
-from packages.valory.connections.x402.clients.mech import (
-    mech_requests,
-    slot_registry,
-)
+from packages.valory.connections.x402.clients.mech import mech_requests
 from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.skills.abstract_round_abci.models import (
     BaseParams,
@@ -51,9 +48,6 @@ from packages.valory.skills.abstract_round_abci.models import (
     TypeCheckMixin,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
-from packages.valory.skills.mech_interact_abci.nonce_allocator import (
-    MECH_SLOT_REGISTRY,
-)
 
 HTTP_OK = [200, 201]
 MINUTE_UNIX = 60
@@ -164,12 +158,6 @@ class SharedState(BaseSharedState):
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""
         super().__init__(*args, skill_context=skill_context, **kwargs)
-        # The mech skill signs marketplace requests itself and the
-        # facilitator signs the paid API calls, both spending this Safe's
-        # slots, and neither can see the other's unsettled ones. Bound
-        # here because this is the skill that declares the facilitator
-        # client; ``mech_interact_abci`` reads it off the shared state.
-        skill_context.shared_state[MECH_SLOT_REGISTRY] = slot_registry()
         self.in_flight_req: bool = False
         self.strategy_to_filehash: Dict[str, str] = {}
         self.strategies_executables: Dict[str, Tuple[str, str]] = {}
@@ -380,10 +368,7 @@ class Coingecko(Model, TypeCheckMixin):
         self.mech_max_delivery_rate: Optional[int] = kwargs.pop(
             "mech_max_delivery_rate", None
         )
-        # The facilitator may hold one call for its admission wait and then
-        # its own upstream deadline, and it charges for a call it served
-        # even when the client walked away. So the mech path cannot borrow
-        # ``request_timeout``: giving up early pays for answers we discard.
+        # A call the facilitator served is charged whether or not we waited.
         self.mech_request_timeout: float = float(
             kwargs.pop("mech_request_timeout", 180.0)
         )
@@ -454,16 +439,20 @@ class Coingecko(Model, TypeCheckMixin):
             else:
                 session = requests.Session()
 
-            # The mech session lives on across calls; the others are per call.
-            keep_open = self.use_x402 and self.use_mech_facilitator
+            on_mech_path = self.use_x402 and self.use_mech_facilitator
+            # The mech adapter clamps each POST's read at what is passed here.
+            timeout = (
+                self.mech_request_timeout
+                if on_mech_path
+                else self.context.params.request_timeout
+            )
             try:
-                response = session.get(
-                    url, headers=headers, timeout=self.context.params.request_timeout
-                )
+                response = session.get(url, headers=headers, timeout=timeout)
                 success = response.status_code in HTTP_OK
                 return success, response.json()
             finally:
-                if not keep_open:
+                # The mech session lives on across calls; the others are per call.
+                if not on_mech_path:
                     session.close()
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")

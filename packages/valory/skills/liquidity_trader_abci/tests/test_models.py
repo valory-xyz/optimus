@@ -30,15 +30,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from packages.valory.skills.abstract_round_abci.models import (
-    SharedState as BaseSharedState,
-)
 from packages.valory.skills.liquidity_trader_abci.models import (
     CircuitBreakerState,
     Coingecko,
     CoingeckoRateLimiter,
     EndpointCircuitBreaker,
-    MECH_SLOT_REGISTRY,
     Params,
     SharedState,
 )
@@ -520,6 +516,7 @@ class TestCoingecko:
     def test_request_with_flag_off_uses_the_x402_session_and_proxy(self) -> None:
         """Default: the x402 session against the x402 proxy URL, unchanged."""
         mock_context = MagicMock()
+        mock_context.params.request_timeout = 10.0
         kwargs = self._make_kwargs()
         kwargs["use_x402"] = True
         cg = Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
@@ -549,6 +546,8 @@ class TestCoingecko:
             mock_session.get.call_args.args[0]
             == "https://x402.example.com/optimism/test"
         )
+        # Only the mech path gets the longer budget; this one is unchanged.
+        assert mock_session.get.call_args.kwargs["timeout"] == 10.0
 
     def test_request_with_mech_flag_uses_a_mech_session_against_the_facilitator(
         self,
@@ -597,9 +596,9 @@ class TestCoingecko:
             max_delivery_rate=6000,
             total_deadline_secs=cg.mech_request_timeout,
         )
-        # Its own budget, not request_timeout: the facilitator charges for a
-        # call it served even when the client gave up waiting for it.
+        # Its own budget, and the adapter clamps each POST's read at it.
         assert cg.mech_request_timeout > float(mock_context.params.request_timeout)
+        assert mock_session.get.call_args.kwargs["timeout"] == cg.mech_request_timeout
         assert cg.paid_proxy_base_url == "https://facilitator.example"
         assert mock_session.get.call_args.args[0] == (
             "https://facilitator.example/api/v3/simple/price"
@@ -954,66 +953,3 @@ class TestParams:
                     "skill_context": mock_context,
                 }
             )
-
-
-class TestTheMechSkillAndTheFacilitatorShareOneSlotCount:
-    """This agent pays from one Safe through two routes that cannot see each other.
-
-    The mech skill signs marketplace requests itself against the on-chain
-    counter, and the facilitator client signs the paid API calls against
-    its own view. ``mapNonces`` only moves at settlement, so an unsettled
-    slot is invisible to both, and each route is correct alone and wrong
-    together. Constructing this shared state is what joins them.
-    """
-
-    _CHAIN = "optimism"
-    _SAFE = "0x000000000000000000000000000000000000AbCd"
-
-    @staticmethod
-    def _shared_state() -> dict:
-        """Build the skill's shared state the way the skill loader does."""
-        shared_state: dict = {}
-        context = MagicMock()
-        context.shared_state = shared_state
-        with patch.object(BaseSharedState, "__init__", return_value=None):
-            SharedState(name="state", skill_context=context)
-        return shared_state
-
-    def test_the_registry_is_bound_where_the_mech_skill_looks_for_it(self) -> None:
-        """The key is the contract between the two packages.
-
-        ``MECH_SLOT_REGISTRY`` is imported from the mech skill rather than
-        spelled out here, so a rename on either side fails this.
-        """
-        shared_state = self._shared_state()
-
-        registry = shared_state[MECH_SLOT_REGISTRY]
-
-        assert registry is not None
-
-    def test_the_second_route_is_not_offered_the_first_ones_slot(self) -> None:
-        """Both routes reading only their own view would sign slot 7 twice."""
-        registry = self._shared_state()[MECH_SLOT_REGISTRY]
-        registry.live.clear()
-
-        held = registry.reserve(self._CHAIN, self._SAFE, 7)
-        offered = registry.reserve(self._CHAIN, self._SAFE, 7)
-
-        assert (held, offered) == (7, 8)
-
-    def test_a_slot_one_route_hands_back_is_offered_to_the_other(self) -> None:
-        """A slot nothing will settle stalls every later request for the Safe."""
-        registry = self._shared_state()[MECH_SLOT_REGISTRY]
-        registry.live.clear()
-
-        taken = registry.reserve(self._CHAIN, self._SAFE, 7)
-        registry.release(self._CHAIN, self._SAFE, taken)
-
-        assert registry.reserve(self._CHAIN, self._SAFE, 7) == taken
-
-    def test_every_skill_in_the_agent_gets_the_same_registry(self) -> None:
-        """Two views of the count are two chances to hand out one slot twice."""
-        first = self._shared_state()[MECH_SLOT_REGISTRY]
-        second = self._shared_state()[MECH_SLOT_REGISTRY]
-
-        assert first is second

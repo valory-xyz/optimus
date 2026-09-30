@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeiduylestbzlhsfwu52zkwlxk5apj3ahw4keygij3hedjocgnyti3i
+agent: valory/basius:0.1.0:bafybeigmvbxvywaix4zgyraxmixc3thlp44hzvht2m4tc526la2xesnlla
 number_of_agents: 1
 deployment:
   agent:
@@ -124,7 +124,7 @@ models:
       genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
       slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.005}
       use_x402: ${USE_X402:bool:true}
-      x402_payment_requirements: ${X402_PAYMENT_REQUIREMENTS:str:{"threshold":200000,"topup":250000}}
+      x402_payment_requirements: ${X402_PAYMENT_REQUIREMENTS:str:{"threshold":350000,"topup":700000}}
       optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC:str:https://mainnet.optimism.io}
       base_ledger_rpc: ${BASE_LEDGER_RPC:str:https://mainnet.base.org}
       lifi_quote_to_amount_url: ${LIFI_QUOTE_TO_AMOUNT_URL:str:https://li.quest/v1/quote/toAmount}
@@ -153,6 +153,9 @@ models:
       use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
       mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
       mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
+      mech_pre_deposit_floor: ${MECH_PRE_DEPOSIT_FLOOR:int:150000}
+      mech_pre_deposit_target: ${MECH_PRE_DEPOSIT_TARGET:int:500000}
+      mech_pre_deposit_cap: ${MECH_PRE_DEPOSIT_CAP:int:500000}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

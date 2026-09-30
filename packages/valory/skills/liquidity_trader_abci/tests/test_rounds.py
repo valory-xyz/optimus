@@ -23,6 +23,7 @@
 
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     CallCheckpointRound,
+    CheckMechPreDepositRound,
     CheckStakingKPIMetRound,
     DecisionMakingRound,
     EvaluateStrategyRound,
@@ -49,6 +50,7 @@ class TestWithdrawalTransitionMap:
             FetchStrategiesRound,
             CallCheckpointRound,
             CheckStakingKPIMetRound,
+            CheckMechPreDepositRound,
             GetPositionsRound,
             EvaluateStrategyRound,
             DecisionMakingRound,

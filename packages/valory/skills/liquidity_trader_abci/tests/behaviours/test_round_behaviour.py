@@ -24,6 +24,9 @@
 from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import (
     CallCheckpointBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours.check_mech_pre_deposit import (
+    CheckMechPreDepositBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
@@ -63,6 +66,7 @@ class TestLiquidityTraderRoundBehaviour:
         expected_behaviours = {
             CallCheckpointBehaviour,
             CheckStakingKPIMetBehaviour,
+            CheckMechPreDepositBehaviour,
             GetPositionsBehaviour,
             EvaluateStrategyBehaviour,
             DecisionMakingBehaviour,

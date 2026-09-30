@@ -426,7 +426,36 @@ class TestCoingecko:
             "use_mech_facilitator": False,
             "mech_facilitator_base_url": "https://facilitator.example",
             "mech_max_delivery_rate": None,
+            "mech_pre_deposit_floor": 150000,
+            "mech_pre_deposit_target": 500000,
+            "mech_pre_deposit_cap": 500000,
         }
+
+    def test_pre_deposit_thresholds_are_read_as_integers(self) -> None:
+        """Token amounts are base units, so they must never become floats."""
+        cg = Coingecko(
+            name="coingecko",
+            skill_context=MagicMock(),
+            **{**self._make_kwargs(), "mech_pre_deposit_floor": "150000"},
+        )
+        assert cg.mech_pre_deposit_floor == 150000
+        assert isinstance(cg.mech_pre_deposit_floor, int)
+        assert cg.mech_pre_deposit_target == 500000
+        assert cg.mech_pre_deposit_cap == 500000
+
+    def test_pre_deposit_thresholds_default_to_no_top_up(self) -> None:
+        """Left unset, the deposit path must ask for nothing rather than guess."""
+        kwargs = self._make_kwargs()
+        for name in (
+            "mech_pre_deposit_floor",
+            "mech_pre_deposit_target",
+            "mech_pre_deposit_cap",
+        ):
+            kwargs.pop(name)
+        cg = Coingecko(name="coingecko", skill_context=MagicMock(), **kwargs)
+        assert cg.mech_pre_deposit_floor == 0
+        assert cg.mech_pre_deposit_target == 0
+        assert cg.mech_pre_deposit_cap == 0
 
     def test_initialization(self) -> None:
         """Test Coingecko initialization."""

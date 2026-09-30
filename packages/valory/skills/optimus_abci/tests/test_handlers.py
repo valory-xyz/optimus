@@ -3523,6 +3523,58 @@ class TestHttpHandlerMethods:
             if acquired:
                 handlers_mod._X402_TOPUP_LOCK.release()
 
+    def test_the_topup_swap_lands_in_the_safe(self) -> None:
+        """The marketplace debits the Safe, so the EOA is no longer the payer.
+
+        The EOA still funds and signs the swap, so what has to be funded
+        externally is unchanged; only the destination moved.
+        """
+        safe = "0x" + "5a" * 20
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.params.safe_contract_addresses = {"optimism": safe}
+        ctx.params.x402_payment_requirements = {"threshold": 200000, "topup": 250000}
+        eoa = MagicMock()
+        eoa.address = "0xEOA"
+        handler._get_eoa_account = MagicMock(return_value=eoa)
+        handler._check_usdc_balance = MagicMock(return_value=0)
+        handler._get_lifi_quote_sync = MagicMock(return_value=None)
+
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_shared.return_value = MagicMock()
+            handler._ensure_sufficient_funds_for_x402_payments()
+
+        assert (
+            handler._check_usdc_balance.call_args[0][0] == safe
+        ), "decided on the EOA's balance"
+        assert (
+            handler._get_lifi_quote_sync.call_args.kwargs["to_address"] == safe
+        ), "swapped to the EOA"
+        assert (
+            handler._get_lifi_quote_sync.call_args[0][0] == "0xEOA"
+        ), "the EOA must still fund the swap"
+
+    def test_no_safe_configured_stops_before_swapping(self) -> None:
+        """Swapping to nowhere would spend the EOA's gas for nothing."""
+        handler, ctx = _make_http_handler()
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.params.safe_contract_addresses = {}
+        eoa = MagicMock()
+        eoa.address = "0xEOA"
+        handler._get_eoa_account = MagicMock(return_value=eoa)
+        handler._get_lifi_quote_sync = MagicMock()
+
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock
+        ) as mock_shared:
+            mock_shared.return_value = MagicMock()
+            result = handler._ensure_sufficient_funds_for_x402_payments()
+
+        assert result is False
+        handler._get_lifi_quote_sync.assert_not_called()
+
     def test_ensure_sufficient_funds_no_eoa(self) -> None:
         """Test _ensure_sufficient_funds_for_x402_payments when no EOA account."""
         handler, ctx = _make_http_handler()

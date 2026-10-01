@@ -3,12 +3,10 @@ alphabet_in:
 - CHECKPOINT_TX_EXECUTED
 - DONE
 - ERROR
-- MECH_REQUEST_NEEDED
-- MECH_REQUEST_TX_EXECUTED
+- MECH_PRE_DEPOSIT_TX_EXECUTED
 - NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
 - NO_MAJORITY
-- OFFCHAIN_MECH_DEPOSIT_SETTLED
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
 - SERVICE_NOT_STAKED
@@ -30,9 +28,6 @@ final_states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
-- FinishedWithMechRequestRound
-- FinishedWithMechResponsePollRound
-- FinishedWithOffchainMechDepositSettledRound
 label: LiquidityTraderAbciApp
 start_states:
 - CallCheckpointRound
@@ -44,6 +39,7 @@ start_states:
 - WithdrawFundsRound
 states:
 - CallCheckpointRound
+- CheckMechPreDepositRound
 - CheckStakingKPIMetRound
 - DecisionMakingRound
 - EvaluateStrategyRound
@@ -54,9 +50,6 @@ states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
-- FinishedWithMechRequestRound
-- FinishedWithMechResponsePollRound
-- FinishedWithOffchainMechDepositSettledRound
 - GetPositionsRound
 - PostTxSettlementRound
 - WithdrawFundsRound
@@ -70,15 +63,20 @@ transition_func:
     (CallCheckpointRound, SERVICE_NOT_STAKED): GetPositionsRound
     (CallCheckpointRound, SETTLE): FinishedCallCheckpointRound
     (CallCheckpointRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
-    (CheckStakingKPIMetRound, DONE): GetPositionsRound
-    (CheckStakingKPIMetRound, ERROR): GetPositionsRound
-    (CheckStakingKPIMetRound, MECH_REQUEST_NEEDED): FinishedWithMechRequestRound
+    (CheckMechPreDepositRound, DONE): GetPositionsRound
+    (CheckMechPreDepositRound, NONE): GetPositionsRound
+    (CheckMechPreDepositRound, NO_MAJORITY): CheckMechPreDepositRound
+    (CheckMechPreDepositRound, ROUND_TIMEOUT): CheckMechPreDepositRound
+    (CheckMechPreDepositRound, SETTLE): FinishedTxPreparationRound
+    (CheckMechPreDepositRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
+    (CheckStakingKPIMetRound, DONE): CheckMechPreDepositRound
+    (CheckStakingKPIMetRound, ERROR): CheckMechPreDepositRound
     (CheckStakingKPIMetRound, NONE): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, SETTLE): FinishedCheckStakingKPIMetRound
-    (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
-    (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
+    (CheckStakingKPIMetRound, STAKING_KPI_MET): CheckMechPreDepositRound
+    (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): CheckMechPreDepositRound
     (CheckStakingKPIMetRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
@@ -106,9 +104,8 @@ transition_func:
     (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
-    (PostTxSettlementRound, MECH_REQUEST_TX_EXECUTED): FinishedWithMechResponsePollRound
+    (PostTxSettlementRound, MECH_PRE_DEPOSIT_TX_EXECUTED): GetPositionsRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
-    (PostTxSettlementRound, OFFCHAIN_MECH_DEPOSIT_SETTLED): FinishedWithOffchainMechDepositSettledRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound

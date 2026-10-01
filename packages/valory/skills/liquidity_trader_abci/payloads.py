@@ -45,14 +45,24 @@ class CallCheckpointPayload(MultisigTxPayload):
 
 
 @dataclass(frozen=True)
+class CheckMechPreDepositPayload(MultisigTxPayload):
+    """A transaction payload for the CheckMechPreDepositRound.
+
+    Carries the Safe multisend that tops the marketplace pre-deposit up, or
+    no hash when the pre-deposit already covers the target.
+    """
+
+    # ``event`` must remain the last declared field: the round's selection_key
+    # omits it, and ``zip(selection_key, payload.values)`` truncates the
+    # trailing value cleanly only while it sits last.
+    event: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class CheckStakingKPIMetPayload(MultisigTxPayload):
     """A transaction payload for the CheckStakingKPIMetRound."""
 
     is_staking_kpi_met: Optional[bool]
-    # New staking regime: a JSON list of one ``MechMetadata`` to hand off to the
-    # composed mech_interact_abci legs (``None`` when no request is owed). Always
-    # carried so it overwrites any stale db value from a prior MechRequestRound.
-    mech_requests: Optional[str] = None
     # Off-chain activity-target signal surfaced on /healthcheck (new regime only;
     # ``None`` on old regime / unstaked).
     is_activity_target_met: Optional[bool] = None
@@ -63,7 +73,7 @@ class CheckStakingKPIMetPayload(MultisigTxPayload):
     # aligns each selection_key entry with its same-named payload position. The
     # round's selection_key intentionally omits ``event``; with ``event`` last,
     # ``zip`` truncates the trailing value cleanly. Reordering any earlier
-    # field would silently shift db keys and break the MECH_REQUEST_NEEDED branch.
+    # field would silently shift db keys.
     event: Optional[str] = None
 
 

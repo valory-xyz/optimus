@@ -19,11 +19,8 @@
 
 """This module contains the behaviour for checking is staking kpi is met for the 'liquidity_trader_abci' skill."""
 
-import json
-from dataclasses import asdict
 from statistics import median
 from typing import Generator, NamedTuple, Optional, Type
-from uuid import uuid4
 
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -47,7 +44,6 @@ from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met i
     CheckStakingKPIMetRound,
     Event,
 )
-from packages.valory.skills.mech_interact_abci.states.base import MechMetadata
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -96,7 +92,6 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 return
 
             vanity_tx_hex = None
-            mech_requests_json = None
             is_activity_target_met = None
             activity_target = None
             activity_completed = None
@@ -163,20 +158,28 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                         )
                         if is_new_regime is None:
                             # Regime undetermined (transient VERSION read);
-                            # neither fire a mech request nor a vanity tx — retry
-                            # next period rather than tick the wrong counter.
+                            # do not fire a vanity tx and risk ticking the wrong
+                            # counter — retry next period.
                             self.context.logger.warning(
                                 "Staking regime undetermined this period; "
                                 "deferring activity tx until it resolves"
                             )
                         elif is_new_regime:
-                            # New regime: hand off to mech_interact_abci with a
-                            # single static mech request (ticks mapRequestCounts
-                            # on the marketplace).
-                            self.context.logger.info(
-                                "Preparing mech-marketplace activity request.."
+                            # The new regime counts marketplace requests, which
+                            # the agent's paid API calls are, so nothing is sent
+                            # purely to tick the counter. Nothing guarantees it
+                            # made enough of them, though: a day with investing
+                            # paused, the facilitator down or the deposit spent
+                            # makes none, and settlement is batched so recent
+                            # ones may not be counted yet. Short at the
+                            # threshold is worth seeing rather than accepting.
+                            self.context.logger.warning(
+                                "Staking KPI is short by "
+                                f"{num_of_tx_left_to_meet_kpi} and the new "
+                                "regime counts marketplace requests, which "
+                                "only the agent's paid API calls make. Nothing "
+                                "is sent to make up the difference."
                             )
-                            mech_requests_json = self._build_mech_request_metadata()
                         else:
                             # Old regime: keep the existing vanity Safe tx, gated
                             # by the EOA-funded check so vanity activity does not
@@ -211,7 +214,6 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 multisig,
                 self.params.staking_chain,
                 is_staking_kpi_met,
-                mech_requests=mech_requests_json,
                 is_activity_target_met=is_activity_target_met,
                 activity_target=activity_target,
                 activity_completed=activity_completed,
@@ -221,28 +223,6 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
-
-    def _build_mech_request_metadata(self) -> str:
-        """Build the JSON payload of one ``MechMetadata`` for the activity request.
-
-        On the new staking regime the agent ticks the on-chain activity counter
-        by sending a real ``MechMarketplace.request(...)`` instead of an empty
-        vanity Safe tx. We inject a single static request (fixed tool + static
-        prompt) for the composed ``mech_interact_abci`` legs to build and settle;
-        the Response leg IS composed (poll-then-discard), but the response
-        *content* is discarded after polling — only the on-chain liveness tick
-        matters, not the mech's answer — so the prompt/tool only need to be valid
-        for the configured priority mech. A fresh ``uuid4`` nonce keeps each
-        request distinct.
-
-        :return: a JSON list containing one serialized ``MechMetadata``.
-        """
-        request = MechMetadata(
-            nonce=str(uuid4()),
-            tool=self.params.mech_tool,
-            prompt=self.params.mech_request_prompt,
-        )
-        return json.dumps([asdict(request)], sort_keys=True)
 
     def _real_tx_cost_vs_balance(self, chain: str) -> Optional[_FundingSignal]:
         """Read the agent EOA balance and recent real-tx cost on ``chain``.

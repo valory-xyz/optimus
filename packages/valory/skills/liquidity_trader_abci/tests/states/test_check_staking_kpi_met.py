@@ -178,22 +178,6 @@ class TestCheckStakingKPIMetRound:
             result = round_obj.end_block()
         assert result == (mock_synced, Event.STAKING_KPI_MET)
 
-    def test_end_block_mech_request_needed(self) -> None:
-        """A pending mech request routes to MECH_REQUEST_NEEDED (new regime)."""
-        round_obj = self._stub_round(threshold=False)
-        mock_synced = MagicMock(spec=SynchronizedData)
-        # KPI not met, no vanity tx, but the producer injected one mech request.
-        mock_synced.is_staking_kpi_met = False
-        mock_synced.most_voted_tx_hash = None
-        mock_synced.mech_requests = '[{"prompt": "p", "tool": "t", "nonce": "n"}]'
-        with patch.object(
-            CollectSameUntilThresholdRound,
-            "end_block",
-            return_value=(mock_synced, Event.DONE),
-        ):
-            result = round_obj.end_block()
-        assert result == (mock_synced, Event.MECH_REQUEST_NEEDED)
-
     def test_end_block_kpi_not_met(self) -> None:
         """Test end_block returns STAKING_KPI_NOT_MET when kpi is not met."""
         round_obj = self._stub_round(threshold=False)
@@ -240,80 +224,27 @@ class TestCheckStakingKPIMetRound:
         assert result == (mock_synced, Event.STAKING_KPI_MET)
 
 
-def test_payload_values_align_with_selection_key() -> None:
-    """Projected payload values must land under their same-named selection_key.
+def test_payload_field_order_still_aligns_with_the_selection_key() -> None:
+    """``event`` must stay the last declared field on the payload.
 
-    CollectSameUntilThresholdRound projects consensus into the db via
-    ``dict(zip(selection_key, payload.values))``. ``payload.values`` walks the
-    dataclass fields in declaration order. Any field in the payload that is not
-    in selection_key (notably ``event``) MUST sit at the end of the declaration
-    so the trailing zip-truncation drops it cleanly; otherwise every later
-    selection_key entry inherits the wrong value, and the
-    ``MECH_REQUEST_NEEDED`` branch silently sees ``mech_requests=None`` even
-    when the producer built a real request.
+    ``CollectSameUntilThresholdRound.end_block`` zips ``selection_key``
+    against ``payload.values``, positionally. The round's selection_key
+    deliberately omits ``event``, so the zip only truncates cleanly while
+    ``event`` is last. Reordering any earlier field shifts every db key
+    one place and writes values under the wrong names, silently.
     """
-    mech_json = '[{"prompt": "p", "tool": "t", "nonce": "n"}]'
-    payload = CheckStakingKPIMetPayload(
-        sender="0xagent",
-        tx_submitter="kpi_round",
-        tx_hash=None,
-        safe_contract_address="0xsafe",
-        chain_id="base",
-        is_staking_kpi_met=False,
-        mech_requests=mech_json,
-        is_activity_target_met=False,
-        activity_target=2,
-        activity_completed=0,
+    from dataclasses import fields
+
+    payload_fields = [f.name for f in fields(CheckStakingKPIMetPayload)]
+    assert payload_fields[-1] == "event"
+
+    # The zip is positional, not by name: payload ``tx_hash`` lands under the
+    # db key ``most_voted_tx_hash``. So what has to hold is the count, with
+    # ``event`` the one trailing value the zip drops.
+    base = {"sender", "round_count", "id_"}
+    carried = [f for f in payload_fields if f not in base]
+    assert carried[-1] == "event"
+    assert len(CheckStakingKPIMetRound.selection_key) == len(carried) - 1, (
+        "selection_key and the payload's carried fields no longer line up; "
+        "every db key after the mismatch would be written from the wrong value"
     )
-
-    projected = dict(zip(CheckStakingKPIMetRound.selection_key, payload.values))
-
-    assert projected["mech_requests"] == mech_json
-    assert projected["is_activity_target_met"] is False
-    assert projected["activity_target"] == 2
-    assert projected["activity_completed"] == 0
-
-
-def test_end_block_emits_mech_request_needed_via_real_payload_projection() -> None:
-    """A real payload projected via the round's selection_key emits MECH_REQUEST_NEEDED.
-
-    The earlier tests in this module set ``mock_synced.mech_requests`` directly,
-    which skips the payload->db projection where the production bug actually
-    lived. This test populates the SynchronizedData stand-in from the same
-    ``dict(zip(selection_key, payload.values))`` the parent class uses, so a
-    future field-order drift between payload and selection_key resurfaces here
-    as a failure rather than as a silent ``STAKING_KPI_NOT_MET`` regression.
-    """
-    mech_json = '[{"prompt": "p", "tool": "t", "nonce": "n"}]'
-    payload = CheckStakingKPIMetPayload(
-        sender="0xagent",
-        tx_submitter="kpi_round",
-        tx_hash=None,
-        safe_contract_address="0xsafe",
-        chain_id="base",
-        is_staking_kpi_met=False,
-        mech_requests=mech_json,
-        is_activity_target_met=False,
-        activity_target=2,
-        activity_completed=0,
-    )
-    projected = dict(zip(CheckStakingKPIMetRound.selection_key, payload.values))
-
-    synced = MagicMock(spec=SynchronizedData)
-    for name, value in projected.items():
-        setattr(synced, name, value)
-
-    round_obj = object.__new__(CheckStakingKPIMetRound)
-    type(round_obj).threshold_reached = PropertyMock(return_value=False)
-    type(round_obj).synchronized_data = PropertyMock(return_value=synced)
-
-    with patch.object(
-        CollectSameUntilThresholdRound,
-        "end_block",
-        return_value=(synced, Event.DONE),
-    ):
-        result = round_obj.end_block()
-
-    assert result is not None
-    _, event = result
-    assert event == Event.MECH_REQUEST_NEEDED

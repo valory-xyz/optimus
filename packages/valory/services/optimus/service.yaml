@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeie6fadc33nz72mo57ad5gijnhkbh7ioigol52pkdie6iupdnosmle
+agent: valory/optimus:0.1.0:bafybeicvkgjc5y63je4ycusrdoj5qvhvexym3m4ttrp42wxkzy4yfuglii
 number_of_agents: 1
 deployment:
   agent:
@@ -65,7 +65,6 @@ models:
       request_retry_delay: ${REQUEST_RETRY_DELAY:float:1.0}
       request_timeout: ${REQUEST_TIMEOUT:float:10.0}
       round_timeout_seconds: ${ROUND_TIMEOUT_SECONDS:float:30.0}
-      mech_interact_round_timeout_seconds: ${MECH_INTERACT_ROUND_TIMEOUT_SECONDS:int:900}
       service_id: ${SERVICE_ID:str:optimus}
       service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x48b6af7B12C71f09e2fC8aF4855De4Ff54e775cA}
       share_tm_config_on_startup: ${USE_ACN:bool:false}
@@ -83,19 +82,9 @@ models:
       staking_activity_checker_contract_address: ${ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${STAKING_THRESHOLD_PERIOD:int:5}
       activity_target: ${ACTIVITY_TARGET:int:1}
-      mech_tool: ${MECH_TOOL:str:prediction-offline}
-      mech_request_prompt: ${MECH_REQUEST_PROMPT:str:Optimus staking activity request.}
       multisend_batch_size: ${MECH_MULTISEND_BATCH_SIZE:int:1}
-      mech_contract_address: ${MECH_CONTRACT_ADDRESS:str:0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E}
-      ipfs_address: ${MECH_IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
-      mech_chain_id: ${MECH_CHAIN_ID:str:optimism}
-      mech_wrapped_native_token_address: ${MECH_WRAPPED_NATIVE_TOKEN_ADDRESS:str:0x4200000000000000000000000000000000000006}
-      mech_interaction_sleep_time: ${MECH_INTERACTION_SLEEP_TIME:int:10}
-      use_mech_marketplace: ${USE_MECH_MARKETPLACE:bool:true}
-      mech_marketplace_config: ${MECH_MARKETPLACE_CONFIG:dict:{"mech_marketplace_address":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461","priority_mech_address":"0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E","priority_mech_service_id":195,"response_timeout":300,"use_dynamic_mech_selection":false,"offchain_url":"https://1dcd79932c59eb58.agent.propel.autonolas.tech","auto_deposit_cap_per_cycle":5000000,"offchain_poll_interval_seconds":3.0,"offchain_poll_timeout_seconds":300.0,"offchain_failover_max_retries":2}}
       use_offchain: ${USE_OFFCHAIN:bool:false}
       offchain_deposit_target_calls: ${OFFCHAIN_DEPOSIT_TARGET_CALLS:int:10}
-      agent_registry_address: ${MECH_AGENT_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
       use_acn_for_delivers: ${USE_ACN_FOR_DELIVERS:bool:false}
       valid_mechs: ${VALID_MECHS:list:["0x3208Dc0DebA018dDE8a8e2FFA09265Ea12aAf55E"]}
       penalize_mech_time_window: ${MECH_PENALIZE_TIME_WINDOW:int:1800}
@@ -164,10 +153,11 @@ models:
       use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
       mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
       mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
+      mech_marketplace_addresses: ${MECH_MARKETPLACE_ADDRESSES:str:{"optimism":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"}}
+      mech_pre_deposit_floor: ${MECH_PRE_DEPOSIT_FLOOR:int:150000}
+      mech_pre_deposit_target: ${MECH_PRE_DEPOSIT_TARGET:int:500000}
+      mech_pre_deposit_cap: ${MECH_PRE_DEPOSIT_CAP:int:500000}
       mech_request_timeout: ${MECH_REQUEST_TIMEOUT:float:180.0}
-  mechs_subgraph:
-    args:
-      url: ${MECHS_SUBGRAPH_URL:str:https://api.subgraph.autonolas.tech/api/proxy/marketplace-optimism}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

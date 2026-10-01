@@ -365,6 +365,22 @@ class Coingecko(Model, TypeCheckMixin):
         self.mech_facilitator_base_url = self._ensure(
             "mech_facilitator_base_url", kwargs, str
         )
+        # The marketplace whose balance tracker holds the pre-deposit. Every
+        # address the top-up sends funds to is resolved from this one, so it
+        # is configured rather than reported.
+        self.mech_marketplace_addresses: Dict[str, str] = json.loads(
+            str(kwargs.pop("mech_marketplace_addresses", "{}"))
+        )
+        # Marketplace pre-deposit thresholds, in the payment token's base
+        # units. The facilitator debits this pot rather than the Safe's own
+        # balance, and only this agent can move funds between the two.
+        # ``floor`` is when to act, ``target`` is what to reach, and ``cap``
+        # bounds one top-up so a misconfiguration cannot drain the Safe.
+        self.mech_pre_deposit_floor: int = int(kwargs.pop("mech_pre_deposit_floor", 0))
+        self.mech_pre_deposit_target: int = int(
+            kwargs.pop("mech_pre_deposit_target", 0)
+        )
+        self.mech_pre_deposit_cap: int = int(kwargs.pop("mech_pre_deposit_cap", 0))
         self.mech_max_delivery_rate: Optional[int] = kwargs.pop(
             "mech_max_delivery_rate", None
         )
@@ -552,8 +568,6 @@ class Params(BaseParams):
         # discarded after polling — only the on-chain liveness tick matters — so
         # these only need to be a valid tool/prompt the configured priority mech
         # serves.
-        self.mech_tool: str = self._ensure("mech_tool", kwargs, str)
-        self.mech_request_prompt: str = self._ensure("mech_request_prompt", kwargs, str)
         self.store_path: Path = self.get_store_path(kwargs)
         self.assets_info_filename: str = self._ensure(
             "assets_info_filename", kwargs, str

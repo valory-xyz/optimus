@@ -23,12 +23,12 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeihyci7aqcrefyy4uak245jq2ud2536c7lqjgmxuzwilfwtw7p2a4y",
         "contract/valory/balancer_queries/0.1.0": "bafybeihbexpjj6ho3ij7rxk4tzz3sowpa5ztawlf63y5fdmmom7xifpan4",
         "contract/valory/mech_activity/0.1.0": "bafybeienezl3yozrionpoyh75r54e24tjtnstxv674ru25lnosps3a7cr4",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeicej7izohxskhgfwwp3henamxba77rh6qy625p4ghmjfappe3yewm",
-        "skill/valory/optimus_abci/0.1.0": "bafybeieahh5muzltijxqcad3dkz5ns32k7e3mv2oe63a6p4cp6yl34p5x4",
-        "agent/valory/optimus/0.1.0": "bafybeie6fadc33nz72mo57ad5gijnhkbh7ioigol52pkdie6iupdnosmle",
-        "agent/valory/basius/0.1.0": "bafybeihfhbgj5nmgyeuxt2tufmexmrfopaylaxr7iwqfdvbvgq35gunro4",
-        "service/valory/optimus/0.1.0": "bafybeihp5yve74vaunuiyssqsj37j3dnb4fn6h7n2kfjotqtcprsfwmwxi",
-        "service/valory/basius/0.1.0": "bafybeigrlz4nmiido3eivehyf2r7j63of4fujguktwwmmonexmx7vuv3ci"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeie2l2aicr7pp6bn2zzzu2ioag3mer6v3vsggcc2yirhh3wlik56e4",
+        "skill/valory/optimus_abci/0.1.0": "bafybeianw5w5w3ihpqqovj37gxgtaedb5shr6zzlxwxmiawwtmyao7knlq",
+        "agent/valory/optimus/0.1.0": "bafybeicvkgjc5y63je4ycusrdoj5qvhvexym3m4ttrp42wxkzy4yfuglii",
+        "agent/valory/basius/0.1.0": "bafybeignsjrd6kc2ujjaign6lve6su4jwodkkja6dhlvdhm4a3wan4pv6i",
+        "service/valory/optimus/0.1.0": "bafybeid2gdmjh7km6muq4miw5cmtxlv4h4nnhehih7mydkbftilmgyncdi",
+        "service/valory/basius/0.1.0": "bafybeiedujotdhlyjmd4x3hhtp7l6rl7ypy7lrjeds57pi6oxr2pvau4nu"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
@@ -82,7 +82,6 @@
         "skill/valory/registration_abci/0.1.0": "bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi",
         "skill/valory/reset_pause_abci/0.1.0": "bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi",
         "skill/valory/termination_abci/0.1.0": "bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa",
-        "skill/valory/funds_manager/0.1.0": "bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by",
-        "skill/valory/mech_interact_abci/0.1.0": "bafybeihg52qu5er6l3tu54u32qfyajkrgkrdzrxgktuxlcrwvwmen6xoqa"
+        "skill/valory/funds_manager/0.1.0": "bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by"
     }
 }

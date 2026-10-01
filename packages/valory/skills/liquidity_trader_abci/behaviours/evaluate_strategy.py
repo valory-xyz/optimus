@@ -1783,11 +1783,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
-                "x402_session": (
-                    self.coingecko.paid_session(self.eoa_account)
-                    if self.coingecko.use_x402
-                    else None
-                ),
+                "x402_session": self._paid_session_or_none(),
                 "x402_proxy": (
                     self.coingecko.paid_proxy_base_url
                     if self.coingecko.use_x402

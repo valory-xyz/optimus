@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeihbhx7enub7uf4falqmihcd5wkim2ktguaquoiaghisev232fpzji
+agent: valory/optimus:0.1.0:bafybeicvkgjc5y63je4ycusrdoj5qvhvexym3m4ttrp42wxkzy4yfuglii
 number_of_agents: 1
 deployment:
   agent:
@@ -153,6 +153,10 @@ models:
       use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
       mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
       mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
+      mech_marketplace_addresses: ${MECH_MARKETPLACE_ADDRESSES:str:{"optimism":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"}}
+      mech_pre_deposit_floor: ${MECH_PRE_DEPOSIT_FLOOR:int:150000}
+      mech_pre_deposit_target: ${MECH_PRE_DEPOSIT_TARGET:int:500000}
+      mech_pre_deposit_cap: ${MECH_PRE_DEPOSIT_CAP:int:500000}
       mech_request_timeout: ${MECH_REQUEST_TIMEOUT:float:180.0}
 ---
 public_id: valory/ledger:0.19.0

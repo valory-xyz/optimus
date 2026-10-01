@@ -23,6 +23,7 @@
 
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     CallCheckpointRound,
+    CheckMechPreDepositRound,
     CheckStakingKPIMetRound,
     DecisionMakingRound,
     EvaluateStrategyRound,
@@ -49,6 +50,7 @@ class TestWithdrawalTransitionMap:
             FetchStrategiesRound,
             CallCheckpointRound,
             CheckStakingKPIMetRound,
+            CheckMechPreDepositRound,
             GetPositionsRound,
             EvaluateStrategyRound,
             DecisionMakingRound,
@@ -75,6 +77,39 @@ class TestWithdrawalTransitionMap:
             if Event.WITHDRAWAL_INITIATED in transitions
         }
         assert targets == {WithdrawFundsRound}
+
+
+class TestMechPreDepositTransitions:
+    """Pin where the pre-deposit round sits in the cycle."""
+
+    def test_the_kpi_check_hands_over_to_the_pre_deposit_check(self) -> None:
+        """The pre-deposit check runs once a period, after the staking check."""
+        assert (
+            LiquidityTraderAbciApp.transition_function[CheckStakingKPIMetRound][
+                Event.DONE
+            ]
+            is CheckMechPreDepositRound
+        )
+
+    def test_a_settled_top_up_carries_on_instead_of_checking_again(self) -> None:
+        """One top-up per period, bounded by where a settled one goes next.
+
+        Re-entering the round after settling would let a stale deposit reading
+        repeat top-ups until the Safe's payment token was gone.
+        """
+        assert (
+            LiquidityTraderAbciApp.transition_function[PostTxSettlementRound][
+                Event.MECH_PRE_DEPOSIT_TX_EXECUTED
+            ]
+            is GetPositionsRound
+        )
+
+    def test_a_prepared_top_up_goes_to_settlement(self) -> None:
+        """A built top-up has to settle before the cycle carries on."""
+        assert (
+            Event.SETTLE
+            in LiquidityTraderAbciApp.transition_function[CheckMechPreDepositRound]
+        )
 
 
 class TestCoreCycleTransitions:

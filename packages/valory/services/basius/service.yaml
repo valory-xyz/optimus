@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeiftqzg4kki4tdbvytnhucdhq5ymxfojqdcd47tyloyhbzkj3gxm4u
+agent: valory/basius:0.1.0:bafybeignsjrd6kc2ujjaign6lve6su4jwodkkja6dhlvdhm4a3wan4pv6i
 number_of_agents: 1
 deployment:
   agent:
@@ -124,7 +124,7 @@ models:
       genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
       slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.005}
       use_x402: ${USE_X402:bool:true}
-      x402_payment_requirements: ${X402_PAYMENT_REQUIREMENTS:str:{"threshold":350000,"topup":700000}}
+      x402_payment_requirements: ${X402_PAYMENT_REQUIREMENTS:str:{"threshold":200000,"topup":250000}}
       optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC:str:https://mainnet.optimism.io}
       base_ledger_rpc: ${BASE_LEDGER_RPC:str:https://mainnet.base.org}
       lifi_quote_to_amount_url: ${LIFI_QUOTE_TO_AMOUNT_URL:str:https://li.quest/v1/quote/toAmount}

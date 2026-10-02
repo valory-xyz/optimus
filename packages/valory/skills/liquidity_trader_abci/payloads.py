@@ -45,20 +45,6 @@ class CallCheckpointPayload(MultisigTxPayload):
 
 
 @dataclass(frozen=True)
-class CheckMechPreDepositPayload(MultisigTxPayload):
-    """A transaction payload for the CheckMechPreDepositRound.
-
-    Carries the Safe multisend that tops the marketplace pre-deposit up, or
-    no hash when the pre-deposit already covers the target.
-    """
-
-    # ``event`` must remain the last declared field: the round's selection_key
-    # omits it, and ``zip(selection_key, payload.values)`` truncates the
-    # trailing value cleanly only while it sits last.
-    event: Optional[str] = None
-
-
-@dataclass(frozen=True)
 class CheckStakingKPIMetPayload(MultisigTxPayload):
     """A transaction payload for the CheckStakingKPIMetRound."""
 

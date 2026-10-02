@@ -22,12 +22,15 @@
 # pylint: skip-file
 
 import json
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 import requests
+from web3 import Web3
 
+import packages.valory.skills.optimus_abci.handlers as handlers_module
 from packages.valory.skills.optimus_abci.handlers import (
     BASIUS_AGENT_PROFILE_PATH,
     BaseHandler,
@@ -4841,3 +4844,855 @@ class TestHttpHandlerMethods:
         call_data = handler._send_ok_response.call_args[0][2]
         # When is_tm_unhealthy is None, is_tm_healthy should be None, not True
         assert call_data["is_tm_healthy"] is None
+
+
+_PD_CHAIN = "optimism"
+_PD_CHAIN_ID = 10
+_PD_SAFE = "0x0000000000000000000000000000000000000111"
+_PD_EOA = "0x0000000000000000000000000000000000000222"
+_PD_MARKETPLACE = "0x0000000000000000000000000000000000000333"
+_PD_TRACKER = "0x0000000000000000000000000000000000000444"
+_PD_TOKEN = "0x0000000000000000000000000000000000000555"
+_PD_ZERO = "0x0000000000000000000000000000000000000000"
+# FixedPriceTokenUSDC, padded to the 32 bytes the marketplace keys trackers by.
+_PD_PAYMENT_TYPE_HEX = "0x" + "6406bb5f".ljust(64, "0")
+_PD_PAYMENT_TYPE = bytes.fromhex(_PD_PAYMENT_TYPE_HEX[2:])
+_PD_FLOOR = 150000
+_PD_TARGET = 500000
+_PD_CAP = 500000
+_PD_GAS_ESTIMATE = 100000
+
+
+def _make_predeposit_handler(**overrides: Any) -> Any:
+    """Create an HttpHandler configured for the mech pre-deposit path.
+
+    :param overrides: values to change from the defaults.
+    :return: the handler and its mocked context.
+    """
+    handler, ctx = _make_http_handler()
+    ctx.coingecko.mech_chain = overrides.get("mech_chain", _PD_CHAIN)
+    ctx.coingecko.use_mech_facilitator = overrides.get("use_mech_facilitator", True)
+    ctx.coingecko.mech_facilitator_base_url = overrides.get(
+        "base_url", "https://facilitator.example/"
+    )
+    ctx.coingecko.mech_marketplace_addresses = overrides.get(
+        "marketplaces", {_PD_CHAIN: _PD_MARKETPLACE}
+    )
+    ctx.coingecko.mech_pre_deposit_floor = overrides.get("floor", _PD_FLOOR)
+    ctx.coingecko.mech_pre_deposit_target = overrides.get("target", _PD_TARGET)
+    ctx.coingecko.mech_pre_deposit_cap = overrides.get("cap", _PD_CAP)
+    ctx.params.chain_to_chain_id_mapping = overrides.get(
+        "chain_ids", {_PD_CHAIN: _PD_CHAIN_ID}
+    )
+    ctx.params.safe_contract_addresses = overrides.get("safes", {_PD_CHAIN: _PD_SAFE})
+    return handler, ctx
+
+
+def _make_fake_contract(**call_results: Any) -> Any:
+    """Return a contract stand-in whose reads resolve to ``call_results``.
+
+    :param call_results: a return value per contract function name. A value
+        that is an ``Exception`` is raised from ``call()`` instead.
+    :return: the contract stand-in.
+    """
+    contract = MagicMock()
+
+    def _function(name: str) -> Any:
+        def _bind(*_args: Any, **_kwargs: Any) -> Any:
+            result = call_results[name]
+            if isinstance(result, Exception):
+                return SimpleNamespace(call=MagicMock(side_effect=result))
+            return SimpleNamespace(call=MagicMock(return_value=result))
+
+        return _bind
+
+    contract.functions = SimpleNamespace(
+        **{name: _function(name) for name in call_results}
+    )
+    contract.encode_abi = MagicMock(side_effect=lambda **kw: f"0x{kw['args']!r}")
+    return contract
+
+
+def _install_rpc(
+    handler: Any,
+    contracts: Optional[dict] = None,
+    native_balance: int = 0,
+    gas_estimate: Any = _PD_GAS_ESTIMATE,
+) -> Any:
+    """Point the handler's RPC at fake contracts and return the fake web3.
+
+    :param handler: the handler to wire.
+    :param contracts: a contract stand-in per address.
+    :param native_balance: what the EOA holds, in wei.
+    :param gas_estimate: the gas estimate, or an exception to raise.
+    :return: the fake web3 instance.
+    """
+    by_address = {
+        Web3.to_checksum_address(address): contract
+        for address, contract in (contracts or {}).items()
+    }
+    w3 = MagicMock()
+    w3.eth.contract = MagicMock(side_effect=lambda address, abi: by_address[address])
+    w3.eth.get_transaction_count = MagicMock(return_value=7)
+    w3.eth.gas_price = 1000
+    w3.eth.get_balance = MagicMock(return_value=native_balance)
+    if isinstance(gas_estimate, Exception):
+        w3.eth.estimate_gas = MagicMock(side_effect=gas_estimate)
+    else:
+        w3.eth.estimate_gas = MagicMock(return_value=gas_estimate)
+    handler._get_web3_instance = MagicMock(return_value=w3)
+    return w3
+
+
+def _make_response(status_code: int = 200, payload: Any = None) -> Any:
+    """Return a facilitator response stand-in.
+
+    :param status_code: the HTTP status to report.
+    :param payload: what ``json()`` returns.
+    :return: the response stand-in.
+    """
+    return SimpleNamespace(
+        status_code=status_code, json=MagicMock(return_value=payload)
+    )
+
+
+class TestContractBinding:
+    """Cover binding a web3 contract for the pre-deposit reads."""
+
+    def test_contract_is_none_without_an_rpc(self) -> None:
+        """No RPC for the chain means no contract to read."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        assert handler._contract(_PD_CHAIN, _PD_TRACKER, handler._TRACKER_ABI) is None
+
+    def test_contract_is_bound_to_the_checksummed_address(self) -> None:
+        """The address is checksummed before web3 sees it."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(token=_PD_TOKEN)
+        w3 = _install_rpc(handler, {_PD_TRACKER: tracker})
+        assert (
+            handler._contract(
+                _PD_CHAIN, _PD_TRACKER.upper().replace("0X", "0x"), handler._TRACKER_ABI
+            )
+            is tracker
+        )
+        assert w3.eth.contract.call_args.kwargs["address"] == Web3.to_checksum_address(
+            _PD_TRACKER
+        )
+
+
+class TestFacilitatorPaymentType:
+    """Cover reading which asset the facilitator charges in."""
+
+    def test_no_base_url_configured(self) -> None:
+        """Without a facilitator URL there is no payment type to read."""
+        handler, _ = _make_predeposit_handler(base_url="")
+        assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
+
+    def test_the_safe_is_checksummed_into_the_url(self) -> None:
+        """The requester path carries the checksummed Safe."""
+        handler, _ = _make_predeposit_handler()
+        response = _make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX})
+        with patch.object(
+            handlers_module.requests, "get", return_value=response
+        ) as get:
+            handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE)
+        url = get.call_args[0][0]
+        assert url == (
+            f"https://facilitator.example/mech/{_PD_CHAIN}/requester/"
+            f"{Web3.to_checksum_address(_PD_SAFE)}"
+        )
+
+    def test_a_hex_payment_type_is_decoded(self) -> None:
+        """A 32-byte hex payment type comes back as raw bytes."""
+        handler, _ = _make_predeposit_handler()
+        response = _make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX})
+        with patch.object(handlers_module.requests, "get", return_value=response):
+            result = handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE)
+        assert result == _PD_PAYMENT_TYPE
+
+    def test_a_payment_type_without_the_0x_prefix_is_accepted(self) -> None:
+        """The prefix is optional; the 32 bytes are what matter."""
+        handler, _ = _make_predeposit_handler()
+        response = _make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX[2:]})
+        with patch.object(handlers_module.requests, "get", return_value=response):
+            result = handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE)
+        assert result == _PD_PAYMENT_TYPE
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {},
+            {"payment_type": None},
+            {"payment_type": 42},
+            {"payment_type": "0xnothex"},
+            {"payment_type": "0x1234"},
+            {"payment_type": "0x" + "ab" * 33},
+            {"payment_type": ""},
+        ],
+    )
+    def test_an_unusable_payment_type_is_refused(self, payload: Any) -> None:
+        """Anything that is not 32 bytes of hex yields no payment type."""
+        handler, _ = _make_predeposit_handler()
+        with patch.object(
+            handlers_module.requests,
+            "get",
+            return_value=_make_response(payload=payload),
+        ):
+            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
+
+    @pytest.mark.parametrize("status_code", [400, 404, 429, 500, 503])
+    def test_a_non_200_response_is_refused(self, status_code: int) -> None:
+        """A facilitator error skips the check rather than guessing."""
+        handler, _ = _make_predeposit_handler()
+        with patch.object(
+            handlers_module.requests,
+            "get",
+            return_value=_make_response(status_code=status_code),
+        ):
+            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
+
+    def test_a_transport_failure_is_refused(self) -> None:
+        """An unreachable facilitator skips the check."""
+        handler, _ = _make_predeposit_handler()
+        with patch.object(
+            handlers_module.requests,
+            "get",
+            side_effect=requests.exceptions.ConnectionError("down"),
+        ):
+            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
+
+    def test_an_unparseable_body_is_refused(self) -> None:
+        """A response that is not JSON skips the check."""
+        handler, _ = _make_predeposit_handler()
+        response = SimpleNamespace(
+            status_code=200, json=MagicMock(side_effect=ValueError("not json"))
+        )
+        with patch.object(handlers_module.requests, "get", return_value=response):
+            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
+
+
+class TestBalanceTrackerResolution:
+    """Cover resolving the tracker that holds the pre-deposit."""
+
+    def test_no_marketplace_configured_for_the_chain(self) -> None:
+        """The marketplace is configured, so an unconfigured chain is refused."""
+        handler, _ = _make_predeposit_handler(marketplaces={})
+        assert handler._resolve_balance_tracker(_PD_CHAIN, _PD_PAYMENT_TYPE) is None
+
+    def test_no_rpc_for_the_chain(self) -> None:
+        """Without an RPC the marketplace cannot be read."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        assert handler._resolve_balance_tracker(_PD_CHAIN, _PD_PAYMENT_TYPE) is None
+
+    def test_the_configured_marketplace_is_the_one_read(self) -> None:
+        """The tracker is resolved from the configured marketplace only."""
+        handler, _ = _make_predeposit_handler()
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
+        w3 = _install_rpc(handler, {_PD_MARKETPLACE: marketplace})
+        result = handler._resolve_balance_tracker(_PD_CHAIN, _PD_PAYMENT_TYPE)
+        assert result == Web3.to_checksum_address(_PD_TRACKER)
+        assert w3.eth.contract.call_args.kwargs["address"] == Web3.to_checksum_address(
+            _PD_MARKETPLACE
+        )
+
+    @pytest.mark.parametrize("tracker", [_PD_ZERO, "", None])
+    def test_an_unregistered_payment_type_is_refused(self, tracker: Any) -> None:
+        """A marketplace that maps the type to nothing yields no tracker."""
+        handler, _ = _make_predeposit_handler()
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=tracker)
+        _install_rpc(handler, {_PD_MARKETPLACE: marketplace})
+        assert handler._resolve_balance_tracker(_PD_CHAIN, _PD_PAYMENT_TYPE) is None
+
+    def test_a_reverting_marketplace_is_refused(self) -> None:
+        """A read that reverts yields no tracker rather than an exception."""
+        handler, _ = _make_predeposit_handler()
+        marketplace = _make_fake_contract(
+            mapPaymentTypeBalanceTrackers=ValueError("reverted")
+        )
+        _install_rpc(handler, {_PD_MARKETPLACE: marketplace})
+        assert handler._resolve_balance_tracker(_PD_CHAIN, _PD_PAYMENT_TYPE) is None
+
+
+class TestPreDepositReads:
+    """Cover reading the deposit and the tracker's token."""
+
+    def test_the_deposit_is_read_for_the_safe(self) -> None:
+        """The balance read is keyed by the Safe the marketplace debits."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(mapRequesterBalances=4321)
+        _install_rpc(handler, {_PD_TRACKER: tracker})
+        assert handler._read_pre_deposit(_PD_CHAIN, _PD_TRACKER, _PD_SAFE) == 4321
+
+    def test_a_zero_deposit_is_distinct_from_an_unreadable_one(self) -> None:
+        """An empty pot reads as 0, not as a failure."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(mapRequesterBalances=0)
+        _install_rpc(handler, {_PD_TRACKER: tracker})
+        assert handler._read_pre_deposit(_PD_CHAIN, _PD_TRACKER, _PD_SAFE) == 0
+
+    def test_an_unreadable_deposit_is_none(self) -> None:
+        """A reverting read yields None so the caller can skip."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(mapRequesterBalances=ValueError("reverted"))
+        _install_rpc(handler, {_PD_TRACKER: tracker})
+        assert handler._read_pre_deposit(_PD_CHAIN, _PD_TRACKER, _PD_SAFE) is None
+
+    def test_no_rpc_means_no_deposit_reading(self) -> None:
+        """Without an RPC the deposit cannot be read."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        assert handler._read_pre_deposit(_PD_CHAIN, _PD_TRACKER, _PD_SAFE) is None
+
+    def test_a_token_tracker_reports_its_token(self) -> None:
+        """A tracker that exposes token() takes that ERC20."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(token=_PD_TOKEN)
+        _install_rpc(handler, {_PD_TRACKER: tracker})
+        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) == (
+            Web3.to_checksum_address(_PD_TOKEN)
+        )
+
+    @pytest.mark.parametrize(
+        "token", [_PD_ZERO, "", None, ValueError("no such function")]
+    )
+    def test_a_native_tracker_reports_no_token(self, token: Any) -> None:
+        """No token means the tracker takes native value."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(token=token)
+        _install_rpc(handler, {_PD_TRACKER: tracker})
+        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) is None
+
+    def test_no_rpc_means_no_token_reading(self) -> None:
+        """Without an RPC the token cannot be read."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) is None
+
+
+class TestSendFromEoa:
+    """Cover sending one deposit transaction from the agent EOA."""
+
+    def test_the_tx_is_signed_for_the_given_chain_id(self) -> None:
+        """The chain id, nonce and gas all come from the live chain."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(handler)
+        handler._sign_and_submit_tx_web3 = MagicMock(return_value="0xhash")
+        handler._check_transaction_status = MagicMock(return_value=True)
+        assert handler._send_from_eoa(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_TRACKER,
+            "0xdata",
+            value=11,
+        )
+        tx = handler._sign_and_submit_tx_web3.call_args[0][0]
+        assert tx["chainId"] == _PD_CHAIN_ID
+        assert tx["nonce"] == 7
+        assert tx["value"] == 11
+        assert tx["to"] == Web3.to_checksum_address(_PD_TRACKER)
+
+    def test_the_gas_limit_carries_headroom_over_the_estimate(self) -> None:
+        """The estimate did not see the state the tx will land in."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(handler)
+        handler._sign_and_submit_tx_web3 = MagicMock(return_value="0xhash")
+        handler._check_transaction_status = MagicMock(return_value=True)
+        handler._send_from_eoa(
+            _PD_CHAIN, _PD_CHAIN_ID, SimpleNamespace(address=_PD_EOA), _PD_TRACKER, "0x"
+        )
+        tx = handler._sign_and_submit_tx_web3.call_args[0][0]
+        assert tx["gas"] == int(
+            _PD_GAS_ESTIMATE * handlers_module.GAS_ESTIMATE_HEADROOM
+        )
+        assert tx["gas"] > _PD_GAS_ESTIMATE
+
+    def test_no_rpc_sends_nothing(self) -> None:
+        """Without an RPC no transaction is built."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        handler._sign_and_submit_tx_web3 = MagicMock()
+        assert not handler._send_from_eoa(
+            _PD_CHAIN, _PD_CHAIN_ID, SimpleNamespace(address=_PD_EOA), _PD_TRACKER, "0x"
+        )
+        handler._sign_and_submit_tx_web3.assert_not_called()
+
+    def test_a_failed_estimate_sends_nothing(self) -> None:
+        """A tx that cannot be estimated is not broadcast blind."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(handler, gas_estimate=ValueError("reverted"))
+        handler._sign_and_submit_tx_web3 = MagicMock()
+        assert not handler._send_from_eoa(
+            _PD_CHAIN, _PD_CHAIN_ID, SimpleNamespace(address=_PD_EOA), _PD_TRACKER, "0x"
+        )
+        handler._sign_and_submit_tx_web3.assert_not_called()
+
+    def test_a_rejected_submission_is_not_waited_on(self) -> None:
+        """Nothing was broadcast, so there is no receipt to wait for."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(handler)
+        handler._sign_and_submit_tx_web3 = MagicMock(return_value=None)
+        handler._check_transaction_status = MagicMock()
+        assert not handler._send_from_eoa(
+            _PD_CHAIN, _PD_CHAIN_ID, SimpleNamespace(address=_PD_EOA), _PD_TRACKER, "0x"
+        )
+        handler._check_transaction_status.assert_not_called()
+
+    def test_a_reverted_tx_is_reported_as_failed(self) -> None:
+        """A mined-but-reverted deposit is not a success."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(handler)
+        handler._sign_and_submit_tx_web3 = MagicMock(return_value="0xhash")
+        handler._check_transaction_status = MagicMock(return_value=False)
+        assert not handler._send_from_eoa(
+            _PD_CHAIN, _PD_CHAIN_ID, SimpleNamespace(address=_PD_EOA), _PD_TRACKER, "0x"
+        )
+
+
+class TestTokenDeposit:
+    """Cover approving and depositing an ERC20 on the Safe's behalf."""
+
+    def test_the_approve_precedes_the_deposit(self) -> None:
+        """The tracker pulls the tokens, so the allowance has to exist first."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(
+            handler,
+            {
+                _PD_TOKEN: _make_fake_contract(),
+                _PD_TRACKER: _make_fake_contract(),
+            },
+        )
+        handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
+        handler._send_from_eoa = MagicMock(return_value=True)
+        assert handler._deposit_token(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            _PD_TOKEN,
+            _PD_TARGET,
+        )
+        targets = [call[0][3] for call in handler._send_from_eoa.call_args_list]
+        assert targets == [_PD_TOKEN, _PD_TRACKER]
+
+    def test_the_deposit_credits_the_safe_not_the_payer(self) -> None:
+        """The EOA pays but the marketplace debits the Safe, so the Safe is credited."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract()
+        _install_rpc(handler, {_PD_TOKEN: _make_fake_contract(), _PD_TRACKER: tracker})
+        handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
+        handler._send_from_eoa = MagicMock(return_value=True)
+        handler._deposit_token(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            _PD_TOKEN,
+            _PD_TARGET,
+        )
+        assert tracker.encode_abi.call_args.kwargs["args"] == [
+            Web3.to_checksum_address(_PD_SAFE),
+            _PD_TARGET,
+        ]
+
+    def test_the_deposit_is_clamped_to_what_the_eoa_holds(self) -> None:
+        """A swap can deliver less than it quoted, so deposit what is there."""
+        handler, _ = _make_predeposit_handler()
+        token = _make_fake_contract()
+        tracker = _make_fake_contract()
+        _install_rpc(handler, {_PD_TOKEN: token, _PD_TRACKER: tracker})
+        handler._check_usdc_balance = MagicMock(return_value=120000)
+        handler._send_from_eoa = MagicMock(return_value=True)
+        handler._deposit_token(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            _PD_TOKEN,
+            _PD_TARGET,
+        )
+        assert token.encode_abi.call_args.kwargs["args"][1] == 120000
+        assert tracker.encode_abi.call_args.kwargs["args"][1] == 120000
+
+    def test_a_failed_approve_does_not_attempt_the_deposit(self) -> None:
+        """A deposit without its allowance reverts, so it is not sent."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(
+            handler,
+            {_PD_TOKEN: _make_fake_contract(), _PD_TRACKER: _make_fake_contract()},
+        )
+        handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
+        handler._send_from_eoa = MagicMock(return_value=False)
+        assert not handler._deposit_token(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            _PD_TOKEN,
+            _PD_TARGET,
+        )
+        assert handler._send_from_eoa.call_count == 1
+
+    @pytest.mark.parametrize("held", [None, 0])
+    def test_nothing_to_deposit_sends_nothing(self, held: Any) -> None:
+        """An unreadable or empty token balance deposits nothing."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(handler)
+        handler._check_usdc_balance = MagicMock(return_value=held)
+        handler._send_from_eoa = MagicMock()
+        assert not handler._deposit_token(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            _PD_TOKEN,
+            _PD_TARGET,
+        )
+        handler._send_from_eoa.assert_not_called()
+
+    def test_no_rpc_sends_nothing(self) -> None:
+        """Without an RPC neither call can be encoded."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
+        handler._send_from_eoa = MagicMock()
+        assert not handler._deposit_token(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            _PD_TOKEN,
+            _PD_TARGET,
+        )
+        handler._send_from_eoa.assert_not_called()
+
+
+class TestNativeDeposit:
+    """Cover depositing native value on the Safe's behalf."""
+
+    def test_the_gas_reserve_is_left_behind(self) -> None:
+        """A deposit must not leave the agent unable to pay for gas."""
+        handler, _ = _make_predeposit_handler()
+        balance = handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + 500
+        _install_rpc(
+            handler, {_PD_TRACKER: _make_fake_contract()}, native_balance=balance
+        )
+        handler._send_from_eoa = MagicMock(return_value=True)
+        assert handler._deposit_native(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            10**18,
+        )
+        assert handler._send_from_eoa.call_args.kwargs["value"] == 500
+
+    def test_a_deposit_under_the_target_is_not_inflated(self) -> None:
+        """A spendable balance above the shortfall deposits only the shortfall."""
+        handler, _ = _make_predeposit_handler()
+        balance = handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + 10**18
+        _install_rpc(
+            handler, {_PD_TRACKER: _make_fake_contract()}, native_balance=balance
+        )
+        handler._send_from_eoa = MagicMock(return_value=True)
+        handler._deposit_native(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            4242,
+        )
+        assert handler._send_from_eoa.call_args.kwargs["value"] == 4242
+
+    @pytest.mark.parametrize("offset", [-1, 0])
+    def test_a_balance_at_or_under_the_reserve_deposits_nothing(
+        self, offset: int
+    ) -> None:
+        """At the reserve there is nothing spendable left."""
+        handler, _ = _make_predeposit_handler()
+        balance = handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + offset
+        _install_rpc(handler, native_balance=balance)
+        handler._send_from_eoa = MagicMock()
+        assert not handler._deposit_native(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            10**18,
+        )
+        handler._send_from_eoa.assert_not_called()
+
+    def test_no_rpc_deposits_nothing(self) -> None:
+        """Without an RPC the balance cannot be read."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_web3_instance = MagicMock(return_value=None)
+        handler._send_from_eoa = MagicMock()
+        assert not handler._deposit_native(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            10**18,
+        )
+        handler._send_from_eoa.assert_not_called()
+
+    def test_a_tracker_that_cannot_be_bound_deposits_nothing(self) -> None:
+        """A tracker with no contract to encode against deposits nothing."""
+        handler, _ = _make_predeposit_handler()
+        balance = handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + 10**18
+        _install_rpc(handler, native_balance=balance)
+        handler._contract = MagicMock(return_value=None)
+        handler._send_from_eoa = MagicMock()
+        assert not handler._deposit_native(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            10**18,
+        )
+        handler._send_from_eoa.assert_not_called()
+
+
+class TestTopUpSizing:
+    """Cover when a top-up happens and how large it is."""
+
+    def _handler_at(self, deposited: int, **overrides: Any) -> Any:
+        """Return a handler whose tracker already holds ``deposited``.
+
+        :param deposited: what the tracker reports for the Safe.
+        :param overrides: threshold overrides.
+        :return: the handler, the token contract and the tracker contract.
+        """
+        handler, _ = _make_predeposit_handler(**overrides)
+        token = _make_fake_contract()
+        tracker = _make_fake_contract(mapRequesterBalances=deposited, token=_PD_TOKEN)
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
+        _install_rpc(
+            handler,
+            {
+                _PD_MARKETPLACE: marketplace,
+                _PD_TRACKER: tracker,
+                _PD_TOKEN: token,
+            },
+        )
+        handler._check_usdc_balance = MagicMock(return_value=_PD_CAP)
+        handler._send_from_eoa = MagicMock(return_value=True)
+        return handler, token, tracker
+
+    def _top_up(self, handler: Any) -> bool:
+        """Run one top-up with the standard arguments.
+
+        :param handler: the handler under test.
+        :return: whether the pre-deposit is sufficient.
+        """
+        return handler._top_up_mech_pre_deposit(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_PAYMENT_TYPE,
+        )
+
+    @pytest.mark.parametrize("deposited", [_PD_FLOOR, _PD_FLOOR + 1, _PD_TARGET])
+    def test_at_or_above_the_floor_nothing_is_sent(self, deposited: int) -> None:
+        """The floor is when to act, so at it there is nothing to do."""
+        handler, _, _ = self._handler_at(deposited)
+        assert self._top_up(handler)
+        handler._send_from_eoa.assert_not_called()
+
+    def test_below_the_floor_the_deposit_reaches_the_target(self) -> None:
+        """A top-up fills to the target, not merely back over the floor."""
+        handler, _, tracker = self._handler_at(_PD_FLOOR - 1)
+        assert self._top_up(handler)
+        assert tracker.encode_abi.call_args.kwargs["args"][1] == (
+            _PD_TARGET - (_PD_FLOOR - 1)
+        )
+
+    def test_the_cap_bounds_one_top_up(self) -> None:
+        """A misconfigured target cannot drain the EOA in one go."""
+        handler, _, tracker = self._handler_at(0, target=10**9, cap=1000)
+        assert self._top_up(handler)
+        assert tracker.encode_abi.call_args.kwargs["args"][1] == 1000
+
+    def test_a_target_under_the_deposit_sends_nothing(self) -> None:
+        """A target below what is held leaves a non-positive amount."""
+        handler, _, _ = self._handler_at(100, floor=200, target=50)
+        assert self._top_up(handler)
+        handler._send_from_eoa.assert_not_called()
+
+    def test_a_native_tracker_takes_the_native_route(self) -> None:
+        """A tracker with no token() is funded with value, not an approve."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(
+            mapRequesterBalances=0, token=ValueError("no such function")
+        )
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
+        _install_rpc(
+            handler,
+            {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker},
+            native_balance=handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + 10**18,
+        )
+        handler._send_from_eoa = MagicMock(return_value=True)
+        assert self._top_up(handler)
+        assert handler._send_from_eoa.call_args.kwargs["value"] == _PD_CAP
+
+    def test_an_unresolvable_tracker_sends_nothing(self) -> None:
+        """No tracker means nothing to deposit into."""
+        handler, _ = _make_predeposit_handler(marketplaces={})
+        handler._send_from_eoa = MagicMock()
+        assert not self._top_up(handler)
+        handler._send_from_eoa.assert_not_called()
+
+    def test_an_unreadable_deposit_sends_nothing(self) -> None:
+        """An unreadable pot is not assumed empty."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(mapRequesterBalances=ValueError("reverted"))
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
+        _install_rpc(handler, {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker})
+        handler._send_from_eoa = MagicMock()
+        assert not self._top_up(handler)
+        handler._send_from_eoa.assert_not_called()
+
+
+class TestEnsureMechPreDeposit:
+    """Cover the entry point that resolves the chain, Safe and EOA."""
+
+    def _wire(self, handler: Any) -> None:
+        """Give the handler a readable chain and a funded EOA.
+
+        :param handler: the handler to wire.
+        """
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
+        tracker = _make_fake_contract(mapRequesterBalances=_PD_TARGET, token=_PD_TOKEN)
+        _install_rpc(handler, {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker})
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+
+    def test_a_funded_pre_deposit_reports_sufficient(self) -> None:
+        """Nothing to do is still a success."""
+        handler, _ = _make_predeposit_handler()
+        self._wire(handler)
+        with patch.object(
+            handlers_module.requests,
+            "get",
+            return_value=_make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX}),
+        ):
+            assert handler._ensure_mech_pre_deposit()
+
+    def test_the_mech_chain_decides_which_safe_pays(self) -> None:
+        """The Safe is the one on the chain the marketplace charges."""
+        handler, _ = _make_predeposit_handler(
+            safes={_PD_CHAIN: _PD_SAFE, "base": _PD_EOA}
+        )
+        self._wire(handler)
+        with patch.object(
+            handlers_module.requests,
+            "get",
+            return_value=_make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX}),
+        ) as get:
+            handler._ensure_mech_pre_deposit()
+        assert Web3.to_checksum_address(_PD_SAFE) in get.call_args[0][0]
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"chain_ids": {}},
+            {"safes": {}},
+            {"safes": {_PD_CHAIN: ""}},
+            {"mech_chain": "unconfigured"},
+        ],
+    )
+    def test_an_unconfigured_chain_deposits_nothing(self, overrides: Any) -> None:
+        """A chain with no id or no Safe cannot be funded."""
+        handler, _ = _make_predeposit_handler(**overrides)
+        self._wire(handler)
+        handler._send_from_eoa = MagicMock()
+        assert not handler._ensure_mech_pre_deposit()
+        handler._send_from_eoa.assert_not_called()
+
+    def test_no_eoa_deposits_nothing(self) -> None:
+        """Without a key there is nobody to pay the deposit."""
+        handler, _ = _make_predeposit_handler()
+        self._wire(handler)
+        handler._get_eoa_account = MagicMock(return_value=None)
+        handler._send_from_eoa = MagicMock()
+        assert not handler._ensure_mech_pre_deposit()
+        handler._send_from_eoa.assert_not_called()
+
+    def test_an_unreadable_payment_type_deposits_nothing(self) -> None:
+        """Without a payment type no tracker can be resolved."""
+        handler, _ = _make_predeposit_handler()
+        self._wire(handler)
+        handler._send_from_eoa = MagicMock()
+        with patch.object(
+            handlers_module.requests,
+            "get",
+            return_value=_make_response(status_code=503),
+        ):
+            assert not handler._ensure_mech_pre_deposit()
+        handler._send_from_eoa.assert_not_called()
+
+    def test_an_unexpected_error_is_contained(self) -> None:
+        """A background step must not take the handler down with it."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_eoa_account = MagicMock(side_effect=RuntimeError("boom"))
+        assert not handler._ensure_mech_pre_deposit()
+
+    def test_a_concurrent_top_up_is_not_duplicated(self) -> None:
+        """Two top-ups would re-broadcast the same approve from one nonce."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_eoa_account = MagicMock()
+        handlers_module._MECH_PRE_DEPOSIT_LOCK.acquire()
+        try:
+            assert not handler._ensure_mech_pre_deposit()
+        finally:
+            handlers_module._MECH_PRE_DEPOSIT_LOCK.release()
+        handler._get_eoa_account.assert_not_called()
+
+    def test_the_lock_is_released_after_an_error(self) -> None:
+        """A failed top-up must not block every later one."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_eoa_account = MagicMock(side_effect=RuntimeError("boom"))
+        handler._ensure_mech_pre_deposit()
+        assert handlers_module._MECH_PRE_DEPOSIT_LOCK.acquire(blocking=False)
+        handlers_module._MECH_PRE_DEPOSIT_LOCK.release()
+
+
+class TestPaidCallFundingMaintenance:
+    """Cover which funding steps run on each route."""
+
+    def test_the_plain_x402_route_only_keeps_the_eoa_funded(self) -> None:
+        """With no facilitator the EOA pays each call from its own balance."""
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=False)
+        handler._ensure_sufficient_funds_for_x402_payments = MagicMock()
+        handler._ensure_mech_pre_deposit = MagicMock()
+        handler._maintain_paid_call_funding()
+        handler._ensure_sufficient_funds_for_x402_payments.assert_called_once_with()
+        handler._ensure_mech_pre_deposit.assert_not_called()
+
+    def test_the_facilitator_route_swaps_before_it_deposits(self) -> None:
+        """The deposit spends the token the swap puts on the EOA."""
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        order = []
+        handler._ensure_sufficient_funds_for_x402_payments = MagicMock(
+            side_effect=lambda: order.append("swap")
+        )
+        handler._ensure_mech_pre_deposit = MagicMock(
+            side_effect=lambda: order.append("deposit")
+        )
+        handler._maintain_paid_call_funding()
+        assert order == ["swap", "deposit"]

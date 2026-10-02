@@ -422,6 +422,11 @@ models:
       use_mech_facilitator: false
       mech_facilitator_base_url: https://x402.olas.autonolas.tech
       mech_max_delivery_rate: 100000
+      mech_marketplace_addresses: '{"optimism":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"}'
+      mech_pre_deposit_floor: 150000
+      mech_pre_deposit_target: 500000
+      mech_pre_deposit_cap: 500000
+      mech_request_timeout: 180.0
     class_name: Coingecko
   randomness_api:
     args:

@@ -92,6 +92,7 @@ common-checks-2:
 	tox -qq -e check-abciapp-specs
 	tox -qq -e check-dependencies
 	tox -qq -e check-handlers
+	python scripts/check_config_overrides.py
 	tomte tox -qq -e analyse-service
 
 .PHONY: all-checks
@@ -113,6 +114,7 @@ ci-linter-checks:
 	tox -qq -e check-abci-docstrings
 	tox -qq -e check-abciapp-specs
 	tox -qq -e check-handlers
+	python scripts/check_config_overrides.py
 	tomte tox -qq -e analyse-service
 
 .PHONY: fix-abci-app-specs

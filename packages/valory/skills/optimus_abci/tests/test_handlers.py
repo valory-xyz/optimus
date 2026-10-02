@@ -4547,6 +4547,26 @@ class TestHttpHandlerMethods:
             "transitions", {}
         )
 
+    def test_setup_builds_every_round_the_real_fsm_declares(self) -> None:
+        """The real FSM and the real ROUNDS_INFO have to agree.
+
+        ``setup`` indexes ``rounds_info`` by every source round in the FSM, so a
+        round added to the FSM without an entry raises ``KeyError`` and the agent
+        dies before it starts. The other setup tests patch both the spec and
+        ROUNDS_INFO, so they cannot see that; this one patches neither.
+        """
+        handler, ctx = _make_http_handler()
+        ctx.params.use_x402 = False
+        ctx.params.service_endpoint_base = "http://localhost:8000"
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.params.available_strategies = {"optimism": ["balancer_pools_search"]}
+
+        handler.setup()
+
+        # Every source round resolved, and transitions were recorded against it.
+        assert handler.rounds_info
+        assert any(info.get("transitions") for info in handler.rounds_info.values())
+
     def test_setup_http_handler_x402(self) -> None:
         """Test HttpHandler.setup with x402 enabled."""
         handler, ctx = _make_http_handler()

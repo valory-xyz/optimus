@@ -83,7 +83,7 @@ generators: clean-cache fix-abci-app-specs
 .PHONY: common-checks-1
 common-checks-1:
 	tox -qq -e copyright-check
-	tomte check-doc-links
+	tomte check-doc-links -u 'https://github.com/valory-xyz/meme-ooorr-test/blob/20c121a9005bd852fedea37ef2bc6b0c30c86d81/packages/dvilela/connections/genai/connection.py#L46' -u 'https://github.com/tendermint/tendermint/blob/v0.34.19/proto/tendermint/abci/types.proto'
 	tox -qq -p -e check-hash -e check-packages -e check-doc-hashes
 
 .PHONY: common-checks-2
@@ -103,7 +103,7 @@ ci-linter-checks:
 	tox -qq -e copyright-check
 	tox -qq -e liccheck
 	tox -qq -e check-dependencies
-	tomte check-doc-links
+	tomte check-doc-links -u 'https://github.com/valory-xyz/meme-ooorr-test/blob/20c121a9005bd852fedea37ef2bc6b0c30c86d81/packages/dvilela/connections/genai/connection.py#L46' -u 'https://github.com/tendermint/tendermint/blob/v0.34.19/proto/tendermint/abci/types.proto'
 	tox -qq -e check-doc-hashes
 	tomte check-security
 	tox -qq -e check-packages

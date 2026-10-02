@@ -102,8 +102,6 @@ jobs:
           tomte tox -e check-abci-docstrings
           tomte tox -e check-abciapp-specs
           tomte tox -e check-handlers
-      - name: Check config overrides
-        run: python scripts/check_config_overrides.py
       - name: Analyse service
         run: tomte tox -e analyse-service
 

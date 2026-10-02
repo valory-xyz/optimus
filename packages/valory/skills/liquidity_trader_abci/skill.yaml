@@ -100,8 +100,6 @@ contracts:
 - valory/balancer_queries:0.1.0:bafybeihbexpjj6ho3ij7rxk4tzz3sowpa5ztawlf63y5fdmmom7xifpan4
 - valory/erc20:0.1.0:bafybeibpuyikvpmtaraca4lqokf3kf6jlpmafkqm6oixnps3ig23jfbllq
 - valory/mech_activity:0.1.0:bafybeifpthgtqxob46nyk7zw2enbihm4mzben5mbbwm7qdx4axzllwyy6u
-- valory/balance_tracker:0.1.0:bafybeiayyxl643qfpw57vopytxgyd6flxxmwassswuxen7myekqaxdxxvi
-- valory/mech_marketplace:0.1.0:bafybeigrcnjaycggulxyx2tsjub4ssjij66d7nfzsavo6gd54hm7beliiu
 - valory/multisend:0.1.0:bafybeifqtf24h7lhhbairveqmq2klhvbswajmbpoyqj4xrgye7c22pxubi
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeib4gev4y35sjl2ie35mgdusssgsauriigmwrt3mbqs7tnbcf2qwya
 - valory/uniswap_v3_pool:0.1.0:bafybeidoj2wrbecxo6pljjjn2qnxhd4sboddqkvnghwghtjxwr77dt33ca

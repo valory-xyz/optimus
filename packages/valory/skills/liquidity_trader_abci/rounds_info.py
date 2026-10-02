@@ -30,11 +30,6 @@ ROUNDS_INFO = {
         "description": "Checks if any earlier transactions are still pending before moving forward.",
         "transitions": {},
     },
-    "CheckMechPreDepositRound": {
-        "name": "Checking the mech pre-deposit",
-        "description": "Checks whether the marketplace pre-deposit that pays for the agent's API calls needs topping up.",
-        "transitions": {},
-    },
     "CheckStakingKPIMetRound": {
         "name": "Checking staking requirements",
         "description": "Ensures the agent is on track to meet the conditions needed to earn staking rewards.",

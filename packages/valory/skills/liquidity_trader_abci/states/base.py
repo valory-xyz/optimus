@@ -83,7 +83,6 @@ class Event(Enum):
     ACTION_EXECUTED = "action_executed"
     CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
     VANITY_TX_EXECUTED = "vanity_tx_executed"
-    MECH_PRE_DEPOSIT_TX_EXECUTED = "mech_pre_deposit_tx_executed"
     TRANSFER_COMPLETED = "transfer_completed"
     WITHDRAWAL_COMPLETED = "withdrawal_completed"
     WITHDRAWAL_INITIATED = "withdrawal_initiated"
@@ -206,11 +205,6 @@ class SynchronizedData(BaseSynchronizedData):
     def participant_to_checkpoint(self) -> DeserializedCollection:
         """Get the participants to the checkpoint round."""
         return self._get_deserialized("participant_to_checkpoint")
-
-    @property
-    def participant_to_mech_pre_deposit(self) -> DeserializedCollection:
-        """Get the participants to the CheckMechPreDeposit round."""
-        return self._get_deserialized("participant_to_mech_pre_deposit")
 
     @property
     def participant_to_staking_kpi(self) -> DeserializedCollection:

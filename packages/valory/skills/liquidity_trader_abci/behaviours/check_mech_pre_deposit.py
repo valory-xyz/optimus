@@ -237,7 +237,7 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         the contract that holds them.
         """
         deposited = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=tracker,
             contract_public_id=BalanceTrackerContract.contract_id,
             contract_callable="get_requester_balance",
@@ -266,7 +266,7 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         facilitator debits for this mech rather than assuming a single pot.
         """
         tracker = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=marketplace,
             contract_public_id=MechMarketplaceContract.contract_id,
             contract_callable="get_balance_tracker_for_mech_type",
@@ -318,7 +318,7 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         amount = min(amount, available)
 
         deposit_data = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=tracker,
             contract_public_id=BalanceTrackerContract.contract_id,
             contract_callable="build_deposit_for_data",
@@ -332,7 +332,7 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         approve_data = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=token,
             contract_public_id=ERC20TokenContract.contract_id,
             contract_callable="build_approval_tx",
@@ -382,7 +382,7 @@ class CheckMechPreDepositBehaviour(LiquidityTraderBaseBehaviour):
         the tracker is native.
         """
         token = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=tracker,
             contract_public_id=BalanceTrackerContract.contract_id,
             contract_callable="get_token_address",

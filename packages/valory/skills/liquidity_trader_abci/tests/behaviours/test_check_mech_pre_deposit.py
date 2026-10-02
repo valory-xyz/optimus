@@ -29,6 +29,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from packages.valory.contracts.gnosis_safe.contract import SafeOperation
+from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_mech_pre_deposit import (
     CheckMechPreDepositBehaviour,
 )
@@ -158,6 +159,13 @@ class _ContractStub:
             f"{name} returns its result under {_DATA_KEYS[name]!r}, "
             f"not {kwargs['data_key']!r}"
         )
+        # ``contract_interact`` reads the body of a RAW_TRANSACTION reply and
+        # treats anything else as a failed interaction, so a GET_STATE request
+        # resolves to None however well the contract answers.
+        assert (
+            kwargs["performative"]
+            == ContractApiMessage.Performative.GET_RAW_TRANSACTION
+        ), f"{name} must be read with GET_RAW_TRANSACTION, got {kwargs['performative']}"
         yield
         return self.answers[name]
 

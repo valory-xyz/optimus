@@ -22,13 +22,13 @@
         "contract/valory/velodrome_voter/0.1.0": "bafybeia4zguqn2dih6kswnlib6ssfvanisauz3clz5iafiz7xwrr6aglea",
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeihyci7aqcrefyy4uak245jq2ud2536c7lqjgmxuzwilfwtw7p2a4y",
         "contract/valory/balancer_queries/0.1.0": "bafybeihbexpjj6ho3ij7rxk4tzz3sowpa5ztawlf63y5fdmmom7xifpan4",
-        "contract/valory/mech_activity/0.1.0": "bafybeifpthgtqxob46nyk7zw2enbihm4mzben5mbbwm7qdx4axzllwyy6u",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiax2lxvfclexltmvge3o2uddun4chckig5jjqu5cpmpzq67dnlifm",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiehjdahh6x6mnuv4oxuehewr5neycpwr3wqeveruq4tw7yh3w7quy",
-        "agent/valory/optimus/0.1.0": "bafybeictcc5mbof2ed45lrx3bkyyrsm4dyjo2f7yi2tkcmup3ppnfeo6qu",
-        "agent/valory/basius/0.1.0": "bafybeib35jvczof5ryuvfw4h7nx6xjrzcitvhhvuwcg7azmefpcbf37dja",
-        "service/valory/optimus/0.1.0": "bafybeibtsriszaofawukgtwxtp2cts34yxvljmctbxa63uw3pas57vgtn4",
-        "service/valory/basius/0.1.0": "bafybeifwjnjwyxnggwmz4jq7nb2hefvv7bqrr4lcoo4a46bmrwjeotuyj4"
+        "contract/valory/mech_activity/0.1.0": "bafybeienezl3yozrionpoyh75r54e24tjtnstxv674ru25lnosps3a7cr4",
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeia7dnmrkaz2cs354qgexbyc6jwq7bctzrkc7gzazokbq7npe4ub5q",
+        "skill/valory/optimus_abci/0.1.0": "bafybeifmm6egmhgvgagssudihhjy5z5rwu3havuzeug32l42ry776j2zpe",
+        "agent/valory/optimus/0.1.0": "bafybeibcbi6jmrun4hokfulrlsdu6b5ykvrza53phzkxdkzqfb5ub4xoaq",
+        "agent/valory/basius/0.1.0": "bafybeifwg3hx2n46ft25salicbcrjiavkbcqwi5vnqslnagwm7seuggt44",
+        "service/valory/optimus/0.1.0": "bafybeibu62pexrasf63x3t5pphrhmmlwqvy6squp2m7xp4yr2uklx6vfau",
+        "service/valory/basius/0.1.0": "bafybeifqxoltoteih3isxzpx3ldmmugczeokett75w6exachkdxwhdi25i"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
@@ -69,12 +69,12 @@
         "contract/valory/agent_registry/0.1.0": "bafybeia6gfxdfpr4apeqd6s4777d7yf6qya2slu3ccqmwiapxe72ckvsiq",
         "connection/valory/http_client/0.23.0": "bafybeihel6sg2yayxu7lqygaswdgciaxpqrgsbl5rwx74c6znu5qz2edd4",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu",
-        "connection/valory/x402/0.1.0": "bafybeicirpftb2tykxat6cu5rud3etmyy7ygdozmwtcxywzifn623rytfm",
+        "connection/valory/x402/0.1.0": "bafybeifhxkt7kaxfotnqnr6w4hxfjnjxf3uumr6psz3felj6pe5astyily",
         "connection/valory/ledger/0.19.0": "bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4",
         "connection/valory/http_server/0.22.0": "bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle",
         "connection/valory/abci/0.1.0": "bafybeiafvaguchnkp2fmhf6gtayc3gpnxkglagghb4ukbqtouni5tveigi",
         "connection/valory/ipfs/0.1.0": "bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa",
-        "connection/valory/genai/0.1.0": "bafybeiddvs3owwus2rmaayhmhcapkgm42iggav7smicqtigalt5cwekujy",
+        "connection/valory/genai/0.1.0": "bafybeibu5zmkjhtesernme7fow7m4kokfxjhykm6a3huskmuagbf2jkrku",
         "connection/valory/kv_store/0.1.0": "bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4",
         "skill/valory/abstract_abci/0.1.0": "bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi",
         "skill/valory/abstract_round_abci/0.1.0": "bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu",
@@ -82,7 +82,6 @@
         "skill/valory/registration_abci/0.1.0": "bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi",
         "skill/valory/reset_pause_abci/0.1.0": "bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi",
         "skill/valory/termination_abci/0.1.0": "bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa",
-        "skill/valory/funds_manager/0.1.0": "bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by",
-        "skill/valory/mech_interact_abci/0.1.0": "bafybeihg52qu5er6l3tu54u32qfyajkrgkrdzrxgktuxlcrwvwmen6xoqa"
+        "skill/valory/funds_manager/0.1.0": "bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by"
     }
 }

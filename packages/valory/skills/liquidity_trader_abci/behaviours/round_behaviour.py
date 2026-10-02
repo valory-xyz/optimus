@@ -28,6 +28,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import (
     CallCheckpointBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours.check_mech_pre_deposit import (
+    CheckMechPreDepositBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
@@ -60,6 +63,7 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     behaviours: Set[Type[BaseBehaviour]] = [  # type: ignore[assignment]
         CallCheckpointBehaviour,
         CheckStakingKPIMetBehaviour,
+        CheckMechPreDepositBehaviour,
         GetPositionsBehaviour,
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,

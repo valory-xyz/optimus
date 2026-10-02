@@ -32,6 +32,7 @@ import requests
 from aea.skills.base import Model, SkillContext
 from eth_account import Account
 
+from packages.valory.connections.x402.clients.mech import mech_requests
 from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.skills.abstract_round_abci.models import (
     BaseParams,
@@ -351,15 +352,47 @@ class Coingecko(Model, TypeCheckMixin):
         self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
         self.network_selector = self._ensure("network_selector", kwargs, str)
+        # The Safe that pays on the mech path; shared with the genai connection.
+        self.mech_chain = self._ensure("mech_chain", kwargs, str)
         self.coingecko_server_base_url = self._ensure(
             "coingecko_server_base_url", kwargs, str
         )
         self.coingecko_x402_server_base_url = self._ensure(
             "coingecko_x402_server_base_url", kwargs, str
         ).format(chain=self.network_selector)
+        # Only consulted when use_x402 is on.
+        self.use_mech_facilitator = self._ensure("use_mech_facilitator", kwargs, bool)
+        self.mech_facilitator_base_url = self._ensure(
+            "mech_facilitator_base_url", kwargs, str
+        )
+        # The marketplace whose balance tracker holds the pre-deposit. Every
+        # address the top-up sends funds to is resolved from this one, so it
+        # is configured rather than reported.
+        self.mech_marketplace_addresses: Dict[str, str] = json.loads(
+            str(kwargs.pop("mech_marketplace_addresses", "{}"))
+        )
+        # Marketplace pre-deposit thresholds, in the payment token's base
+        # units. The facilitator debits this pot rather than the Safe's own
+        # balance, and only this agent can move funds between the two.
+        # ``floor`` is when to act, ``target`` is what to reach, and ``cap``
+        # bounds one top-up so a misconfiguration cannot drain the Safe.
+        self.mech_pre_deposit_floor: int = int(kwargs.pop("mech_pre_deposit_floor", 0))
+        self.mech_pre_deposit_target: int = int(
+            kwargs.pop("mech_pre_deposit_target", 0)
+        )
+        self.mech_pre_deposit_cap: int = int(kwargs.pop("mech_pre_deposit_cap", 0))
+        self.mech_max_delivery_rate: Optional[int] = kwargs.pop(
+            "mech_max_delivery_rate", None
+        )
+        # A call the facilitator served is charged whether or not we waited.
+        self.mech_request_timeout: float = float(
+            kwargs.pop("mech_request_timeout", 180.0)
+        )
         self.coin_from_address_endpoint: str = self._ensure(
             "coin_from_address_endpoint", kwargs, str
         )
+        # One session, or the adapter cannot replay an unresolved request.
+        self._mech_session: Optional[requests.Session] = None
         super().__init__(*args, **kwargs)
 
     def rate_limited_status_callback(self) -> None:
@@ -372,6 +405,38 @@ class Coingecko(Model, TypeCheckMixin):
         self.rate_limiter._remaining_limit = 0
         self.rate_limiter._last_request_time = time()
 
+    @property
+    def paid_proxy_base_url(self) -> str:
+        """Base URL paid CoinGecko calls are built on (x402 proxy or facilitator origin)."""
+        if self.use_mech_facilitator:
+            return self.mech_facilitator_base_url.rstrip("/")
+        return self.coingecko_x402_server_base_url
+
+    def paid_session(self, signer: Optional[Account]) -> requests.Session:
+        """Return the session that pays for CoinGecko calls.
+
+        :param signer: the agent EOA; the sole owner of the Safe on the mech path.
+        :return: an x402 session, or a mech-marketplace session when enabled.
+        """
+        if not self.use_mech_facilitator:
+            return x402_requests(account=signer)
+        if self._mech_session is not None:
+            return self._mech_session
+        chain = self.mech_chain.lower()
+        safe_address = self.context.params.safe_contract_addresses.get(chain)
+        if not safe_address:
+            raise ValueError(f"no Safe address configured for chain {chain!r}")
+        self._mech_session = mech_requests(
+            signer,
+            safe_address=safe_address,
+            chain=chain,
+            api="coingecko",
+            facilitator_base_url=self.mech_facilitator_base_url,
+            max_delivery_rate=self.mech_max_delivery_rate,
+            total_deadline_secs=self.mech_request_timeout,
+        )
+        return self._mech_session
+
     def request(
         self,
         endpoint: str,
@@ -379,20 +444,32 @@ class Coingecko(Model, TypeCheckMixin):
         x402_signer: Optional[Account],
     ) -> Tuple[bool, Dict]:
         """Make a request to the Coingecko Proxied API if x402."""
+        url = (
+            self.paid_proxy_base_url
+            if self.use_x402
+            else self.coingecko_server_base_url
+        ) + endpoint
         try:
             if self.use_x402:
-                session = x402_requests(account=x402_signer)
-                url = self.coingecko_x402_server_base_url + endpoint
+                session = self.paid_session(x402_signer)
             else:
                 session = requests.Session()
-                url = self.coingecko_server_base_url + endpoint
 
-            with session:
-                response = session.get(
-                    url, headers=headers, timeout=self.context.params.request_timeout
-                )
+            on_mech_path = self.use_x402 and self.use_mech_facilitator
+            # The mech adapter clamps each POST's read at what is passed here.
+            timeout = (
+                self.mech_request_timeout
+                if on_mech_path
+                else self.context.params.request_timeout
+            )
+            try:
+                response = session.get(url, headers=headers, timeout=timeout)
                 success = response.status_code in HTTP_OK
                 return success, response.json()
+            finally:
+                # The mech session lives on across calls; the others are per call.
+                if not on_mech_path:
+                    session.close()
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")
             return False, {"exception": str(exc)}
@@ -491,8 +568,6 @@ class Params(BaseParams):
         # discarded after polling — only the on-chain liveness tick matters — so
         # these only need to be a valid tool/prompt the configured priority mech
         # serves.
-        self.mech_tool: str = self._ensure("mech_tool", kwargs, str)
-        self.mech_request_prompt: str = self._ensure("mech_request_prompt", kwargs, str)
         self.store_path: Path = self.get_store_path(kwargs)
         self.assets_info_filename: str = self._ensure(
             "assets_info_filename", kwargs, str

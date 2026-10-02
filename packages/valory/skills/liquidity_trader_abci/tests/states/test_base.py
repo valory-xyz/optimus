@@ -160,12 +160,6 @@ class TestSynchronizedData:
         data = _make_synced_data(is_staking_kpi_met=True)
         assert data.is_staking_kpi_met is True
 
-    def test_mech_requests_default_and_set(self) -> None:
-        """mech_requests defaults to an empty JSON list and round-trips a value."""
-        assert _make_synced_data().mech_requests == "[]"
-        payload = '[{"prompt": "p", "tool": "t", "nonce": "n"}]'
-        assert _make_synced_data(mech_requests=payload).mech_requests == payload
-
     def test_activity_target_signal_defaults_none(self) -> None:
         """The activity-target signal fields are None on the old regime / unstaked."""
         data = _make_synced_data()

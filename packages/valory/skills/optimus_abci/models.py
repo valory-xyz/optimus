@@ -40,20 +40,6 @@ from packages.valory.skills.liquidity_trader_abci.models import (
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     Event as LiquidityTraderEvent,
 )
-from packages.valory.skills.mech_interact_abci.models import (
-    MechResponseSpecs as BaseMechResponseSpecs,
-)
-from packages.valory.skills.mech_interact_abci.models import (
-    MechToolsSpecs as BaseMechToolsSpecs,
-)
-from packages.valory.skills.mech_interact_abci.models import (
-    MechsSubgraph as BaseMechsSubgraph,
-)
-from packages.valory.skills.mech_interact_abci.models import Params as MechParams
-from packages.valory.skills.mech_interact_abci.models import (
-    SharedState as MechSharedState,
-)
-from packages.valory.skills.mech_interact_abci.rounds import Event as MechInteractEvent
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
 from packages.valory.skills.registration_abci.rounds import Event as RegistrationEvent
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
@@ -67,7 +53,6 @@ EventType = Union[
     Type[TransactionSettlementEvent],
     Type[ResetPauseEvent],
     Type[RegistrationEvent],
-    Type[MechInteractEvent],
 ]
 EventToTimeoutMappingType = Dict[
     Union[
@@ -75,7 +60,6 @@ EventToTimeoutMappingType = Dict[
         TransactionSettlementEvent,
         ResetPauseEvent,
         RegistrationEvent,
-        MechInteractEvent,
     ],
     float,
 ]
@@ -86,54 +70,24 @@ BenchmarkTool = BaseBenchmarkTool
 
 RandomnessApi = BaseRandomnessApi
 
-# Re-exports so skill.yaml can resolve the mech_interact_abci API-spec models on
-# this composition skill's `models` module (the mech behaviours read them via
-# ``self.context.mech_response`` / ``mech_tools`` / ``mechs_subgraph``).
-MechResponseSpecs = BaseMechResponseSpecs
-MechToolsSpecs = BaseMechToolsSpecs
-MechsSubgraph = BaseMechsSubgraph
-
 MARGIN = 5
 MULTIPLIER = 40
 
 
 class Params(  # pylint: disable=too-many-ancestors
-    MechParams,
     TerminationParams,
     LiquidityTraderParams,
 ):
-    """A model to represent params for multiple abci apps.
-
-    Also mixes in ``MechParams`` so the composed ``mech_interact_abci``
-    behaviours can read their marketplace/request config off the single shared
-    ``self.context.params`` in this composition skill.
-
-    ``MechParams`` is listed first on purpose. Both it and ``TerminationParams``
-    consume ``multisend_address``, but ``TerminationParams`` reads it via
-    ``_ensure`` (which *pops* the key off ``kwargs``) while ``MechParams`` reads
-    it non-destructively via ``kwargs.get``. With ``TerminationParams`` ahead of
-    ``MechParams`` in the MRO the pop runs first, so ``MechParams`` sees ``None``
-    and ``enforce(multisend_address is not None)`` raises "Multisend address not
-    specified!" at agent load. Running ``MechParams`` first lets it read the
-    value before ``TerminationParams`` pops it.
-    """
+    """A model to represent params for multiple abci apps."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Init"""
         self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
-        self.mech_interact_round_timeout_seconds: int = self._ensure(
-            "mech_interact_round_timeout_seconds", kwargs, type_=int
-        )
         super().__init__(*args, **kwargs)
 
 
-class SharedState(BaseSharedState, MechSharedState):
-    """Keep the current shared state of the skill.
-
-    Mixes in the ``mech_interact_abci`` shared state so the composed mech
-    behaviours can use ``penalized_mechs`` / ``last_called_mech`` /
-    ``last_failure_reason`` off the single live ``self.context.state``.
-    """
+class SharedState(BaseSharedState):
+    """Keep the current shared state of the skill."""
 
     abci_app_cls = OptimusAbciApp  # type: ignore
 
@@ -156,9 +110,6 @@ class SharedState(BaseSharedState, MechSharedState):
         round_timeout_overrides = {
             cast(EventType, event).ROUND_TIMEOUT: round_timeout for event in events
         }
-        round_timeout_overrides[MechInteractEvent.ROUND_TIMEOUT] = (
-            self.params.mech_interact_round_timeout_seconds
-        )
         reset_pause_timeout = self.params.reset_pause_duration + MARGIN
         event_to_timeout_overrides: EventToTimeoutMappingType = {
             **round_timeout_overrides,

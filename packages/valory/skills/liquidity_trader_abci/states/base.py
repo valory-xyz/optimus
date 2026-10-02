@@ -83,15 +83,7 @@ class Event(Enum):
     ACTION_EXECUTED = "action_executed"
     CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
     VANITY_TX_EXECUTED = "vanity_tx_executed"
-    # New staking regime: the producer owes a mech-marketplace request (hands off
-    # to the composed mech_interact_abci legs); and the post-settlement routing
-    # back to the staking loop after that request's tx settles.
-    MECH_REQUEST_NEEDED = "mech_request_needed"
-    MECH_REQUEST_TX_EXECUTED = "mech_request_tx_executed"
-    # Settled off-chain auto-deposit: routes back into MechRequestRound for
-    # ``_retry_pending`` rather than forward to MechResponseRound. Keyed off
-    # the ``OFFCHAIN_DEPOSIT_TX_SUBMITTER`` sentinel from mech_interact_abci.
-    OFFCHAIN_MECH_DEPOSIT_SETTLED = "offchain_mech_deposit_settled"
+    MECH_PRE_DEPOSIT_TX_EXECUTED = "mech_pre_deposit_tx_executed"
     TRANSFER_COMPLETED = "transfer_completed"
     WITHDRAWAL_COMPLETED = "withdrawal_completed"
     WITHDRAWAL_INITIATED = "withdrawal_initiated"
@@ -216,6 +208,11 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_checkpoint")
 
     @property
+    def participant_to_mech_pre_deposit(self) -> DeserializedCollection:
+        """Get the participants to the CheckMechPreDeposit round."""
+        return self._get_deserialized("participant_to_mech_pre_deposit")
+
+    @property
     def participant_to_staking_kpi(self) -> DeserializedCollection:
         """Get the participants to the CheckStakingKPIMet round."""
         return self._get_deserialized("participant_to_staking_kpi")
@@ -236,19 +233,6 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(int, self.db.get("is_staking_kpi_met", False))  # type: ignore[return-value]
 
     @property
-    def mech_requests(self) -> str:
-        """Serialized list of pending mech requests (consumed by mech_interact_abci).
-
-        The producer (``CheckStakingKPIMetBehaviour`` on the new staking regime)
-        writes a JSON list of one ``MechMetadata`` here; the composed
-        ``mech_interact_abci`` ``MechRequestRound`` reads the same db key. An
-        empty/``None`` value means no request is owed this visit.
-
-        :return: the JSON-serialized list of pending mech requests.
-        """
-        return cast(str, self.db.get("mech_requests", "[]") or "[]")
-
-    @property
     def is_activity_target_met(self) -> Optional[bool]:
         """Off-chain activity-target signal for Pearl auto-run rotation.
 
@@ -261,7 +245,7 @@ class SynchronizedData(BaseSynchronizedData):
 
     @property
     def activity_target(self) -> Optional[int]:
-        """Per-epoch mech-request target (new regime only; else ``None``)."""
+        """Per-epoch activity target (new regime only; else ``None``)."""
         return cast(Optional[int], self.db.get("activity_target", None))
 
     @property

@@ -43,7 +43,6 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_utils import to_checksum_address
 
-from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -1604,6 +1603,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return results
 
+    def _paid_session_or_none(self) -> Optional[Any]:
+        """Return the paid session for strategies, or ``None`` if unavailable.
+
+        :return: the session, or ``None`` when the paid path cannot be used.
+
+        Building it validates configuration and raises: no Safe for the mech
+        chain, or a call budget at or below the client's minimum. Raising from
+        inside the kwargs of a strategy run would take the agent down, and a
+        misconfigured paid path is a reason to fall back to the unpaid one
+        rather than to stop trading.
+        """
+        if not self.coingecko.use_x402:
+            return None
+        try:
+            return self.coingecko.paid_session(self.eoa_account)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.context.logger.error(
+                f"Paid CoinGecko session unavailable, strategies will use the "
+                f"unpaid path this cycle: {exc}"
+            )
+            return None
+
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities using asyncio for concurrency."""
         self.trading_opportunities.clear()
@@ -1641,13 +1662,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                     "coin_id_mapping": COIN_ID_MAPPING,
-                    "x402_session": (
-                        x402_requests(account=self.eoa_account)
-                        if self.coingecko.use_x402
-                        else None
-                    ),
+                    "x402_session": self._paid_session_or_none(),
                     "x402_proxy": (
-                        self.coingecko.coingecko_x402_server_base_url
+                        self.coingecko.paid_proxy_base_url
                         if self.coingecko.use_x402
                         else None
                     ),
@@ -1766,13 +1783,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
-                "x402_session": (
-                    x402_requests(account=self.eoa_account)
-                    if self.coingecko.use_x402
-                    else None
-                ),
+                "x402_session": self._paid_session_or_none(),
                 "x402_proxy": (
-                    self.coingecko.coingecko_x402_server_base_url
+                    self.coingecko.paid_proxy_base_url
                     if self.coingecko.use_x402
                     else None
                 ),

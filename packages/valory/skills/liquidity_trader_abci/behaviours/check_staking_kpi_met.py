@@ -165,21 +165,32 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                                 "deferring activity tx until it resolves"
                             )
                         elif is_new_regime:
-                            # The new regime counts marketplace requests, which
-                            # the agent's paid API calls are, so nothing is sent
-                            # purely to tick the counter. Nothing guarantees it
-                            # made enough of them, though: a day with investing
-                            # paused, the facilitator down or the deposit spent
-                            # makes none, and settlement is batched so recent
-                            # ones may not be counted yet. Short at the
-                            # threshold is worth seeing rather than accepting.
-                            self.context.logger.warning(
-                                "Staking KPI is short by "
-                                f"{num_of_tx_left_to_meet_kpi} and the new "
-                                "regime counts marketplace requests, which "
-                                "only the agent's paid API calls make. Nothing "
-                                "is sent to make up the difference."
-                            )
+                            # This regime's counter is marketplace requests, and
+                            # the only ones the agent makes are its paid API
+                            # calls on the facilitator route. Nothing is sent
+                            # purely to tick it. With that route off no amount of
+                            # work moves the counter, so the shortfall is a
+                            # misconfiguration rather than a quiet day, and the
+                            # service is heading for eviction either way.
+                            if not self.params.use_mech_facilitator:
+                                self.context.logger.error(
+                                    "Staking KPI is short by "
+                                    f"{num_of_tx_left_to_meet_kpi} and cannot be "
+                                    "met: this staking regime counts mech "
+                                    "marketplace requests and the agent makes "
+                                    "none while use_mech_facilitator is off. "
+                                    "Enable it, or stake against an activity "
+                                    "checker that counts Safe nonces."
+                                )
+                            else:
+                                self.context.logger.warning(
+                                    "Staking KPI is short by "
+                                    f"{num_of_tx_left_to_meet_kpi}; this regime "
+                                    "counts the agent's paid API calls, and "
+                                    "settlement is batched so recent ones may "
+                                    "not be counted yet. Nothing is sent to make "
+                                    "up the difference."
+                                )
                         else:
                             # Old regime: keep the existing vanity Safe tx, gated
                             # by the EOA-funded check so vanity activity does not

@@ -280,11 +280,11 @@ class TestCheckStakingKPIMetBehaviour:
     def test_new_regime_shortfall_is_reported_and_sends_nothing(self) -> None:
         """Nothing makes up the difference here, so it has to be visible.
 
-        The new regime counts marketplace requests, which only the agent's
-        paid API calls make. A day with investing paused, the facilitator
-        unreachable or the deposit spent makes none, and settlement is
-        batched so recent ones may not be counted yet. Logging that at info
-        and moving on loses the staking reward quietly.
+        With the facilitator on, the agent's paid API calls are what move the
+        counter. A day with investing paused or the deposit spent makes none,
+        and settlement is batched so recent ones may not be counted yet, so a
+        shortfall can be transient. Logging it at info loses the staking
+        reward quietly, but it is not a misconfiguration.
         """
         obj = _make_behaviour()
         params_mock = MagicMock()
@@ -292,6 +292,7 @@ class TestCheckStakingKPIMetBehaviour:
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
         params_mock.activity_target = 5
+        params_mock.use_mech_facilitator = True
 
         synced_mock = MagicMock()
         synced_mock.period_count = 20
@@ -316,6 +317,46 @@ class TestCheckStakingKPIMetBehaviour:
             str(call) for call in obj.context.logger.warning.call_args_list
         )
         assert "short by 3" in warned, warned
+        obj.context.logger.error.assert_not_called()
+
+    def test_new_regime_without_the_facilitator_cannot_meet_the_kpi(self) -> None:
+        """This combination can never tick the counter, so it is an error.
+
+        On this regime the counter is marketplace requests, and the agent only
+        makes those on the facilitator route. With the route off the shortfall
+        never recovers however well the agent runs, and the service is evicted
+        at the liveness window, so it has to be louder than a quiet day.
+        """
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        params_mock.staking_threshold_period = 10
+        params_mock.activity_target = 5
+        params_mock.use_mech_facilitator = False
+
+        synced_mock = MagicMock()
+        synced_mock.period_count = 20
+        synced_mock.period_number_at_last_cp = 0
+        synced_mock.min_num_of_safe_tx_required = 5
+
+        def fake_is_kpi_met():
+            """Short by three."""
+            yield
+            return False, 2
+
+        obj._is_staking_kpi_met = fake_is_kpi_met
+        obj._is_new_staking_regime = _gen_value(True)
+        obj._prepare_vanity_tx = MagicMock(
+            side_effect=AssertionError("sent a transaction on the new regime")
+        )
+
+        _run_async_act(obj, params_mock, synced_mock)
+
+        obj.set_done.assert_called_once()
+        logged = " ".join(str(call) for call in obj.context.logger.error.call_args_list)
+        assert "short by 3" in logged, logged
+        assert "use_mech_facilitator" in logged, logged
 
     def test_async_act_kpi_not_met_no_tx_needed(self) -> None:
         """Test async_act when tx left is 0."""

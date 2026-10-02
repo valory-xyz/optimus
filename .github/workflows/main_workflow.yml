@@ -67,7 +67,9 @@ jobs:
       - name: Check third-party package hashes against upstreams
         run: tomte tox -e check-third-party-hashes
       - name: Check doc links
-        run: tomte check-doc-links
+        # Both live in vendored packages this repo does not own, and both answer
+        # 200 individually: they only 503 under the checker's concurrent load.
+        run: tomte check-doc-links -u 'https://github.com/valory-xyz/meme-ooorr-test/blob/20c121a9005bd852fedea37ef2bc6b0c30c86d81/packages/dvilela/connections/genai/connection.py#L46' -u 'https://github.com/tendermint/tendermint/blob/v0.34.19/proto/tendermint/abci/types.proto'
       - name: Check doc IPFS hashes
         run: tomte tox -e check-doc-hashes
 

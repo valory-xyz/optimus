@@ -364,6 +364,9 @@ def _make_http_handler() -> Any:
     handler.rounds_info = {}
     handler.handler_url_regex = r".*localhost(:\d+)?\/.*"
     handler.routes = {}
+    # Off by default, as the config has it. Left as a MagicMock this reads
+    # truthy and silently puts every test on the facilitator route.
+    mock_context.coingecko.use_mech_facilitator = False
     return handler, mock_context
 
 
@@ -4848,11 +4851,11 @@ class TestHttpHandlerMethods:
 
 _PD_CHAIN = "optimism"
 _PD_CHAIN_ID = 10
-_PD_SAFE = "0x0000000000000000000000000000000000000111"
-_PD_EOA = "0x0000000000000000000000000000000000000222"
-_PD_MARKETPLACE = "0x0000000000000000000000000000000000000333"
-_PD_TRACKER = "0x0000000000000000000000000000000000000444"
-_PD_TOKEN = "0x0000000000000000000000000000000000000555"
+_PD_SAFE = "0xabcdef0123456789abcdef0123456789abcdef01"
+_PD_EOA = "0xfedcba9876543210fedcba9876543210fedcba98"
+_PD_MARKETPLACE = "0xdeadbeefcafebabedeadbeefcafebabedeadbeef"
+_PD_TRACKER = "0xfacefeedfacefeedfacefeedfacefeedfacefeed"
+_PD_TOKEN = "0x0b2c639c533813f4aa9d7837caf62653d097ff85"
 _PD_ZERO = "0x0000000000000000000000000000000000000000"
 # FixedPriceTokenUSDC, padded to the 32 bytes the marketplace keys trackers by.
 _PD_PAYMENT_TYPE_HEX = "0x" + "6406bb5f".ljust(64, "0")
@@ -5266,7 +5269,7 @@ class TestTokenDeposit:
         )
         handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
         handler._send_from_eoa = MagicMock(return_value=True)
-        assert handler._deposit_token(
+        assert handlers_module.MechDepositOutcome.SUFFICIENT is handler._deposit_token(
             _PD_CHAIN,
             _PD_CHAIN_ID,
             SimpleNamespace(address=_PD_EOA),
@@ -5277,6 +5280,49 @@ class TestTokenDeposit:
         )
         targets = [call[0][3] for call in handler._send_from_eoa.call_args_list]
         assert targets == [_PD_TOKEN, _PD_TRACKER]
+
+    def test_the_allowance_is_granted_to_the_tracker(self) -> None:
+        """Approving anyone else leaves the tracker unable to pull the tokens."""
+        handler, _ = _make_predeposit_handler()
+        token = _make_fake_contract()
+        _install_rpc(handler, {_PD_TOKEN: token, _PD_TRACKER: _make_fake_contract()})
+        handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
+        handler._send_from_eoa = MagicMock(return_value=True)
+        handler._deposit_token(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            _PD_TOKEN,
+            _PD_TARGET,
+        )
+        assert token.encode_abi.call_args.kwargs["args"][0] == (
+            Web3.to_checksum_address(_PD_TRACKER)
+        )
+
+    def test_a_failed_deposit_after_a_successful_approve_is_reported(self) -> None:
+        """A standing allowance with no deposit is not a funded pre-deposit."""
+        handler, _ = _make_predeposit_handler()
+        _install_rpc(
+            handler,
+            {_PD_TOKEN: _make_fake_contract(), _PD_TRACKER: _make_fake_contract()},
+        )
+        handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
+        handler._send_from_eoa = MagicMock(side_effect=[True, False])
+        assert (
+            handler._deposit_token(
+                _PD_CHAIN,
+                _PD_CHAIN_ID,
+                SimpleNamespace(address=_PD_EOA),
+                _PD_SAFE,
+                _PD_TRACKER,
+                _PD_TOKEN,
+                _PD_TARGET,
+            )
+            is handlers_module.MechDepositOutcome.UNDERFUNDED
+        )
+        assert handler._send_from_eoa.call_count == 2
 
     def test_the_deposit_credits_the_safe_not_the_payer(self) -> None:
         """The EOA pays but the marketplace debits the Safe, so the Safe is credited."""
@@ -5328,7 +5374,7 @@ class TestTokenDeposit:
         )
         handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
         handler._send_from_eoa = MagicMock(return_value=False)
-        assert not handler._deposit_token(
+        assert handlers_module.MechDepositOutcome.UNDERFUNDED is handler._deposit_token(
             _PD_CHAIN,
             _PD_CHAIN_ID,
             SimpleNamespace(address=_PD_EOA),
@@ -5339,14 +5385,22 @@ class TestTokenDeposit:
         )
         assert handler._send_from_eoa.call_count == 1
 
-    @pytest.mark.parametrize("held", [None, 0])
-    def test_nothing_to_deposit_sends_nothing(self, held: Any) -> None:
-        """An unreadable or empty token balance deposits nothing."""
+    @pytest.mark.parametrize(
+        "held,expected",
+        [
+            # An unreadable balance is not a shortfall: the agent does not know
+            # whether it can pay, so it must not ask the user for money.
+            (None, "UNAVAILABLE"),
+            (0, "UNDERFUNDED"),
+        ],
+    )
+    def test_nothing_to_deposit_sends_nothing(self, held: Any, expected: str) -> None:
+        """An empty balance is a shortfall; an unreadable one is not."""
         handler, _ = _make_predeposit_handler()
         _install_rpc(handler)
         handler._check_usdc_balance = MagicMock(return_value=held)
         handler._send_from_eoa = MagicMock()
-        assert not handler._deposit_token(
+        assert handler._deposit_token(
             _PD_CHAIN,
             _PD_CHAIN_ID,
             SimpleNamespace(address=_PD_EOA),
@@ -5354,7 +5408,7 @@ class TestTokenDeposit:
             _PD_TRACKER,
             _PD_TOKEN,
             _PD_TARGET,
-        )
+        ) is getattr(handlers_module.MechDepositOutcome, expected)
         handler._send_from_eoa.assert_not_called()
 
     def test_no_rpc_sends_nothing(self) -> None:
@@ -5363,7 +5417,7 @@ class TestTokenDeposit:
         handler._get_web3_instance = MagicMock(return_value=None)
         handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
         handler._send_from_eoa = MagicMock()
-        assert not handler._deposit_token(
+        assert handlers_module.MechDepositOutcome.UNAVAILABLE is handler._deposit_token(
             _PD_CHAIN,
             _PD_CHAIN_ID,
             SimpleNamespace(address=_PD_EOA),
@@ -5396,6 +5450,25 @@ class TestNativeDeposit:
         )
         assert handler._send_from_eoa.call_args.kwargs["value"] == 500
 
+    def test_the_native_deposit_credits_the_safe(self) -> None:
+        """The EOA sends the value but the Safe is the requester credited."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract()
+        balance = handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + 10**18
+        _install_rpc(handler, {_PD_TRACKER: tracker}, native_balance=balance)
+        handler._send_from_eoa = MagicMock(return_value=True)
+        handler._deposit_native(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_TRACKER,
+            4242,
+        )
+        assert tracker.encode_abi.call_args.kwargs["args"] == [
+            Web3.to_checksum_address(_PD_SAFE)
+        ]
+
     def test_a_deposit_under_the_target_is_not_inflated(self) -> None:
         """A spendable balance above the shortfall deposits only the shortfall."""
         handler, _ = _make_predeposit_handler()
@@ -5423,13 +5496,16 @@ class TestNativeDeposit:
         balance = handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + offset
         _install_rpc(handler, native_balance=balance)
         handler._send_from_eoa = MagicMock()
-        assert not handler._deposit_native(
-            _PD_CHAIN,
-            _PD_CHAIN_ID,
-            SimpleNamespace(address=_PD_EOA),
-            _PD_SAFE,
-            _PD_TRACKER,
-            10**18,
+        assert (
+            handler._deposit_native(
+                _PD_CHAIN,
+                _PD_CHAIN_ID,
+                SimpleNamespace(address=_PD_EOA),
+                _PD_SAFE,
+                _PD_TRACKER,
+                10**18,
+            )
+            is handlers_module.MechDepositOutcome.UNDERFUNDED
         )
         handler._send_from_eoa.assert_not_called()
 
@@ -5438,13 +5514,16 @@ class TestNativeDeposit:
         handler, _ = _make_predeposit_handler()
         handler._get_web3_instance = MagicMock(return_value=None)
         handler._send_from_eoa = MagicMock()
-        assert not handler._deposit_native(
-            _PD_CHAIN,
-            _PD_CHAIN_ID,
-            SimpleNamespace(address=_PD_EOA),
-            _PD_SAFE,
-            _PD_TRACKER,
-            10**18,
+        assert (
+            handler._deposit_native(
+                _PD_CHAIN,
+                _PD_CHAIN_ID,
+                SimpleNamespace(address=_PD_EOA),
+                _PD_SAFE,
+                _PD_TRACKER,
+                10**18,
+            )
+            is handlers_module.MechDepositOutcome.UNAVAILABLE
         )
         handler._send_from_eoa.assert_not_called()
 
@@ -5455,13 +5534,16 @@ class TestNativeDeposit:
         _install_rpc(handler, native_balance=balance)
         handler._contract = MagicMock(return_value=None)
         handler._send_from_eoa = MagicMock()
-        assert not handler._deposit_native(
-            _PD_CHAIN,
-            _PD_CHAIN_ID,
-            SimpleNamespace(address=_PD_EOA),
-            _PD_SAFE,
-            _PD_TRACKER,
-            10**18,
+        assert (
+            handlers_module.MechDepositOutcome.UNAVAILABLE
+            is handler._deposit_native(
+                _PD_CHAIN,
+                _PD_CHAIN_ID,
+                SimpleNamespace(address=_PD_EOA),
+                _PD_SAFE,
+                _PD_TRACKER,
+                10**18,
+            )
         )
         handler._send_from_eoa.assert_not_called()
 
@@ -5510,13 +5592,13 @@ class TestTopUpSizing:
     def test_at_or_above_the_floor_nothing_is_sent(self, deposited: int) -> None:
         """The floor is when to act, so at it there is nothing to do."""
         handler, _, _ = self._handler_at(deposited)
-        assert self._top_up(handler)
+        assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         handler._send_from_eoa.assert_not_called()
 
     def test_below_the_floor_the_deposit_reaches_the_target(self) -> None:
         """A top-up fills to the target, not merely back over the floor."""
         handler, _, tracker = self._handler_at(_PD_FLOOR - 1)
-        assert self._top_up(handler)
+        assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         assert tracker.encode_abi.call_args.kwargs["args"][1] == (
             _PD_TARGET - (_PD_FLOOR - 1)
         )
@@ -5524,13 +5606,13 @@ class TestTopUpSizing:
     def test_the_cap_bounds_one_top_up(self) -> None:
         """A misconfigured target cannot drain the EOA in one go."""
         handler, _, tracker = self._handler_at(0, target=10**9, cap=1000)
-        assert self._top_up(handler)
+        assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         assert tracker.encode_abi.call_args.kwargs["args"][1] == 1000
 
     def test_a_target_under_the_deposit_sends_nothing(self) -> None:
         """A target below what is held leaves a non-positive amount."""
         handler, _, _ = self._handler_at(100, floor=200, target=50)
-        assert self._top_up(handler)
+        assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         handler._send_from_eoa.assert_not_called()
 
     def test_a_native_tracker_takes_the_native_route(self) -> None:
@@ -5546,14 +5628,14 @@ class TestTopUpSizing:
             native_balance=handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + 10**18,
         )
         handler._send_from_eoa = MagicMock(return_value=True)
-        assert self._top_up(handler)
+        assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         assert handler._send_from_eoa.call_args.kwargs["value"] == _PD_CAP
 
     def test_an_unresolvable_tracker_sends_nothing(self) -> None:
         """No tracker means nothing to deposit into."""
         handler, _ = _make_predeposit_handler(marketplaces={})
         handler._send_from_eoa = MagicMock()
-        assert not self._top_up(handler)
+        assert handlers_module.MechDepositOutcome.UNAVAILABLE is self._top_up(handler)
         handler._send_from_eoa.assert_not_called()
 
     def test_an_unreadable_deposit_sends_nothing(self) -> None:
@@ -5563,7 +5645,7 @@ class TestTopUpSizing:
         marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
         _install_rpc(handler, {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker})
         handler._send_from_eoa = MagicMock()
-        assert not self._top_up(handler)
+        assert handlers_module.MechDepositOutcome.UNAVAILABLE is self._top_up(handler)
         handler._send_from_eoa.assert_not_called()
 
 
@@ -5591,7 +5673,10 @@ class TestEnsureMechPreDeposit:
             "get",
             return_value=_make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX}),
         ):
-            assert handler._ensure_mech_pre_deposit()
+            assert (
+                handlers_module.MechDepositOutcome.SUFFICIENT
+                is handler._ensure_mech_pre_deposit()
+            )
 
     def test_the_mech_chain_decides_which_safe_pays(self) -> None:
         """The Safe is the one on the chain the marketplace charges."""
@@ -5621,7 +5706,10 @@ class TestEnsureMechPreDeposit:
         handler, _ = _make_predeposit_handler(**overrides)
         self._wire(handler)
         handler._send_from_eoa = MagicMock()
-        assert not handler._ensure_mech_pre_deposit()
+        assert (
+            handlers_module.MechDepositOutcome.UNAVAILABLE
+            is handler._ensure_mech_pre_deposit()
+        )
         handler._send_from_eoa.assert_not_called()
 
     def test_no_eoa_deposits_nothing(self) -> None:
@@ -5630,7 +5718,10 @@ class TestEnsureMechPreDeposit:
         self._wire(handler)
         handler._get_eoa_account = MagicMock(return_value=None)
         handler._send_from_eoa = MagicMock()
-        assert not handler._ensure_mech_pre_deposit()
+        assert (
+            handlers_module.MechDepositOutcome.UNAVAILABLE
+            is handler._ensure_mech_pre_deposit()
+        )
         handler._send_from_eoa.assert_not_called()
 
     def test_an_unreadable_payment_type_deposits_nothing(self) -> None:
@@ -5643,14 +5734,20 @@ class TestEnsureMechPreDeposit:
             "get",
             return_value=_make_response(status_code=503),
         ):
-            assert not handler._ensure_mech_pre_deposit()
+            assert (
+                handlers_module.MechDepositOutcome.UNAVAILABLE
+                is handler._ensure_mech_pre_deposit()
+            )
         handler._send_from_eoa.assert_not_called()
 
     def test_an_unexpected_error_is_contained(self) -> None:
         """A background step must not take the handler down with it."""
         handler, _ = _make_predeposit_handler()
         handler._get_eoa_account = MagicMock(side_effect=RuntimeError("boom"))
-        assert not handler._ensure_mech_pre_deposit()
+        assert (
+            handlers_module.MechDepositOutcome.UNAVAILABLE
+            is handler._ensure_mech_pre_deposit()
+        )
 
     def test_a_concurrent_top_up_is_not_duplicated(self) -> None:
         """Two top-ups would re-broadcast the same approve from one nonce."""
@@ -5658,7 +5755,10 @@ class TestEnsureMechPreDeposit:
         handler._get_eoa_account = MagicMock()
         handlers_module._MECH_PRE_DEPOSIT_LOCK.acquire()
         try:
-            assert not handler._ensure_mech_pre_deposit()
+            assert (
+                handlers_module.MechDepositOutcome.UNAVAILABLE
+                is handler._ensure_mech_pre_deposit()
+            )
         finally:
             handlers_module._MECH_PRE_DEPOSIT_LOCK.release()
         handler._get_eoa_account.assert_not_called()
@@ -5696,3 +5796,185 @@ class TestPaidCallFundingMaintenance:
         )
         handler._maintain_paid_call_funding()
         assert order == ["swap", "deposit"]
+
+
+class TestPaidCallChain:
+    """Cover which chain the agent keeps its payment balance on."""
+
+    def test_the_facilitator_route_uses_the_mech_chain(self) -> None:
+        """The marketplace debits a pot on mech_chain, so the token is needed there."""
+        handler, ctx = _make_predeposit_handler(use_mech_facilitator=True)
+        ctx.params.target_investment_chains = ["base"]
+        assert handler._paid_call_chain() == _PD_CHAIN
+
+    def test_the_plain_route_uses_the_first_trading_chain(self) -> None:
+        """Off the facilitator the EOA pays each call from its own balance."""
+        handler, ctx = _make_predeposit_handler(use_mech_facilitator=False)
+        ctx.params.target_investment_chains = ["base"]
+        assert handler._paid_call_chain() == "base"
+
+    def test_the_swap_and_the_deposit_cannot_target_different_chains(self) -> None:
+        """The swap funds the EOA on whichever chain the deposit will spend on.
+
+        With the swap reading target_investment_chains and the deposit reading
+        mech_chain, the shipped service config pointed them at base and optimism
+        respectively, so the EOA was funded on a chain the deposit never touched.
+        """
+        handler, ctx = _make_predeposit_handler(use_mech_facilitator=True)
+        ctx.params.target_investment_chains = ["base", "optimism", "mode"]
+        ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+        handler._check_usdc_balance = MagicMock(return_value=2000)
+        with patch.object(type(handler), "shared_state", new_callable=PropertyMock):
+            handler._ensure_sufficient_funds_for_x402_payments()
+        swap_chain = handler._check_usdc_balance.call_args[0][1]
+        assert swap_chain == handler._paid_call_chain() == _PD_CHAIN
+
+    def test_the_swap_buys_the_token_the_tracker_takes(self) -> None:
+        """The deposit spends USDC on the mech chain, so that is what is bought."""
+        handler, ctx = _make_predeposit_handler(use_mech_facilitator=True)
+        ctx.params.target_investment_chains = ["base"]
+        ctx.params.x402_payment_requirements = {"threshold": 1000, "topup": 5000}
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+        handler._check_usdc_balance = MagicMock(return_value=2000)
+        with patch.object(type(handler), "shared_state", new_callable=PropertyMock):
+            handler._ensure_sufficient_funds_for_x402_payments()
+        assert handler._check_usdc_balance.call_args[0][2] == (
+            handlers_module.USDC_ADDRESSES[_PD_CHAIN]
+        )
+
+
+class TestPendingNonce:
+    """Cover that in-flight transactions still consume their nonce."""
+
+    def test_the_deposit_nonce_counts_pending_transactions(self) -> None:
+        """A deposit signed against "latest" can take a pending swap's nonce."""
+        handler, _ = _make_predeposit_handler()
+        w3 = _install_rpc(handler)
+        handler._sign_and_submit_tx_web3 = MagicMock(return_value="0xhash")
+        handler._check_transaction_status = MagicMock(return_value=True)
+        handler._send_from_eoa(
+            _PD_CHAIN, _PD_CHAIN_ID, SimpleNamespace(address=_PD_EOA), _PD_TRACKER, "0x"
+        )
+        assert w3.eth.get_transaction_count.call_args[0][1] == "pending"
+
+    def test_the_swap_nonce_counts_pending_transactions(self) -> None:
+        """The swap shares the EOA with the deposit, so it counts the same way."""
+        handler, _ = _make_predeposit_handler()
+        w3 = _install_rpc(handler)
+        handler._call_web3_with_breaker = MagicMock(
+            side_effect=lambda _c, fn, *a: fn(*a)
+        )
+        handler._get_nonce_and_gas_web3(_PD_EOA, _PD_CHAIN)
+        assert w3.eth.get_transaction_count.call_args[0][1] == "pending"
+
+
+class TestMechDepositReporting:
+    """Cover what a failed pre-deposit tells /funds-status."""
+
+    def test_a_successful_top_up_leaves_the_swap_verdict_alone(self) -> None:
+        """Overwriting it would clear a deficit the swap had just reported."""
+        handler, _ = _make_predeposit_handler()
+        handler._record_x402_topup_outcome = MagicMock()
+        handler._record_mech_pre_deposit_outcome(
+            handlers_module.MechDepositOutcome.SUFFICIENT
+        )
+        handler._record_x402_topup_outcome.assert_not_called()
+
+    def test_an_unreachable_facilitator_reports_no_deficit(self) -> None:
+        """The agent does not know funds are short, so it must not ask for money."""
+        handler, _ = _make_predeposit_handler()
+        handler._record_x402_topup_outcome = MagicMock()
+        handler._record_mech_pre_deposit_outcome(
+            handlers_module.MechDepositOutcome.UNAVAILABLE
+        )
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is False
+        assert deficit is None
+
+    def test_an_unaffordable_deposit_on_an_empty_eoa_reports_the_floor(self) -> None:
+        """This is what makes Pearl ask the user to top the agent up."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+        handler._get_native_balance = MagicMock(return_value=0)
+        handler._record_x402_topup_outcome = MagicMock()
+        handler._record_mech_pre_deposit_outcome(
+            handlers_module.MechDepositOutcome.UNDERFUNDED
+        )
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is False
+        assert deficit == handlers_module.X402_ETH_DEFICIT_FLOOR_WEI
+
+    def test_an_unaffordable_deposit_on_a_funded_eoa_reports_no_deficit(self) -> None:
+        """More gas would not help, so the failure is not a funding one."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+        handler._get_native_balance = MagicMock(
+            return_value=handlers_module.X402_ETH_DEFICIT_FLOOR_WEI * 10
+        )
+        handler._record_x402_topup_outcome = MagicMock()
+        handler._record_mech_pre_deposit_outcome(
+            handlers_module.MechDepositOutcome.UNDERFUNDED
+        )
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is False
+        assert deficit is None
+
+    def test_an_unavailable_eoa_reports_no_deficit(self) -> None:
+        """With no key there is no balance to size a shortfall from."""
+        handler, _ = _make_predeposit_handler()
+        handler._get_eoa_account = MagicMock(return_value=None)
+        handler._record_x402_topup_outcome = MagicMock()
+        handler._record_mech_pre_deposit_outcome(
+            handlers_module.MechDepositOutcome.UNDERFUNDED
+        )
+        assert handler._record_x402_topup_outcome.call_args[0][1] is None
+
+    def test_the_deposit_outcome_reaches_the_reporting(self) -> None:
+        """The result used to be discarded, so a failure never showed up."""
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        handler._ensure_sufficient_funds_for_x402_payments = MagicMock()
+        handler._ensure_mech_pre_deposit = MagicMock(
+            return_value=handlers_module.MechDepositOutcome.UNDERFUNDED
+        )
+        handler._record_mech_pre_deposit_outcome = MagicMock()
+        handler._maintain_paid_call_funding()
+        handler._record_mech_pre_deposit_outcome.assert_called_once_with(
+            handlers_module.MechDepositOutcome.UNDERFUNDED
+        )
+
+
+class TestPaidCallFundingLock:
+    """Cover that the swap and the deposit are serialized together."""
+
+    def test_a_second_run_does_neither_step(self) -> None:
+        """A deposit started mid-swap would be signed against the swap's nonce."""
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        handler._ensure_sufficient_funds_for_x402_payments = MagicMock()
+        handler._ensure_mech_pre_deposit = MagicMock()
+        handlers_module._PAID_CALL_FUNDING_LOCK.acquire()
+        try:
+            handler._maintain_paid_call_funding()
+        finally:
+            handlers_module._PAID_CALL_FUNDING_LOCK.release()
+        handler._ensure_sufficient_funds_for_x402_payments.assert_not_called()
+        handler._ensure_mech_pre_deposit.assert_not_called()
+
+    def test_the_lock_is_released_after_an_error(self) -> None:
+        """One failed cycle must not block every later one."""
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=False)
+        handler._ensure_sufficient_funds_for_x402_payments = MagicMock(
+            side_effect=RuntimeError("boom")
+        )
+        with pytest.raises(RuntimeError):
+            handler._maintain_paid_call_funding()
+        assert handlers_module._PAID_CALL_FUNDING_LOCK.acquire(blocking=False)
+        handlers_module._PAID_CALL_FUNDING_LOCK.release()

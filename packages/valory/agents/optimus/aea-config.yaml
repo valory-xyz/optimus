@@ -69,8 +69,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeigwfeq4bwk4vvzvgrxfkronhhimyh27cbgkvucx63r6okhbdmnqsu
-- valory/optimus_abci:0.1.0:bafybeigjieqqw7vw76jcnf3fulhkqvihrj27fp2xowenvmikibzwkgf53y
+- valory/liquidity_trader_abci:0.1.0:bafybeialzfesvyvxxfft22kwc2qjdk4px6nkcnejtfxo42phh6cukucqpe
+- valory/optimus_abci:0.1.0:bafybeiadr77bxwjb7w2geqlniik63z3asem7gnlrkniq5cw2muzlcul6cy
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa

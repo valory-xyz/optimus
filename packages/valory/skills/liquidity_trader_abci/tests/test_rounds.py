@@ -81,11 +81,7 @@ class TestCoreCycleTransitions:
     """Pin the load-bearing transitions in the GetPositions -> EvaluateStrategy -> DecisionMaking cycle."""
 
     def test_the_kpi_check_hands_over_to_get_positions(self) -> None:
-        """Every exit from the staking check continues into the trading cycle.
-
-        The pre-deposit top-up is not a round: it runs in the HTTP handler and
-        pays from the agent EOA, so nothing settles between the two checks.
-        """
+        """Every exit from the staking check continues into the trading cycle."""
         transitions = LiquidityTraderAbciApp.transition_function[
             CheckStakingKPIMetRound
         ]

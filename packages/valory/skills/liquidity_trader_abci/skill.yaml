@@ -79,7 +79,7 @@ fingerprint:
   tests/test_models.py: bafybeifuhepzz5wh3vctegypyjxfnhtg24ez3cb7mdvtcuoffpt4drf6ru
   tests/test_payloads.py: bafybeihgckap5l6g7gmj2g7bon4zp5oc23mo55pt32hstznwobfb24cifq
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
-  tests/test_rounds.py: bafybeihr6o2tuyhi2yamdxjatipbraffs6poayrzryq2sh2kq2a44jbduu
+  tests/test_rounds.py: bafybeicn2btzjnmbgus5gg4vvvcqqpzfkphlo36s6qtycso6afnmctvwwm
   tests/test_rounds_info.py: bafybeicjjnlimixrbzyouasifrkcxycl4aitutlwm7ellq27xq55zog6ge
   tests/utils/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/utils/test_balancer_math.py: bafybeig4aixtnrm3oqewfba7m3v7boc6htpetkcdcpf35y35xzjpwh4drq

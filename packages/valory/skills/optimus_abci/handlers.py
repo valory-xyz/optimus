@@ -216,6 +216,11 @@ class MechDepositOutcome(Enum):
     /funds-status as a shortfall so the user is asked to top the agent up,
     while "the facilitator was unreachable" must not, or the user is asked for
     money that would not help.
+
+    ``UNDERFUNDED`` is only returned where a balance read says so. A
+    transaction that could not be estimated, sent or confirmed is
+    ``UNAVAILABLE``: it fails the same way on a funded agent, for an RPC
+    timeout or a call that reverts.
     """
 
     SUFFICIENT = "sufficient"
@@ -465,6 +470,7 @@ class HttpHandler(BaseHttpHandler):
 
         if self.context.params.use_x402:
             self.shared_state.sufficient_funds_for_x402_payments = False
+            self._warn_if_paid_calls_are_funded_off_the_trading_chain()
             self._submit_background(self._maintain_paid_call_funding)
 
         service_endpoint_base = urlparse(
@@ -1363,7 +1369,7 @@ class HttpHandler(BaseHttpHandler):
         sent = self._send_from_eoa(
             chain, chain_id, eoa_account, tracker, data, value=amount
         )
-        return MechDepositOutcome.SUFFICIENT if sent else MechDepositOutcome.UNDERFUNDED
+        return MechDepositOutcome.SUFFICIENT if sent else MechDepositOutcome.UNAVAILABLE
 
     def _deposit_token(
         self,
@@ -1416,14 +1422,14 @@ class HttpHandler(BaseHttpHandler):
         )
         if not self._send_from_eoa(chain, chain_id, eoa_account, token, approve):
             self.context.logger.error("Pre-deposit approval failed.")
-            return MechDepositOutcome.UNDERFUNDED
+            return MechDepositOutcome.UNAVAILABLE
 
         deposit = tracker_contract.encode_abi(
             abi_element_identifier="depositFor(address,uint256)",
             args=[Web3.to_checksum_address(safe_address), amount],
         )
         sent = self._send_from_eoa(chain, chain_id, eoa_account, tracker, deposit)
-        return MechDepositOutcome.SUFFICIENT if sent else MechDepositOutcome.UNDERFUNDED
+        return MechDepositOutcome.SUFFICIENT if sent else MechDepositOutcome.UNAVAILABLE
 
     def _top_up_mech_pre_deposit(
         self,
@@ -1567,6 +1573,24 @@ class HttpHandler(BaseHttpHandler):
         self._record_x402_topup_outcome(
             False, deficit, "mech pre-deposit could not be funded"
         )
+
+    def _warn_if_paid_calls_are_funded_off_the_trading_chain(self) -> None:
+        """Warn when paid calls need native token on a chain the agent does not trade on.
+
+        The swap and the deposit run on ``mech_chain`` and any shortfall is
+        reported there. A funder that only watches the trading chain will not
+        act on it, and chat stays unavailable until the agent EOA holds native
+        token on ``mech_chain``.
+        """
+        trading_chain = self.context.params.target_investment_chains[0]
+        paid_call_chain = self._paid_call_chain()
+        if paid_call_chain != trading_chain:
+            self.context.logger.warning(
+                f"Paid API calls are funded on {paid_call_chain} but the agent "
+                f"trades on {trading_chain}. The agent EOA needs native token "
+                f"on {paid_call_chain}; funding it on {trading_chain} alone "
+                "leaves paid calls and chat unavailable."
+            )
 
     def _paid_call_chain(self) -> str:
         """Return the chain the agent pays for API calls on.
@@ -2079,9 +2103,10 @@ class HttpHandler(BaseHttpHandler):
         """Inject x402 ETH deficit into the funds-status response.
 
         Ensures the external funding system sees the ETH needed for the
-        ETH->USDC swap so it can top up the agent EOA.
+        ETH->USDC swap so it can top up the agent EOA. Reported on the chain
+        the swap runs on, since that is where the ETH is needed.
         """
-        chain = self.context.params.target_investment_chains[0]
+        chain = self._paid_call_chain()
         agent_address = self.context.agent_address
         native_token = ZERO_ADDRESS
 

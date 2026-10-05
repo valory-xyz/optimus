@@ -24,11 +24,11 @@
         "contract/valory/balancer_queries/0.1.0": "bafybeihbexpjj6ho3ij7rxk4tzz3sowpa5ztawlf63y5fdmmom7xifpan4",
         "contract/valory/mech_activity/0.1.0": "bafybeifpthgtqxob46nyk7zw2enbihm4mzben5mbbwm7qdx4axzllwyy6u",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeialzfesvyvxxfft22kwc2qjdk4px6nkcnejtfxo42phh6cukucqpe",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiga4odxg3uav5zwngepkztimcktwqefpw2g2bkw67zmn5xq2wfnqq",
-        "agent/valory/optimus/0.1.0": "bafybeialkzha3txtk2ucu5k3xc6k4ph3veemlh5jl4tbexx4xpzak4tlfq",
-        "agent/valory/basius/0.1.0": "bafybeig62mpdke7klv2itusrsvmjildidlczfw3g3zc7s5vropq3s5crty",
-        "service/valory/optimus/0.1.0": "bafybeihpdn2pqlrwrkdlgaztybrzz2xrsfbfzttbckfcehplpor2moa5ce",
-        "service/valory/basius/0.1.0": "bafybeia4phkolcghps2ykvuruwo3jwv3kz7mttmlnvkhmz54fgmgn3kqly"
+        "skill/valory/optimus_abci/0.1.0": "bafybeienlgthide65hifad5aecn7bg432yjoak2455f56uk2smrhwwnzie",
+        "agent/valory/optimus/0.1.0": "bafybeief2l3urlegnjj4mnrlgm4utciyacghzq4kw3ihv3rrcykdzpsize",
+        "agent/valory/basius/0.1.0": "bafybeiaua7j2jb3vk6w3luqowee6wkwrc6fhchkxkt3r24kkabi7jk67ti",
+        "service/valory/optimus/0.1.0": "bafybeidjhytac54bnsykwzwpc7mug3in7ad5g5tpvcejjxrscaggqzv2fa",
+        "service/valory/basius/0.1.0": "bafybeigzieoyoidpmchgtmihyl4ne5h3rvcrn2rdf42csfqxmnjhjadeqe"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

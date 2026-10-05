@@ -32,6 +32,7 @@ from web3 import Web3
 from web3.exceptions import BadFunctionCallOutput, ContractLogicError
 
 import packages.valory.skills.optimus_abci.handlers as handlers_module
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
 from packages.valory.skills.optimus_abci.handlers import (
     BASIUS_AGENT_PROFILE_PATH,
     BaseHandler,
@@ -5327,8 +5328,10 @@ class TestTokenDeposit:
             Web3.to_checksum_address(_PD_TRACKER)
         )
 
-    def test_a_failed_deposit_after_a_successful_approve_is_reported(self) -> None:
-        """A standing allowance with no deposit is not a funded pre-deposit."""
+    def test_a_failed_deposit_after_a_successful_approve_is_not_a_shortfall(
+        self,
+    ) -> None:
+        """The EOA held the token, so a failed send says nothing about its funds."""
         handler, _ = _make_predeposit_handler()
         _install_rpc(
             handler,
@@ -5346,7 +5349,7 @@ class TestTokenDeposit:
                 _PD_TOKEN,
                 _PD_TARGET,
             )
-            is handlers_module.MechDepositOutcome.UNDERFUNDED
+            is handlers_module.MechDepositOutcome.UNAVAILABLE
         )
         assert handler._send_from_eoa.call_count == 2
 
@@ -5400,7 +5403,7 @@ class TestTokenDeposit:
         )
         handler._check_usdc_balance = MagicMock(return_value=_PD_TARGET)
         handler._send_from_eoa = MagicMock(return_value=False)
-        assert handlers_module.MechDepositOutcome.UNDERFUNDED is handler._deposit_token(
+        assert handlers_module.MechDepositOutcome.UNAVAILABLE is handler._deposit_token(
             _PD_CHAIN,
             _PD_CHAIN_ID,
             SimpleNamespace(address=_PD_EOA),
@@ -5475,6 +5478,26 @@ class TestNativeDeposit:
             10**18,
         )
         assert handler._send_from_eoa.call_args.kwargs["value"] == 500
+
+    def test_a_failed_native_send_is_not_a_shortfall(self) -> None:
+        """The balance covered the deposit, so the failure is not about funds."""
+        handler, _ = _make_predeposit_handler()
+        balance = handlers_module.X402_ETH_DEFICIT_FLOOR_WEI + 10**18
+        _install_rpc(
+            handler, {_PD_TRACKER: _make_fake_contract()}, native_balance=balance
+        )
+        handler._send_from_eoa = MagicMock(return_value=False)
+        assert (
+            handler._deposit_native(
+                _PD_CHAIN,
+                _PD_CHAIN_ID,
+                SimpleNamespace(address=_PD_EOA),
+                _PD_SAFE,
+                _PD_TRACKER,
+                4242,
+            )
+            is handlers_module.MechDepositOutcome.UNAVAILABLE
+        )
 
     def test_the_native_deposit_credits_the_safe(self) -> None:
         """The EOA sends the value but the Safe is the requester credited."""
@@ -5920,6 +5943,42 @@ class TestMechDepositReporting:
         )
         handler._record_x402_topup_outcome.assert_not_called()
 
+    @pytest.mark.parametrize(
+        "sends",
+        [
+            pytest.param([False], id="approve fails"),
+            pytest.param([True, False], id="deposit fails after approve"),
+        ],
+    )
+    def test_a_deposit_that_keeps_failing_does_not_gate_chat(self, sends: Any) -> None:
+        """A reverting or timed-out send on a funded agent is not a funding verdict."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(mapRequesterBalances=0, token=_PD_TOKEN)
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
+        _install_rpc(
+            handler,
+            {
+                _PD_MARKETPLACE: marketplace,
+                _PD_TRACKER: tracker,
+                _PD_TOKEN: _make_fake_contract(),
+            },
+        )
+        handler._check_usdc_balance = MagicMock(return_value=_PD_CAP)
+        handler._send_from_eoa = MagicMock(side_effect=sends)
+        handler._record_x402_topup_outcome = MagicMock()
+
+        outcome = handler._top_up_mech_pre_deposit(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_PAYMENT_TYPE,
+        )
+        handler._record_mech_pre_deposit_outcome(outcome)
+
+        assert outcome is handlers_module.MechDepositOutcome.UNAVAILABLE
+        handler._record_x402_topup_outcome.assert_not_called()
+
     def test_an_unreadable_tracker_token_does_not_gate_chat(self) -> None:
         """An RPC failure mid-top-up must not turn into a funding verdict.
 
@@ -6030,3 +6089,63 @@ class TestPaidCallFundingLock:
             handler._maintain_paid_call_funding()
         assert handlers_module._PAID_CALL_FUNDING_LOCK.acquire(blocking=False)
         handlers_module._PAID_CALL_FUNDING_LOCK.release()
+
+
+class TestPaidCallFundingOffTheTradingChain:
+    """Cover an agent that trades on one chain and pays for calls on another."""
+
+    @staticmethod
+    def _handler() -> Any:
+        """Return a handler trading on base with the mech on the default chain."""
+        handler, ctx = _make_predeposit_handler(use_mech_facilitator=True)
+        ctx.params.target_investment_chains = ["base", "optimism", "mode"]
+        ctx.agent_address = _PD_EOA
+        return handler, ctx
+
+    def test_the_deficit_is_reported_where_the_swap_runs(self) -> None:
+        """ETH sent to the trading chain never reaches a swap on the mech chain."""
+        handler, _ = self._handler()
+        result = handler._inject_x402_eth_deficit({}, 1000)
+        assert result == {_PD_CHAIN: {_PD_EOA: {ZERO_ADDRESS: {"deficit": "1000"}}}}
+
+    def test_the_trading_chain_balance_does_not_offset_the_deficit(self) -> None:
+        """A funded trading chain used to hide a shortfall on the mech chain."""
+        handler, _ = self._handler()
+        existing = {"base": {_PD_EOA: {ZERO_ADDRESS: {"balance": "999999"}}}}
+        result = handler._inject_x402_eth_deficit(existing, 1000)
+        assert result[_PD_CHAIN][_PD_EOA][ZERO_ADDRESS]["deficit"] == "1000"
+        assert "deficit" not in result["base"][_PD_EOA][ZERO_ADDRESS]
+
+    def test_the_plain_route_still_reports_on_the_trading_chain(self) -> None:
+        """Off the facilitator the swap runs on the trading chain, as before."""
+        handler, ctx = _make_predeposit_handler(use_mech_facilitator=False)
+        ctx.params.target_investment_chains = ["base"]
+        ctx.agent_address = _PD_EOA
+        result = handler._inject_x402_eth_deficit({}, 1000)
+        assert list(result) == ["base"]
+
+    def test_differing_chains_are_warned_about(self) -> None:
+        """A funder watching only the trading chain will not fund the mech chain."""
+        handler, ctx = self._handler()
+        handler._warn_if_paid_calls_are_funded_off_the_trading_chain()
+        message = ctx.logger.warning.call_args[0][0]
+        assert f"funded on {_PD_CHAIN}" in message
+        assert "trades on base" in message
+
+    @pytest.mark.parametrize(
+        "use_mech_facilitator,trading_chains",
+        [
+            pytest.param(True, [_PD_CHAIN], id="facilitator on the trading chain"),
+            pytest.param(False, ["base"], id="plain x402 route"),
+        ],
+    )
+    def test_matching_chains_are_not_warned_about(
+        self, use_mech_facilitator: bool, trading_chains: Any
+    ) -> None:
+        """The warning is for a misconfiguration, not for every start-up."""
+        handler, ctx = _make_predeposit_handler(
+            use_mech_facilitator=use_mech_facilitator
+        )
+        ctx.params.target_investment_chains = trading_chains
+        handler._warn_if_paid_calls_are_funded_off_the_trading_chain()
+        ctx.logger.warning.assert_not_called()

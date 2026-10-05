@@ -39,9 +39,6 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
 from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import (
     CallCheckpointRound,
 )
-from packages.valory.skills.liquidity_trader_abci.states.check_mech_pre_deposit import (
-    CheckMechPreDepositRound,
-)
 from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import (
     CheckStakingKPIMetRound,
 )
@@ -76,9 +73,6 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
             submitter_to_event: Dict[str, Event] = {
                 CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
                 CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
-                CheckMechPreDepositRound.auto_round_id(): (
-                    Event.MECH_PRE_DEPOSIT_TX_EXECUTED
-                ),
                 DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
                 FetchStrategiesRound.auto_round_id(): Event.TRANSFER_COMPLETED,
                 WithdrawFundsRound.auto_round_id(): Event.WITHDRAWAL_COMPLETED,

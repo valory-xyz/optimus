@@ -10,7 +10,6 @@ alphabet_in:
 - FINALIZE_TIMEOUT
 - INCORRECT_SERIALIZATION
 - INSUFFICIENT_FUNDS
-- MECH_PRE_DEPOSIT_TX_EXECUTED
 - NEGATIVE
 - NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
@@ -41,7 +40,6 @@ start_states:
 states:
 - CallCheckpointRound
 - CheckLateTxHashesRound
-- CheckMechPreDepositRound
 - CheckStakingKPIMetRound
 - CheckTransactionHistoryRound
 - CollectSignatureRound
@@ -78,20 +76,14 @@ transition_func:
     (CheckLateTxHashesRound, NEGATIVE): ResetAndPauseRound
     (CheckLateTxHashesRound, NONE): ResetAndPauseRound
     (CheckLateTxHashesRound, NO_MAJORITY): ResetAndPauseRound
-    (CheckMechPreDepositRound, DONE): GetPositionsRound
-    (CheckMechPreDepositRound, NONE): GetPositionsRound
-    (CheckMechPreDepositRound, NO_MAJORITY): CheckMechPreDepositRound
-    (CheckMechPreDepositRound, ROUND_TIMEOUT): CheckMechPreDepositRound
-    (CheckMechPreDepositRound, SETTLE): RandomnessTransactionSubmissionRound
-    (CheckMechPreDepositRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
-    (CheckStakingKPIMetRound, DONE): CheckMechPreDepositRound
-    (CheckStakingKPIMetRound, ERROR): CheckMechPreDepositRound
+    (CheckStakingKPIMetRound, DONE): GetPositionsRound
+    (CheckStakingKPIMetRound, ERROR): GetPositionsRound
     (CheckStakingKPIMetRound, NONE): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, SETTLE): RandomnessTransactionSubmissionRound
-    (CheckStakingKPIMetRound, STAKING_KPI_MET): CheckMechPreDepositRound
-    (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): CheckMechPreDepositRound
+    (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
+    (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
     (CheckStakingKPIMetRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CheckTransactionHistoryRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckTransactionHistoryRound, CHECK_TIMEOUT): CheckTransactionHistoryRound
@@ -134,7 +126,6 @@ transition_func:
     (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
-    (PostTxSettlementRound, MECH_PRE_DEPOSIT_TX_EXECUTED): GetPositionsRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound

@@ -61,7 +61,7 @@ fingerprint:
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeielhxk7hstefud4xkvw2cxysverkegttcpm6uec7en7cmeuli2d6q
-  handlers.py: bafybeiesv5jygq42lfi2bbjcf4xtlgo6eu6hhpcbzyklky5ptzawnh6bdq
+  handlers.py: bafybeibgpfnexfvf5533lpxa65qtmyi2443ez7erzdkgs35vsthr3kymhq
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -159,7 +159,7 @@ fingerprint:
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeigr43hq5u5qnjx6xucyx4n4zqzo5k5ixacbvi343gvw4dsotlgrb4
+  tests/test_handlers.py: bafybeiazwslu6lgxodkg3lqey73g2s3dve3bj6mwf7evnmpiikzhxs7usy
   tests/test_models.py: bafybeiashcolhjijpi7deibstjm35dgv3cajqwet577yl2vovvvgfzja7y
   tests/test_prompts.py: bafybeibpbnuqhgntud3jiw4fjq77tffdcjoczg4mwu2qryka7vt7g5rl7i
 fingerprint_ignore_patterns: []

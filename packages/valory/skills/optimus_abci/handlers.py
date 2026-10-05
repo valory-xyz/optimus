@@ -42,7 +42,7 @@ from aea.skills.base import Handler
 from aea_ledger_ethereum.ethereum import EthereumCrypto
 from eth_account import Account
 from web3 import Web3
-from web3.exceptions import ContractLogicError, Web3Exception
+from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3Exception
 
 from packages.valory.connections.genai.connection import (
     PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
@@ -1238,26 +1238,34 @@ class HttpHandler(BaseHttpHandler):
             )
             return None
 
-    def _tracker_token(self, chain: str, tracker: str) -> Optional[str]:
-        """Return the ERC20 a tracker takes, or ``None`` when it takes native.
+    def _tracker_token(self, chain: str, tracker: str) -> Tuple[bool, Optional[str]]:
+        """Return which asset a tracker takes.
 
         :param chain: chain name.
         :param tracker: the balance tracker address.
-        :return: the token address, or ``None`` for a native tracker.
+        :return: whether the answer is known, and the ERC20 address, or
+            ``None`` for a tracker that takes native value.
 
-        Only a token tracker exposes ``token()``. The native one has no such
-        function, so the call reverting is the signal rather than an error.
+        Only a token tracker exposes ``token()``, so the contract answering
+        that it has no such function is what identifies a native one. A read
+        that never reached the contract says nothing either way, and treating
+        it as "native" would send value to a tracker that takes a token.
         """
         contract = self._contract(chain, tracker, self._TRACKER_ABI)
         if contract is None:
-            return None
+            return False, None
         try:
             token = contract.functions.token().call()
-        except Exception:  # pylint: disable=broad-except
-            return None
+        except (ContractLogicError, BadFunctionCallOutput):
+            return True, None
+        except Exception as exc:  # pylint: disable=broad-except
+            self.context.logger.warning(
+                f"Could not read the tracker's token ({exc}); skipping the check."
+            )
+            return False, None
         if not token or int(token, 16) == 0:
-            return None
-        return Web3.to_checksum_address(token)
+            return True, None
+        return True, Web3.to_checksum_address(token)
 
     def _send_from_eoa(
         self,
@@ -1464,7 +1472,9 @@ class HttpHandler(BaseHttpHandler):
         if amount <= 0:
             return MechDepositOutcome.SUFFICIENT
 
-        token = self._tracker_token(chain, tracker)
+        token_known, token = self._tracker_token(chain, tracker)
+        if not token_known:
+            return MechDepositOutcome.UNAVAILABLE
         self.context.logger.info(
             f"Mech pre-deposit {deposited} is below the floor {floor}; "
             f"depositing {amount} into {tracker}."
@@ -1534,20 +1544,17 @@ class HttpHandler(BaseHttpHandler):
 
         A pre-deposit the agent could not pay for means paid calls are refused,
         which is the same user-visible state as an unfunded x402 balance, so it
-        is reported through the same field rather than a second one. Only
-        ``UNDERFUNDED`` can name a number, and even then only when the EOA's own
-        native balance is below the refill floor: a deposit can fail on a funded
-        agent, and asking the user for money that would not help is worse than
-        reporting nothing.
+        is reported through the same field rather than a second one. A deficit
+        is only named when the EOA's own native balance is below the refill
+        floor: a deposit can fail on a funded agent, and asking the user for
+        money that would not help is worse than reporting nothing.
 
-        A successful top-up records nothing, so the swap's own verdict stands.
+        Only ``UNDERFUNDED`` records anything. The field also gates chat, so
+        ``UNAVAILABLE`` leaves the swap's verdict standing the way a successful
+        top-up does: not knowing the state of the pre-deposit is no reason to
+        refuse prompts, and one failed read would otherwise do exactly that.
         """
-        if outcome is MechDepositOutcome.SUFFICIENT:
-            return
-        if outcome is MechDepositOutcome.UNAVAILABLE:
-            self._record_x402_topup_outcome(
-                False, None, "mech pre-deposit could not be read or reached"
-            )
+        if outcome is not MechDepositOutcome.UNDERFUNDED:
             return
 
         chain = str(self.coingecko.mech_chain).lower()

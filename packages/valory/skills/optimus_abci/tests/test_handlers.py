@@ -29,6 +29,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 import requests
 from web3 import Web3
+from web3.exceptions import BadFunctionCallOutput, ContractLogicError
 
 import packages.valory.skills.optimus_abci.handlers as handlers_module
 from packages.valory.skills.optimus_abci.handlers import (
@@ -5154,24 +5155,49 @@ class TestPreDepositReads:
         tracker = _make_fake_contract(token=_PD_TOKEN)
         _install_rpc(handler, {_PD_TRACKER: tracker})
         assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) == (
-            Web3.to_checksum_address(_PD_TOKEN)
+            True,
+            Web3.to_checksum_address(_PD_TOKEN),
         )
 
     @pytest.mark.parametrize(
-        "token", [_PD_ZERO, "", None, ValueError("no such function")]
+        "token",
+        [
+            _PD_ZERO,
+            "",
+            None,
+            ContractLogicError("execution reverted"),
+            BadFunctionCallOutput("no data returned"),
+        ],
     )
     def test_a_native_tracker_reports_no_token(self, token: Any) -> None:
-        """No token means the tracker takes native value."""
+        """The contract answering that it has no token() is what marks it native."""
         handler, _ = _make_predeposit_handler()
         tracker = _make_fake_contract(token=token)
         _install_rpc(handler, {_PD_TRACKER: tracker})
-        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) is None
+        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) == (True, None)
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            requests.exceptions.Timeout("rpc timed out"),
+            requests.exceptions.ConnectionError("rpc unreachable"),
+            ValueError("malformed response"),
+        ],
+    )
+    def test_a_read_that_never_reached_the_tracker_is_not_native(
+        self, error: Exception
+    ) -> None:
+        """An RPC failure says nothing about which asset the tracker takes."""
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(token=error)
+        _install_rpc(handler, {_PD_TRACKER: tracker})
+        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) == (False, None)
 
     def test_no_rpc_means_no_token_reading(self) -> None:
         """Without an RPC the token cannot be read."""
         handler, _ = _make_predeposit_handler()
         handler._get_web3_instance = MagicMock(return_value=None)
-        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) is None
+        assert handler._tracker_token(_PD_CHAIN, _PD_TRACKER) == (False, None)
 
 
 class TestSendFromEoa:
@@ -5619,7 +5645,7 @@ class TestTopUpSizing:
         """A tracker with no token() is funded with value, not an approve."""
         handler, _ = _make_predeposit_handler()
         tracker = _make_fake_contract(
-            mapRequesterBalances=0, token=ValueError("no such function")
+            mapRequesterBalances=0, token=ContractLogicError("execution reverted")
         )
         marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
         _install_rpc(
@@ -5885,16 +5911,42 @@ class TestMechDepositReporting:
         )
         handler._record_x402_topup_outcome.assert_not_called()
 
-    def test_an_unreachable_facilitator_reports_no_deficit(self) -> None:
-        """The agent does not know funds are short, so it must not ask for money."""
+    def test_an_unknown_pre_deposit_leaves_the_swap_verdict_alone(self) -> None:
+        """Recording anything here would refuse chat on one failed read."""
         handler, _ = _make_predeposit_handler()
         handler._record_x402_topup_outcome = MagicMock()
         handler._record_mech_pre_deposit_outcome(
             handlers_module.MechDepositOutcome.UNAVAILABLE
         )
-        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
-        assert sufficient is False
-        assert deficit is None
+        handler._record_x402_topup_outcome.assert_not_called()
+
+    def test_an_unreadable_tracker_token_does_not_gate_chat(self) -> None:
+        """An RPC failure mid-top-up must not turn into a funding verdict.
+
+        Read as "native", it would send the deposit down the value route,
+        fail there and be recorded as the agent being unable to pay.
+        """
+        handler, _ = _make_predeposit_handler()
+        tracker = _make_fake_contract(
+            mapRequesterBalances=0, token=requests.exceptions.Timeout("rpc")
+        )
+        marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
+        _install_rpc(handler, {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker})
+        handler._send_from_eoa = MagicMock()
+        handler._record_x402_topup_outcome = MagicMock()
+
+        outcome = handler._top_up_mech_pre_deposit(
+            _PD_CHAIN,
+            _PD_CHAIN_ID,
+            SimpleNamespace(address=_PD_EOA),
+            _PD_SAFE,
+            _PD_PAYMENT_TYPE,
+        )
+        handler._record_mech_pre_deposit_outcome(outcome)
+
+        assert outcome is handlers_module.MechDepositOutcome.UNAVAILABLE
+        handler._send_from_eoa.assert_not_called()
+        handler._record_x402_topup_outcome.assert_not_called()
 
     def test_an_unaffordable_deposit_on_an_empty_eoa_reports_the_floor(self) -> None:
         """This is what makes Pearl ask the user to top the agent up."""

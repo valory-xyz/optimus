@@ -29,7 +29,6 @@ import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
-from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
@@ -208,6 +207,7 @@ GAS_ESTIMATE_HEADROOM = 1.3
 # A deposit can mine well after the default receipt wait, and reporting it as
 # failed is what makes the next cycle deposit again.
 MECH_DEPOSIT_RECEIPT_TIMEOUT = 180
+MECH_DEPOSIT_READBACK_RETRY_SECS = 2
 
 
 class MechDepositOutcome(Enum):
@@ -1004,9 +1004,6 @@ class HttpHandler(BaseHttpHandler):
         """
         if gate_chat:
             self.shared_state.sufficient_funds_for_x402_payments = sufficient
-        # Kept separately so the pre-deposit step can fall back to the EOA's
-        # verdict when the pot cannot be read.
-        self.shared_state.x402_eoa_sufficient = sufficient
         self.shared_state.x402_funding_checked = True
         if eth_deficit is None:
             self.context.logger.info(
@@ -1517,6 +1514,10 @@ class HttpHandler(BaseHttpHandler):
         # The deposit is clamped to what the EOA held, so a sent deposit says
         # nothing about whether the pot can now pay for calls. Read it back.
         after = self._read_pre_deposit(chain, tracker, safe_address)
+        if after is not None and after < floor:
+            # A node behind the head still serves the pre-deposit balance.
+            time.sleep(MECH_DEPOSIT_READBACK_RETRY_SECS)
+            after = self._read_pre_deposit(chain, tracker, safe_address)
         if after is None:
             return MechDepositOutcome.UNAVAILABLE
         if after < floor:
@@ -1586,19 +1587,27 @@ class HttpHandler(BaseHttpHandler):
         a funded pot records sufficient and keeps the swap's deficit;
         ``UNDERFUNDED`` records insufficient, with a deficit only when the EOA
         is below the refill floor. When the pot cannot be read
-        (``UNAVAILABLE``) the EOA's own verdict from the swap stands, so a
-        failed read neither refuses chat on a healthy agent nor opens it on
-        a broke one.
+        (``UNAVAILABLE``) its last verdict stands, so one failed read neither
+        refuses chat on a full pot nor opens it on an empty one. Until the
+        pot has been read once there is no such verdict, and the swap's
+        verdict on the EOA stands in, so a pot that can never be read does
+        not leave chat refused on a healthy agent.
         """
-        if outcome is MechDepositOutcome.SUFFICIENT:
-            self._record_x402_topup_outcome(True, None, "mech pre-deposit funded")
-            return
         if outcome is MechDepositOutcome.UNAVAILABLE:
+            if self.shared_state.x402_pot_checked:
+                self.context.logger.info(
+                    "Mech pre-deposit unreadable; its last verdict stands."
+                )
+                return
             self._record_x402_topup_outcome(
                 self.shared_state.x402_eoa_sufficient,
                 None,
-                "mech pre-deposit unreadable; the EOA's verdict stands",
+                "mech pre-deposit never read; the EOA's verdict stands",
             )
+            return
+        self.shared_state.x402_pot_checked = True
+        if outcome is MechDepositOutcome.SUFFICIENT:
+            self._record_x402_topup_outcome(True, None, "mech pre-deposit funded")
             return
 
         chain = str(self.coingecko.mech_chain).lower()
@@ -1698,10 +1707,16 @@ class HttpHandler(BaseHttpHandler):
             return
         # On the facilitator route the pre-deposit pays for calls and decides
         # the chat flag; the swap only refills the EOA and reports the deficit.
-        record = partial(
-            self._record_x402_topup_outcome,
-            gate_chat=not self.coingecko.use_mech_facilitator,
-        )
+        # Its verdict on the EOA is kept apart from the chat flag, for the
+        # pre-deposit to fall back on while the pot has never been read.
+        gate_chat = not self.coingecko.use_mech_facilitator
+
+        def record(sufficient: bool, eth_deficit: Optional[int], reason: str) -> None:
+            self.shared_state.x402_eoa_sufficient = sufficient
+            self._record_x402_topup_outcome(
+                sufficient, eth_deficit, reason, gate_chat=gate_chat
+            )
+
         try:
             chain = self._paid_call_chain()
             eoa_account = self._get_eoa_account()

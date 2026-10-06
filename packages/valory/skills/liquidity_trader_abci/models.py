@@ -204,6 +204,7 @@ class SharedState(BaseSharedState):
         self.x402_funding_checked: bool = False
         # The swap's own verdict on the EOA, kept apart from the chat flag.
         self.x402_eoa_sufficient: bool = False
+        self.x402_pot_checked: bool = False
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""
@@ -732,9 +733,8 @@ class Params(BaseParams):
         self.strategy_backoff_max_seconds: int = kwargs.pop(
             "strategy_backoff_max_seconds", 14400
         )
-        # Hourly price histories used to rank pools and to size Velodrome CL
-        # tick bands; at 12h the bands lag a volatility change by up to half
-        # a day, traded for not re-buying the histories every cycle.
+        # Pool-ranking price histories; the Velodrome CL band history is
+        # capped at 1h separately.
         self.strategy_price_cache_ttl: int = kwargs.pop(
             "strategy_price_cache_ttl", 43200
         )

@@ -12,7 +12,7 @@ fingerprint:
   tests/conftest.py: bafybeif24a2wrul7gh44bsxmwcw2asdxkx4rtgfeijnr3snpo2gtfywhfy
   tests/test_velodrome_pools_search.py: bafybeibcomhr3y6ts34zem64mqtzbdwv7bsj2go3afg2pvtql77stcgs6q
   velodrome_lp_sugar.json: bafybeiamf3gev3vfeikh2mjmrhaqmyrsuzl6bt34gcilgz375z4o4uap2q
-  velodrome_pools_search.py: bafybeihtllqbfzz6doga76qc7mcknblad4neh5u5nzr3bfov32mrmfvl6a
+  velodrome_pools_search.py: bafybeie5mxwmepjairtutu4p5bufm4ksnzlq3tbwlgf4droe742vlqrlye
 fingerprint_ignore_patterns: []
 entry_point: velodrome_pools_search.py
 callable: run

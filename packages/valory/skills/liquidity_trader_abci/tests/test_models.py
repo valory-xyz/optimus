@@ -74,6 +74,8 @@ class TestSharedState:
         assert state.x402_eth_deficit == 0
         assert state.sufficient_funds_for_x402_payments is False
         assert state.x402_funding_checked is False
+        assert state.x402_eoa_sufficient is False
+        assert state.x402_pot_checked is False
 
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""

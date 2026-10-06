@@ -287,6 +287,10 @@ CACHE = {
 # Keys: (token_id, time_period) -> {"data": ..., "timestamp": float}
 COINGECKO_PRICE_CACHE: Dict[str, Any] = {}
 COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwargs
+# Hourly history that sizes CL tick bands from the last 100 points. It is never
+# cached longer than this, whatever TTL the pool-ranking histories get, so a
+# volatility change reaches the band width within the hour.
+CL_HISTORY_CACHE_TTL: int = 3600
 
 
 def get_cached_price(
@@ -2216,6 +2220,7 @@ def get_historical_market_data(
     """Get historical market data using x402 requests when available"""
     if price_cache is None:
         price_cache = {}
+    price_cache_ttl = min(price_cache_ttl, CL_HISTORY_CACHE_TTL)
     try:
         # Check price cache first
         cached = get_cached_price(

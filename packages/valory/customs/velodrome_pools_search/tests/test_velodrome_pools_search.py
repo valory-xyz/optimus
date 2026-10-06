@@ -60,6 +60,7 @@ from packages.valory.customs.velodrome_pools_search.velodrome_pools_search impor
     get_epochs_by_address,
     get_errors,
     get_filtered_pools_for_velodrome,
+    CL_HISTORY_CACHE_TTL,
     get_historical_market_data,
     get_opportunities_for_velodrome,
     get_pool_token_history,
@@ -2283,6 +2284,76 @@ class TestGetCoinIdFromAddress:
 
 class TestGetHistoricalMarketData:
     """Tests for get_historical_market_data."""
+
+    @pytest.mark.parametrize("requested_ttl", [43200, 7200, 3601])
+    def test_the_band_history_is_never_cached_longer_than_an_hour(
+        self, requested_ttl: int
+    ) -> None:
+        """A volatility change must reach the tick bands within the hour.
+
+        The pool-ranking histories may be cached for far longer; this series
+        sizes positions, so it caps the TTL it is handed.
+        """
+        cache: dict = {}
+        set_cached_price("ethereum", 30, {"prices": [1.0]}, cache, prefix="velo_hist")
+        cache["velo_hist_ethereum_30"]["timestamp"] -= CL_HISTORY_CACHE_TTL + 1
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+        ) as cg_class:
+            cg_class.return_value.get_coin_market_chart_by_id.return_value = {
+                "prices": [[1000000, 2.0]]
+            }
+            result = get_historical_market_data(
+                "ethereum",
+                30,
+                x402_session=MagicMock(),
+                x402_proxy="https://proxy.example.com",
+                price_cache=cache,
+                price_cache_ttl=requested_ttl,
+            )
+        assert result is not None
+        assert result["prices"] == [2.0]
+
+    def test_a_shorter_ttl_than_the_cap_is_kept(self) -> None:
+        """The cap only shortens; a caller asking for fresher data gets it."""
+        cache: dict = {}
+        set_cached_price("ethereum", 30, {"prices": [1.0]}, cache, prefix="velo_hist")
+        cache["velo_hist_ethereum_30"]["timestamp"] -= 120
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+        ) as cg_class:
+            cg_class.return_value.get_coin_market_chart_by_id.return_value = {
+                "prices": [[1000000, 2.0]]
+            }
+            result = get_historical_market_data(
+                "ethereum",
+                30,
+                x402_session=MagicMock(),
+                x402_proxy="https://proxy.example.com",
+                price_cache=cache,
+                price_cache_ttl=60,
+            )
+        assert result is not None
+        assert result["prices"] == [2.0]
+
+    def test_within_the_hour_the_band_history_is_served_from_cache(self) -> None:
+        """The cap is an hour, not zero: no refetch inside it."""
+        cache: dict = {}
+        set_cached_price("ethereum", 30, {"prices": [1.0]}, cache, prefix="velo_hist")
+        cache["velo_hist_ethereum_30"]["timestamp"] -= CL_HISTORY_CACHE_TTL - 60
+        with patch(
+            "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+        ) as cg_class:
+            result = get_historical_market_data(
+                "ethereum",
+                30,
+                x402_session=MagicMock(),
+                x402_proxy="https://proxy.example.com",
+                price_cache=cache,
+                price_cache_ttl=43200,
+            )
+        assert result == {"prices": [1.0]}
+        cg_class.return_value.get_coin_market_chart_by_id.assert_not_called()
 
     @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"

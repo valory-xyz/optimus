@@ -1496,12 +1496,27 @@ class HttpHandler(BaseHttpHandler):
             f"depositing {amount} into {tracker}."
         )
         if token is None:
-            return self._deposit_native(
+            outcome = self._deposit_native(
                 chain, chain_id, eoa_account, safe_address, tracker, amount
             )
-        return self._deposit_token(
-            chain, chain_id, eoa_account, safe_address, tracker, token, amount
-        )
+        else:
+            outcome = self._deposit_token(
+                chain, chain_id, eoa_account, safe_address, tracker, token, amount
+            )
+        if outcome is not MechDepositOutcome.SUFFICIENT:
+            return outcome
+        # The deposit is clamped to what the EOA held, so a sent deposit says
+        # nothing about whether the pot can now pay for calls. Read it back.
+        after = self._read_pre_deposit(chain, tracker, safe_address)
+        if after is None:
+            return MechDepositOutcome.UNAVAILABLE
+        if after < floor:
+            self.context.logger.warning(
+                f"Mech pre-deposit is {after} after depositing; still below the "
+                f"floor {floor}."
+            )
+            return MechDepositOutcome.UNDERFUNDED
+        return MechDepositOutcome.SUFFICIENT
 
     def _ensure_mech_pre_deposit(self) -> MechDepositOutcome:
         """Top the Safe's marketplace pre-deposit up when it runs low.
@@ -2604,6 +2619,7 @@ class HttpHandler(BaseHttpHandler):
                 self.shared_state, "sufficient_funds_for_x402_payments", False
             )
             if not sufficient_funds_for_x402_payments:
+                self.context.state.request_queue.pop()
                 self._send_ok_response(
                     http_msg,
                     http_dialogue,

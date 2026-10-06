@@ -5609,7 +5609,11 @@ class TestTopUpSizing:
         """
         handler, _ = _make_predeposit_handler(**overrides)
         token = _make_fake_contract()
-        tracker = _make_fake_contract(mapRequesterBalances=deposited, token=_PD_TOKEN)
+        tracker = _make_fake_contract(token=_PD_TOKEN)
+        # First read is the pot before the deposit; the read-back after a
+        # deposit sees it landed in full.
+        reads = SimpleNamespace(call=MagicMock(side_effect=[deposited, _PD_TARGET]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
         marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
         _install_rpc(
             handler,
@@ -5664,12 +5668,42 @@ class TestTopUpSizing:
         assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         handler._send_from_eoa.assert_not_called()
 
+    def test_a_deposit_that_leaves_the_pot_below_the_floor_is_not_sufficient(
+        self,
+    ) -> None:
+        """Leftover USDC on the EOA must not open chat on a near-empty pot.
+
+        The deposit is clamped to what the EOA holds, so a sent deposit can be
+        one base unit. Only the pot's balance after the deposit says whether
+        calls can be paid for.
+        """
+        handler, _, tracker = self._handler_at(0)
+        handler._check_usdc_balance = MagicMock(return_value=1)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, 1]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.UNDERFUNDED
+        assert handler._send_from_eoa.call_count == 2
+
+    def test_a_deposit_that_reaches_the_floor_is_sufficient(self) -> None:
+        """The pot is read back after the deposit, not assumed from the send."""
+        handler, _, tracker = self._handler_at(0)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, _PD_TARGET]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.SUFFICIENT
+
+    def test_an_unreadable_pot_after_a_deposit_is_unavailable(self) -> None:
+        """A sent deposit with no readable result is not evidence either way."""
+        handler, _, tracker = self._handler_at(0)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, ValueError("rpc")]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.UNAVAILABLE
+
     def test_a_native_tracker_takes_the_native_route(self) -> None:
         """A tracker with no token() is funded with value, not an approve."""
         handler, _ = _make_predeposit_handler()
-        tracker = _make_fake_contract(
-            mapRequesterBalances=0, token=ContractLogicError("execution reverted")
-        )
+        tracker = _make_fake_contract(token=ContractLogicError("execution reverted"))
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, _PD_TARGET]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
         marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
         _install_rpc(
             handler,
@@ -6183,6 +6217,9 @@ class TestPaidCallUnavailableMessage:
             type(handler), "shared_state", new_callable=PropertyMock, return_value=state
         ):
             handler._handle_post_process_prompt(MagicMock(), dialogue)
+        # A refused prompt must give its queue slot back, or every later
+        # strategy write from chat is dropped until the agent restarts.
+        assert handler.context.state.request_queue == []
         return handler._send_ok_response.call_args[0][2]["error"]
 
     def test_before_any_check_has_reported_it_is_initializing(self) -> None:

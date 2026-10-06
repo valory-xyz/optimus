@@ -730,7 +730,9 @@ class Params(BaseParams):
         self.strategy_backoff_max_seconds: int = kwargs.pop(
             "strategy_backoff_max_seconds", 14400
         )
-        # Histories are daily, so 12h staleness does not change pool ranking.
+        # Hourly price histories used to rank pools and to size Velodrome CL
+        # tick bands; at 12h the bands lag a volatility change by up to half
+        # a day, traded for not re-buying the histories every cycle.
         self.strategy_price_cache_ttl: int = kwargs.pop(
             "strategy_price_cache_ttl", 43200
         )

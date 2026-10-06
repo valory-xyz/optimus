@@ -287,6 +287,8 @@ CACHE = {
 # Keys: (token_id, time_period) -> {"data": ..., "timestamp": float}
 COINGECKO_PRICE_CACHE: Dict[str, Any] = {}
 COINGECKO_PRICE_CACHE_TTL: int = 1800  # default 30 minutes, overridable via kwargs
+# The CL band history is never cached longer than this, whatever TTL is passed.
+CL_HISTORY_CACHE_TTL: int = 3600
 
 
 def get_cached_price(
@@ -315,7 +317,13 @@ def set_cached_price(
     cache: Dict[str, Any],
     prefix: str = "il_range",
 ) -> None:
-    """Cache CoinGecko price data with current timestamp."""
+    """Cache CoinGecko price data with current timestamp.
+
+    Empty histories aren't cached, so a failed fetch retries next cycle.
+    """
+    if not isinstance(data, dict) or not data.get("prices"):
+        logger.info(f"Not caching empty price history for {token_id}")
+        return
     cache_key = f"{prefix}_{token_id}_{time_period}"
     cache[cache_key] = {
         "data": data,
@@ -2216,6 +2224,7 @@ def get_historical_market_data(
     """Get historical market data using x402 requests when available"""
     if price_cache is None:
         price_cache = {}
+    price_cache_ttl = min(price_cache_ttl, CL_HISTORY_CACHE_TTL)
     try:
         # Check price cache first
         cached = get_cached_price(

@@ -5609,7 +5609,11 @@ class TestTopUpSizing:
         """
         handler, _ = _make_predeposit_handler(**overrides)
         token = _make_fake_contract()
-        tracker = _make_fake_contract(mapRequesterBalances=deposited, token=_PD_TOKEN)
+        tracker = _make_fake_contract(token=_PD_TOKEN)
+        # First read is the pot before the deposit; the read-back after a
+        # deposit sees it landed in full.
+        reads = SimpleNamespace(call=MagicMock(side_effect=[deposited, _PD_TARGET]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
         marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
         _install_rpc(
             handler,
@@ -5622,6 +5626,11 @@ class TestTopUpSizing:
         handler._check_usdc_balance = MagicMock(return_value=_PD_CAP)
         handler._send_from_eoa = MagicMock(return_value=True)
         return handler, token, tracker
+
+    @pytest.fixture(autouse=True)
+    def _no_read_back_wait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Skip the wait before a stale read-back is retried."""
+        monkeypatch.setattr(handlers_module, "MECH_DEPOSIT_READBACK_RETRY_SECS", 0)
 
     def _top_up(self, handler: Any) -> bool:
         """Run one top-up with the standard arguments.
@@ -5658,18 +5667,78 @@ class TestTopUpSizing:
         assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         assert tracker.encode_abi.call_args.kwargs["args"][1] == 1000
 
-    def test_a_target_under_the_deposit_sends_nothing(self) -> None:
-        """A target below what is held leaves a non-positive amount."""
-        handler, _, _ = self._handler_at(100, floor=200, target=50)
-        assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            pytest.param({"floor": 200, "target": 50}, id="target under the deposit"),
+            pytest.param({"floor": 200, "cap": 0}, id="zero cap"),
+        ],
+    )
+    def test_nothing_to_deposit_while_below_the_floor_is_underfunded(
+        self, overrides: Any
+    ) -> None:
+        """A pot that cannot pay and cannot be filled must not open chat."""
+        handler, _, _ = self._handler_at(100, **overrides)
+        assert handlers_module.MechDepositOutcome.UNDERFUNDED is self._top_up(handler)
         handler._send_from_eoa.assert_not_called()
+
+    def test_a_deposit_that_leaves_the_pot_below_the_floor_is_not_sufficient(
+        self,
+    ) -> None:
+        """Leftover USDC on the EOA must not open chat on a near-empty pot.
+
+        The deposit is clamped to what the EOA holds, so a sent deposit can be
+        one base unit. Only the pot's balance after the deposit says whether
+        calls can be paid for.
+        """
+        handler, _, tracker = self._handler_at(0)
+        handler._check_usdc_balance = MagicMock(return_value=1)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, 1, 1]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.UNDERFUNDED
+        assert handler._send_from_eoa.call_count == 2
+        assert reads.call.call_count == 3
+
+    def test_a_stale_read_back_is_read_again(self) -> None:
+        """A node a block behind serves the old balance after the receipt.
+
+        One stale read must not report a landed deposit as underfunded and
+        keep chat off until the next poll.
+        """
+        handler, _, tracker = self._handler_at(0)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, 0, _PD_TARGET]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.SUFFICIENT
+        assert reads.call.call_count == 3
+
+    def test_a_read_back_at_the_floor_is_not_read_again(self) -> None:
+        """Only a result below the floor is suspected of being stale."""
+        handler, _, tracker = self._handler_at(0)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, _PD_FLOOR]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.SUFFICIENT
+        assert reads.call.call_count == 2
+
+    def test_a_deposit_that_reaches_the_floor_is_sufficient(self) -> None:
+        """The pot is read back after the deposit, not assumed from the send."""
+        handler, _, tracker = self._handler_at(0)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, _PD_TARGET]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.SUFFICIENT
+
+    def test_an_unreadable_pot_after_a_deposit_is_unavailable(self) -> None:
+        """A sent deposit with no readable result is not evidence either way."""
+        handler, _, tracker = self._handler_at(0)
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, ValueError("rpc")]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
+        assert self._top_up(handler) is handlers_module.MechDepositOutcome.UNAVAILABLE
 
     def test_a_native_tracker_takes_the_native_route(self) -> None:
         """A tracker with no token() is funded with value, not an approve."""
         handler, _ = _make_predeposit_handler()
-        tracker = _make_fake_contract(
-            mapRequesterBalances=0, token=ContractLogicError("execution reverted")
-        )
+        tracker = _make_fake_contract(token=ContractLogicError("execution reverted"))
+        reads = SimpleNamespace(call=MagicMock(side_effect=[0, _PD_TARGET]))
+        tracker.functions.mapRequesterBalances = lambda *_: reads
         marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
         _install_rpc(
             handler,
@@ -5925,23 +5994,110 @@ class TestPendingNonce:
 class TestMechDepositReporting:
     """Cover what a failed pre-deposit tells /funds-status."""
 
-    def test_a_successful_top_up_leaves_the_swap_verdict_alone(self) -> None:
-        """Overwriting it would clear a deficit the swap had just reported."""
+    def test_a_funded_pre_deposit_overrides_a_failed_swap(self) -> None:
+        """The pot pays for calls, so a full pot means prompts can be served."""
         handler, _ = _make_predeposit_handler()
         handler._record_x402_topup_outcome = MagicMock()
         handler._record_mech_pre_deposit_outcome(
             handlers_module.MechDepositOutcome.SUFFICIENT
         )
-        handler._record_x402_topup_outcome.assert_not_called()
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is True
+        assert deficit is None
 
-    def test_an_unknown_pre_deposit_leaves_the_swap_verdict_alone(self) -> None:
-        """Recording anything here would refuse chat on one failed read."""
+    def test_a_funded_pre_deposit_keeps_the_swap_deficit(self) -> None:
+        """The ETH the swap asked for is still what the next refill needs."""
         handler, _ = _make_predeposit_handler()
-        handler._record_x402_topup_outcome = MagicMock()
-        handler._record_mech_pre_deposit_outcome(
-            handlers_module.MechDepositOutcome.UNAVAILABLE
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False, x402_eth_deficit=777
         )
-        handler._record_x402_topup_outcome.assert_not_called()
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.SUFFICIENT
+            )
+        assert state.sufficient_funds_for_x402_payments is True
+        assert state.x402_eth_deficit == 777
+        assert state.x402_funding_checked is True
+
+    @pytest.mark.parametrize("eoa_sufficient", [True, False])
+    def test_a_pot_never_read_falls_back_to_the_eoa_verdict(
+        self, eoa_sufficient: bool
+    ) -> None:
+        """Until the pot has been read, the swap's view of the EOA decides.
+
+        The swap no longer gates chat on this route, so recording nothing
+        here left the flag wherever setup put it: False, for as long as the
+        read kept failing, on a healthy agent.
+        """
+        handler, _ = _make_predeposit_handler()
+        state = SimpleNamespace(
+            x402_eoa_sufficient=eoa_sufficient, x402_pot_checked=False
+        )
+        handler._record_x402_topup_outcome = MagicMock()
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.UNAVAILABLE
+            )
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is eoa_sufficient
+        assert deficit is None
+
+    def test_one_failed_read_keeps_the_last_pot_verdict(self) -> None:
+        """A full pot stays open through an RPC hiccup, whatever the EOA says.
+
+        The deposit moves the EOA's USDC into the pot, so the EOA usually sits
+        below the swap threshold and the swap records it as insufficient. If
+        an unreadable pot fell back to that, one hiccup would refuse chat on
+        a pot that can pay.
+        """
+        handler, _ = _make_predeposit_handler()
+        handler._x402_floor_deficit_if_unfunded = MagicMock(return_value=None)
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_funding_checked=True,
+            x402_eth_deficit=0,
+            x402_eoa_sufficient=False,
+            x402_pot_checked=False,
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.SUFFICIENT
+            )
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.UNAVAILABLE
+            )
+            assert state.sufficient_funds_for_x402_payments is True
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.UNDERFUNDED
+            )
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.UNAVAILABLE
+            )
+            assert state.sufficient_funds_for_x402_payments is False
+
+    def test_the_pot_does_not_rewrite_the_eoa_verdict(self) -> None:
+        """``x402_eoa_sufficient`` is the swap's alone, or the fallback is circular."""
+        handler, _ = _make_predeposit_handler()
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_funding_checked=True,
+            x402_eth_deficit=0,
+            x402_eoa_sufficient=False,
+            x402_pot_checked=False,
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.SUFFICIENT
+            )
+        assert state.x402_eoa_sufficient is False
 
     @pytest.mark.parametrize(
         "sends",
@@ -5966,6 +6122,7 @@ class TestMechDepositReporting:
         handler._check_usdc_balance = MagicMock(return_value=_PD_CAP)
         handler._send_from_eoa = MagicMock(side_effect=sends)
         handler._record_x402_topup_outcome = MagicMock()
+        handler.shared_state.x402_pot_checked = False
 
         outcome = handler._top_up_mech_pre_deposit(
             _PD_CHAIN,
@@ -5977,7 +6134,9 @@ class TestMechDepositReporting:
         handler._record_mech_pre_deposit_outcome(outcome)
 
         assert outcome is handlers_module.MechDepositOutcome.UNAVAILABLE
-        handler._record_x402_topup_outcome.assert_not_called()
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is handler.shared_state.x402_eoa_sufficient
+        assert deficit is None
 
     def test_an_unreadable_tracker_token_does_not_gate_chat(self) -> None:
         """An RPC failure mid-top-up must not turn into a funding verdict.
@@ -5993,6 +6152,7 @@ class TestMechDepositReporting:
         _install_rpc(handler, {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker})
         handler._send_from_eoa = MagicMock()
         handler._record_x402_topup_outcome = MagicMock()
+        handler.shared_state.x402_pot_checked = False
 
         outcome = handler._top_up_mech_pre_deposit(
             _PD_CHAIN,
@@ -6005,7 +6165,9 @@ class TestMechDepositReporting:
 
         assert outcome is handlers_module.MechDepositOutcome.UNAVAILABLE
         handler._send_from_eoa.assert_not_called()
-        handler._record_x402_topup_outcome.assert_not_called()
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is handler.shared_state.x402_eoa_sufficient
+        assert deficit is None
 
     def test_an_unaffordable_deposit_on_an_empty_eoa_reports_the_floor(self) -> None:
         """This is what makes Pearl ask the user to top the agent up."""
@@ -6149,3 +6311,242 @@ class TestPaidCallFundingOffTheTradingChain:
         ctx.params.target_investment_chains = trading_chains
         handler._warn_if_paid_calls_are_funded_off_the_trading_chain()
         ctx.logger.warning.assert_not_called()
+
+
+class TestPaidCallUnavailableMessage:
+    """Cover what a refused prompt is told."""
+
+    @staticmethod
+    def _refused_prompt(handler: Any, state: Any) -> str:
+        handler.context.params.use_x402 = True
+        handler.context.state.request_queue = []
+        handler._send_ok_response = MagicMock()
+        dialogue = MagicMock()
+        dialogue.dialogue_label.dialogue_reference = ("req1", "")
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._handle_post_process_prompt(MagicMock(), dialogue)
+        # A refused prompt must give its queue slot back, or every later
+        # strategy write from chat is dropped until the agent restarts.
+        assert handler.context.state.request_queue == []
+        return handler._send_ok_response.call_args[0][2]["error"]
+
+    def test_before_any_check_has_reported_it_is_initializing(self) -> None:
+        """Nothing is known yet, so "initializing" is the truth."""
+        handler, _ = _make_predeposit_handler()
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_funding_checked=False,
+            x402_eth_deficit=0,
+        )
+        assert self._refused_prompt(handler, state).startswith("System initializing")
+
+    def test_a_recorded_deficit_asks_for_funds(self) -> None:
+        """Waiting will not fix this, so the user is told what will."""
+        handler, _ = _make_predeposit_handler()
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_funding_checked=True,
+            x402_eth_deficit=300000000000000,
+        )
+        message = self._refused_prompt(handler, state)
+        assert "Add ETH to your agent" in message
+        assert "initializing" not in message
+
+    @pytest.mark.parametrize("deficit", [0, None])
+    def test_a_check_without_a_deficit_is_temporarily_unavailable(
+        self, deficit: Any
+    ) -> None:
+        """Infrastructure failures must not ask the user for money."""
+        handler, _ = _make_predeposit_handler()
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_funding_checked=True,
+            x402_eth_deficit=deficit,
+        )
+        message = self._refused_prompt(handler, state)
+        assert "temporarily unavailable" in message
+        assert "Add ETH" not in message
+        assert "initializing" not in message
+
+    def test_a_check_that_reports_marks_funding_as_checked(self) -> None:
+        """Every exit of the swap and the deposit routes through the recorder."""
+        handler, _ = _make_predeposit_handler()
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_eth_deficit=0,
+            x402_funding_checked=False,
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_x402_topup_outcome(False, None, "LiFi quote unavailable")
+        assert state.x402_funding_checked is True
+
+
+class TestX402SwapSlippage:
+    """Cover the slippage the top-up swap is quoted with."""
+
+    def test_the_top_up_uses_its_own_slippage_not_the_trading_one(self) -> None:
+        """The top-up is quoted with its own slippage, not the trading one."""
+        handler, ctx = _make_http_handler()
+        ctx.params.chain_to_chain_id_mapping = {"optimism": 10}
+        ctx.params.slippage_for_swap = 0.005
+        ctx.params.x402_swap_slippage = 0.05
+        ctx.params.lifi_quote_to_amount_url = "https://api.example.com/quote"
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"quote": "data"}
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.requests.get",
+            return_value=response,
+        ) as get:
+            handler._get_lifi_quote_sync("0xaddr", "optimism", "0xusdc", "250000")
+        assert get.call_args.kwargs["params"]["slippage"] == 0.05
+
+
+class TestWhoOwnsTheChatFlag:
+    """Cover which step decides the chat flag on each route."""
+
+    @staticmethod
+    def _state() -> Any:
+        return SimpleNamespace(
+            sufficient_funds_for_x402_payments=True,
+            x402_funding_checked=False,
+            x402_eth_deficit=0,
+            x402_pot_checked=False,
+        )
+
+    def test_the_swap_does_not_touch_the_flag_when_told_not_to(self) -> None:
+        """It still records the deficit and that a check has reported."""
+        handler, _ = _make_predeposit_handler()
+        state = self._state()
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_x402_topup_outcome(
+                False, 777, "quote refused", gate_chat=False
+            )
+        assert state.sufficient_funds_for_x402_payments is True
+        assert state.x402_eth_deficit == 777
+        assert state.x402_funding_checked is True
+
+    def test_the_swap_owns_the_flag_by_default(self) -> None:
+        """Off the facilitator route the EOA pays, so the swap's verdict stands."""
+        handler, _ = _make_predeposit_handler()
+        state = self._state()
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_x402_topup_outcome(False, 777, "quote refused")
+        assert state.sufficient_funds_for_x402_payments is False
+
+    @staticmethod
+    def _run_funding(handler: Any, state: Any, deposit_outcome: Any) -> None:
+        """Run the real maintenance step with a refused quote and a given pot state."""
+        ctx = handler.context
+        ctx.params.x402_payment_requirements = {"threshold": 200000, "topup": 250000}
+        ctx.params.target_investment_chains = [_PD_CHAIN]
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+        handler._check_usdc_balance = MagicMock(return_value=0)
+        handler._get_lifi_quote_sync = MagicMock(return_value=None)
+        handler._x402_floor_deficit_if_unfunded = MagicMock(return_value=777)
+        handler._ensure_mech_pre_deposit = MagicMock(return_value=deposit_outcome)
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._maintain_paid_call_funding()
+
+    def test_a_refused_quote_then_a_funded_pot_leaves_chat_on(self) -> None:
+        """The real ordering through the real recorders: swap fails, pot is full.
+
+        The flag must never read False, not even between the two steps, since
+        prompts arriving in that window were refused with a full pot.
+        """
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        state = self._state()
+        seen = []
+        original = type(state).__setattr__
+
+        class Watching(SimpleNamespace):
+            def __setattr__(self, name: str, value: Any) -> None:
+                if name == "sufficient_funds_for_x402_payments":
+                    seen.append(value)
+                original(self, name, value)
+
+        state = Watching(**vars(state))
+        self._run_funding(handler, state, handlers_module.MechDepositOutcome.SUFFICIENT)
+        assert state.sufficient_funds_for_x402_payments is True
+        assert False not in seen
+        assert state.x402_eth_deficit == 777
+
+    def test_a_refused_quote_then_an_empty_pot_turns_chat_off(self) -> None:
+        """A funded verdict from an earlier cycle must not survive an empty pot."""
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        state = self._state()
+        handler._get_native_balance = MagicMock(return_value=0)
+        self._run_funding(
+            handler, state, handlers_module.MechDepositOutcome.UNDERFUNDED
+        )
+        assert state.sufficient_funds_for_x402_payments is False
+        assert state.x402_eth_deficit > 0
+
+    def test_a_hiccup_after_a_funded_pot_keeps_chat_on(self) -> None:
+        """The real ordering: refused quote, full pot, then one failed read.
+
+        The EOA sits below the swap threshold once its USDC is in the pot, so
+        the swap keeps recording it as insufficient. That verdict must not
+        reach the chat flag through an unreadable pot.
+        """
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        state = self._state()
+        state.sufficient_funds_for_x402_payments = False
+        self._run_funding(handler, state, handlers_module.MechDepositOutcome.SUFFICIENT)
+        assert state.x402_eoa_sufficient is False
+        assert state.sufficient_funds_for_x402_payments is True
+        self._run_funding(
+            handler, state, handlers_module.MechDepositOutcome.UNAVAILABLE
+        )
+        assert state.sufficient_funds_for_x402_payments is True
+
+    def test_an_unreadable_pot_after_a_healthy_swap_keeps_chat_on(self) -> None:
+        """Three unreadable pots in a row on a healthy EOA must not refuse chat.
+
+        setup() starts the flag False; with the swap no longer gating, only
+        the pre-deposit step can raise it, so UNAVAILABLE has to carry the
+        EOA's verdict or a read failure refuses chat for as long as it lasts.
+        """
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_funding_checked=False,
+            x402_eth_deficit=0,
+            x402_eoa_sufficient=False,
+            x402_pot_checked=False,
+        )
+        ctx = handler.context
+        ctx.params.x402_payment_requirements = {"threshold": 200000, "topup": 250000}
+        ctx.params.target_investment_chains = [_PD_CHAIN]
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+        handler._check_usdc_balance = MagicMock(return_value=250000)
+        handler._ensure_mech_pre_deposit = MagicMock(
+            return_value=handlers_module.MechDepositOutcome.UNAVAILABLE
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            for _ in range(3):
+                handler._maintain_paid_call_funding()
+        assert state.sufficient_funds_for_x402_payments is True
+
+    def test_off_the_facilitator_route_the_swap_still_gates_chat(self) -> None:
+        """Nothing changes for the plain x402 route."""
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=False)
+        state = self._state()
+        self._run_funding(handler, state, handlers_module.MechDepositOutcome.SUFFICIENT)
+        assert state.sufficient_funds_for_x402_payments is False
+        handler._ensure_mech_pre_deposit.assert_not_called()

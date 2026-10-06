@@ -73,6 +73,9 @@ class TestSharedState:
         state = SharedState(name="state", skill_context=mock_context)
         assert state.x402_eth_deficit == 0
         assert state.sufficient_funds_for_x402_payments is False
+        assert state.x402_funding_checked is False
+        assert state.x402_eoa_sufficient is False
+        assert state.x402_pot_checked is False
 
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""
@@ -780,6 +783,7 @@ class TestParams:
             "lifi_fetch_step_transaction_url": "https://lifi.example.com/step",
             "lifi_check_status_url": "https://lifi.example.com/status",
             "slippage_for_swap": 0.03,
+            "x402_swap_slippage": 0.05,
             "slippage_tolerance": 0.01,
             "allowed_dexs": ["uniswap"],
             "balancer_vault_contract_addresses": json.dumps({}),
@@ -870,6 +874,8 @@ class TestParams:
             assert params.round_threshold == 10
             assert params.allowed_chains == ["ethereum"]
             assert params.slippage_for_swap == 0.03
+            assert params.x402_swap_slippage == 0.05
+            assert params.strategy_price_cache_ttl == 43200
             assert params.stoploss_threshold_multiplier == 0.43
             assert params.min_investment_amount == 100
             assert params.genai_api_key == "test_key"

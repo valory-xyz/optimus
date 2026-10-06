@@ -123,7 +123,15 @@ def set_cached_price(
     cache: Dict[str, Any],
     prefix: str = "il_range",
 ) -> None:
-    """Cache CoinGecko price data with current timestamp."""
+    """Cache CoinGecko price data with current timestamp.
+
+    Only a history that actually has prices is cached. An empty or error body
+    cached for the TTL would turn the metric off for that token for the whole
+    window, where a refetch next cycle usually recovers.
+    """
+    if not isinstance(data, dict) or not data.get("prices"):
+        logger.info(f"Not caching empty price history for {token_id}")
+        return
     cache_key = f"{prefix}_{token_id}_{time_period}"
     cache[cache_key] = {
         "data": data,

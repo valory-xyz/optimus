@@ -4629,6 +4629,22 @@ class TestGetCachedPriceVelodrome:
         result = get_cached_price("token", 90, cache, 1800)
         assert result is None
 
+    @pytest.mark.parametrize(
+        "data",
+        [
+            pytest.param({"prices": []}, id="no prices"),
+            pytest.param({}, id="empty body"),
+            pytest.param({"error": "rate limited"}, id="error body"),
+            pytest.param(None, id="none"),
+        ],
+    )
+    def test_a_history_without_prices_is_not_cached(self, data: Any) -> None:
+        """An empty fetch must be retried next cycle, not served for the TTL."""
+        cache: Dict[Any, Any] = {}
+        set_cached_price("token", 90, data, cache)
+        assert cache == {}
+        assert get_cached_price("token", 90, cache, 1800) is None
+
 
 class TestCalculateVelodromeIlRiskScoreMultiWithCache:
     """Tests for calculate_velodrome_il_risk_score_multi with cache."""

@@ -1004,6 +1004,9 @@ class HttpHandler(BaseHttpHandler):
         """
         if gate_chat:
             self.shared_state.sufficient_funds_for_x402_payments = sufficient
+        # Kept separately so the pre-deposit step can fall back to the EOA's
+        # verdict when the pot cannot be read.
+        self.shared_state.x402_eoa_sufficient = sufficient
         self.shared_state.x402_funding_checked = True
         if eth_deficit is None:
             self.context.logger.info(
@@ -1486,7 +1489,13 @@ class HttpHandler(BaseHttpHandler):
             int(self.coingecko.mech_pre_deposit_cap),
         )
         if amount <= 0:
-            return MechDepositOutcome.SUFFICIENT
+            # Below the floor with nothing to deposit (a zero cap, or a target
+            # under the floor) is a pot that cannot pay, not a funded one.
+            self.context.logger.warning(
+                f"Mech pre-deposit {deposited} is below the floor {floor} and the "
+                f"configured target/cap leave nothing to deposit."
+            )
+            return MechDepositOutcome.UNDERFUNDED
 
         token_known, token = self._tracker_token(chain, tracker)
         if not token_known:
@@ -1573,16 +1582,23 @@ class HttpHandler(BaseHttpHandler):
 
         :param outcome: what the top-up attempt ended with.
 
-        The pot pays for calls, so it owns the chat flag: a funded pot records
-        sufficient and keeps the swap's deficit; ``UNDERFUNDED`` records
-        insufficient, with a deficit only when the EOA is below the refill
-        floor; ``UNAVAILABLE`` records nothing, so one failed read cannot
-        refuse chat.
+        The pot pays for calls, so it owns the chat flag when it can be read:
+        a funded pot records sufficient and keeps the swap's deficit;
+        ``UNDERFUNDED`` records insufficient, with a deficit only when the EOA
+        is below the refill floor. When the pot cannot be read
+        (``UNAVAILABLE``) the EOA's own verdict from the swap stands, so a
+        failed read neither refuses chat on a healthy agent nor opens it on
+        a broke one.
         """
         if outcome is MechDepositOutcome.SUFFICIENT:
             self._record_x402_topup_outcome(True, None, "mech pre-deposit funded")
             return
-        if outcome is not MechDepositOutcome.UNDERFUNDED:
+        if outcome is MechDepositOutcome.UNAVAILABLE:
+            self._record_x402_topup_outcome(
+                self.shared_state.x402_eoa_sufficient,
+                None,
+                "mech pre-deposit unreadable; the EOA's verdict stands",
+            )
             return
 
         chain = str(self.coingecko.mech_chain).lower()

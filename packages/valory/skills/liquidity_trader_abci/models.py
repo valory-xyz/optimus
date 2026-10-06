@@ -202,6 +202,8 @@ class SharedState(BaseSharedState):
         self.sufficient_funds_for_x402_payments: bool = False
         # True once a funding check has reported.
         self.x402_funding_checked: bool = False
+        # The swap's own verdict on the EOA, kept apart from the chat flag.
+        self.x402_eoa_sufficient: bool = False
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""

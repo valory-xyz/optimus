@@ -5662,10 +5662,19 @@ class TestTopUpSizing:
         assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
         assert tracker.encode_abi.call_args.kwargs["args"][1] == 1000
 
-    def test_a_target_under_the_deposit_sends_nothing(self) -> None:
-        """A target below what is held leaves a non-positive amount."""
-        handler, _, _ = self._handler_at(100, floor=200, target=50)
-        assert handlers_module.MechDepositOutcome.SUFFICIENT is self._top_up(handler)
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            pytest.param({"floor": 200, "target": 50}, id="target under the deposit"),
+            pytest.param({"floor": 200, "cap": 0}, id="zero cap"),
+        ],
+    )
+    def test_nothing_to_deposit_while_below_the_floor_is_underfunded(
+        self, overrides: Any
+    ) -> None:
+        """A pot that cannot pay and cannot be filled must not open chat."""
+        handler, _, _ = self._handler_at(100, **overrides)
+        assert handlers_module.MechDepositOutcome.UNDERFUNDED is self._top_up(handler)
         handler._send_from_eoa.assert_not_called()
 
     def test_a_deposit_that_leaves_the_pot_below_the_floor_is_not_sufficient(
@@ -5986,14 +5995,28 @@ class TestMechDepositReporting:
         assert state.x402_eth_deficit == 777
         assert state.x402_funding_checked is True
 
-    def test_an_unknown_pre_deposit_leaves_the_swap_verdict_alone(self) -> None:
-        """Recording anything here would refuse chat on one failed read."""
+    @pytest.mark.parametrize("eoa_sufficient", [True, False])
+    def test_an_unknown_pre_deposit_falls_back_to_the_eoa_verdict(
+        self, eoa_sufficient: bool
+    ) -> None:
+        """When the pot cannot be read, the swap's view of the EOA decides.
+
+        The swap no longer gates chat on this route, so recording nothing
+        here left the flag wherever setup put it: False, for as long as the
+        read kept failing, on a healthy agent.
+        """
         handler, _ = _make_predeposit_handler()
+        state = SimpleNamespace(x402_eoa_sufficient=eoa_sufficient)
         handler._record_x402_topup_outcome = MagicMock()
-        handler._record_mech_pre_deposit_outcome(
-            handlers_module.MechDepositOutcome.UNAVAILABLE
-        )
-        handler._record_x402_topup_outcome.assert_not_called()
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            handler._record_mech_pre_deposit_outcome(
+                handlers_module.MechDepositOutcome.UNAVAILABLE
+            )
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is eoa_sufficient
+        assert deficit is None
 
     @pytest.mark.parametrize(
         "sends",
@@ -6029,7 +6052,9 @@ class TestMechDepositReporting:
         handler._record_mech_pre_deposit_outcome(outcome)
 
         assert outcome is handlers_module.MechDepositOutcome.UNAVAILABLE
-        handler._record_x402_topup_outcome.assert_not_called()
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is handler.shared_state.x402_eoa_sufficient
+        assert deficit is None
 
     def test_an_unreadable_tracker_token_does_not_gate_chat(self) -> None:
         """An RPC failure mid-top-up must not turn into a funding verdict.
@@ -6057,7 +6082,9 @@ class TestMechDepositReporting:
 
         assert outcome is handlers_module.MechDepositOutcome.UNAVAILABLE
         handler._send_from_eoa.assert_not_called()
-        handler._record_x402_topup_outcome.assert_not_called()
+        sufficient, deficit, _ = handler._record_x402_topup_outcome.call_args[0]
+        assert sufficient is handler.shared_state.x402_eoa_sufficient
+        assert deficit is None
 
     def test_an_unaffordable_deposit_on_an_empty_eoa_reports_the_floor(self) -> None:
         """This is what makes Pearl ask the user to top the agent up."""
@@ -6381,6 +6408,37 @@ class TestWhoOwnsTheChatFlag:
         )
         assert state.sufficient_funds_for_x402_payments is False
         assert state.x402_eth_deficit > 0
+
+    def test_an_unreadable_pot_after_a_healthy_swap_keeps_chat_on(self) -> None:
+        """Three unreadable pots in a row on a healthy EOA must not refuse chat.
+
+        setup() starts the flag False; with the swap no longer gating, only
+        the pre-deposit step can raise it, so UNAVAILABLE has to carry the
+        EOA's verdict or a read failure refuses chat for as long as it lasts.
+        """
+        handler, _ = _make_predeposit_handler(use_mech_facilitator=True)
+        state = SimpleNamespace(
+            sufficient_funds_for_x402_payments=False,
+            x402_funding_checked=False,
+            x402_eth_deficit=0,
+            x402_eoa_sufficient=False,
+        )
+        ctx = handler.context
+        ctx.params.x402_payment_requirements = {"threshold": 200000, "topup": 250000}
+        ctx.params.target_investment_chains = [_PD_CHAIN]
+        handler._get_eoa_account = MagicMock(
+            return_value=SimpleNamespace(address=_PD_EOA)
+        )
+        handler._check_usdc_balance = MagicMock(return_value=250000)
+        handler._ensure_mech_pre_deposit = MagicMock(
+            return_value=handlers_module.MechDepositOutcome.UNAVAILABLE
+        )
+        with patch.object(
+            type(handler), "shared_state", new_callable=PropertyMock, return_value=state
+        ):
+            for _ in range(3):
+                handler._maintain_paid_call_funding()
+        assert state.sufficient_funds_for_x402_payments is True
 
     def test_off_the_facilitator_route_the_swap_still_gates_chat(self) -> None:
         """Nothing changes for the plain x402 route."""

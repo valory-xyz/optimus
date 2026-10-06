@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeieystvmttmgcsz45r27czqqyvjtbsfzsifpkwikebxzpvncydkrfq
+  models.py: bafybeigznrkhowt2l7z5vnspta7qfbllxtn2xz7aubqjh5jadksmbtzo44
   payloads.py: bafybeibsn2rifxr3v4solfbarft3mn5u2hdukhf4z53hkbi3mhfuviiuna
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -76,7 +76,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeifuhepzz5wh3vctegypyjxfnhtg24ez3cb7mdvtcuoffpt4drf6ru
+  tests/test_models.py: bafybeieph57ptttuo7evjhwhcxbsepu2hh44mei2cwv7zzextelu3tpfwa
   tests/test_payloads.py: bafybeihgckap5l6g7gmj2g7bon4zp5oc23mo55pt32hstznwobfb24cifq
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
   tests/test_rounds.py: bafybeicn2btzjnmbgus5gg4vvvcqqpzfkphlo36s6qtycso6afnmctvwwm
@@ -255,6 +255,7 @@ models:
       lifi_fetch_step_transaction_url: https://li.quest/v1/advanced/stepTransaction
       lifi_check_status_url: https://li.quest/v1/status
       slippage_for_swap: 0.08
+      x402_swap_slippage: 0.05
       slippage_tolerance: 0.01
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
       balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C","base":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5"}'
@@ -336,7 +337,7 @@ models:
       stoploss_threshold_multiplier: 0.43
       strategy_backoff_base_seconds: 1800
       strategy_backoff_max_seconds: 14400
-      strategy_price_cache_ttl: 1800
+      strategy_price_cache_ttl: 43200
       tls_verify: true
       mode_conduit_explorer_url: https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2
       mode_native_explorer_url: https://explorer.mode.network/api

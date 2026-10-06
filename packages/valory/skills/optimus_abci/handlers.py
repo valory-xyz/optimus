@@ -786,7 +786,7 @@ class HttpHandler(BaseHttpHandler):
                 "fromAddress": eoa_address,
                 "toAddress": eoa_address,
                 "toAmount": to_amount,
-                "slippage": self.context.params.slippage_for_swap,
+                "slippage": self.context.params.x402_swap_slippage,
                 "integrator": "valory",
             }
 
@@ -995,6 +995,7 @@ class HttpHandler(BaseHttpHandler):
         :param reason: short description of the exit, for the log line.
         """
         self.shared_state.sufficient_funds_for_x402_payments = sufficient
+        self.shared_state.x402_funding_checked = True
         if eth_deficit is None:
             self.context.logger.info(
                 f"x402 top-up outcome: {reason}; x402_eth_deficit left unchanged"
@@ -1544,22 +1545,27 @@ class HttpHandler(BaseHttpHandler):
             _MECH_PRE_DEPOSIT_LOCK.release()
 
     def _record_mech_pre_deposit_outcome(self, outcome: MechDepositOutcome) -> None:
-        """Report a failed pre-deposit through the x402 funding status.
+        """Report the pre-deposit's state through the x402 funding status.
 
         :param outcome: what the top-up attempt ended with.
 
-        A pre-deposit the agent could not pay for means paid calls are refused,
-        which is the same user-visible state as an unfunded x402 balance, so it
-        is reported through the same field rather than a second one. A deficit
-        is only named when the EOA's own native balance is below the refill
-        floor: a deposit can fail on a funded agent, and asking the user for
-        money that would not help is worse than reporting nothing.
+        On this route the pre-deposit is what pays for calls, so its state
+        decides whether prompts are accepted. The swap that runs first only
+        refills the EOA, and it records a failure whenever a quote is refused,
+        which happens often for an amount this small; left standing, that
+        verdict refused chat while the pot was full. So a funded pot records
+        sufficient, overriding the swap. The swap's deficit is left alone: it
+        is still what the user would need to add for the next refill.
 
-        Only ``UNDERFUNDED`` records anything. The field also gates chat, so
-        ``UNAVAILABLE`` leaves the swap's verdict standing the way a successful
-        top-up does: not knowing the state of the pre-deposit is no reason to
-        refuse prompts, and one failed read would otherwise do exactly that.
+        ``UNDERFUNDED`` records insufficient, naming a deficit only when the
+        EOA's own native balance is below the refill floor: a deposit can fail
+        on a funded agent, and asking for money that would not help is worse
+        than reporting nothing. ``UNAVAILABLE`` records nothing, since not
+        knowing the state of the pot is no reason to refuse prompts.
         """
+        if outcome is MechDepositOutcome.SUFFICIENT:
+            self._record_x402_topup_outcome(True, None, "mech pre-deposit funded")
+            return
         if outcome is not MechDepositOutcome.UNDERFUNDED:
             return
 
@@ -1591,6 +1597,28 @@ class HttpHandler(BaseHttpHandler):
                 f"on {paid_call_chain}; funding it on {trading_chain} alone "
                 "leaves paid calls and chat unavailable."
             )
+
+    def _paid_call_unavailable_message(self) -> str:
+        """Say why a prompt cannot be paid for right now.
+
+        :return: the message for the chat response.
+
+        Until the first funding check has reported, the agent does not know,
+        and "initializing" is the truth. After a check has found the agent
+        unable to pay, "initializing" is not: the user is waiting for something
+        that will not happen on its own. The native token is named because that
+        is what Pearl asks the user to add and what the refill swap spends.
+        """
+        if getattr(self.shared_state, "x402_funding_checked", False) is not True:
+            return "System initializing. Please wait for some time."
+        native_token = {"optimism": "ETH", "base": "ETH", "mode": "ETH"}.get(
+            self._paid_call_chain(), "the chain's native token"
+        )
+        return (
+            "Chat needs a small prepaid balance that your agent couldn't fund. "
+            f"Add {native_token} to your agent in Pearl, then try again in a few "
+            "minutes."
+        )
 
     def _paid_call_chain(self) -> str:
         """Return the chain the agent pays for API calls on.
@@ -2585,7 +2613,7 @@ class HttpHandler(BaseHttpHandler):
                 self._send_ok_response(
                     http_msg,
                     http_dialogue,
-                    {"error": "System initializing. Please wait for some time."},
+                    {"error": self._paid_call_unavailable_message()},
                 )
                 return
 

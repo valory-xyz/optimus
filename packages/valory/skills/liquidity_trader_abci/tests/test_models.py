@@ -73,6 +73,7 @@ class TestSharedState:
         state = SharedState(name="state", skill_context=mock_context)
         assert state.x402_eth_deficit == 0
         assert state.sufficient_funds_for_x402_payments is False
+        assert state.x402_funding_checked is False
 
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""
@@ -870,6 +871,10 @@ class TestParams:
             assert params.round_threshold == 10
             assert params.allowed_chains == ["ethereum"]
             assert params.slippage_for_swap == 0.03
+            # The top-up swap is tiny, so it does not share the trading slippage.
+            assert params.x402_swap_slippage == 0.05
+            # Daily-granularity history; a half-day-old window ranks pools the same.
+            assert params.strategy_price_cache_ttl == 43200
             assert params.stoploss_threshold_multiplier == 0.43
             assert params.min_investment_amount == 100
             assert params.genai_api_key == "test_key"

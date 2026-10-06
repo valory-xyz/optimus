@@ -200,8 +200,7 @@ class SharedState(BaseSharedState):
         # falls back to False when the attribute is missing.
         self.x402_eth_deficit: int = 0
         self.sufficient_funds_for_x402_payments: bool = False
-        # Flips once a funding check has reported, so a refused prompt can say
-        # "the agent cannot pay" rather than "still starting up".
+        # True once a funding check has reported.
         self.x402_funding_checked: bool = False
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
@@ -510,11 +509,8 @@ class Params(BaseParams):
         )
         self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
         self.slippage_for_swap = self._ensure("slippage_for_swap", kwargs, float)
-        # The x402 top-up buys a fixed, tiny amount of the payment token. At
-        # that size the gap between what the router quotes and what it can
-        # guarantee is a few percent, so the trading slippage refuses almost
-        # every quote. Worst case at 5% on a 0.25 USDC swap is about a cent.
-        self.x402_swap_slippage: float = float(kwargs.pop("x402_swap_slippage", 0.05))
+        # Own slippage: the tiny top-up swap is refused at the trading slippage.
+        self.x402_swap_slippage = self._ensure("x402_swap_slippage", kwargs, float)
         self.slippage_tolerance = self._ensure("slippage_tolerance", kwargs, float)
         self.allowed_dexs: List[str] = self._ensure("allowed_dexs", kwargs, List[str])
         self.balancer_vault_contract_addresses = json.loads(
@@ -734,9 +730,7 @@ class Params(BaseParams):
         self.strategy_backoff_max_seconds: int = kwargs.pop(
             "strategy_backoff_max_seconds", 14400
         )
-        # The strategies' 90-day price histories, one point per day, so a
-        # half-day-old window ranks pools the same way. Current prices for
-        # held positions have their own, shorter cache.
+        # Histories are daily, so 12h staleness does not change pool ranking.
         self.strategy_price_cache_ttl: int = kwargs.pop(
             "strategy_price_cache_ttl", 43200
         )

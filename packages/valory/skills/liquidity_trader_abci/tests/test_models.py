@@ -781,6 +781,7 @@ class TestParams:
             "lifi_fetch_step_transaction_url": "https://lifi.example.com/step",
             "lifi_check_status_url": "https://lifi.example.com/status",
             "slippage_for_swap": 0.03,
+            "x402_swap_slippage": 0.05,
             "slippage_tolerance": 0.01,
             "allowed_dexs": ["uniswap"],
             "balancer_vault_contract_addresses": json.dumps({}),
@@ -871,9 +872,7 @@ class TestParams:
             assert params.round_threshold == 10
             assert params.allowed_chains == ["ethereum"]
             assert params.slippage_for_swap == 0.03
-            # The top-up swap is tiny, so it does not share the trading slippage.
             assert params.x402_swap_slippage == 0.05
-            # Daily-granularity history; a half-day-old window ranks pools the same.
             assert params.strategy_price_cache_ttl == 43200
             assert params.stoploss_threshold_multiplier == 0.43
             assert params.min_investment_amount == 100

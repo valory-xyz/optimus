@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiejjz3nv42puenuq4ik72zf6cg3g6ivwayierofph7ahkxtmx5uyu
+agent: valory/optimus:0.1.0:bafybeiczpwhtf7ew6jg62rviisqquimxbi4md3raptdj7nyt64tc3ja3qm
 number_of_agents: 1
 deployment:
   agent:
@@ -123,6 +123,7 @@ models:
       slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:0.01}
       genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
       slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.005}
+      x402_swap_slippage: ${X402_SWAP_SLIPPAGE:float:0.05}
       use_x402: ${USE_X402:bool:true}
       x402_payment_requirements: ${X402_PAYMENT_REQUIREMENTS:str:{"threshold":200000,"topup":250000}}
       optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC:str:https://mainnet.optimism.io}

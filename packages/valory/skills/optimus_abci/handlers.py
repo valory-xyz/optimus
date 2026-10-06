@@ -29,6 +29,7 @@ import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
@@ -976,7 +977,11 @@ class HttpHandler(BaseHttpHandler):
             return None
 
     def _record_x402_topup_outcome(
-        self, sufficient: bool, eth_deficit: Optional[int], reason: str
+        self,
+        sufficient: bool,
+        eth_deficit: Optional[int],
+        reason: str,
+        gate_chat: bool = True,
     ) -> None:
         """Record the outcome of an x402 top-up attempt on the shared state.
 
@@ -993,8 +998,12 @@ class HttpHandler(BaseHttpHandler):
             agent does not know whether funds are short and asking the user for
             money would be wrong.
         :param reason: short description of the exit, for the log line.
+        :param gate_chat: whether ``sufficient`` decides the chat flag. The
+            swap passes ``False`` on the facilitator route, where the
+            pre-deposit pays for calls and owns the flag.
         """
-        self.shared_state.sufficient_funds_for_x402_payments = sufficient
+        if gate_chat:
+            self.shared_state.sufficient_funds_for_x402_payments = sufficient
         self.shared_state.x402_funding_checked = True
         if eth_deficit is None:
             self.context.logger.info(
@@ -1549,19 +1558,11 @@ class HttpHandler(BaseHttpHandler):
 
         :param outcome: what the top-up attempt ended with.
 
-        On this route the pre-deposit is what pays for calls, so its state
-        decides whether prompts are accepted. The swap that runs first only
-        refills the EOA, and it records a failure whenever a quote is refused,
-        which happens often for an amount this small; left standing, that
-        verdict refused chat while the pot was full. So a funded pot records
-        sufficient, overriding the swap. The swap's deficit is left alone: it
-        is still what the user would need to add for the next refill.
-
-        ``UNDERFUNDED`` records insufficient, naming a deficit only when the
-        EOA's own native balance is below the refill floor: a deposit can fail
-        on a funded agent, and asking for money that would not help is worse
-        than reporting nothing. ``UNAVAILABLE`` records nothing, since not
-        knowing the state of the pot is no reason to refuse prompts.
+        The pot pays for calls, so it owns the chat flag: a funded pot records
+        sufficient and keeps the swap's deficit; ``UNDERFUNDED`` records
+        insufficient, with a deficit only when the EOA is below the refill
+        floor; ``UNAVAILABLE`` records nothing, so one failed read cannot
+        refuse chat.
         """
         if outcome is MechDepositOutcome.SUFFICIENT:
             self._record_x402_topup_outcome(True, None, "mech pre-deposit funded")
@@ -1599,25 +1600,20 @@ class HttpHandler(BaseHttpHandler):
             )
 
     def _paid_call_unavailable_message(self) -> str:
-        """Say why a prompt cannot be paid for right now.
+        """Say why a prompt cannot be paid for: not checked yet, short of ETH, or down.
 
         :return: the message for the chat response.
-
-        Until the first funding check has reported, the agent does not know,
-        and "initializing" is the truth. After a check has found the agent
-        unable to pay, "initializing" is not: the user is waiting for something
-        that will not happen on its own. The native token is named because that
-        is what Pearl asks the user to add and what the refill swap spends.
         """
-        if getattr(self.shared_state, "x402_funding_checked", False) is not True:
+        if not self.shared_state.x402_funding_checked:
             return "System initializing. Please wait for some time."
-        native_token = {"optimism": "ETH", "base": "ETH", "mode": "ETH"}.get(
-            self._paid_call_chain(), "the chain's native token"
-        )
+        if int(self.shared_state.x402_eth_deficit or 0) > 0:
+            return (
+                "Chat needs a small prepaid balance that your agent couldn't fund. "
+                "Add ETH to your agent in Pearl, then try again in a few minutes."
+            )
         return (
-            "Chat needs a small prepaid balance that your agent couldn't fund. "
-            f"Add {native_token} to your agent in Pearl, then try again in a few "
-            "minutes."
+            "Chat is temporarily unavailable while the agent tops up its prepaid "
+            "balance. Please try again in a few minutes."
         )
 
     def _paid_call_chain(self) -> str:
@@ -1669,21 +1665,25 @@ class HttpHandler(BaseHttpHandler):
                 "x402 topup already in flight, skipping duplicate submission"
             )
             return
+        # On the facilitator route the pre-deposit pays for calls and decides
+        # the chat flag; the swap only refills the EOA and reports the deficit.
+        record = partial(
+            self._record_x402_topup_outcome,
+            gate_chat=not self.coingecko.use_mech_facilitator,
+        )
         try:
             chain = self._paid_call_chain()
             eoa_account = self._get_eoa_account()
             if not eoa_account:
                 self.context.logger.error("Failed to get EOA account")
-                self._record_x402_topup_outcome(False, None, "no EOA account")
+                record(False, None, "no EOA account")
                 return False
             eoa_address = eoa_account.address
 
             usdc_address = USDC_ADDRESSES.get(chain.lower())
             if not usdc_address:
                 self.context.logger.error(f"No USDC address for {chain}")
-                self._record_x402_topup_outcome(
-                    False, None, f"no USDC address for {chain}"
-                )
+                record(False, None, f"no USDC address for {chain}")
                 return
 
             try:
@@ -1695,9 +1695,7 @@ class HttpHandler(BaseHttpHandler):
                     f"x402-funds-check-breaker-open chain={chain}; "
                     "marking x402 funds insufficient until recovery"
                 )
-                self._record_x402_topup_outcome(
-                    False, None, "USDC balance circuit breaker open"
-                )
+                record(False, None, "USDC balance circuit breaker open")
                 return
 
             if usdc_balance is None:
@@ -1708,7 +1706,7 @@ class HttpHandler(BaseHttpHandler):
                 # as-is here and tracked in
                 # https://github.com/valory-xyz/optimus/issues/378; changing it
                 # is not a reporting fix.
-                self._record_x402_topup_outcome(True, None, "USDC balance unavailable")
+                record(True, None, "USDC balance unavailable")
                 return
 
             threshold = self.context.params.x402_payment_requirements.get(
@@ -1727,7 +1725,7 @@ class HttpHandler(BaseHttpHandler):
                 # an agent rescued by a direct USDC transfer takes this exit
                 # forever after, and Pearl would keep asking for ETH it no
                 # longer needs.
-                self._record_x402_topup_outcome(True, 0, "USDC balance sufficient")
+                record(True, 0, "USDC balance sufficient")
                 return
 
             self.context.logger.info(
@@ -1743,7 +1741,7 @@ class HttpHandler(BaseHttpHandler):
             )
             if not quote:
                 self.context.logger.error("Failed to get LiFi quote")
-                self._record_x402_topup_outcome(
+                record(
                     False,
                     self._x402_floor_deficit_if_unfunded(eoa_address, chain),
                     "LiFi quote unavailable",
@@ -1753,7 +1751,7 @@ class HttpHandler(BaseHttpHandler):
             tx_request = quote.get("transactionRequest")
             if not tx_request:
                 self.context.logger.error("No transactionRequest in quote")
-                self._record_x402_topup_outcome(
+                record(
                     False,
                     self._x402_floor_deficit_if_unfunded(eoa_address, chain),
                     "LiFi quote carried no transactionRequest",
@@ -1763,9 +1761,7 @@ class HttpHandler(BaseHttpHandler):
             nonce, gas_price = self._get_nonce_and_gas_web3(eoa_address, chain)
             if nonce is None or gas_price is None:
                 self.context.logger.error("Failed to get nonce or gas price")
-                self._record_x402_topup_outcome(
-                    False, None, "nonce or gas price unavailable"
-                )
+                record(False, None, "nonce or gas price unavailable")
                 return
 
             tx_value = _tx_request_value_wei(tx_request)
@@ -1776,9 +1772,7 @@ class HttpHandler(BaseHttpHandler):
             if tx_gas is None:
                 self.context.logger.error("Failed to estimate gas for transaction")
                 if not insufficient_funds:
-                    self._record_x402_topup_outcome(
-                        False, None, "gas estimation failed (infrastructure)"
-                    )
+                    record(False, None, "gas estimation failed (infrastructure)")
                     return
                 # The swap is unaffordable and there is no live estimate to
                 # price it with, so fall back to LiFi's own route-specific gas
@@ -1800,7 +1794,7 @@ class HttpHandler(BaseHttpHandler):
                 # one reports nothing. Both behaviours are pinned by tests.
                 native_balance = self._get_native_balance(eoa_address, chain)
                 if native_balance is not None and native_balance >= single_cycle_wei:
-                    self._record_x402_topup_outcome(
+                    record(
                         False,
                         None,
                         f"gas estimation failed with funds-like error but agent "
@@ -1809,7 +1803,7 @@ class HttpHandler(BaseHttpHandler):
                     )
                     return
                 fallback_deficit = self._size_x402_eth_deficit(single_cycle_wei)
-                self._record_x402_topup_outcome(
+                record(
                     False,
                     fallback_deficit,
                     f"gas estimation failed for lack of funds "
@@ -1842,7 +1836,7 @@ class HttpHandler(BaseHttpHandler):
             if not tx_hash:
                 self.context.logger.error("Failed to submit transaction")
                 # Store the ETH deficit so funds-status can request a top-up
-                self._record_x402_topup_outcome(
+                record(
                     False,
                     self._size_x402_eth_deficit(total_eth_needed),
                     "swap submission failed",
@@ -1857,7 +1851,7 @@ class HttpHandler(BaseHttpHandler):
             if not tx_successful:
                 self.context.logger.error(f"Transaction {tx_hash} failed or timed out")
                 # Store the ETH deficit so funds-status can request a top-up
-                self._record_x402_topup_outcome(
+                record(
                     False,
                     self._size_x402_eth_deficit(total_eth_needed),
                     "swap transaction failed or timed out",
@@ -1868,14 +1862,14 @@ class HttpHandler(BaseHttpHandler):
                 f"ETH to USDC swap completed successfully: {tx_hash}"
             )
             # Clear the stored deficit on success
-            self._record_x402_topup_outcome(True, 0, "swap completed")
+            record(True, 0, "swap completed")
             return
 
         except Exception as e:
             self.context.logger.error(
                 f"Error in checking funds for x402 payments: {str(e)}"
             )
-            self._record_x402_topup_outcome(False, None, f"unexpected error: {str(e)}")
+            record(False, None, f"unexpected error: {str(e)}")
             return
         finally:
             _X402_TOPUP_LOCK.release()

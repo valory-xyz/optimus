@@ -3132,8 +3132,8 @@ class HttpHandler(BaseHttpHandler):
 
         if not is_update:
             self.context.logger.info(
-                f"Chat request {request_id} is a {intent} with no change; "
-                f"nothing written"
+                f"Chat request {request_id} is a {intent} with no strategy change; "
+                f"no strategy write"
             )
             return
 

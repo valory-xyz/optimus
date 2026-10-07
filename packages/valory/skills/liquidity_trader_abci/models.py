@@ -571,6 +571,13 @@ class Params(BaseParams):
         # contracts). Optimus/Basius default: 1. Feeds ``is_activity_target_met``
         # in /healthcheck (the Pearl auto-run rotation signal).
         self.activity_target: int = self._ensure("activity_target", kwargs, int)
+        # Not to be confused with ``activity_target``: this is the user-facing
+        # rounds goal per epoch (one round = one FSM period in which the agent
+        # works). Standby needs both this goal and the staking side met. The
+        # user can override it from the chat; this is the default.
+        self.activity_goal_target: int = self._ensure(
+            "activity_goal_target", kwargs, int
+        )
         # The fixed tool string and static prompt the producer puts on the single
         # mech request fired to tick ``mapRequestCounts`` on the new regime. The
         # Response leg is composed (poll-then-discard); the response content is

@@ -332,6 +332,7 @@ models:
       staking_activity_checker_contract_address: '0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68'
       staking_threshold_period: 5
       activity_target: 1
+      activity_goal_target: 10
       multisend_batch_size: 1
       use_offchain: false
       offchain_deposit_target_calls: 10

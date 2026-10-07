@@ -277,6 +277,7 @@ models:
       staking_activity_checker_contract_address: '0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68'
       staking_threshold_period: 5
       activity_target: 1
+      activity_goal_target: 10
       service_registry_contract_addresses: '{"optimism":"0x3d77596beb0f130a4415df3D2D8232B3d3D31e44","mode":"0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"}'
       store_path: data
       assets_info_filename: assets.json

@@ -817,6 +817,7 @@ class TestParams:
             "staking_activity_checker_contract_address": "0xchecker",
             "staking_threshold_period": 86400,
             "activity_target": 1,
+            "activity_goal_target": 10,
             "mech_tool": "openai-gpt-4o-2024-08-06",
             "mech_request_prompt": "Optimus staking activity request.",
             "store_path": tmpdir,
@@ -896,6 +897,17 @@ class TestParams:
             assert params.genai_api_key == "test_key"
             assert params.genai_model == "test_model"
             assert params.use_x402 is False
+            assert params.activity_goal_target == 10
+
+    def test_activity_goal_target_is_required(self) -> None:
+        """The rounds goal default must be configured."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs.pop("activity_goal_target")
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(Exception):
+                    params.__init__(**kwargs)
 
     def test_safe_api_chain_slugs_non_dict_raises(self) -> None:
         """Non-dict ``safe_api_chain_slugs`` (e.g. JSON list) fails at startup."""

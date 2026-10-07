@@ -48,6 +48,9 @@ from packages.valory.skills.abstract_round_abci.models import (
     TypeCheckMixin,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    is_non_negative_int,
+)
 
 HTTP_OK = [200, 201]
 MINUTE_UNIX = 60
@@ -574,13 +577,15 @@ class Params(BaseParams):
         # contracts). Optimus/Basius default: 1. Feeds ``is_activity_target_met``
         # in /healthcheck (the Pearl auto-run rotation signal).
         self.activity_target: int = self._ensure("activity_target", kwargs, int)
-        # Not to be confused with ``activity_target``: this is the user-facing
-        # rounds goal per epoch (one round = one FSM period in which the agent
-        # works). Standby needs both this goal and the staking side met. The
-        # user can override it from the chat; this is the default.
+        # User-facing rounds goal per epoch; not activity_target.
         self.activity_goal_target: int = self._ensure(
             "activity_goal_target", kwargs, int
         )
+        if not is_non_negative_int(self.activity_goal_target):
+            raise ValueError(
+                "activity_goal_target must be a whole number of rounds, 0 or "
+                f"more; got {self.activity_goal_target!r}"
+            )
         # The fixed tool string and static prompt the producer puts on the single
         # mech request fired to tick ``mapRequestCounts`` on the new regime. The
         # Response leg is composed (poll-then-discard); the response content is

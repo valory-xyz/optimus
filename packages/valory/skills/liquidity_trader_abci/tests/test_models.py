@@ -909,6 +909,16 @@ class TestParams:
                 with pytest.raises(Exception):
                     params.__init__(**kwargs)
 
+    def test_negative_activity_goal_target_raises(self) -> None:
+        """A negative rounds goal would make every epoch's goal met at once."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kwargs = self._make_kwargs(tmpdir)
+            kwargs["activity_goal_target"] = -1
+            params = object.__new__(Params)
+            with patch.object(Params.__bases__[0], "__init__", return_value=None):
+                with pytest.raises(ValueError, match="activity_goal_target"):
+                    params.__init__(**kwargs)  # type: ignore[misc]
+
     def test_safe_api_chain_slugs_non_dict_raises(self) -> None:
         """Non-dict ``safe_api_chain_slugs`` (e.g. JSON list) fails at startup."""
         with tempfile.TemporaryDirectory() as tmpdir:

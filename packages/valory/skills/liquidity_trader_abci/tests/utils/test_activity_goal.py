@@ -31,7 +31,7 @@ import pytest
 from packages.valory.skills.liquidity_trader_abci.utils import activity_goal
 from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
     build_activity_goal_block,
-    is_valid_activity_goal,
+    is_non_negative_int,
     merge_agent_performance,
     parse_stored_int,
     read_activity_goal_block,
@@ -63,9 +63,9 @@ def _read(path: Path):
     "value,expected",
     [(0, True), (500, True), (-1, False), (2.0, False), ("3", False), (True, False)],
 )
-def test_is_valid_activity_goal(value, expected) -> None:
-    """Only non-negative, non-bool integers are goals."""
-    assert is_valid_activity_goal(value) is expected
+def test_is_non_negative_int(value, expected) -> None:
+    """Only non-negative, non-bool integers are accepted."""
+    assert is_non_negative_int(value) is expected
 
 
 @pytest.mark.parametrize(

@@ -53,10 +53,12 @@ PathLike = Union[str, Path]
 _AGENT_PERFORMANCE_LOCK = threading.Lock()
 
 
-def is_valid_activity_goal(value: Any) -> bool:
-    """Return whether ``value`` can be used as a goal: a non-negative, non-bool int.
+def is_non_negative_int(value: Any) -> bool:
+    """Return whether ``value`` is a non-negative, non-bool int.
 
-    :param value: the candidate goal.
+    Goals, counts and timestamps in the block must all be of this kind.
+
+    :param value: the candidate value.
     :return: whether it is valid.
     """
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
@@ -224,7 +226,7 @@ def _valid_block(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not isinstance(block, dict):
         return None
     for key in ("target", "progress", "period_start"):
-        if not is_valid_activity_goal(block.get(key)):
+        if not is_non_negative_int(block.get(key)):
             return None
     return block
 
@@ -260,7 +262,7 @@ def retarget_activity_goal(
         progress = previous["progress"]
         period_start = previous["period_start"]
         last_met_at = previous.get("last_met_at")
-        if not is_valid_activity_goal(last_met_at):
+        if not is_non_negative_int(last_met_at):
             last_met_at = None
         last_met_at = stamp_last_met_at(
             progress, target, period_start, last_met_at, now

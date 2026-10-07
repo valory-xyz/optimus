@@ -44,9 +44,27 @@ class TradingType(enum.Enum):
     BALANCED = "balanced"
 
 
+class Intent(enum.Enum):
+    """What the user asked the chat for."""
+
+    QUERY = "query"
+    UPDATE = "update"
+
+
+# The max loss percentage the LLM may return, inclusive bounds.
+MAX_LOSS_PERCENTAGE_RANGE: typing.Tuple[float, float] = (1.0, 30.0)
+
+# The max loss percentage in force before the user ever set one.
+DEFAULT_MAX_LOSS_PERCENTAGE: typing.Dict[str, float] = {
+    TradingType.BALANCED.value: 10.0,
+    TradingType.RISKY.value: 20.0,
+}
+
+
 class StrategyConfig(BaseModel):
     """Strategy configuration response."""
 
+    intent: Intent
     selected_protocols: typing.List[str]
     trading_type: TradingType
     max_loss_percentage: float
@@ -59,4 +77,4 @@ def build_strategy_config_schema() -> dict:
 
 
 # Ultra-minimal prompt for maximum speed (keeping reasoning)
-STRATEGY_PROMPT = """"{user_prompt}" Current: {previous_protocols},{previous_type},{previous_threshold}% Protocols: balancerPool,velodrome,sturdy Risk: 1-5% conservative,6-10% balanced,11-15% growth,16-30% aggressive JSON: selected_protocols, trading_type, max_loss_percentage, reasoning"""
+STRATEGY_PROMPT = """"{user_prompt}" Current: {previous_protocols},{previous_type},{previous_threshold}% Protocols: balancerPool,velodrome,sturdy Risk: 1-5% conservative,6-10% balanced,11-15% growth,16-30% aggressive intent: update if the user asks to change something, else query (keep Current) JSON: intent, selected_protocols, trading_type, max_loss_percentage, reasoning"""

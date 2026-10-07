@@ -58,7 +58,6 @@ class TestSharedState:
         assert state.trading_type == ""
         assert state.selected_protocols == []
         assert state.request_count == 0
-        assert state.request_queue == []
         assert state.req_to_callback == {}
         assert state.agent_reasoning == ""
 
@@ -76,6 +75,13 @@ class TestSharedState:
         assert state.x402_funding_checked is False
         assert state.x402_eoa_sufficient is False
         assert state.x402_pot_checked is False
+
+    def test_chat_state_defaults(self) -> None:
+        """A fresh SharedState has no stored loss limit and no pending chat write."""
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        assert state.max_loss_percentage is None
+        assert state.latest_chat_write_request_id is None
 
     def test_strategy_state_defaults(self) -> None:
         """A fresh SharedState has not restored anything and holds no cache."""

@@ -23,7 +23,7 @@
 
 import json
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -2670,7 +2670,6 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt processes prompt successfully."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         ctx.state.trading_type = "balanced"
         ctx.state.selected_protocols = json.dumps(["balancer_pools_search"])
         ctx.state.req_to_callback = {}
@@ -2687,7 +2686,6 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt with empty prompt."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         handler._handle_bad_request = MagicMock()
         mock_msg = MagicMock()
         mock_msg.body = json.dumps({"prompt": ""}).encode()
@@ -2700,7 +2698,6 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt with invalid JSON."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         handler._handle_bad_request = MagicMock()
         mock_msg = MagicMock()
         mock_msg.body = b"not json"
@@ -2713,7 +2710,6 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt with x402 and insufficient funds."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = True
-        ctx.state.request_queue = []
         handler._send_ok_response = MagicMock()
         with patch.object(
             type(handler), "shared_state", new_callable=PropertyMock
@@ -2736,7 +2732,6 @@ class TestHttpHandlerMethods:
         """
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = True
-        ctx.state.request_queue = []
         ctx.state.trading_type = "balanced"
         ctx.state.selected_protocols = json.dumps(["balancer_pools_search"])
         ctx.state.req_to_callback = {}
@@ -2758,7 +2753,6 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt when selected_protocols is None."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         ctx.state.trading_type = None
         ctx.state.selected_protocols = None
         ctx.state.req_to_callback = {}
@@ -2922,48 +2916,54 @@ class TestHttpHandlerMethods:
         """Test _delayed_write_kv_extended with one request in queue."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
+        ctx.state.latest_chat_write_request_id = "req1"
         data = {
             "selected_protocols": json.dumps(["balancer_pools_search"]),
             "trading_type": "balanced",
             "composite_score": "0.35",
         }
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
-            handler._delayed_write_kv_extended(data)
+            handler._delayed_write_kv_extended(data, "req1")
         handler._write_kv.assert_called_once()
         assert ctx.state.selected_protocols == ["balancer_pools_search"]
         assert ctx.state.trading_type == "balanced"
 
-    def test_delayed_write_kv_extended_multiple_requests(self) -> None:
-        """Test _delayed_write_kv_extended with multiple requests."""
+    def test_delayed_write_kv_extended_superseded_by_a_newer_write(self) -> None:
+        """An older write steps aside once a newer request has scheduled its own."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1", "req2"]
+        ctx.state.latest_chat_write_request_id = "req2"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
         data = {"selected_protocols": json.dumps(["x"]), "trading_type": "balanced"}
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
-            handler._delayed_write_kv_extended(data)
+            handler._delayed_write_kv_extended(data, "req1")
         handler._write_kv.assert_not_called()
 
-    def test_delayed_write_kv_extended_skips_when_lock_held(self) -> None:
-        """A duplicate concurrent KV write must short-circuit."""
+    def test_delayed_write_waits_for_an_in_flight_write(self) -> None:
+        """A write that overlaps another one is serialised, not dropped."""
+        import threading
+
         from packages.valory.skills.optimus_abci import handlers as handlers_mod
 
         handler, ctx = _make_http_handler()
         handler._write_kv = MagicMock()
-        ctx.state.request_queue = ["req1"]
+        handler._update_agent_performance_chat = MagicMock()
+        ctx.state.latest_chat_write_request_id = "req1"
         ctx.params.default_acceptance_time = 0
-        acquired = handlers_mod._KV_WRITE_LOCK.acquire(blocking=False)
+        handlers_mod._KV_WRITE_LOCK.acquire()
+        releaser = threading.Timer(0.05, handlers_mod._KV_WRITE_LOCK.release)
+        releaser.start()
         try:
-            assert acquired is True
-            handler._delayed_write_kv_extended({"trading_type": "balanced"})
+            with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+                handler._delayed_write_kv_extended(
+                    {"trading_type": "balanced"}, request_id="req1"
+                )
         finally:
-            handlers_mod._KV_WRITE_LOCK.release()
-        handler._write_kv.assert_not_called()
-        ctx.logger.info.assert_called()
+            releaser.join()
+        handler._write_kv.assert_called_once()
 
     def test_delayed_write_kv_extended_releases_lock_after_exception(
         self,
@@ -2973,11 +2973,13 @@ class TestHttpHandlerMethods:
 
         handler, ctx = _make_http_handler()
         handler._write_kv = MagicMock(side_effect=RuntimeError("boom"))
-        ctx.state.request_queue = ["req1"]
+        ctx.state.latest_chat_write_request_id = "req1"
         ctx.params.default_acceptance_time = 0
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             with pytest.raises(RuntimeError):
-                handler._delayed_write_kv_extended({"trading_type": "balanced"})
+                handler._delayed_write_kv_extended(
+                    {"trading_type": "balanced"}, request_id="req1"
+                )
         acquired = handlers_mod._KV_WRITE_LOCK.acquire(blocking=False)
         try:
             assert acquired is True, "lock leaked across exception"
@@ -4666,36 +4668,36 @@ class TestHttpHandlerMethods:
         """Test _delayed_write_kv_extended with only trading_type and composite_score."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
+        ctx.state.latest_chat_write_request_id = "req1"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
         data = {"trading_type": "risky"}
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
-            handler._delayed_write_kv_extended(data)
+            handler._delayed_write_kv_extended(data, "req1")
         assert ctx.state.trading_type == "risky"
 
     def test_delayed_write_kv_extended_only_composite_score(self) -> None:
         """Test _delayed_write_kv_extended with only composite_score."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
+        ctx.state.latest_chat_write_request_id = "req1"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
         data = {"composite_score": "0.42"}
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
-            handler._delayed_write_kv_extended(data)
+            handler._delayed_write_kv_extended(data, "req1")
         assert ctx.state.composite_score == 0.42
 
     def test_delayed_write_kv_extended_empty_data(self) -> None:
         """Test _delayed_write_kv_extended with no matching keys."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
+        ctx.state.latest_chat_write_request_id = "req1"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
         data = {"other_key": "value"}
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
-            handler._delayed_write_kv_extended(data)
+            handler._delayed_write_kv_extended(data, "req1")
 
     def test_handle_llm_response_inner_json_parse_error(self) -> None:
         """Test _handle_llm_response when inner response is not valid JSON (JSONDecodeError)."""
@@ -6319,7 +6321,6 @@ class TestPaidCallUnavailableMessage:
     @staticmethod
     def _refused_prompt(handler: Any, state: Any) -> str:
         handler.context.params.use_x402 = True
-        handler.context.state.request_queue = []
         handler._send_ok_response = MagicMock()
         dialogue = MagicMock()
         dialogue.dialogue_label.dialogue_reference = ("req1", "")
@@ -6327,9 +6328,7 @@ class TestPaidCallUnavailableMessage:
             type(handler), "shared_state", new_callable=PropertyMock, return_value=state
         ):
             handler._handle_post_process_prompt(MagicMock(), dialogue)
-        # A refused prompt must give its queue slot back, or every later
         # strategy write from chat is dropped until the agent restarts.
-        assert handler.context.state.request_queue == []
         return handler._send_ok_response.call_args[0][2]["error"]
 
     def test_before_any_check_has_reported_it_is_initializing(self) -> None:
@@ -6550,3 +6549,410 @@ class TestWhoOwnsTheChatFlag:
         self._run_funding(handler, state, handlers_module.MechDepositOutcome.SUFFICIENT)
         assert state.sufficient_funds_for_x402_payments is False
         handler._ensure_mech_pre_deposit.assert_not_called()
+
+
+def _chat_handler(trading_type: str = "balanced", protocols: Any = None) -> Any:
+    """A handler wired for the chat path with the LLM, threads and KV stubbed."""
+    handler, ctx = _make_http_handler()
+    handler._send_ok_response = MagicMock()
+    handler._submit_background = MagicMock()
+    handler._write_kv = MagicMock()
+    handler._update_agent_performance_chat = MagicMock()
+    ctx.state.latest_chat_write_request_id = None
+    ctx.state.trading_type = trading_type
+    ctx.state.selected_protocols = json.dumps(protocols or ["balancer_pools_search"])
+    ctx.state.max_loss_percentage = None
+    handler.available_strategies = ["balancer_pools_search"]
+    ctx.params.target_investment_chains = ["optimism"]
+    ctx.params.available_strategies = {"optimism": ["balancer_pools_search"]}
+    ctx.params.default_acceptance_time = 0
+    return handler, ctx
+
+
+def _llm_reply(**fields: Any) -> MagicMock:
+    data = {
+        "intent": "update",
+        "selected_protocols": ["balancerPool"],
+        "trading_type": "balanced",
+        "max_loss_percentage": 10.0,
+        "reasoning": "ok",
+    }
+    data.update(fields)
+    msg = MagicMock()
+    msg.payload = json.dumps({"response": json.dumps(data)})
+    return msg
+
+
+def _http_dialogue(request_id: str) -> MagicMock:
+    dialogue = MagicMock()
+    dialogue.dialogue_label.dialogue_reference = (request_id, "")
+    return dialogue
+
+
+def _reply(
+    handler: Any, llm_msg: MagicMock, request_id: str = "req1"
+) -> Dict[str, Any]:
+    with patch(
+        "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
+        side_effect=lambda names, *a, **k: list(names),
+    ):
+        handler._handle_llm_response(
+            llm_msg, MagicMock(), MagicMock(), _http_dialogue(request_id)
+        )
+    return handler._send_ok_response.call_args[0][2]
+
+
+class TestChatWriteOrdering:
+    """Only the latest scheduled write lands, and nothing else blocks it."""
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            pytest.param(json.dumps({"error": "rate limited"}), id="genai error"),
+            pytest.param("not valid json", id="outer json error"),
+            pytest.param(json.dumps({"response": "invalid {"}), id="inner json error"),
+            pytest.param(
+                json.dumps({"response": json.dumps({"max_loss_percentage": "x"})}),
+                id="generic exception",
+            ),
+        ],
+    )
+    def test_llm_failure_schedules_no_write(self, payload: str) -> None:
+        """A failed LLM round trip answers with an error and writes nothing."""
+        handler, ctx = _chat_handler()
+        llm_msg = MagicMock()
+        llm_msg.payload = payload
+        handler._handle_llm_response(
+            llm_msg, MagicMock(), MagicMock(), _http_dialogue("req1")
+        )
+        assert "error" in handler._send_ok_response.call_args[0][2]
+        handler._submit_background.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "failing",
+        [
+            "validate_and_fix_protocols",
+            "calculate_composite_score_from_var",
+            "_send_ok_response",
+        ],
+    )
+    def test_exception_after_parsing_schedules_no_write(self, failing: str) -> None:
+        """A failure before the hand-off surfaces and schedules nothing."""
+        handler, ctx = _chat_handler()
+        boom = MagicMock(side_effect=RuntimeError("boom"))
+        if failing == "validate_and_fix_protocols":
+            patcher: Any = patch(
+                "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
+                boom,
+            )
+        else:
+            setattr(handler, failing, boom)
+            patcher = patch(
+                "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
+                side_effect=lambda names, *a, **k: list(names),
+            )
+        with patcher, pytest.raises(RuntimeError):
+            handler._handle_llm_response(
+                _llm_reply(trading_type="risky"),
+                MagicMock(),
+                MagicMock(),
+                _http_dialogue("req1"),
+            )
+        handler._submit_background.assert_not_called()
+
+    def test_prompt_path_exception_propagates(self) -> None:
+        """An unexpected error while sending to the LLM is not swallowed."""
+        handler, ctx = _chat_handler()
+        ctx.params.use_x402 = False
+        ctx.srr_dialogues.create.side_effect = RuntimeError("connection down")
+        msg = MagicMock()
+        msg.body = json.dumps({"prompt": "go risky"}).encode()
+        with pytest.raises(RuntimeError):
+            handler._handle_post_process_prompt(msg, _http_dialogue("req1"))
+
+    def test_superseded_request_skips_its_write(self) -> None:
+        """Only the newest write in a burst lands; older ones step aside."""
+        handler, ctx = _chat_handler()
+        ctx.state.latest_chat_write_request_id = "new"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_kv_extended(
+                {"trading_type": "risky"}, request_id="old"
+            )
+        handler._write_kv.assert_not_called()
+
+    def test_latest_request_writes(self) -> None:
+        """The newest write lands even while an older slot is still held."""
+        handler, ctx = _chat_handler()
+        ctx.state.latest_chat_write_request_id = "new"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_kv_extended(
+                {"trading_type": "risky"}, request_id="new"
+            )
+        handler._write_kv.assert_called_once()
+        assert ctx.state.trading_type == "risky"
+
+    def test_update_after_an_overlapping_burst_is_written(self) -> None:
+        """Two overlapping messages must not block the next strategy change."""
+        handler, ctx = _chat_handler()
+        ctx.state.latest_chat_write_request_id = "b"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_kv_extended(
+                {"trading_type": "balanced"}, request_id="a"
+            )
+            handler._delayed_write_kv_extended(
+                {"trading_type": "balanced"}, request_id="b"
+            )
+            ctx.state.latest_chat_write_request_id = "c"
+            handler._delayed_write_kv_extended(
+                {"trading_type": "risky"}, request_id="c"
+            )
+        assert handler._write_kv.call_count == 2
+        assert ctx.state.trading_type == "risky"
+
+    def test_a_question_after_an_update_does_not_cancel_the_write(self) -> None:
+        """A query queued during the acceptance delay leaves the update intact."""
+        handler, ctx = _chat_handler()
+        ctx.state.latest_chat_write_request_id = "update"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_kv_extended(
+                {"trading_type": "risky"}, request_id="update"
+            )
+        handler._write_kv.assert_called_once()
+        assert ctx.state.trading_type == "risky"
+
+    def test_update_followed_by_a_question_end_to_end(self) -> None:
+        """The reply's confirmed update survives a follow-up question."""
+        handler, ctx = _chat_handler()
+        body = _reply(
+            handler, _llm_reply(trading_type="risky", max_loss_percentage=20.0), "u1"
+        )
+        assert body["updated"] is True
+        assert ctx.state.latest_chat_write_request_id == "u1"
+        fn, data, request_id = handler._submit_background.call_args[0]
+        _reply(handler, _llm_reply(intent="query", reasoning="risky"), "q1")
+        assert ctx.state.latest_chat_write_request_id == "u1"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            fn(data, request_id)
+        handler._write_kv.assert_called_once()
+        assert ctx.state.trading_type == "risky"
+
+    def test_second_change_within_the_delay_starts_from_the_confirmed_settings(
+        self,
+    ) -> None:
+        """A follow-up change sees the first change even before its write lands."""
+        handler, ctx = _chat_handler()
+        first = _reply(
+            handler, _llm_reply(trading_type="risky", max_loss_percentage=20.0), "u1"
+        )
+        assert first["updated"] is True
+        assert ctx.state.trading_type == "risky"
+        assert ctx.state.max_loss_percentage == 20.0
+        handler._write_kv.assert_not_called()
+
+        second = _reply(
+            handler, _llm_reply(trading_type="risky", max_loss_percentage=15.0), "u2"
+        )
+        assert second["updated"] is True
+        assert "previous_trading_type" not in second
+        _, data, request_id = handler._submit_background.call_args[0]
+        assert request_id == "u2"
+        assert data["trading_type"] == "risky"
+        assert data["max_loss_percentage"] == "15.0"
+        assert ctx.state.latest_chat_write_request_id == "u2"
+
+    def test_write_requires_a_request_id(self) -> None:
+        """There is no anonymous write path left."""
+        handler, ctx = _chat_handler()
+        with pytest.raises(TypeError):
+            handler._delayed_write_kv_extended({"trading_type": "risky"})  # type: ignore[call-arg]
+
+    def test_write_records_the_max_loss_in_state(self) -> None:
+        """The stored loss figure is what the next prompt reports as current."""
+        handler, ctx = _chat_handler()
+        ctx.state.latest_chat_write_request_id = "req1"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_kv_extended(
+                {"trading_type": "risky", "max_loss_percentage": "20.0"},
+                request_id="req1",
+            )
+        assert ctx.state.max_loss_percentage == 20.0
+        assert handler._current_max_loss_percentage("risky") == 20.0
+
+
+class TestChatIntent:
+    """A question answers; only a requested change writes and shows an update."""
+
+    def test_query_writes_nothing_and_shows_no_update(self) -> None:
+        """Asking about the strategy must not re-save it or render a card."""
+        handler, ctx = _chat_handler()
+        body = _reply(
+            handler, _llm_reply(intent="query", reasoning="You are balanced.")
+        )
+        assert body["updated"] is False
+        assert "previous_trading_type" not in body
+        assert body["selected_protocols"] == []
+        assert body["reasoning"] == "You are balanced."
+        handler._submit_background.assert_not_called()
+
+    def test_query_echoing_a_different_config_still_writes_nothing(self) -> None:
+        """A query is read-only even if the LLM returns a changed config."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(intent="query", trading_type="risky"))
+        assert body["updated"] is False
+        assert "previous_trading_type" not in body
+        handler._submit_background.assert_not_called()
+
+    def test_update_with_a_type_change_writes_and_reports_the_previous_type(
+        self,
+    ) -> None:
+        """A requested change is persisted and the UI gets the from/to pair."""
+        handler, ctx = _chat_handler()
+        body = _reply(
+            handler, _llm_reply(trading_type="risky", max_loss_percentage=20.0)
+        )
+        assert body["updated"] is True
+        assert body["previous_trading_type"] == "balanced"
+        assert body["trading_type"] == "risky"
+        handler._submit_background.assert_called_once()
+        fn, data, request_id = handler._submit_background.call_args[0]
+        assert fn == handler._delayed_write_kv_extended
+        assert data["trading_type"] == "risky"
+        assert request_id == "req1"
+
+    def test_update_that_changes_nothing_writes_nothing(self) -> None:
+        """Setting the strategy to what it already is produces no update."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply())
+        assert body["updated"] is False
+        assert "previous_trading_type" not in body
+        assert body["selected_protocols"] == []
+        handler._submit_background.assert_not_called()
+
+    def test_loss_only_change_writes_without_a_type_card(self) -> None:
+        """A changed loss limit is saved, but no from/to type pair is sent."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(max_loss_percentage=5.0))
+        assert body["updated"] is True
+        assert "previous_trading_type" not in body
+        assert body["selected_protocols"] == []
+        handler._submit_background.assert_called_once()
+
+    def test_protocol_change_is_reported_only_when_protocols_differ(self) -> None:
+        """The protocols card is driven by an actual protocol change."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(selected_protocols=["velodrome"]))
+        assert body["updated"] is True
+        assert body["selected_protocols"] == ["velodrome"]
+        assert "previous_trading_type" not in body
+
+    @pytest.mark.parametrize(
+        "missing", ["trading_type", "max_loss_percentage"], ids=lambda m: f"no {m}"
+    )
+    def test_truncated_reply_is_a_query(self, missing: str) -> None:
+        """A reply without a full configuration must not store field defaults."""
+        handler, ctx = _chat_handler(trading_type="risky")
+        ctx.state.max_loss_percentage = 25.0
+        reply = _llm_reply()
+        data = json.loads(json.loads(reply.payload)["response"])
+        del data[missing]
+        del data["intent"]
+        reply.payload = json.dumps({"response": json.dumps(data)})
+        body = _reply(handler, reply)
+        assert body["updated"] is False
+        assert "previous_trading_type" not in body
+        handler._submit_background.assert_not_called()
+        assert ctx.state.trading_type == "risky"
+        assert ctx.state.max_loss_percentage == 25.0
+
+    def test_no_change_update_through_the_real_validator(self) -> None:
+        """The stored strategy and the model's protocol name must round-trip as equal."""
+        handler, ctx = _chat_handler(protocols=["balancer_pools_search"])
+        handler._handle_llm_response(
+            _llm_reply(selected_protocols=["balancerPool"]),
+            MagicMock(),
+            MagicMock(),
+            _http_dialogue("req1"),
+        )
+        body = handler._send_ok_response.call_args[0][2]
+        assert body["updated"] is False
+        assert body["selected_protocols"] == []
+        handler._submit_background.assert_not_called()
+
+    def test_fresh_agent_compares_against_the_default_protocols(self) -> None:
+        """With nothing saved yet, the defaults count as the current protocols."""
+        handler, ctx = _chat_handler()
+        ctx.state.selected_protocols = []
+        body = _reply(handler, _llm_reply())
+        assert body["updated"] is False
+        assert body["selected_protocols"] == []
+        handler._submit_background.assert_not_called()
+        switched = _reply(
+            handler, _llm_reply(trading_type="risky", max_loss_percentage=20.0)
+        )
+        assert switched["updated"] is True
+        assert switched["previous_trading_type"] == "balanced"
+        assert switched["selected_protocols"] == []
+
+    def test_missing_intent_is_treated_as_an_update(self) -> None:
+        """A reply without the intent field keeps the pre-existing behaviour."""
+        handler, ctx = _chat_handler()
+        reply = _llm_reply(trading_type="risky")
+        data = json.loads(json.loads(reply.payload)["response"])
+        del data["intent"]
+        reply.payload = json.dumps({"response": json.dumps(data)})
+        body = _reply(handler, reply)
+        assert body["updated"] is True
+        assert body["previous_trading_type"] == "balanced"
+
+    @pytest.mark.parametrize(
+        ("returned", "expected"),
+        [
+            pytest.param(95.0, 30.0, id="above range"),
+            pytest.param(0.3, 1.0, id="below range"),
+            pytest.param(12.5, 12.5, id="inside range"),
+            pytest.param(30.0, 30.0, id="upper bound"),
+            pytest.param(1.0, 1.0, id="lower bound"),
+        ],
+    )
+    def test_max_loss_percentage_is_clamped(
+        self, returned: float, expected: float
+    ) -> None:
+        """The loss figure is kept inside the allowed range before it is stored."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(max_loss_percentage=returned))
+        assert body["max_loss_percentage"] == expected
+
+    @pytest.mark.parametrize(
+        ("stored", "trading_type", "expected"),
+        [
+            pytest.param(None, "balanced", 10.0, id="default balanced"),
+            pytest.param(None, "risky", 20.0, id="default risky"),
+            pytest.param(None, "unknown", 10.0, id="unknown type falls back"),
+            pytest.param(7.5, "balanced", 7.5, id="stored value wins"),
+            pytest.param(True, "balanced", 10.0, id="bool is not a value"),
+            pytest.param(0.3374, "balanced", 10.0, id="stored echo below range"),
+            pytest.param(95.0, "risky", 20.0, id="stored value above range"),
+        ],
+    )
+    def test_current_max_loss_percentage(
+        self, stored: Any, trading_type: str, expected: float
+    ) -> None:
+        """The loss figure in force is the stored one, else the type's default."""
+        handler, ctx = _chat_handler()
+        ctx.state.max_loss_percentage = stored
+        assert handler._current_max_loss_percentage(trading_type) == expected
+
+    def test_prompt_reports_the_loss_limit_not_the_composite_score(self) -> None:
+        """The LLM is told the real max loss percentage as the current value."""
+        handler, ctx = _chat_handler()
+        ctx.params.use_x402 = False
+        ctx.state.req_to_callback = {}
+        ctx.state.in_flight_req = False
+        ctx.srr_dialogues.create.return_value = (MagicMock(), MagicMock())
+        msg = MagicMock()
+        msg.body = json.dumps({"prompt": "what is my strategy?"}).encode()
+        handler._handle_post_process_prompt(msg, _http_dialogue("req1"))
+        payload = json.loads(ctx.srr_dialogues.create.call_args.kwargs["payload"])
+        assert "balanced,10.0%" in payload["prompt"]
+        assert "0.3374" not in payload["prompt"]
+        assert "intent" in payload["prompt"]

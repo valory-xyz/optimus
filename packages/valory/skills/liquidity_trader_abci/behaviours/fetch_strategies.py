@@ -213,6 +213,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     matching_round: Type[AbstractRound] = FetchStrategiesRound
     strategies = None
 
+    @staticmethod
+    def _parse_max_loss(raw: Optional[str]) -> Optional[float]:
+        """Parse the stored max loss percentage, if a chat update ever set one.
+
+        :param raw: the KV store value, or None when nothing was stored
+        :return: the percentage, or None so the trading type's default applies
+        """
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
@@ -262,7 +276,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
 
                 db_data = yield from self._read_kv(
-                    keys=("selected_protocols", "trading_type")
+                    keys=("selected_protocols", "trading_type", "max_loss_percentage")
                 )
 
                 selected_protocols = db_data.get("selected_protocols", None)
@@ -306,6 +320,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 self.shared_state.trading_type = trading_type
                 self.shared_state.selected_protocols = selected_protocols
+                self.shared_state.max_loss_percentage = self._parse_max_loss(
+                    db_data.get("max_loss_percentage")
+                )
 
                 # Initialize assets from initial_assets if empty
                 if not self.assets:  # pragma: no branch

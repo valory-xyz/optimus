@@ -68,6 +68,7 @@ class StrategyConfig(BaseModel):
     selected_protocols: typing.List[str]
     trading_type: TradingType
     max_loss_percentage: float
+    activity_goal: typing.Optional[int] = None
     reasoning: str
 
 
@@ -77,4 +78,4 @@ def build_strategy_config_schema() -> dict:
 
 
 # Ultra-minimal prompt for maximum speed (keeping reasoning)
-STRATEGY_PROMPT = """"{user_prompt}" Current: {previous_protocols},{previous_type},{previous_threshold}% Protocols: balancerPool,velodrome,sturdy Risk: 1-5% conservative,6-10% balanced,11-15% growth,16-30% aggressive intent: update if the user asks to change something, else query (keep Current) JSON: intent, selected_protocols, trading_type, max_loss_percentage, reasoning"""
+STRATEGY_PROMPT = """"{user_prompt}" Current: {previous_protocols},{previous_type},{previous_threshold}% Protocols: balancerPool,velodrome,sturdy Risk: 1-5% conservative,6-10% balanced,11-15% growth,16-30% aggressive Daily goal: {activity_goal} rounds, {activity_goal_progress} done this epoch. A round is one cycle of my main loop: I refresh my positions, look at the opportunities for your funds and decide whether to act; I may decide to hold. intent: update if the user asks to change something, else query (keep Current) activity_goal: the new number of rounds if the user asks to change the goal, else null; if they only talk about the goal keep Current protocols, type and risk JSON: intent, selected_protocols, trading_type, max_loss_percentage, activity_goal, reasoning"""

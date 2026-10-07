@@ -22,6 +22,8 @@
 # pylint: skip-file
 
 import json
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -369,6 +371,14 @@ def _make_http_handler() -> Any:
     # Off by default, as the config has it. Left as a MagicMock this reads
     # truthy and silently puts every test on the facilitator route.
     mock_context.coingecko.use_mech_facilitator = False
+    # A real but absent store: a MagicMock path would be opened as file
+    # descriptor 1 (MagicMock implements __index__).
+    mock_context.params.store_path = (
+        Path(tempfile.gettempdir()) / "optimus-handler-tests-no-store"
+    )
+    mock_context.params.agent_performance_filename = "agent_performance.json"
+    mock_context.params.activity_goal_target = 10
+    mock_context.state.activity_goal_target = None
     return handler, mock_context
 
 
@@ -3191,109 +3201,64 @@ class TestHttpHandlerMethods:
         call_data = handler._send_ok_response.call_args[0][2]
         assert "error" in call_data
 
-    def test_update_agent_performance_chat_success(self) -> None:
-        """Test _update_agent_performance_chat with valid chat."""
+    @staticmethod
+    def _chat_perf(tmp_path: Path, existing: Any = None) -> Any:
         handler, ctx = _make_http_handler()
-        ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
-        ctx.params.agent_performance_filename = "agent_perf.json"
-        existing_perf = {
-            "timestamp": 123,
-            "metrics": [],
-            "last_activity": None,
-            "agent_behavior": None,
-        }
-        with (
-            patch("builtins.open", MagicMock()),
-            patch("json.load", return_value=existing_perf),
-            patch("json.dump") as mock_dump,
-        ):
-            handler._update_agent_performance_chat("New behavior info")
-        mock_dump.assert_called_once()
+        ctx.params.store_path = tmp_path
+        path = tmp_path / "agent_performance.json"
+        if existing is not None:
+            path.write_text(json.dumps(existing))
+        return handler, ctx, path
 
-    def test_update_agent_performance_chat_none(self) -> None:
-        """Test _update_agent_performance_chat with None chat."""
-        handler, ctx = _make_http_handler()
-        handler._update_agent_performance_chat(None)
-
-    def test_update_agent_performance_chat_file_not_found(self) -> None:
-        """Test _update_agent_performance_chat when file not found."""
-        handler, ctx = _make_http_handler()
-        ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
-        ctx.params.agent_performance_filename = "agent_perf.json"
-        with (
-            patch(
-                "builtins.open",
-                side_effect=[FileNotFoundError("not found"), MagicMock()],
-            ),
-            patch("json.dump"),
-        ):
-            handler._update_agent_performance_chat("New behavior")
-
-    def test_update_agent_performance_chat_llm_error(self) -> None:
-        """Test _update_agent_performance_chat with LLM error message."""
-        handler, ctx = _make_http_handler()
-        ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
-        ctx.params.agent_performance_filename = "agent_perf.json"
-        existing_perf = {
-            "timestamp": 123,
-            "metrics": [],
-            "last_activity": None,
-            "agent_behavior": None,
-        }
-        with (
-            patch("builtins.open", MagicMock()),
-            patch("json.load", return_value=existing_perf),
-        ):
-            handler._update_agent_performance_chat("LLM Error: something went wrong")
-        # Should return early when message starts with "LLM Error:"
-
-    def test_update_agent_performance_chat_html_tags(self) -> None:
-        """Test _update_agent_performance_chat cleans HTML tags."""
-        handler, ctx = _make_http_handler()
-        ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
-        ctx.params.agent_performance_filename = "agent_perf.json"
-        existing_perf = {
-            "timestamp": 123,
-            "metrics": [],
-            "last_activity": None,
-            "agent_behavior": None,
-        }
-        with (
-            patch("builtins.open", MagicMock()),
-            patch("json.load", return_value=existing_perf),
-            patch("json.dump") as mock_dump,
-        ):
-            handler._update_agent_performance_chat("<b>Bold</b>&nbsp;text&lt;")
-        mock_dump.assert_called_once()
-
-    def test_update_agent_performance_chat_outer_exception(self) -> None:
-        """Test _update_agent_performance_chat handles outer exception."""
-        handler, ctx = _make_http_handler()
-        ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(
-            side_effect=Exception("Path error")
+    def test_update_agent_performance_chat_keeps_other_keys(
+        self, tmp_path: Path
+    ) -> None:
+        """The chat reply is merged; metrics and the goal block survive."""
+        handler, ctx, path = self._chat_perf(
+            tmp_path,
+            {"timestamp": 1, "metrics": ["m"], "activity_goal": {"progress": 2}},
         )
-        ctx.params.agent_performance_filename = "agent_perf.json"
+        handler._update_agent_performance_chat("New behavior info")
+        data = json.loads(path.read_text())
+        assert data["agent_behavior"] == "New behavior info"
+        assert data["metrics"] == ["m"]
+        assert data["activity_goal"] == {"progress": 2}
+        assert data["timestamp"] > 1
+
+    def test_update_agent_performance_chat_none(self, tmp_path: Path) -> None:
+        """An empty reply writes nothing."""
+        handler, ctx, path = self._chat_perf(tmp_path)
+        handler._update_agent_performance_chat(None)
+        assert not path.exists()
+
+    def test_update_agent_performance_chat_file_not_found(
+        self, tmp_path: Path
+    ) -> None:
+        """A missing file is created with the initial shape."""
+        handler, ctx, path = self._chat_perf(tmp_path)
+        handler._update_agent_performance_chat("New behavior")
+        data = json.loads(path.read_text())
+        assert data["agent_behavior"] == "New behavior"
+        assert data["metrics"] == []
+        assert data["last_activity"] is None
+
+    def test_update_agent_performance_chat_llm_error(self, tmp_path: Path) -> None:
+        """An LLM error is not shown as the agent's behaviour."""
+        handler, ctx, path = self._chat_perf(tmp_path, {"agent_behavior": "old"})
+        handler._update_agent_performance_chat("LLM Error: something went wrong")
+        assert json.loads(path.read_text()) == {"agent_behavior": "old"}
+
+    def test_update_agent_performance_chat_html_tags(self, tmp_path: Path) -> None:
+        """HTML tags and entities are stripped."""
+        handler, ctx, path = self._chat_perf(tmp_path, {})
+        handler._update_agent_performance_chat("<b>Bold</b>&nbsp;text&lt;")
+        assert json.loads(path.read_text())["agent_behavior"] == "Bold text<"
+
+    def test_update_agent_performance_chat_write_error(self) -> None:
+        """A write failure is logged, not raised into the background thread."""
+        handler, ctx = _make_http_handler()
         handler._update_agent_performance_chat("chat msg")
         ctx.logger.error.assert_called()
-
-    def test_update_agent_performance_chat_inner_generic_exception(self) -> None:
-        """Test _update_agent_performance_chat handles inner generic exception."""
-        handler, ctx = _make_http_handler()
-        ctx.params.store_path = MagicMock()
-        ctx.params.store_path.__truediv__ = MagicMock(return_value="/tmp/perf.json")
-        ctx.params.agent_performance_filename = "agent_perf.json"
-        # First open succeeds for read but json.load raises a generic Exception
-        with (
-            patch("builtins.open", MagicMock()),
-            patch("json.load", side_effect=[Exception("Generic error"), None]),
-            patch("json.dump"),
-        ):
-            handler._update_agent_performance_chat("chat msg")
 
     def test_handle_get_funds_status_normal_mode(self) -> None:
         """Test _handle_get_funds_status in normal mode."""
@@ -6956,3 +6921,137 @@ class TestChatIntent:
         assert "balanced,10.0%" in payload["prompt"]
         assert "0.3374" not in payload["prompt"]
         assert "intent" in payload["prompt"]
+
+
+def _goal_block(target: int = 10, progress: int = 4) -> Dict[str, Any]:
+    return {
+        "unit": "rounds",
+        "target": target,
+        "progress": progress,
+        "is_met": progress >= target,
+        "period_start": 1000,
+        "last_met_at": None,
+        "updated_at": 1100,
+    }
+
+
+class TestActivityGoalChat:
+    """The Profile chat reads and sets the rounds goal."""
+
+    @staticmethod
+    def _with_block(ctx: Any, tmp_path: Path, block: Any) -> Path:
+        ctx.params.store_path = tmp_path
+        path = tmp_path / "agent_performance.json"
+        path.write_text(json.dumps({"metrics": ["m"], "activity_goal": block}))
+        return path
+
+    @staticmethod
+    def _prompt_sent(handler: Any, ctx: Any) -> str:
+        ctx.params.use_x402 = False
+        ctx.srr_dialogues.create.return_value = (MagicMock(), MagicMock())
+        msg = MagicMock()
+        msg.body = json.dumps({"prompt": "what is my goal?"}).encode()
+        handler._handle_post_process_prompt(msg, _http_dialogue("req1"))
+        payload = json.loads(ctx.srr_dialogues.create.call_args.kwargs["payload"])
+        return payload["prompt"]
+
+    def test_prompt_carries_the_goal_and_progress(self, tmp_path: Path) -> None:
+        """The LLM can answer "what's my goal?" from the published block."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block(target=12, progress=4))
+        assert "Daily goal: 12 rounds, 4 done this epoch" in self._prompt_sent(
+            handler, ctx
+        )
+
+    def test_prompt_uses_a_pending_goal_and_the_default(self) -> None:
+        """A goal not yet written wins; without a block progress is zero."""
+        handler, ctx = _chat_handler()
+        assert "Daily goal: 10 rounds, 0 done" in self._prompt_sent(handler, ctx)
+        ctx.state.activity_goal_target = 7
+        assert "Daily goal: 7 rounds, 0 done" in self._prompt_sent(handler, ctx)
+
+    def test_a_goal_only_message_keeps_the_strategy_and_persists_the_goal(
+        self, tmp_path: Path
+    ) -> None:
+        """The goal is confirmed and scheduled; the strategy is not rewritten."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block(progress=4))
+        body = _reply(handler, _llm_reply(activity_goal=20))
+        assert body["updated"] is False
+        assert body["activity_goal"] == 20
+        assert body["selected_protocols"] == []
+        assert "Your daily goal is now 20 rounds (4 done this epoch)." in (
+            body["reasoning"]
+        )
+        assert ctx.state.activity_goal_target == 20
+        handler._submit_background.assert_called_once_with(
+            handler._delayed_write_activity_goal, 20, "req1"
+        )
+
+    def test_a_null_goal_leaves_it_untouched(self) -> None:
+        """A message that does not mention the goal changes nothing about it."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=None))
+        assert body["activity_goal"] is None
+        assert body["reasoning"] == "ok"
+        assert ctx.state.activity_goal_target is None
+        handler._submit_background.assert_not_called()
+
+    @pytest.mark.parametrize("value", [-1, 2.5, "five", True])
+    def test_an_invalid_goal_is_declined_and_the_old_one_kept(self, value) -> None:
+        """Only whole numbers of rounds, 0 or more, are accepted."""
+        handler, ctx = _chat_handler()
+        ctx.state.activity_goal_target = 6
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=value))
+        assert body["activity_goal"] is None
+        assert "It stays at 6 rounds." in body["reasoning"]
+        assert str(value) not in body["reasoning"].replace("6 rounds", "")
+        assert ctx.state.activity_goal_target == 6
+        handler._submit_background.assert_not_called()
+
+    @pytest.mark.parametrize("value", [0, 500])
+    def test_zero_and_large_goals_are_accepted(self, value: int) -> None:
+        """There is no upper bound, and zero is a valid goal."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(activity_goal=value))
+        assert body["activity_goal"] == value
+        assert ctx.state.activity_goal_target == value
+
+    def test_a_strategy_and_goal_change_schedule_both_writes(self) -> None:
+        """Each write is superseded only by a newer one of its own kind."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(trading_type="risky", activity_goal=3))
+        assert body["updated"] is True
+        assert body["activity_goal"] == 3
+        scheduled = [c.args[0] for c in handler._submit_background.call_args_list]
+        assert scheduled == [
+            handler._delayed_write_activity_goal,
+            handler._delayed_write_kv_extended,
+        ]
+        assert ctx.state.latest_goal_write_request_id == "req1"
+        assert ctx.state.latest_chat_write_request_id == "req1"
+
+    def test_lowering_the_goal_to_progress_meets_it(self, tmp_path: Path) -> None:
+        """The write stores the goal and Pearl sees it met at once."""
+        handler, ctx = _chat_handler()
+        path = self._with_block(ctx, tmp_path, _goal_block(target=10, progress=4))
+        ctx.state.latest_goal_write_request_id = "req1"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_activity_goal(4, "req1")
+        handler._write_kv.assert_called_once_with({"activity_goal_target": "4"})
+        data = json.loads(path.read_text())
+        assert data["metrics"] == ["m"]
+        assert data["activity_goal"]["target"] == 4
+        assert data["activity_goal"]["progress"] == 4
+        assert data["activity_goal"]["is_met"] is True
+        assert data["activity_goal"]["last_met_at"] is not None
+
+    def test_a_superseded_goal_is_not_written(self, tmp_path: Path) -> None:
+        """Only the newest goal in a burst lands."""
+        handler, ctx = _chat_handler()
+        path = self._with_block(ctx, tmp_path, _goal_block())
+        ctx.state.latest_goal_write_request_id = "newer"
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_activity_goal(4, "older")
+        handler._write_kv.assert_not_called()
+        assert json.loads(path.read_text())["activity_goal"] == _goal_block()

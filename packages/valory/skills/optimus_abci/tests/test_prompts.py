@@ -55,6 +55,30 @@ class TestStrategyConfig:
         assert config.trading_type == TradingType.BALANCED
         assert config.max_loss_percentage == 5.0
         assert config.reasoning == "test reasoning"
+        assert config.activity_goal is None
+
+    def test_activity_goal(self) -> None:
+        """The goal is an optional integer the LLM fills only on a change."""
+        config = StrategyConfig(
+            intent=Intent.UPDATE,
+            selected_protocols=[],
+            trading_type=TradingType.BALANCED,
+            max_loss_percentage=5.0,
+            activity_goal=20,
+            reasoning="goal",
+        )
+        assert config.activity_goal == 20
+        assert (
+            StrategyConfig(
+                intent=Intent.QUERY,
+                selected_protocols=[],
+                trading_type=TradingType.BALANCED,
+                max_loss_percentage=5.0,
+                activity_goal=None,
+                reasoning="none",
+            ).activity_goal
+            is None
+        )
 
     def test_risky_trading_type(self) -> None:
         """Test creating a StrategyConfig with risky trading type."""
@@ -152,6 +176,15 @@ class TestStrategyPrompt:
             previous_protocols=["balancerPool"],
             previous_type="balanced",
             previous_threshold=5,
+            activity_goal=10,
+            activity_goal_progress=4,
         )
         assert "invest conservatively" in formatted
         assert "balanced" in formatted
+        assert "Daily goal: 10 rounds, 4 done this epoch" in formatted
+
+    def test_prompt_defines_a_round_and_the_goal_field(self) -> None:
+        """The LLM knows what a round is and returns the goal only on a change."""
+        assert "A round is one cycle of my main loop" in STRATEGY_PROMPT
+        assert "activity_goal: the new number of rounds" in STRATEGY_PROMPT
+        assert "activity_goal, reasoning" in STRATEGY_PROMPT

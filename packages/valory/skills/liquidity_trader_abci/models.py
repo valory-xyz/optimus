@@ -165,6 +165,9 @@ class SharedState(BaseSharedState):
         self.selected_protocols: List[str] = []
         self.max_loss_percentage: Optional[float] = None
         self.latest_chat_write_request_id: Optional[str] = None
+        # The rounds goal last set from the chat, ahead of its delayed KV write.
+        self.activity_goal_target: Optional[int] = None
+        self.latest_goal_write_request_id: Optional[str] = None
         self.request_count: int = 0
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""

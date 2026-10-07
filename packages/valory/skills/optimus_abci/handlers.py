@@ -97,6 +97,13 @@ from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.liquidity_trader_abci.utils import (
     validate_and_fix_protocols,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    KV_ACTIVITY_GOAL_TARGET,
+    is_non_negative_int,
+    merge_agent_performance,
+    read_activity_goal_block,
+    retarget_activity_goal,
+)
 from packages.valory.skills.optimus_abci.dialogues import (
     HttpDialogue,
     HttpDialogues,
@@ -2550,8 +2557,9 @@ class HttpHandler(BaseHttpHandler):
             period = None
 
         # Staking activity signal for Pearl auto-run rotation (new staking
-        # regime). ``is_activity_target_met`` is the rotation/stop signal Pearl
-        # reads; Pearl (not the agent) enacts the stop. On the old regime /
+        # regime). ``is_activity_target_met`` is the staking side of the
+        # standby gate; the agent stands by itself only once the rounds goal it
+        # publishes in agent_performance.json is met too. On the old regime /
         # unstaked these are ``None`` (the off-chain target concept does not
         # apply) — see §5.4. The four keys mirror trader PR #993 so Pearl/FE read
         # the same contract.
@@ -2679,6 +2687,7 @@ class HttpHandler(BaseHttpHandler):
             last_selected_threshold = self._current_max_loss_percentage(
                 previous_trading_type
             )
+            activity_goal, activity_goal_progress = self._current_activity_goal()
 
             # Convert previous selected protocols to their protocol names
             previous_protocols_for_llm = [
@@ -2692,6 +2701,8 @@ class HttpHandler(BaseHttpHandler):
                 previous_protocols=previous_protocols_for_llm,
                 previous_type=previous_trading_type,
                 previous_threshold=last_selected_threshold,
+                activity_goal=activity_goal,
+                activity_goal_progress=activity_goal_progress,
             )
 
             # Prepare payload data with schema and speed optimizations
@@ -2699,7 +2710,7 @@ class HttpHandler(BaseHttpHandler):
                 "prompt": prompt_template,
                 "schema": build_strategy_config_schema(),
                 "temperature": 0.01,
-                "max_tokens": 120,
+                "max_tokens": 150,
             }
 
             # Create LLM request
@@ -2721,6 +2732,34 @@ class HttpHandler(BaseHttpHandler):
         except (json.JSONDecodeError, ValueError) as e:
             self.context.logger.error(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
+
+    @property
+    def _agent_performance_filepath(self) -> Path:
+        """The agent performance file Pearl reads."""
+        return cast(
+            Path,
+            self.context.params.store_path
+            / self.context.params.agent_performance_filename,
+        )
+
+    def _current_activity_goal(self) -> Tuple[int, int]:
+        """The rounds goal in effect and the rounds counted toward it this epoch.
+
+        Progress comes from the block the FSM last published; a goal set from
+        the chat but not yet written wins over the block's.
+
+        :return: the goal and the progress.
+        """
+        block = read_activity_goal_block(self._agent_performance_filepath)
+        target = self.context.state.activity_goal_target
+        if target is None:
+            target = (
+                block["target"]
+                if block is not None
+                else self.context.params.activity_goal_target
+            )
+        progress = block["progress"] if block is not None else 0
+        return target, progress
 
     def _current_max_loss_percentage(self, trading_type: str) -> float:
         """The max loss percentage in force, or the trading type's default.
@@ -2962,6 +3001,7 @@ class HttpHandler(BaseHttpHandler):
                 float(strategy_data.get("max_loss_percentage", 10))
             )
             reasoning = strategy_data.get("reasoning", "")
+            requested_goal = strategy_data.get("activity_goal")
             intent = strategy_data.get("intent", Intent.UPDATE.value)
             if (
                 "trading_type" not in strategy_data
@@ -3036,6 +3076,16 @@ class HttpHandler(BaseHttpHandler):
             chain_info = ", ".join(self.params.target_investment_chains)
             reasoning += f"<br><br><strong>Note:</strong> The following protocols were filtered out as they are not available on the selected chains ({chain_info}): {', '.join(filtered_protocols)}. Only protocols compatible with your selected chains are included."
 
+        current_goal, goal_progress = self._current_activity_goal()
+        activity_goal: Optional[int] = None
+        if requested_goal is not None:
+            if is_non_negative_int(requested_goal):
+                activity_goal = requested_goal
+                reasoning += f"<br><br><strong>Note:</strong> Your daily goal is now {activity_goal} rounds ({goal_progress} done this epoch)."
+            else:
+                # The value came from the LLM, so it is not echoed into the HTML.
+                reasoning += f"<br><br><strong>Note:</strong> I could not change your daily goal: it must be a whole number of rounds, 0 or more. It stays at {current_goal} rounds."
+
         # Convert validated protocol names to strategies for storage
         selected_protocols = [
             PROTOCOL_TO_STRATEGY.get(protocol, protocol)
@@ -3066,9 +3116,19 @@ class HttpHandler(BaseHttpHandler):
         }
         if is_update and type_changed:
             response_data["previous_trading_type"] = previous_trading_type
+        response_data["activity_goal"] = activity_goal
 
         self.context.logger.info(f"response_data: {response_data}")
         self._send_ok_response(http_msg, http_dialogue, response_data)
+
+        if activity_goal is not None:
+            # Tracked apart from strategy writes so that neither supersedes
+            # the other while both are pending.
+            self.context.state.activity_goal_target = activity_goal
+            self.context.state.latest_goal_write_request_id = request_id
+            self._submit_background(
+                self._delayed_write_activity_goal, activity_goal, request_id
+            )
 
         if not is_update:
             self.context.logger.info(
@@ -3178,6 +3238,31 @@ class HttpHandler(BaseHttpHandler):
                 self.context.state.max_loss_percentage = float(
                     data["max_loss_percentage"]
                 )
+
+    def _delayed_write_activity_goal(self, target: int, request_id: str) -> None:
+        """Persist a goal set from the chat after a delay, unless superseded.
+
+        :param target: the new rounds goal.
+        :param request_id: the chat request this write belongs to
+        """
+        time.sleep(self.context.params.default_acceptance_time)
+
+        if self.context.state.latest_goal_write_request_id != request_id:
+            self.context.logger.info(
+                f"Chat request {request_id} superseded by a newer goal; "
+                f"skipping its goal write"
+            )
+            return
+
+        with _KV_WRITE_LOCK:
+            self._write_kv({KV_ACTIVITY_GOAL_TARGET: str(target)})
+            # Pearl sees the new goal at once; the next staking check rebuilds
+            # the block from the KV store.
+            retarget_activity_goal(
+                self._agent_performance_filepath,
+                target,
+                int(datetime.now(timezone.utc).timestamp()),
+            )
 
     def _write_kv(self, data: Dict[str, str]) -> None:
         """
@@ -3581,45 +3666,28 @@ class HttpHandler(BaseHttpHandler):
         try:
             if not chat:
                 return
-            # Construct the agent performance file path
-            agent_performance_filepath = (
-                self.context.params.store_path
-                / self.context.params.agent_performance_filename
-            )
 
-            # Read existing agent performance data or initialize
-            try:
-                # Load existing performance data
-                with open(agent_performance_filepath, "r", encoding="utf-8") as file:
-                    agent_performance = json.load(file)
+            # Remove HTML tags and replace entities
+            html_entities = {"&nbsp;": " ", "&lt;": "<", "&gt;": ">", "&amp;": "&"}
+            clean_message = re.sub(r"<[^>]+>", "", chat)
+            for entity, replacement in html_entities.items():
+                clean_message = clean_message.replace(entity, replacement)
+            if clean_message.startswith("LLM Error:"):
+                return
 
-                # Remove HTML tags and replace entities
-                html_entities = {"&nbsp;": " ", "&lt;": "<", "&gt;": ">", "&amp;": "&"}
-                clean_message = re.sub(r"<[^>]+>", "", chat)
-                for entity, replacement in html_entities.items():
-                    clean_message = clean_message.replace(entity, replacement)
-                if clean_message.startswith("LLM Error:"):
-                    return
-
-            except (FileNotFoundError, json.JSONDecodeError):
-                agent_performance = {
+            merge_agent_performance(
+                self._agent_performance_filepath,
+                {
+                    "agent_behavior": clean_message,
+                    "timestamp": int(datetime.now(timezone.utc).timestamp()),
+                },
+                defaults={
                     "timestamp": None,
                     "metrics": [],
                     "last_activity": None,
                     "agent_behavior": None,
-                }
-                clean_message = chat
-            except Exception as e:
-                self.context.logger.error(f"Error cleaning HTML from message: {str(e)}")
-                clean_message = chat
-
-            # Update agent behavior based on chat message
-            agent_performance["agent_behavior"] = clean_message
-            agent_performance["timestamp"] = int(datetime.now(timezone.utc).timestamp())
-
-            # Store the updated performance data
-            with open(agent_performance_filepath, "w", encoding="utf-8") as file:
-                json.dump(agent_performance, file)
+                },
+            )
 
             self.context.logger.info(
                 f"Updated agent performance behavior: {clean_message}"

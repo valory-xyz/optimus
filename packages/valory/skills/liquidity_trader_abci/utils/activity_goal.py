@@ -25,6 +25,7 @@ Both the FSM (main loop) and the HTTP handler (background threads) write
 """
 
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -52,11 +53,11 @@ PathLike = Union[str, Path]
 
 _AGENT_PERFORMANCE_LOCK = threading.Lock()
 
+_logger = logging.getLogger(f"aea.{__name__}")
+
 
 def is_non_negative_int(value: Any) -> bool:
     """Return whether ``value`` is a non-negative, non-bool int.
-
-    Goals, counts and timestamps in the block must all be of this kind.
 
     :param value: the candidate value.
     :return: whether it is valid.
@@ -77,24 +78,6 @@ def parse_stored_int(raw: Any) -> Optional[int]:
     return value if value >= 0 else None
 
 
-def staking_side_met(
-    is_staking_kpi_met: Optional[bool], is_activity_target_met: Optional[bool]
-) -> Optional[bool]:
-    """Return the staking half of the standby gate.
-
-    ``is_activity_target_met`` is only computed on the decoupled-activity
-    regime; on the old regime it is ``None`` and the on-chain KPI decides. This
-    matches how Pearl derives the staking side for its status header.
-
-    :param is_staking_kpi_met: the on-chain liveness KPI verdict.
-    :param is_activity_target_met: the new-regime activity-target verdict.
-    :return: whether the staking side is met, or ``None`` when undetermined.
-    """
-    if is_activity_target_met is not None:
-        return is_activity_target_met
-    return is_staking_kpi_met
-
-
 def should_stand_by(
     is_staking_kpi_met: Optional[bool],
     is_activity_target_met: Optional[bool],
@@ -107,10 +90,11 @@ def should_stand_by(
     :param is_activity_goal_met: whether the rounds goal was met before this period.
     :return: ``True`` only when both the staking side and the goal are met.
     """
-    return (
-        is_activity_goal_met is True
-        and staking_side_met(is_staking_kpi_met, is_activity_target_met) is True
+    # Pearl's status header derives the staking side the same way.
+    staking_met = (
+        is_staking_kpi_met if is_activity_target_met is None else is_activity_target_met
     )
+    return is_activity_goal_met is True and staking_met is True
 
 
 def stamp_last_met_at(
@@ -174,7 +158,10 @@ def _read_json_object(file_path: PathLike) -> Dict[str, Any]:
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             data = json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError as e:
+        _logger.warning(f"Corrupt {str(file_path)!r} will be replaced: {e}")
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -238,15 +225,10 @@ def read_activity_goal_block(file_path: PathLike) -> Optional[Dict[str, Any]]:
     """Return the ``activity_goal`` block on disk.
 
     :param file_path: the agent performance file.
-    :return: the block, or ``None`` when the file or the block is missing,
-        invalid or unreadable.
+    :return: the block, or ``None`` when the file or the block is missing or invalid.
     """
     with _AGENT_PERFORMANCE_LOCK:
-        try:
-            data = _read_json_object(file_path)
-        except OSError:
-            return None
-        return _valid_block(data)
+        return _valid_block(_read_json_object(file_path))
 
 
 def retarget_activity_goal(

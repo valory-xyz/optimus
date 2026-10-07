@@ -37,7 +37,6 @@ from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
     read_activity_goal_block,
     retarget_activity_goal,
     should_stand_by,
-    staking_side_met,
     stamp_last_met_at,
 )
 
@@ -79,16 +78,6 @@ def test_parse_stored_int(raw, expected) -> None:
 
 class TestStandbyGate:
     """The staking side is regime-aware and both halves must be met."""
-
-    def test_new_regime_uses_the_activity_target(self) -> None:
-        """When the activity target is computed, it decides over the KPI."""
-        assert staking_side_met(False, True) is True
-        assert staking_side_met(True, False) is False
-
-    def test_old_regime_uses_the_kpi(self) -> None:
-        """Without an activity target, the on-chain KPI decides."""
-        assert staking_side_met(True, None) is True
-        assert staking_side_met(None, None) is None
 
     @pytest.mark.parametrize(
         "kpi,target,goal,expected",
@@ -195,6 +184,14 @@ class TestMergeAgentPerformance:
                 merge_agent_performance(path, {"metrics": []})
         assert _read(path) == {"agent_behavior": "hi", "activity_goal": _block()}
 
+    def test_corrupt_file_is_logged(self, tmp_path: Path, caplog) -> None:
+        """Replacing a corrupt file leaves a warning behind."""
+        path = tmp_path / "perf.json"
+        path.write_text("{not json")
+        with caplog.at_level("WARNING"):
+            merge_agent_performance(path, {"metrics": []})
+        assert "Corrupt" in caplog.text
+
     def test_failed_write_leaves_the_file_and_no_temp(self, tmp_path: Path) -> None:
         """A failure mid-write keeps the old content and cleans up the temp file."""
         path = tmp_path / "perf.json"
@@ -257,12 +254,13 @@ class TestReadActivityGoalBlock:
         """No file reads as ``None``."""
         assert read_activity_goal_block(tmp_path / "perf.json") is None
 
-    def test_unreadable_file_is_none(self, tmp_path: Path) -> None:
-        """A file that cannot be read reads as ``None``."""
+    def test_unreadable_file_raises(self, tmp_path: Path) -> None:
+        """A read error is left for the caller to log."""
         path = tmp_path / "perf.json"
         _write(path, {"activity_goal": _block()})
         with patch("builtins.open", side_effect=PermissionError("denied")):
-            assert read_activity_goal_block(path) is None
+            with pytest.raises(PermissionError):
+                read_activity_goal_block(path)
 
 
 class TestRetargetActivityGoal:

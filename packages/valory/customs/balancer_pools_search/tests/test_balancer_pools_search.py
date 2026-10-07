@@ -28,7 +28,9 @@ import pytest
 
 import packages.valory.customs.balancer_pools_search.balancer_pools_search as bal_mod
 from packages.valory.customs.balancer_pools_search.balancer_pools_search import (
+    FAILED_FETCH_CACHE_TTL,
     REQUIRED_FIELDS,
+    SPOT_PRICE_CACHE_TTL,
     _reset_x402_adapter,
     analyze_pool_liquidity,
     apply_composite_pre_filter,
@@ -57,13 +59,52 @@ from packages.valory.customs.balancer_pools_search.balancer_pools_search import 
     get_total_apr,
     get_underlying_token_symbol,
     is_pro_api_key,
+    is_recent_failure,
     normalize_token_symbol,
     remove_irrelevant_fields,
     run,
     run_query,
     set_cached_price,
+    set_cached_value,
+    set_failed_fetch,
     standardize_metrics,
 )
+
+IL_TIME_PERIOD = 90
+SPOT_PREFIX = "spot"
+SPOT_PERIOD = 0
+
+
+def _price_history(base: float, step: float, points: int = 50) -> Dict[str, Any]:
+    """Build a CoinGecko market-chart payload with a strictly moving price."""
+    return {"prices": [[i, base + i * step] for i in range(points)]}
+
+
+def _expired_failure() -> Dict[str, Any]:
+    """Build a failed-fetch entry older than FAILED_FETCH_CACHE_TTL."""
+    return {
+        "data": None,
+        "timestamp": time.time() - FAILED_FETCH_CACHE_TTL - 1,
+        "failed": True,
+    }
+
+
+# A pool that survives get_filtered_pools_for_balancer and sizes a positive
+# investment (single pool, APR 10%, TVL 100k) when both tokens have a price.
+RUN_POOL: Dict[str, Any] = {
+    "id": "pool1",
+    "address": "0x" + "ab" * 20,
+    "chain": "OPTIMISM",
+    "type": "WEIGHTED",
+    "poolTokens": [
+        {"address": "0xt0", "symbol": "TK0"},
+        {"address": "0xt1", "symbol": "TK1"},
+    ],
+    "dynamicData": {
+        "totalLiquidity": "100000",
+        "aprItems": [{"type": "SWAP_FEE_24H", "apr": 0.1}],
+    },
+}
 
 
 @pytest.fixture(autouse=True)
@@ -670,6 +711,7 @@ class TestCalculateIlRiskScoreMulti:
             ["t0", "t1"], "", x402_session=MagicMock(), x402_proxy="https://p.com"
         )
         assert result is None
+        assert get_errors() == []
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
@@ -724,6 +766,7 @@ class TestCalculateIlRiskScoreMulti:
         ):
             result = calculate_il_risk_score_multi(["t0", "t1"], "key")
             assert result is None
+            assert get_errors() == []
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
@@ -742,6 +785,84 @@ class TestCalculateIlRiskScoreMulti:
         mock_cg.side_effect = Exception("constructor fail")
         result = calculate_il_risk_score_multi(["t0", "t1"], "key")
         assert result is None
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_api_exception_does_not_abort_strategy(
+        self, mock_cg: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A failed fetch is remembered in the cache, not pushed to the error list."""
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        result = calculate_il_risk_score_multi(
+            ["t0", "t1"],
+            "",
+            x402_session=MagicMock(),
+            x402_proxy="https://p.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert get_errors() == []
+        assert cache[f"il_range_t0_{IL_TIME_PERIOD}"]["failed"] is True
+        assert f"il_range_t1_{IL_TIME_PERIOD}" not in cache
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_recent_failure_skips_fetch(
+        self, mock_cg: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A token that failed recently is not re-paid for."""
+        inst = MagicMock()
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("t0", IL_TIME_PERIOD, cache)
+        result = calculate_il_risk_score_multi(
+            ["t0", "t1"],
+            "key",
+            x402_session=MagicMock(),
+            x402_proxy="https://p.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert inst.get_coin_market_chart_range_by_id.call_count == 0
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_expired_failure_is_retried(
+        self, mock_cg: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """Once the failure TTL has elapsed the token is fetched again."""
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = [
+            _price_history(100, 0.5),
+            _price_history(200, 0.3),
+        ]
+        mock_cg.return_value = inst
+        cache = {f"il_range_t0_{IL_TIME_PERIOD}": _expired_failure()}
+        result = calculate_il_risk_score_multi(
+            ["t0", "t1"],
+            "key",
+            x402_session=MagicMock(),
+            x402_proxy="https://p.com",
+            price_cache=cache,
+        )
+        assert isinstance(result, float)
+        assert inst.get_coin_market_chart_range_by_id.call_count == 2
+        assert is_recent_failure("t0", IL_TIME_PERIOD, cache) is False
 
 
 class TestCreateGraphqlClient:
@@ -1483,6 +1604,148 @@ class TestGetPoolTokenPrices:
         # Price should be 0.0 since search failed and token is not USD-pegged
         assert result["RANDOMTOKEN"] == 0.0
 
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_cached_spot_price_skips_api_and_sleep(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A cached spot price is served without any client, call or delay."""
+        cache: Dict[str, Any] = {}
+        set_cached_value("weth", SPOT_PERIOD, {"usd": 2000.0}, cache, SPOT_PREFIX)
+        result = get_pool_token_prices(
+            ["WETH"], coingecko_api_key="key", price_cache=cache
+        )
+        assert result == {"WETH": 2000.0}
+        mock_cg.assert_not_called()
+        mock_sleep.assert_not_called()
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_spot_price_is_cached_after_fetch(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A resolved price is written to the cache so the next call is free."""
+        mock_pro.return_value = False
+        inst = MagicMock()
+        inst.get_price.return_value = {"weth": {"usd": 2000.0}}
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        first = get_pool_token_prices(
+            ["WETH"], coingecko_api_key="key", price_cache=cache
+        )
+        calls_after_first = inst.get_price.call_count
+        assert calls_after_first == 1
+        second = get_pool_token_prices(
+            ["WETH"], coingecko_api_key="key", price_cache=cache
+        )
+        assert first == second == {"WETH": 2000.0}
+        assert inst.get_price.call_count == calls_after_first
+
+    @pytest.mark.parametrize(
+        ("symbol", "fallback"),
+        [
+            pytest.param("USDC", 1.0, id="usd-like"),
+            pytest.param("RANDOMTOKEN", 0.0, id="unknown"),
+        ],
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_unresolvable_symbol_records_failed_fetch(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_sleep: MagicMock,
+        symbol: str,
+        fallback: float,
+    ) -> None:
+        """An unresolved symbol is remembered as failed; the fallback is not cached."""
+        mock_pro.return_value = False
+        inst = MagicMock()
+        inst.get_price.return_value = {}
+        inst.search.return_value = {"coins": []}
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        result = get_pool_token_prices(
+            [symbol], coingecko_api_key="key", price_cache=cache
+        )
+        assert result == {symbol: fallback}
+        assert is_recent_failure(symbol.lower(), SPOT_PERIOD, cache, SPOT_PREFIX)
+        assert (
+            get_cached_price(
+                symbol.lower(), SPOT_PERIOD, cache, SPOT_PRICE_CACHE_TTL, SPOT_PREFIX
+            )
+            is None
+        )
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_recent_failure_falls_back_without_api_calls(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """Recently failed symbols get the static fallback with no client or delay."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("usdc", SPOT_PERIOD, cache, SPOT_PREFIX)
+        set_failed_fetch("randomtoken", SPOT_PERIOD, cache, SPOT_PREFIX)
+        result = get_pool_token_prices(
+            ["USDC", "RANDOMTOKEN"], coingecko_api_key="key", price_cache=cache
+        )
+        assert result == {"USDC": 1.0, "RANDOMTOKEN": 0.0}
+        mock_cg.assert_not_called()
+        mock_sleep.assert_not_called()
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_warmup_delay_precedes_only_the_first_api_call(
+        self, mock_cg: MagicMock, mock_pro: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """The 3s warm-up happens once, before the first lookup, not per symbol."""
+        mock_pro.return_value = False
+        inst = MagicMock()
+        inst.get_price.side_effect = lambda ids, **_: {ids: {"usd": 1.5}}
+        mock_cg.return_value = inst
+        result = get_pool_token_prices(
+            ["AAA", "BBB"], coingecko_api_key="key", price_cache={}
+        )
+        assert result == {"AAA": 1.5, "BBB": 1.5}
+        delays = [call.args[0] for call in mock_sleep.call_args_list]
+        assert delays[0] == 3
+        assert delays.count(3) == 1
+
 
 class TestGetTokenInvestmentsMulti:
     """Tests for get_token_investments_multi function."""
@@ -1846,9 +2109,188 @@ class TestFormatPoolData:
         )
         assert len(result) == 1
 
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_price_cache_forwarded_to_get_pool_token_prices(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
+        """The same cache object reaches the spot-price lookup."""
+        mock_pro.return_value = False
+        mock_prices.return_value = {"TK0": 50.0, "TK1": 100.0}
+        cache: Dict[str, Any] = {}
+        format_pool_data([self._make_pool()], "key", price_cache=cache)
+        assert mock_prices.call_args.kwargs["price_cache"] is cache
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_pool_token_prices"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_missing_prices_are_treated_as_empty(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_prices: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
+        """A None price map yields zero-sized pools instead of raising."""
+        mock_pro.return_value = False
+        mock_prices.return_value = None
+        result = format_pool_data([self._make_pool(apr=0.1)], "key")
+        assert result[0]["max_investment_usd"] == 0.0
+        assert result[0]["max_investment_amounts"] == []
+
 
 class TestGetOpportunitiesForBalancer:
     """Tests for get_opportunities_for_balancer function."""
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
+    def test_no_scorable_pool_reports_one_strategy_error(
+        self,
+        mock_get: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_format: MagicMock,
+        mock_valid: MagicMock,
+    ) -> None:
+        """When every pool lacks an IL score the root cause is reported once."""
+        pools = [
+            {
+                "id": f"pool{i}",
+                "chain": "OPTIMISM",
+                "type": "Weighted",
+                "poolTokens": [
+                    {"address": "0xt0", "symbol": "TK0"},
+                    {"address": "0xt1", "symbol": "TK1"},
+                ],
+            }
+            for i in range(2)
+        ]
+        mock_get.return_value = pools
+        mock_filter.return_value = pools
+        mock_il.return_value = None
+        mock_sharpe.return_value = 1.0
+        mock_liq.return_value = (100, 5000)
+        mock_format.return_value = pools
+        mock_valid.return_value = pools
+        get_opportunities_for_balancer(
+            ["optimism"],
+            "url",
+            [],
+            "key",
+            {"optimism": {}},
+            {"optimism": {"tk0": "a", "tk1": "b"}},
+            None,
+            None,
+        )
+        assert len(get_errors()) == 1
+        assert "all 2 pools" in get_errors()[0]
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
+    def test_a_partly_scored_set_reports_no_strategy_error(
+        self,
+        mock_get: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_format: MagicMock,
+        mock_valid: MagicMock,
+    ) -> None:
+        """One unscored pool among scored ones is not a strategy failure."""
+        pools = [
+            {
+                "id": f"pool{i}",
+                "chain": "OPTIMISM",
+                "type": "Weighted",
+                "poolTokens": [
+                    {"address": "0xt0", "symbol": "TK0"},
+                    {"address": "0xt1", "symbol": "TK1"},
+                ],
+            }
+            for i in range(2)
+        ]
+        mock_get.return_value = pools
+        mock_filter.return_value = pools
+        mock_il.side_effect = [None, -0.05]
+        mock_sharpe.return_value = 1.0
+        mock_liq.return_value = (100, 5000)
+        mock_format.return_value = pools
+        mock_valid.return_value = pools
+        get_opportunities_for_balancer(
+            ["optimism"],
+            "url",
+            [],
+            "key",
+            {"optimism": {}},
+            {"optimism": {"tk0": "a", "tk1": "b"}},
+            None,
+            None,
+        )
+        assert get_errors() == []
 
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
@@ -2000,6 +2442,64 @@ class TestGetOpportunitiesForBalancer:
         )
         # Should still return results but with il_risk_score = None
         mock_il.assert_not_called()
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
+    def test_price_cache_forwarded_to_format_pool_data(
+        self,
+        mock_get: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_format: MagicMock,
+        mock_valid: MagicMock,
+    ) -> None:
+        """The same cache object reaches both the IL and the spot-price lookups."""
+        pool = dict(RUN_POOL)
+        mock_get.return_value = [pool]
+        mock_filter.return_value = [pool]
+        mock_il.return_value = None
+        mock_sharpe.return_value = 1.5
+        mock_liq.return_value = (100, 5000)
+        mock_format.return_value = [{"dex_type": "balancerPool"}]
+        mock_valid.return_value = [{"dex_type": "balancerPool"}]
+        cache: Dict[str, Any] = {}
+
+        result = get_opportunities_for_balancer(
+            ["optimism"],
+            "url",
+            [],
+            "key",
+            {"optimism": {}},
+            {"optimism": {"tk0": "id0", "tk1": "id1"}},
+            None,
+            None,
+            price_cache=cache,
+        )
+        assert result == [{"dex_type": "balancerPool"}]
+        assert mock_il.call_args.kwargs["price_cache"] is cache
+        assert mock_format.call_args.kwargs["price_cache"] is cache
+        assert mock_format.call_args.args[0][0]["il_risk_score"] is None
 
 
 class TestIsProApiKey:
@@ -2362,6 +2862,82 @@ class TestRun:
         )
         assert "error" in result
 
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.run_query"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.CoinGeckoAPI"
+    )
+    def test_il_fetch_failure_still_returns_opportunities(
+        self,
+        mock_cg: MagicMock,
+        mock_pro: MagicMock,
+        mock_query: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
+        """One pool's failed IL history leaves it ranked without a score; the rest proceed."""
+        mock_pro.return_value = False
+        other_pool = {
+            **RUN_POOL,
+            "id": "pool2",
+            "address": "0x" + "cd" * 20,
+            "poolTokens": [
+                {"address": "0xt2", "symbol": "TK2"},
+                {"address": "0xt3", "symbol": "TK3"},
+            ],
+        }
+        mock_query.return_value = {"poolGetPools": [dict(RUN_POOL), other_pool]}
+        mock_sharpe.return_value = 1.0
+        mock_liq.return_value = (100, 5000)
+        inst = MagicMock()
+
+        def _history(id, **_):  # pylint: disable=redefined-builtin
+            if id == "id0":
+                raise Exception("rate limit")
+            return _price_history(100.0, 0.5)
+
+        inst.get_coin_market_chart_range_by_id.side_effect = _history
+        inst.get_price.side_effect = lambda ids, **_: {ids: {"usd": 10.0}}
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+
+        result = run(
+            chains=["optimism"],
+            graphql_endpoint="url",
+            current_positions=[],
+            whitelisted_assets={"optimism": {}},
+            coin_id_mapping={
+                "optimism": {"tk0": "id0", "tk1": "id1", "tk2": "id2", "tk3": "id3"}
+            },
+            coingecko_api_key="key",
+            x402_session=None,
+            x402_proxy=None,
+            price_cache=cache,
+        )
+        assert result["error"] == []
+        # The scored pool is the one that comes out on top; the unscored one
+        # neither aborts the strategy nor outranks it.
+        returned = {p["pool_id"]: p for p in result["result"]}
+        assert "pool2" in returned, result
+        assert isinstance(returned["pool2"]["il_risk_score"], float)
+        assert returned["pool2"]["max_investment_usd"] > 0
+        assert all(p["il_risk_score"] is not None or p["pool_id"] == "pool1" for p in result["result"])
+        assert is_recent_failure("id0", IL_TIME_PERIOD, cache) is True
+
 
 class TestResetX402Adapter:
     """Tests for _reset_x402_adapter helper."""
@@ -2511,6 +3087,67 @@ class TestGetCachedPrice:
         set_cached_price("token", 90, data, cache)
         assert cache == {}
         assert get_cached_price("token", 90, cache, 1800) is None
+
+    def test_failed_entry_reads_as_cache_miss(self) -> None:
+        """A failed marker is never returned as price data."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache)
+        assert get_cached_price("token", IL_TIME_PERIOD, cache, 1800) is None
+
+    def test_failed_fetch_is_recent_within_ttl(self) -> None:
+        """A just-recorded failure counts as recent."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache)
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is True
+
+    def test_failed_fetch_expires_after_ttl(self) -> None:
+        """A failure older than FAILED_FETCH_CACHE_TTL no longer blocks a retry."""
+        cache = {f"il_range_token_{IL_TIME_PERIOD}": _expired_failure()}
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+
+    def test_successful_entry_is_not_a_failure(self) -> None:
+        """A normal cached history is not reported as a failure."""
+        cache: Dict[str, Any] = {}
+        set_cached_price("token", IL_TIME_PERIOD, {"prices": [[0, 100]]}, cache)
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+
+    def test_successful_fetch_overwrites_failed_entry(self) -> None:
+        """A later successful fetch clears the failure marker."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache)
+        set_cached_price("token", IL_TIME_PERIOD, {"prices": [[0, 100]]}, cache)
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+        assert get_cached_price("token", IL_TIME_PERIOD, cache, 1800) == {
+            "prices": [[0, 100]]
+        }
+
+    def test_failure_is_scoped_to_prefix_and_period(self) -> None:
+        """Failure markers do not leak across prefixes or time periods."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache, SPOT_PREFIX)
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+        assert is_recent_failure("token", 30, cache, SPOT_PREFIX) is False
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache, SPOT_PREFIX) is True
+
+    def test_failure_helpers_tolerate_missing_cache(self) -> None:
+        """Without a cache nothing is recorded and nothing is recent."""
+        set_failed_fetch("token", IL_TIME_PERIOD, None)
+        assert is_recent_failure("token", IL_TIME_PERIOD, None) is False
+
+    def test_set_cached_value_round_trips_under_prefix(self) -> None:
+        """A non-history payload is readable back through get_cached_price."""
+        cache: Dict[str, Any] = {}
+        set_cached_value("weth", SPOT_PERIOD, {"usd": 2.0}, cache, SPOT_PREFIX)
+        assert get_cached_price(
+            "weth", SPOT_PERIOD, cache, SPOT_PRICE_CACHE_TTL, SPOT_PREFIX
+        ) == {"usd": 2.0}
+
+    def test_set_cached_value_ignores_none_payload_and_none_cache(self) -> None:
+        """Neither a None payload nor a None cache produces an entry or an error."""
+        cache: Dict[str, Any] = {}
+        set_cached_value("weth", SPOT_PERIOD, None, cache, SPOT_PREFIX)
+        assert cache == {}
+        set_cached_value("weth", SPOT_PERIOD, {"usd": 2.0}, None, SPOT_PREFIX)
 
 
 class TestCalculateIlRiskScoreMultiWithCache:

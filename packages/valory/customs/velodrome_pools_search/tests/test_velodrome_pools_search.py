@@ -3799,10 +3799,19 @@ class TestGetVelodromePoolsViaSugarBranches:
         assert len(result) == 4
 
     @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
     )
-    def test_batch_exception(self, mock_conn: MagicMock) -> None:
-        """Test exception during batch fetch (lines 1104-1107).
+    def test_reverted_batch_returns_error_and_caches_nothing(
+        self, mock_conn: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A reverted ``all()`` call is a discovery failure, not an empty market.
+
+        The caller must see an error dict (so the agent logs the revert) and
+        the next run must call the contract again instead of serving a cached
+        empty list.
         """
         mock_w3 = MagicMock()
         mock_w3.is_connected.return_value = True
@@ -3815,8 +3824,159 @@ class TestGetVelodromePoolsViaSugarBranches:
         result = get_velodrome_pools_via_sugar(
             "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
         )
+        assert isinstance(result, dict)
+        assert "batch error" in result["error"]
+        assert "0xsugar" in result["error"]
+        assert f"after {vel_mod.SUGAR_BATCH_RETRIES} attempts" in result["error"]
+        assert any("batch error" in e for e in get_errors())
+        assert get_cached_data("pools", f"{MODE_CHAIN_ID}:0xsugar") is None
+        get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
+        assert (
+            mock_contract.functions.all.return_value.call.call_count
+            == 2 * vel_mod.SUGAR_BATCH_RETRIES
+        )
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
+    def test_later_batch_failure_keeps_pools_already_fetched(
+        self, mock_conn: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A batch that keeps failing after a full first batch ends discovery.
+
+        Chains with tens of thousands of pools hit RPC rate limits part way
+        through; the pools already fetched are still a usable view, so they
+        are returned and cached rather than discarded.
+        """
+
+        def _pool(idx: int) -> Any:
+            return (
+                f"0xlp{idx}",
+                "SYM",
+                18,
+                1000,
+                0,
+                0,
+                1000,
+                f"0xt0_{idx}",
+                500,
+                100,
+                f"0xt1_{idx}",
+                500,
+                100,
+                "0xgauge",
+                500,
+                True,
+                100,
+                "0xbribe",
+                "0xfactory",
+                1000,
+                "0xemtoken",
+                500,
+                500,
+                0,
+                100,
+                200,
+                0,
+                100,
+                200,
+                "0xnfpm",
+                "0xalm",
+                "0xroot",
+            )
+
+        mock_w3 = MagicMock()
+        mock_w3.is_connected.return_value = True
+        mock_contract = MagicMock()
+        mock_contract.functions.all.return_value.call.side_effect = [
+            [_pool(i) for i in range(500)],
+            Exception("rate limited"),
+            Exception("rate limited"),
+            Exception("rate limited"),
+        ]
+        mock_w3.eth.contract.return_value = mock_contract
+        mock_conn.return_value = mock_w3
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
         assert isinstance(result, list)
-        assert len(result) == 0
+        assert len(result) == 500
+        assert get_errors() == []
+        assert (
+            mock_contract.functions.all.return_value.call.call_count
+            == 1 + vel_mod.SUGAR_BATCH_RETRIES
+        )
+        assert len(get_cached_data("pools", f"{MODE_CHAIN_ID}:0xsugar")) == 500
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
+    def test_failed_batch_is_retried_with_backoff(
+        self, mock_conn: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A transient batch error is retried, with the delay doubling each time."""
+        pool = (
+            "0xlp",
+            "SYM",
+            18,
+            1000,
+            0,
+            0,
+            1000,
+            "0xt0",
+            500,
+            100,
+            "0xt1",
+            500,
+            100,
+            "0xgauge",
+            500,
+            True,
+            100,
+            "0xbribe",
+            "0xfactory",
+            1000,
+            "0xemtoken",
+            500,
+            500,
+            0,
+            100,
+            200,
+            0,
+            100,
+            200,
+            "0xnfpm",
+            "0xalm",
+            "0xroot",
+        )
+        mock_w3 = MagicMock()
+        mock_w3.is_connected.return_value = True
+        mock_contract = MagicMock()
+        mock_contract.functions.all.return_value.call.side_effect = [
+            Exception("rate limited"),
+            Exception("rate limited"),
+            [pool],
+        ]
+        mock_w3.eth.contract.return_value = mock_contract
+        mock_conn.return_value = mock_w3
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert get_errors() == []
+        assert [c.args[0] for c in mock_sleep.call_args_list] == [
+            vel_mod.SUGAR_BATCH_RETRY_DELAY_SECONDS,
+            vel_mod.SUGAR_BATCH_RETRY_DELAY_SECONDS * 2,
+        ]
 
     @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
@@ -4750,3 +4910,454 @@ class TestRunRpcOverrideSnapshotRestore:
                 )
 
         assert dict(RPC_ENDPOINTS) == snapshot_before
+
+
+class TestSugarDeploymentAddresses:
+    """The LpSugar addresses must be deployments that implement the ABI in use."""
+
+    @pytest.mark.parametrize(
+        ("chain_id", "upstream"),
+        [
+            pytest.param(
+                OPTIMISM_CHAIN_ID,
+                "0x347512180804A8B40AA7525AE932a31198F074aA",
+                id="optimism",
+            ),
+            pytest.param(
+                MODE_CHAIN_ID,
+                "0x1A3C63c8D442948085E47f88CB377183E23EA01f",
+                id="mode",
+            ),
+        ],
+    )
+    def test_lp_sugar_matches_upstream_deployment(
+        self, chain_id: int, upstream: str
+    ) -> None:
+        """Each chain must point at the LpSugar listed in velodrome-finance/sugar.
+
+        ``deployments/<chain>.env`` lists LP_SUGAR_ADDRESS_<id>; the previous
+        Optimism and Mode addresses only exposed the two-argument ``all`` and
+        every batch call reverted, which left the strategy with no pools at all.
+        """
+        assert vel_mod.SUGAR_CONTRACT_ADDRESSES[chain_id] == upstream
+
+    @pytest.mark.parametrize("chain_id", sorted(vel_mod.SUGAR_CONTRACT_ADDRESSES))
+    def test_lp_sugar_addresses_are_checksummed(self, chain_id: int) -> None:
+        """A mistyped address must fail here, not at the first eth_call."""
+        from web3 import Web3
+
+        address = vel_mod.SUGAR_CONTRACT_ADDRESSES[chain_id]
+        assert Web3.to_checksum_address(address) == address
+
+
+class TestFailedFetchCache:
+    """A failed fetch is remembered so it is not re-paid on every cycle."""
+
+    def test_failed_fetch_is_remembered_within_window(self) -> None:
+        """Within the window the entry reads as a recent failure and as a miss."""
+        cache: Dict[str, Any] = {}
+        vel_mod.set_failed_fetch("t0", 90, cache)
+        assert vel_mod.is_recent_failure("t0", 90, cache) is True
+        assert get_cached_price("t0", 90, cache, 1800) is None
+
+    def test_failed_fetch_expires(self) -> None:
+        """After the window the token is fetched again."""
+        cache: Dict[str, Any] = {}
+        vel_mod.set_failed_fetch("t0", 90, cache)
+        cache["il_range_t0_90"]["timestamp"] -= vel_mod.FAILED_FETCH_CACHE_TTL + 1
+        assert vel_mod.is_recent_failure("t0", 90, cache) is False
+
+    def test_success_overwrites_failure(self) -> None:
+        """A later successful fetch replaces the failure record."""
+        cache: Dict[str, Any] = {}
+        vel_mod.set_failed_fetch("t0", 90, cache)
+        set_cached_price("t0", 90, {"prices": [[0, 1.0]]}, cache)
+        assert vel_mod.is_recent_failure("t0", 90, cache) is False
+        assert get_cached_price("t0", 90, cache, 1800) == {"prices": [[0, 1.0]]}
+
+    def test_prefixes_are_independent(self) -> None:
+        """A failure under one prefix does not hide another prefix's entry."""
+        cache: Dict[str, Any] = {}
+        vel_mod.set_failed_fetch("t0", 90, cache, prefix="velo_hist")
+        assert vel_mod.is_recent_failure("t0", 90, cache) is False
+
+    def test_helpers_tolerate_missing_cache(self) -> None:
+        """Callers without a cache dict neither crash nor skip."""
+        vel_mod.set_failed_fetch("t0", 90, None)
+        assert vel_mod.is_recent_failure("t0", 90, None) is False
+        vel_mod.set_cached_value("t0", 90, {"id": "x"}, None, "coin_id")
+
+    def test_set_cached_value_stores_any_payload(self) -> None:
+        """Non-history payloads are cached under the same key scheme."""
+        cache: Dict[str, Any] = {}
+        vel_mod.set_cached_value(
+            "0xabc", "optimistic-ethereum", {"id": "eth"}, cache, "coin_id"
+        )
+        assert get_cached_price(
+            "0xabc", "optimistic-ethereum", cache, 60, prefix="coin_id"
+        ) == {"id": "eth"}
+        vel_mod.set_cached_value("0xabc", "optimistic-ethereum", None, cache, "coin_id")
+        assert cache["coin_id_0xabc_optimistic-ethereum"]["data"] == {"id": "eth"}
+
+
+class TestIlRiskFailureCache:
+    """IL-risk history fetches honour the failed-fetch window."""
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    def test_failed_fetch_is_not_repaid_within_window(
+        self, cg_class: MagicMock
+    ) -> None:
+        """A token that just failed is skipped without an API call."""
+        cache: Dict[str, Any] = {}
+        vel_mod.set_failed_fetch("t0", 90, cache)
+        result = calculate_velodrome_il_risk_score_multi(
+            ["t0", "t1"],
+            None,
+            x402_session=MagicMock(),
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert cg_class.return_value.get_coin_market_chart_range_by_id.call_count == 0
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    def test_exception_records_failed_fetch(
+        self, cg_class: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """An API error is recorded so the next cycle does not pay for it again."""
+        cg_class.return_value.get_coin_market_chart_range_by_id.side_effect = Exception(
+            "402"
+        )
+        cache: Dict[str, Any] = {}
+        result = calculate_velodrome_il_risk_score_multi(
+            ["t0", "t1"],
+            None,
+            x402_session=MagicMock(),
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert vel_mod.is_recent_failure("t0", 90, cache) is True
+
+
+class TestHistoricalMarketDataFailureCache:
+    """Band-history fetches honour the failed-fetch window."""
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    def test_recent_failure_skips_api_call(self, cg_class: MagicMock) -> None:
+        """A coin whose history just failed is not fetched again."""
+        cache: Dict[str, Any] = {}
+        vel_mod.set_failed_fetch("ethereum", 30, cache, prefix="velo_hist")
+        result = get_historical_market_data(
+            "ethereum",
+            30,
+            x402_session=MagicMock(),
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert cg_class.return_value.get_coin_market_chart_by_id.call_count == 0
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            pytest.param({"side_effect": Exception("boom")}, id="exception"),
+            pytest.param({"return_value": {}}, id="empty response"),
+        ],
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    def test_failed_fetch_is_recorded(
+        self, cg_class: MagicMock, mock_sleep: MagicMock, failure: Dict[str, Any]
+    ) -> None:
+        """Both an error and an empty body mark the coin as recently failed."""
+        cg_class.return_value.get_coin_market_chart_by_id.configure_mock(**failure)
+        cache: Dict[str, Any] = {}
+        result = get_historical_market_data(
+            "ethereum",
+            30,
+            x402_session=MagicMock(),
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert vel_mod.is_recent_failure("ethereum", 30, cache, prefix="velo_hist")
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            pytest.param({"side_effect": Exception("boom")}, id="exception"),
+            pytest.param({"return_value": None}, id="empty response"),
+        ],
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key",
+        return_value=False,
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    def test_failed_fetch_is_recorded_on_regular_api(
+        self,
+        cg_class: MagicMock,
+        mock_sleep: MagicMock,
+        mock_pro: MagicMock,
+        failure: Dict[str, Any],
+    ) -> None:
+        """The keyed API path records failures the same way as the paid path."""
+        cg_class.return_value.get_coin_market_chart_by_id.configure_mock(**failure)
+        cache: Dict[str, Any] = {}
+        result = get_historical_market_data(
+            "ethereum", 30, coingecko_api_key="key", price_cache=cache
+        )
+        assert result is None
+        assert vel_mod.is_recent_failure("ethereum", 30, cache, prefix="velo_hist")
+
+
+class TestCoinIdLookupCache:
+    """Contract-address to coin-id lookups are paid at most once per window."""
+
+    def _session(self, status: int, body: Any = None) -> MagicMock:
+        session = MagicMock()
+        response = MagicMock()
+        response.status_code = status
+        response.json.return_value = body or {}
+        session.get.return_value = response
+        return session
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    def test_mapping_is_cached_after_lookup(
+        self, mock_sleep: MagicMock, cg_class: MagicMock
+    ) -> None:
+        """The second lookup for the same address makes no request."""
+        session = self._session(200, {"id": "ethereum"})
+        cache: Dict[str, Any] = {}
+        first = get_coin_id_from_address(
+            "optimism",
+            "0xUnknown",
+            "optimistic-ethereum",
+            x402_session=session,
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        second = get_coin_id_from_address(
+            "optimism",
+            "0xunknown",
+            "optimistic-ethereum",
+            x402_session=session,
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert first == second == "ethereum"
+        assert session.get.call_count == 1
+        assert mock_sleep.call_count == 1
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    def test_not_listed_is_cached_as_none(
+        self, mock_sleep: MagicMock, cg_class: MagicMock
+    ) -> None:
+        """A 404 is a stable answer and is not asked again within the window."""
+        session = self._session(404)
+        cache: Dict[str, Any] = {}
+        for _ in range(2):
+            result = get_coin_id_from_address(
+                "optimism",
+                "0xunlisted",
+                "optimistic-ethereum",
+                x402_session=session,
+                x402_proxy="https://proxy.example.com",
+                price_cache=cache,
+            )
+            assert result is None
+        assert session.get.call_count == 1
+        assert cache["coin_id_0xunlisted_optimistic-ethereum"]["data"] == {"id": None}
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    def test_not_listed_is_rechecked_after_a_day(
+        self, mock_sleep: MagicMock, cg_class: MagicMock
+    ) -> None:
+        """A new listing is picked up once the shorter not-listed window passes."""
+        session = self._session(404)
+        cache: Dict[str, Any] = {}
+        get_coin_id_from_address(
+            "optimism",
+            "0xunlisted",
+            "optimistic-ethereum",
+            x402_session=session,
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        entry = cache["coin_id_0xunlisted_optimistic-ethereum"]
+        entry["timestamp"] -= vel_mod.NOT_LISTED_CACHE_TTL + 1
+        session.get.return_value.status_code = 200
+        session.get.return_value.json.return_value = {"id": "newly-listed"}
+        result = get_coin_id_from_address(
+            "optimism",
+            "0xunlisted",
+            "optimistic-ethereum",
+            x402_session=session,
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert result == "newly-listed"
+        assert session.get.call_count == 2
+
+    @pytest.mark.parametrize(
+        "session_factory",
+        [
+            pytest.param(lambda self: self._session(500), id="server error"),
+            pytest.param(
+                lambda self: MagicMock(get=MagicMock(side_effect=Exception("down"))),
+                id="exception",
+            ),
+        ],
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    def test_transient_failure_is_not_retried_within_window(
+        self, mock_sleep: MagicMock, cg_class: MagicMock, session_factory: Any
+    ) -> None:
+        """A failed lookup is skipped until the failure window has passed."""
+        session = session_factory(self)
+        cache: Dict[str, Any] = {}
+        for _ in range(2):
+            assert (
+                get_coin_id_from_address(
+                    "optimism",
+                    "0xflaky",
+                    "optimistic-ethereum",
+                    x402_session=session,
+                    x402_proxy="https://proxy.example.com",
+                    price_cache=cache,
+                )
+                is None
+            )
+        assert session.get.call_count == 1
+        assert vel_mod.is_recent_failure(
+            "0xflaky", "optimistic-ethereum", cache, prefix="coin_id"
+        )
+        cache["coin_id_0xflaky_optimistic-ethereum"]["timestamp"] -= (
+            vel_mod.FAILED_FETCH_CACHE_TTL + 1
+        )
+        get_coin_id_from_address(
+            "optimism",
+            "0xflaky",
+            "optimistic-ethereum",
+            x402_session=session,
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert session.get.call_count == 2
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key",
+        return_value=False,
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    def test_regular_api_mapping_is_cached(
+        self, mock_sleep: MagicMock, cg_class: MagicMock, mock_pro: MagicMock
+    ) -> None:
+        """The keyed API path caches like the paid path."""
+        cg_class.return_value.get_coin_info_from_contract_address_by_id.return_value = {
+            "id": "velodrome-finance"
+        }
+        cache: Dict[str, Any] = {}
+        for _ in range(2):
+            result = get_coin_id_from_address(
+                "optimism",
+                "0xvelo",
+                "optimistic-ethereum",
+                coingecko_api_key="key",
+                price_cache=cache,
+            )
+            assert result == "velodrome-finance"
+        assert (
+            cg_class.return_value.get_coin_info_from_contract_address_by_id.call_count
+            == 1
+        )
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.is_pro_api_key",
+        return_value=False,
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    def test_regular_api_error_records_failed_fetch(
+        self, mock_sleep: MagicMock, cg_class: MagicMock, mock_pro: MagicMock
+    ) -> None:
+        """A keyed API error is remembered for the failure window."""
+        cg_class.return_value.get_coin_info_from_contract_address_by_id.side_effect = (
+            Exception("boom")
+        )
+        cache: Dict[str, Any] = {}
+        assert (
+            get_coin_id_from_address(
+                "optimism",
+                "0xvelo",
+                "optimistic-ethereum",
+                coingecko_api_key="key",
+                price_cache=cache,
+            )
+            is None
+        )
+        assert vel_mod.is_recent_failure(
+            "0xvelo", "optimistic-ethereum", cache, prefix="coin_id"
+        )
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_coin_id_from_address",
+        return_value=None,
+    )
+    def test_pool_token_history_forwards_the_price_cache(
+        self, mock_lookup: MagicMock
+    ) -> None:
+        """The coin-id cache must be the strategy's shared cache, not a fresh dict."""
+        cache: Dict[str, Any] = {}
+        get_pool_token_history("optimism", "0xa", "0xb", price_cache=cache)
+        assert mock_lookup.call_count == 2
+        for call in mock_lookup.call_args_list:
+            assert call.kwargs["price_cache"] is cache

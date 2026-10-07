@@ -109,6 +109,8 @@ def get_cached_price(
     entry = cache.get(cache_key)
     if entry is None:
         return None
+    if entry.get("failed"):
+        return None
     elapsed = time.time() - entry["timestamp"]
     if elapsed > ttl:
         return None
@@ -135,6 +137,67 @@ def set_cached_price(
         "data": data,
         "timestamp": time.time(),
     }
+
+
+# A fetch that failed is remembered this long so it is not re-paid every cycle.
+# liquidity_trader_abci/behaviours/evaluate_strategy.py prunes these entries
+# with the same TTL; keep the two in step.
+FAILED_FETCH_CACHE_TTL: int = 900
+
+
+def set_failed_fetch(
+    token_id: str,
+    time_period: int,
+    cache: Optional[Dict[str, Any]],
+    prefix: str = "il_range",
+) -> None:
+    """Record a failed fetch; a later successful cache write replaces it."""
+    if cache is None:
+        return
+    cache[f"{prefix}_{token_id}_{time_period}"] = {
+        "data": None,
+        "timestamp": time.time(),
+        "failed": True,
+    }
+
+
+def is_recent_failure(
+    token_id: str,
+    time_period: int,
+    cache: Optional[Dict[str, Any]],
+    prefix: str = "il_range",
+) -> bool:
+    """Return True when the last fetch failed less than FAILED_FETCH_CACHE_TTL ago."""
+    if cache is None:
+        return False
+    entry = cache.get(f"{prefix}_{token_id}_{time_period}")
+    return bool(
+        entry
+        and entry.get("failed")
+        and time.time() - entry["timestamp"] <= FAILED_FETCH_CACHE_TTL
+    )
+
+
+def set_cached_value(
+    token_id: str,
+    time_period: int,
+    data: Any,
+    cache: Optional[Dict[str, Any]],
+    prefix: str,
+) -> None:
+    """Cache any non-None payload under the same key scheme as set_cached_price."""
+    if cache is None or data is None:
+        return
+    cache[f"{prefix}_{token_id}_{time_period}"] = {
+        "data": data,
+        "timestamp": time.time(),
+    }
+
+
+# Spot prices feed investment sizing, not the IL window, so they get their own
+# key prefix and a shorter TTL than the 90-day price histories.
+SPOT_PRICE_CACHE_TTL: int = 3600
+SPOT_PRICE_CACHE_PREFIX = "spot"
 
 
 def get_errors() -> Any:
@@ -533,6 +596,10 @@ def calculate_il_risk_score_multi(
                     prices_data.append([x[1] for x in cached["prices"]])
                     continue
 
+                if is_recent_failure(token_id, time_period, price_cache):
+                    logger.info(f"Skipping {token_id}: recent price fetch failure")
+                    return None
+
                 cg = CoinGeckoAPI()
                 if x402_session is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
@@ -558,9 +625,8 @@ def calculate_il_risk_score_multi(
                 prices_data.append([x[1] for x in prices["prices"]])
                 time.sleep(1)  # Rate limiting
             except Exception as e:
-                get_errors().append(
-                    f"Error fetching price data for {token_id}: {str(e)}"
-                )
+                logger.warning(f"Error fetching price data for {token_id}: {e}")
+                set_failed_fetch(token_id, time_period, price_cache)
                 return None
 
         # Find minimum length to align all price series
@@ -598,7 +664,7 @@ def calculate_il_risk_score_multi(
         return float(il_impact * avg_correlation * avg_volatility)
 
     except Exception as e:
-        get_errors().append(f"Error calculating IL risk score: {str(e)}")
+        logger.warning(f"Error calculating IL risk score: {e}")
         return None
 
 
@@ -973,30 +1039,53 @@ def get_pool_token_prices(
     coingecko_api_key: Optional[str] = None,
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, float]]:
-    """Enhanced token price fetching with support for synthetic tokens."""
+    """Resolve USD spot prices by symbol, caching hits and recent failures."""
+    if price_cache is None:
+        price_cache = {}
     prices = {}
+    api_warmed_up = False
 
     try:
-        # Add initial delay
-        time.sleep(3)
-
         for original_symbol in token_symbols:
+            symbol = original_symbol.lower()
+
+            cached = get_cached_price(
+                symbol,
+                0,
+                price_cache,
+                SPOT_PRICE_CACHE_TTL,
+                prefix=SPOT_PRICE_CACHE_PREFIX,
+            )
+            if cached is not None:
+                prices[original_symbol] = cached["usd"]
+                continue
+
+            lookup_allowed = not is_recent_failure(
+                symbol, 0, price_cache, prefix=SPOT_PRICE_CACHE_PREFIX
+            )
+            if lookup_allowed and not api_warmed_up:
+                time.sleep(3)
+                api_warmed_up = True
+
             try:
-                symbol = original_symbol.lower()
-                underlying_symbol = get_underlying_token_symbol(symbol)
-                normalized_symbol = normalize_token_symbol(symbol)
-
-                # List of possible IDs to try
-                possible_ids = [
-                    symbol,
-                    underlying_symbol,
-                    normalized_symbol,
-                    f"{underlying_symbol}-token",
-                    f"{normalized_symbol}-token",
-                ]
-
                 price_found = False
+                possible_ids: List[str] = []
+                if lookup_allowed:
+                    underlying_symbol = get_underlying_token_symbol(symbol)
+                    normalized_symbol = normalize_token_symbol(symbol)
+
+                    # List of possible IDs to try
+                    possible_ids = [
+                        symbol,
+                        underlying_symbol,
+                        normalized_symbol,
+                        f"{underlying_symbol}-token",
+                        f"{normalized_symbol}-token",
+                    ]
+                else:
+                    logger.info(f"Skipping {symbol}: recent spot price fetch failure")
 
                 # Try each possible ID
                 for token_id in possible_ids:
@@ -1030,7 +1119,7 @@ def get_pool_token_prices(
                         continue
 
                 # If still no price, try search
-                if not price_found:
+                if not price_found and lookup_allowed:
                     time.sleep(2)
                     try:
                         search_result = cg.search(underlying_symbol)
@@ -1049,6 +1138,19 @@ def get_pool_token_prices(
                         Exception
                     ):  # nosec B110 — best-effort fallback; price stays unknown
                         pass
+
+                if price_found:
+                    set_cached_value(
+                        symbol,
+                        0,
+                        {"usd": prices[original_symbol]},
+                        price_cache,
+                        prefix=SPOT_PRICE_CACHE_PREFIX,
+                    )
+                elif lookup_allowed:
+                    set_failed_fetch(
+                        symbol, 0, price_cache, prefix=SPOT_PRICE_CACHE_PREFIX
+                    )
 
                 # Special handling for USD-pegged tokens
                 if not price_found and any(
@@ -1260,6 +1362,7 @@ def format_pool_data(
     coingecko_api_key: str,
     x402_session: Optional[str] = None,
     x402_proxy: Optional[str] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Enhanced pool data formatter with improved investment calculations for multi-token pools."""
     # Initialize CoinGecko API
@@ -1294,8 +1397,15 @@ def format_pool_data(
         for token in pool["poolTokens"]:
             all_token_symbols.append(token["symbol"])
 
-    all_prices = get_pool_token_prices(
-        list(set(all_token_symbols)), coingecko_api_key, x402_session, x402_proxy
+    all_prices = (
+        get_pool_token_prices(
+            list(set(all_token_symbols)),
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
+        )
+        or {}
     )
 
     for i, pool in enumerate(sorted_pools):
@@ -1345,7 +1455,7 @@ def format_pool_data(
         # Get token prices from pre-fetched prices
         token_prices = {}
         for token in pool["poolTokens"]:
-            token_prices[token["symbol"]] = all_prices.get(token["symbol"], 0)  # type: ignore[union-attr]
+            token_prices[token["symbol"]] = all_prices.get(token["symbol"], 0)
 
         if diff_investment > 0 and any(price > 0 for price in token_prices.values()):
             token_amounts = get_token_investments_multi(diff_investment, token_prices)
@@ -1358,6 +1468,15 @@ def format_pool_data(
         formatted_pools.append(base_data)
 
     return formatted_pools
+
+
+def _report_missing_il_scores(pools: List[Dict[str, Any]]) -> None:
+    """Record one strategy error when no pool could be scored for IL risk."""
+    if pools and all(pool.get("il_risk_score") is None for pool in pools):
+        get_errors().append(
+            f"IL risk score unavailable for all {len(pools)} pools: "
+            f"price history could not be fetched"
+        )
 
 
 def get_opportunities_for_balancer(
@@ -1430,17 +1549,26 @@ def get_opportunities_for_balancer(
                 price_cache=price_cache,
                 price_cache_ttl=price_cache_ttl,
             )
-            logger.info(f"IL risk score calculated: {pool['il_risk_score']}")
+            if pool["il_risk_score"] is None:
+                logger.warning(f"Pool {pool['id']} ranked without IL risk score")
+            else:
+                logger.info(f"IL risk score calculated: {pool['il_risk_score']}")
         else:
             pool["il_risk_score"] = None
             logger.warning(
                 f"Insufficient valid token IDs for IL calculation: {len(valid_token_ids)}"
             )
 
+    _report_missing_il_scores(filtered_pools)
+
     # Format pools with investment calculations
     logger.info("Formatting pool data with investment calculations")
     formatted_pools = format_pool_data(
-        filtered_pools, coingecko_api_key, x402_session, x402_proxy
+        filtered_pools,
+        coingecko_api_key,
+        x402_session,
+        x402_proxy,
+        price_cache=price_cache,
     )
 
     # Filter pools to only include those with valid investments in both token0 and token1

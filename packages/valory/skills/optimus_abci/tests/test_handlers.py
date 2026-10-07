@@ -2717,7 +2717,7 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt with x402 and insufficient funds."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = True
-        ctx.state.request_queue = []
+        ctx.state.request_queue = ["other"]
         handler._send_ok_response = MagicMock()
         with patch.object(
             type(handler), "shared_state", new_callable=PropertyMock
@@ -2730,6 +2730,8 @@ class TestHttpHandlerMethods:
             mock_dialogue.dialogue_label.dialogue_reference = ("req1", "")
             handler._handle_post_process_prompt(mock_msg, mock_dialogue)
         handler._send_ok_response.assert_called_once()
+        # Only the refused request's own slot is given back.
+        assert ctx.state.request_queue == ["other"]
 
     def test_handle_post_process_prompt_x402_sufficient_funds(self) -> None:
         """Test _handle_post_process_prompt with x402 enabled and sufficient funds.
@@ -6654,6 +6656,40 @@ class TestChatRequestQueue:
         assert ctx.state.request_queue == []
         handler._submit_background.assert_not_called()
 
+    @pytest.mark.parametrize(
+        "failing",
+        [
+            "validate_and_fix_protocols",
+            "calculate_composite_score_from_var",
+            "_send_ok_response",
+        ],
+    )
+    def test_exception_after_parsing_releases_the_slot(self, failing: str) -> None:
+        """A failure anywhere before the hand-off frees the slot and surfaces."""
+        handler, ctx = _chat_handler()
+        ctx.state.request_queue = ["req1"]
+        boom = MagicMock(side_effect=RuntimeError("boom"))
+        if failing == "validate_and_fix_protocols":
+            patcher: Any = patch(
+                "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
+                boom,
+            )
+        else:
+            setattr(handler, failing, boom)
+            patcher = patch(
+                "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
+                side_effect=lambda names, *a, **k: list(names),
+            )
+        with patcher, pytest.raises(RuntimeError):
+            handler._handle_llm_response(
+                _llm_reply(trading_type="risky"),
+                MagicMock(),
+                MagicMock(),
+                _http_dialogue("req1"),
+            )
+        assert ctx.state.request_queue == []
+        handler._submit_background.assert_not_called()
+
     def test_prompt_path_exception_releases_the_slot(self) -> None:
         """An unexpected error while sending to the LLM does not keep the slot."""
         handler, ctx = _chat_handler()
@@ -6844,6 +6880,41 @@ class TestChatIntent:
         assert body["updated"] is True
         assert body["selected_protocols"] == ["velodrome"]
         assert "previous_trading_type" not in body
+
+    @pytest.mark.parametrize(
+        "missing", ["trading_type", "max_loss_percentage"], ids=lambda m: f"no {m}"
+    )
+    def test_truncated_reply_is_a_query(self, missing: str) -> None:
+        """A reply without a full configuration must not store field defaults."""
+        handler, ctx = _chat_handler(trading_type="risky")
+        ctx.state.max_loss_percentage = 25.0
+        ctx.state.request_queue = ["req1"]
+        reply = _llm_reply()
+        data = json.loads(json.loads(reply.payload)["response"])
+        del data[missing]
+        del data["intent"]
+        reply.payload = json.dumps({"response": json.dumps(data)})
+        body = _reply(handler, reply)
+        assert body["updated"] is False
+        assert "previous_trading_type" not in body
+        handler._submit_background.assert_not_called()
+        assert ctx.state.trading_type == "risky"
+        assert ctx.state.max_loss_percentage == 25.0
+        assert ctx.state.request_queue == []
+
+    def test_no_change_update_through_the_real_validator(self) -> None:
+        """The stored strategy and the model's protocol name must round-trip as equal."""
+        handler, ctx = _chat_handler(protocols=["balancer_pools_search"])
+        handler._handle_llm_response(
+            _llm_reply(selected_protocols=["balancerPool"]),
+            MagicMock(),
+            MagicMock(),
+            _http_dialogue("req1"),
+        )
+        body = handler._send_ok_response.call_args[0][2]
+        assert body["updated"] is False
+        assert body["selected_protocols"] == []
+        handler._submit_background.assert_not_called()
 
     def test_fresh_agent_compares_against_the_default_protocols(self) -> None:
         """With nothing saved yet, the defaults count as the current protocols."""

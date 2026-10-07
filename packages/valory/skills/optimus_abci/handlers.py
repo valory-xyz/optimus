@@ -2956,7 +2956,33 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the original HttpDialogue
         """
         request_id = http_dialogue.dialogue_label.dialogue_reference[0]
+        handed_off = False
+        try:
+            handed_off = self._process_llm_response(
+                llm_response_message, http_msg, http_dialogue, request_id
+            )
+        finally:
+            # The slot belongs to the delayed write once it is scheduled; every
+            # other way out of the request, including an exception, frees it.
+            if not handed_off:
+                self._release_request_slot(request_id)
 
+    def _process_llm_response(
+        self,
+        llm_response_message: SrrMessage,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        request_id: str,
+    ) -> bool:
+        """
+        Answer the chat request and schedule a KV write when it changed something.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :param http_msg: the original HttpMessage
+        :param http_dialogue: the original HttpDialogue
+        :param request_id: the chat request being answered
+        :return: True when the request's slot was handed to a scheduled write
+        """
         try:
             # Parse the outer payload
             genai_response: dict = json.loads(llm_response_message.payload)
@@ -2966,9 +2992,8 @@ class HttpHandler(BaseHttpHandler):
             if "error" in genai_response:
                 error_msg = genai_response["error"]
                 self.context.logger.error(f"GenAI error: {error_msg}")
-                self._release_request_slot(request_id)
                 self._send_ok_response(http_msg, http_dialogue, {"error": error_msg})
-                return
+                return False
 
             # Extract the response field (it's a JSON string)
             llm_response = genai_response.get("response", "{}")
@@ -2984,6 +3009,13 @@ class HttpHandler(BaseHttpHandler):
             )
             reasoning = strategy_data.get("reasoning", "")
             intent = strategy_data.get("intent", Intent.UPDATE.value)
+            if (
+                "trading_type" not in strategy_data
+                or "max_loss_percentage" not in strategy_data
+            ):
+                # A reply without a full configuration cannot describe a change;
+                # treating it as an update would store the field defaults.
+                intent = Intent.QUERY.value
 
             # Get previous trading type from state
             previous_trading_type = self.context.state.trading_type or "balanced"
@@ -2996,22 +3028,20 @@ class HttpHandler(BaseHttpHandler):
 
         except json.JSONDecodeError as e:
             self.context.logger.error(f"JSON decode error: {e}", exc_info=True)
-            self._release_request_slot(request_id)
             self._send_ok_response(
                 http_msg,
                 http_dialogue,
                 {"error": f"Failed to parse LLM response: {str(e)}"},
             )
-            return
+            return False
         except Exception as e:
             self.context.logger.error(f"Error parsing LLM response: {e}", exc_info=True)
-            self._release_request_slot(request_id)
             self._send_ok_response(
                 http_msg,
                 http_dialogue,
                 {"error": f"Failed to process LLM response: {str(e)}"},
             )
-            return
+            return False
 
         var_value = -max_loss_percentage / 100.0
         # Calculate composite score using the formula
@@ -3058,10 +3088,7 @@ class HttpHandler(BaseHttpHandler):
             for protocol in validated_protocol_names
         ]
 
-        # The UI renders an "updated" card whenever previous_trading_type and
-        # trading_type are both present, and a protocols card whenever
-        # selected_protocols is non-empty, so those fields are only sent for a
-        # change the user asked for.
+        # The UI shows an "updated" card for any from/to pair or non-empty protocols.
         type_changed = trading_type != previous_trading_type
         protocols_changed = set(selected_protocols) != set(
             previous_selected_protocols or []
@@ -3094,8 +3121,7 @@ class HttpHandler(BaseHttpHandler):
                 f"Chat request {request_id} is a {intent} with no change; "
                 f"nothing written"
             )
-            self._release_request_slot(request_id)
-            return
+            return False
 
         self.context.logger.info(f"trading_type: {trading_type}")
 
@@ -3112,6 +3138,7 @@ class HttpHandler(BaseHttpHandler):
         self._submit_background(
             self._delayed_write_kv_extended, storage_data, request_id
         )
+        return True
 
     @staticmethod
     def _clamp_max_loss_percentage(value: float) -> float:
@@ -3155,9 +3182,6 @@ class HttpHandler(BaseHttpHandler):
     def _delayed_write_kv_extended(self, data: Dict[str, str], request_id: str) -> None:
         """
         Write to the KV store after a delay, unless a newer write superseded it.
-
-        Only a later request that scheduled a write of its own takes precedence;
-        a question sent in between does not.
 
         :param data: Dictionary of data to store
         :param request_id: the chat request this write belongs to

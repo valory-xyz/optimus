@@ -3231,9 +3231,7 @@ class TestHttpHandlerMethods:
         handler._update_agent_performance_chat(None)
         assert not path.exists()
 
-    def test_update_agent_performance_chat_file_not_found(
-        self, tmp_path: Path
-    ) -> None:
+    def test_update_agent_performance_chat_file_not_found(self, tmp_path: Path) -> None:
         """A missing file is created with the initial shape."""
         handler, ctx, path = self._chat_perf(tmp_path)
         handler._update_agent_performance_chat("New behavior")

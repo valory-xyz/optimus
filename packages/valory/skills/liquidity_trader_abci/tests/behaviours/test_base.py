@@ -3035,9 +3035,7 @@ class TestStoreReadMethods:
 
     def test_store_agent_performance_logs_write_errors(self) -> None:
         """A failed write is logged, not raised into the round."""
-        b = _make_behaviour(
-            agent_performance_filepath="/nonexistent_dir_xyz/perf.json"
-        )
+        b = _make_behaviour(agent_performance_filepath="/nonexistent_dir_xyz/perf.json")
         b.agent_performance = {"timestamp": 1, "metrics": []}
         b.store_agent_performance()
         b.context.logger.error.assert_called_once()

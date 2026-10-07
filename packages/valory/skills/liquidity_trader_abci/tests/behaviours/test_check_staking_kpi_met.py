@@ -1056,9 +1056,7 @@ class TestActivityGoalTracking:
         }
         assert json.loads(run.perf_path.read_text())["metrics"] == ["kept"]
 
-    def test_a_second_run_in_the_same_period_adds_nothing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_a_second_run_in_the_same_period_adds_nothing(self, tmp_path: Path) -> None:
         """After a checkpoint or vanity tx the round runs again; no double count."""
         run = _GoalRun(tmp_path, _kv(3, last_counted=5))
         assert run() is False
@@ -1081,7 +1079,9 @@ class TestActivityGoalTracking:
         assert run.block["is_met"] is True
         assert run.block["last_met_at"] == NOW
 
-        following = _GoalRun(tmp_path, _kv(10, last_counted=5, last_met_at=NOW), period=6)
+        following = _GoalRun(
+            tmp_path, _kv(10, last_counted=5, last_met_at=NOW), period=6
+        )
         assert following() is True
         assert following.progress == 10
         assert "standing by" in str(following.obj.context.logger.info.call_args)

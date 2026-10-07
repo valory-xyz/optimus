@@ -37,8 +37,8 @@ from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
     read_activity_goal_block,
     retarget_activity_goal,
     should_stand_by,
-    stamp_last_met_at,
     staking_side_met,
+    stamp_last_met_at,
 )
 
 EPOCH = 1_000
@@ -176,7 +176,9 @@ class TestMergeAgentPerformance:
         assert _read(path) == {"agent_behavior": "hi", "metrics": [2], "x": 0}
 
     @pytest.mark.parametrize("content", [None, "{not json", "[1, 2]"])
-    def test_missing_or_corrupt_file_starts_empty(self, tmp_path: Path, content) -> None:
+    def test_missing_or_corrupt_file_starts_empty(
+        self, tmp_path: Path, content
+    ) -> None:
         """A missing, corrupt or non-object file is replaced by the merged keys."""
         path = tmp_path / "perf.json"
         if content is not None:

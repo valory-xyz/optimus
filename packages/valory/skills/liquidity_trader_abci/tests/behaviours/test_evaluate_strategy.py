@@ -36,8 +36,12 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy import (
+    COIN_ID_CACHE_TTL,
     EvaluateStrategyBehaviour,
+    FAILED_FETCH_CACHE_TTL,
     MIN_SWAP_VALUE_USD,
+    STRATEGY_BACKOFF_KV_KEY,
+    STRATEGY_PRICE_CACHE_KV_KEY,
 )
 
 
@@ -2712,6 +2716,7 @@ class TestAsyncAct:
         )
         b.check_funds = MagicMock(return_value=True)
         b._check_and_use_cached_cl_opportunity = _gen_return([{"action": "cached"}])
+        b._write_kv = _gen_return(True)
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
         _drive(b.async_act(), sends=[None] * 10)
@@ -2728,6 +2733,7 @@ class TestAsyncAct:
         b._check_and_use_cached_cl_opportunity = _gen_return(None)
         b.fetch_all_trading_opportunities = _gen_none
         b.prepare_strategy_actions = _gen_return([{"action": "enter"}])
+        b._write_kv = _gen_return(True)
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
         _drive(b.async_act(), sends=[None] * 20)
@@ -6882,3 +6888,281 @@ class TestAsyncActBackoff:
         # send_actions called once with no args (early return)
         assert len(calls) == 1
         assert calls[0] is None
+
+
+class TestStrategyStatePersistence:
+    """The backoff schedule and the paid price cache survive a process restart."""
+
+    @staticmethod
+    def _fresh(**overrides):
+        """A behaviour whose shared state has not been restored yet."""
+        b = _mk(**overrides)
+        b.shared_state.strategy_state_restored = False
+        return b
+
+    @staticmethod
+    def _capture_writes():
+        writes = {}
+
+        def _write_kv(data):
+            writes.update(data)
+            yield
+            return True
+
+        return writes, _write_kv
+
+    def test_backoff_state_survives_restart(self):
+        """A restarted process must not run the paid search while in backoff."""
+        first = self._fresh()
+        writes, write_kv = self._capture_writes()
+        first._write_kv = write_kv
+        first._update_strategy_backoff([])
+        _drive(first._persist_strategy_state())
+        assert set(writes) == {STRATEGY_BACKOFF_KV_KEY, STRATEGY_PRICE_CACHE_KV_KEY}
+
+        second = self._fresh()
+        second._read_kv = _gen_return(dict(writes))
+        _drive(second._restore_strategy_state())
+        assert second.shared_state.consecutive_no_action_count == 1
+        assert (
+            second.shared_state.last_strategy_evaluation_time
+            == first.shared_state.last_strategy_evaluation_time
+        )
+        assert second._is_in_strategy_backoff() is True
+
+    def test_price_cache_survives_restart(self):
+        """Price history paid for before a restart is reused after it."""
+        first = self._fresh()
+        first.shared_state.strategy_coingecko_price_cache = {
+            "il_range_eth_90": {
+                "data": {"prices": [[1, 2.0]]},
+                "timestamp": time.time(),
+            }
+        }
+        writes, write_kv = self._capture_writes()
+        first._write_kv = write_kv
+        _drive(first._persist_strategy_state())
+
+        second = self._fresh()
+        second._read_kv = _gen_return(dict(writes))
+        _drive(second._restore_strategy_state())
+        assert second.shared_state.strategy_coingecko_price_cache == {
+            "il_range_eth_90": {
+                "data": {"prices": [[1, 2.0]]},
+                "timestamp": first.shared_state.strategy_coingecko_price_cache[
+                    "il_range_eth_90"
+                ]["timestamp"],
+            }
+        }
+
+    def test_restore_runs_once_per_process(self):
+        """The kv store is read once; later cycles keep the in-memory state."""
+        b = self._fresh()
+        reads = []
+
+        def _read_kv(keys):
+            reads.append(keys)
+            yield
+            return {}
+
+        b._read_kv = _read_kv
+        _drive(b._restore_strategy_state())
+        _drive(b._restore_strategy_state())
+        assert len(reads) == 1
+        assert b.shared_state.strategy_state_restored is True
+
+    def test_restore_reads_both_keys(self):
+        """Both records are requested in a single read."""
+        b = self._fresh()
+        seen = []
+
+        def _read_kv(keys):
+            seen.append(keys)
+            yield
+            return None
+
+        b._read_kv = _read_kv
+        _drive(b._restore_strategy_state())
+        assert seen == [(STRATEGY_BACKOFF_KV_KEY, STRATEGY_PRICE_CACHE_KV_KEY)]
+        assert b.shared_state.consecutive_no_action_count == 0
+
+    @pytest.mark.parametrize(
+        "stored",
+        [
+            pytest.param({}, id="no records"),
+            pytest.param(
+                {STRATEGY_BACKOFF_KV_KEY: None, STRATEGY_PRICE_CACHE_KV_KEY: None},
+                id="missing keys",
+            ),
+            pytest.param(
+                {
+                    STRATEGY_BACKOFF_KV_KEY: "{not json",
+                    STRATEGY_PRICE_CACHE_KV_KEY: "[",
+                },
+                id="corrupt json",
+            ),
+            pytest.param(
+                {
+                    STRATEGY_BACKOFF_KV_KEY: json.dumps(
+                        {"consecutive_no_action_count": "x"}
+                    ),
+                    STRATEGY_PRICE_CACHE_KV_KEY: json.dumps([1, 2]),
+                },
+                id="wrong shapes",
+            ),
+        ],
+    )
+    def test_restore_keeps_defaults_on_bad_records(self, stored):
+        """Anything unreadable leaves the safe in-memory defaults in place."""
+        b = self._fresh()
+        b._read_kv = _gen_return(stored)
+        _drive(b._restore_strategy_state())
+        assert b.shared_state.consecutive_no_action_count == 0
+        assert b.shared_state.last_strategy_evaluation_time == 0.0
+        assert b.shared_state.strategy_coingecko_price_cache == {}
+
+    def test_restore_tolerates_kv_read_failure(self):
+        """An unreachable kv store does not stop the round."""
+        b = self._fresh()
+
+        def _read_kv(keys):
+            yield
+            raise RuntimeError("kv down")
+
+        b._read_kv = _read_kv
+        _drive(b._restore_strategy_state())
+        assert b.shared_state.consecutive_no_action_count == 0
+        assert b.shared_state.strategy_state_restored is True
+
+    def test_persist_tolerates_kv_write_failure(self):
+        """A failed or raising write is logged, never raised."""
+        b = self._fresh()
+        b._write_kv = _gen_return(False)
+        _drive(b._persist_strategy_state())
+
+        def _write_kv(data):
+            yield
+            raise RuntimeError("kv down")
+
+        b._write_kv = _write_kv
+        _drive(b._persist_strategy_state())
+        assert b.context.logger.warning.call_count == 2
+
+    def test_persist_prunes_expired_and_slims_history_entries(self):
+        """Only live entries are written, and histories keep just their prices."""
+        now = time.time()
+        b = self._fresh()
+        b.shared_state.strategy_coingecko_price_cache = {
+            "il_range_fresh_90": {
+                "data": {
+                    "prices": [[1, 1.0]],
+                    "market_caps": [[1, 9.0]],
+                    "total_volumes": [],
+                },
+                "timestamp": now,
+            },
+            "il_range_old_90": {
+                "data": {"prices": [[1, 1.0]]},
+                "timestamp": now - 1801,
+            },
+            "il_range_failed_fresh_90": {
+                "data": None,
+                "timestamp": now - 10,
+                "failed": True,
+            },
+            "il_range_failed_old_90": {
+                "data": None,
+                "timestamp": now - FAILED_FETCH_CACHE_TTL - 1,
+                "failed": True,
+            },
+            "coin_id_0xabc_optimistic-ethereum": {
+                "data": {"id": "x"},
+                "timestamp": now - 86400,
+            },
+            "coin_id_0xold_optimistic-ethereum": {
+                "data": {"id": "y"},
+                "timestamp": now - COIN_ID_CACHE_TTL - 1,
+            },
+            "spot_usdc_0": {"data": {"usd": 1.0}, "timestamp": now},
+            "garbage": "not an entry",
+            "no_timestamp": {"data": {}},
+            "bad_timestamp": {"data": {}, "timestamp": "soon"},
+        }
+        writes, write_kv = self._capture_writes()
+        b._write_kv = write_kv
+        _drive(b._persist_strategy_state())
+        written = json.loads(writes[STRATEGY_PRICE_CACHE_KV_KEY])
+        assert set(written) == {
+            "il_range_fresh_90",
+            "il_range_failed_fresh_90",
+            "coin_id_0xabc_optimistic-ethereum",
+            "spot_usdc_0",
+        }
+        assert written["il_range_fresh_90"]["data"] == {"prices": [[1, 1.0]]}
+        assert written["il_range_failed_fresh_90"]["failed"] is True
+        assert b.shared_state.strategy_coingecko_price_cache == written
+
+    def test_persist_writes_backoff_counters(self):
+        """The written backoff record carries the live counters."""
+        b = self._fresh()
+        b.shared_state.consecutive_no_action_count = 3
+        b.shared_state.last_strategy_evaluation_time = 123.5
+        writes, write_kv = self._capture_writes()
+        b._write_kv = write_kv
+        _drive(b._persist_strategy_state())
+        assert json.loads(writes[STRATEGY_BACKOFF_KV_KEY]) == {
+            "consecutive_no_action_count": 3,
+            "last_strategy_evaluation_time": 123.5,
+        }
+
+    def _flow(self, b):
+        b._read_investing_paused = _gen_return(False)
+        b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
+        b._apply_tip_filters_to_exit_decisions = _gen_return((True, []))
+        b.check_funds = MagicMock(return_value=True)
+        b._check_and_use_cached_cl_opportunity = _gen_return(None)
+        b.fetch_all_trading_opportunities = MagicMock(side_effect=_gen_none)
+        b.prepare_strategy_actions = _gen_return([])
+        calls = []
+
+        def send_actions(actions=None):
+            calls.append(actions)
+            yield
+
+        b.send_actions = send_actions
+        return calls
+
+    def test_async_act_restores_before_the_backoff_gate(self):
+        """A persisted backoff closes the gate on the first cycle after restart."""
+        b = self._fresh()
+        calls = self._flow(b)
+        b._read_kv = _gen_return(
+            {
+                STRATEGY_BACKOFF_KV_KEY: json.dumps(
+                    {
+                        "consecutive_no_action_count": 1,
+                        "last_strategy_evaluation_time": time.time() - 60,
+                    }
+                ),
+                STRATEGY_PRICE_CACHE_KV_KEY: None,
+            }
+        )
+        b._write_kv = _gen_return(True)
+        _drive(b.async_act(), sends=[None] * 20)
+        assert calls == [None]
+        assert b.fetch_all_trading_opportunities.call_count == 0
+
+    def test_async_act_persists_after_an_evaluation(self):
+        """Every evaluation leaves an up-to-date record in the kv store."""
+        b = self._fresh()
+        calls = self._flow(b)
+        b._read_kv = _gen_return({})
+        writes, write_kv = self._capture_writes()
+        b._write_kv = write_kv
+        _drive(b.async_act(), sends=[None] * 20)
+        assert calls == [[]]
+        assert b.fetch_all_trading_opportunities.call_count == 1
+        assert (
+            json.loads(writes[STRATEGY_BACKOFF_KV_KEY])["consecutive_no_action_count"]
+            == 1
+        )

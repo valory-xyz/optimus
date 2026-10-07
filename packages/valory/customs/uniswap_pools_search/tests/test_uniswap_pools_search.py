@@ -27,6 +27,7 @@ import pytest
 
 import packages.valory.customs.uniswap_pools_search.uniswap_pools_search as uni_mod
 from packages.valory.customs.uniswap_pools_search.uniswap_pools_search import (
+    FAILED_FETCH_CACHE_TTL,
     REQUIRED_FIELDS,
     _reset_x402_adapter,
     apply_composite_pre_filter,
@@ -47,12 +48,30 @@ from packages.valory.customs.uniswap_pools_search.uniswap_pools_search import (
     get_opportunities_for_uniswap,
     get_uniswap_pool_sharpe_ratio,
     is_pro_api_key,
+    is_recent_failure,
     remove_irrelevant_fields,
     run,
     run_query,
     set_cached_price,
+    set_failed_fetch,
     standardize_metrics,
 )
+
+IL_TIME_PERIOD = 90
+
+
+def _price_history(base: float, step: float, points: int = 100) -> Dict[str, Any]:
+    """Build a CoinGecko market-chart payload with a strictly moving price."""
+    return {"prices": [[i, base + i * step] for i in range(points)]}
+
+
+def _expired_failure() -> Dict[str, Any]:
+    """Build a failed-fetch entry older than FAILED_FETCH_CACHE_TTL."""
+    return {
+        "data": None,
+        "timestamp": time.time() - FAILED_FETCH_CACHE_TTL - 1,
+        "failed": True,
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -549,6 +568,7 @@ class TestCalculateIlRiskScore:
             "t0", "t1", "", x402_session=MagicMock(), x402_proxy="https://p.com"
         )
         assert result is None
+        assert get_errors() == []
 
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
@@ -587,6 +607,145 @@ class TestCalculateIlRiskScore:
         mock_cg.return_value = inst
         result = calculate_il_risk_score("t0", "t1", "key")
         assert isinstance(result, float)
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_exception_does_not_abort_strategy(self, mock_cg: MagicMock) -> None:
+        """A failed fetch is remembered in the cache, not pushed to the error list."""
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = Exception("fail")
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        result = calculate_il_risk_score(
+            "t0",
+            "t1",
+            "",
+            x402_session=MagicMock(),
+            x402_proxy="https://p.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert get_errors() == []
+        assert cache[f"il_range_t0_{IL_TIME_PERIOD}"]["failed"] is True
+        assert f"il_range_t1_{IL_TIME_PERIOD}" not in cache
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_failure_is_attributed_to_the_token_being_fetched(
+        self, mock_cg: MagicMock
+    ) -> None:
+        """When the second fetch fails, only the second token is marked failed."""
+        good = _price_history(100, 0.5)
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = [good, Exception("fail")]
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        result = calculate_il_risk_score(
+            "t0",
+            "t1",
+            "",
+            x402_session=MagicMock(),
+            x402_proxy="https://p.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert get_cached_price("t0", IL_TIME_PERIOD, cache, 1800) == good
+        assert is_recent_failure("t0", IL_TIME_PERIOD, cache) is False
+        assert is_recent_failure("t1", IL_TIME_PERIOD, cache) is True
+
+    @pytest.mark.parametrize("failed_token", ["t0", "t1"])
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_recent_failure_skips_fetch(
+        self, mock_cg: MagicMock, failed_token: str
+    ) -> None:
+        """A pair with a recently failed token is not re-paid for."""
+        inst = MagicMock()
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        set_failed_fetch(failed_token, IL_TIME_PERIOD, cache)
+        result = calculate_il_risk_score(
+            "t0",
+            "t1",
+            "key",
+            x402_session=MagicMock(),
+            x402_proxy="https://p.com",
+            price_cache=cache,
+        )
+        assert result is None
+        assert inst.get_coin_market_chart_range_by_id.call_count == 0
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_expired_failure_is_retried(self, mock_cg: MagicMock) -> None:
+        """Once the failure TTL has elapsed the token is fetched again."""
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = [
+            _price_history(100, 0.5),
+            _price_history(200, 0.3),
+        ]
+        mock_cg.return_value = inst
+        cache = {f"il_range_t0_{IL_TIME_PERIOD}": _expired_failure()}
+        result = calculate_il_risk_score(
+            "t0",
+            "t1",
+            "key",
+            x402_session=MagicMock(),
+            x402_proxy="https://p.com",
+            price_cache=cache,
+        )
+        assert isinstance(result, float)
+        assert inst.get_coin_market_chart_range_by_id.call_count == 2
+        assert is_recent_failure("t0", IL_TIME_PERIOD, cache) is False
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_missing_prices_key_records_failed_fetch(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """A response without prices marks that token failed and keeps the good one."""
+        mock_is_pro.return_value = False
+        good = _price_history(200, 0.3, points=10)
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = [{"market_caps": []}, good]
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        result = calculate_il_risk_score("t0", "t1", "key", price_cache=cache)
+        assert result is None
+        assert get_errors() == []
+        assert is_recent_failure("t0", IL_TIME_PERIOD, cache) is True
+        assert get_cached_price("t1", IL_TIME_PERIOD, cache, 1800) == good
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.is_pro_api_key"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.CoinGeckoAPI"
+    )
+    def test_unparseable_second_response_marks_second_token(
+        self, mock_cg: MagicMock, mock_is_pro: MagicMock
+    ) -> None:
+        """A None second response marks the second token failed, not the first."""
+        mock_is_pro.return_value = False
+        inst = MagicMock()
+        inst.get_coin_market_chart_range_by_id.side_effect = [
+            _price_history(100, 0.5, points=10),
+            None,
+        ]
+        mock_cg.return_value = inst
+        cache: Dict[str, Any] = {}
+        result = calculate_il_risk_score("t0", "t1", "key", price_cache=cache)
+        assert result is None
+        assert is_recent_failure("t0", IL_TIME_PERIOD, cache) is False
+        assert is_recent_failure("t1", IL_TIME_PERIOD, cache) is True
 
 
 class TestFetchPoolData:
@@ -1260,6 +1419,52 @@ class TestGetCachedPrice:
         set_cached_price("token", 90, data, cache)
         assert cache == {}
         assert get_cached_price("token", 90, cache, 1800) is None
+
+    def test_failed_entry_reads_as_cache_miss(self) -> None:
+        """A failed marker is never returned as price data."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache)
+        assert get_cached_price("token", IL_TIME_PERIOD, cache, 1800) is None
+
+    def test_failed_fetch_is_recent_within_ttl(self) -> None:
+        """A just-recorded failure counts as recent."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache)
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is True
+
+    def test_failed_fetch_expires_after_ttl(self) -> None:
+        """A failure older than FAILED_FETCH_CACHE_TTL no longer blocks a retry."""
+        cache = {f"il_range_token_{IL_TIME_PERIOD}": _expired_failure()}
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+
+    def test_successful_entry_is_not_a_failure(self) -> None:
+        """A normal cached history is not reported as a failure."""
+        cache: Dict[str, Any] = {}
+        set_cached_price("token", IL_TIME_PERIOD, {"prices": [[0, 100]]}, cache)
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+
+    def test_successful_fetch_overwrites_failed_entry(self) -> None:
+        """A later successful fetch clears the failure marker."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache)
+        set_cached_price("token", IL_TIME_PERIOD, {"prices": [[0, 100]]}, cache)
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+        assert get_cached_price("token", IL_TIME_PERIOD, cache, 1800) == {
+            "prices": [[0, 100]]
+        }
+
+    def test_failure_is_scoped_to_prefix_and_period(self) -> None:
+        """Failure markers do not leak across prefixes or time periods."""
+        cache: Dict[str, Any] = {}
+        set_failed_fetch("token", IL_TIME_PERIOD, cache, "spot")
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache) is False
+        assert is_recent_failure("token", 30, cache, "spot") is False
+        assert is_recent_failure("token", IL_TIME_PERIOD, cache, "spot") is True
+
+    def test_failure_helpers_tolerate_missing_cache(self) -> None:
+        """Without a cache nothing is recorded and nothing is recent."""
+        set_failed_fetch("token", IL_TIME_PERIOD, None)
+        assert is_recent_failure("token", IL_TIME_PERIOD, None) is False
 
 
 class TestCalculateIlRiskScoreWithCache:

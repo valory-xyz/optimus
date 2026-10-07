@@ -77,6 +77,17 @@ from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy impor
 MIN_SWAP_VALUE_USD = 0.5
 
 
+# KV-store keys under which the strategy backoff state and the price cache
+# survive a process restart.
+STRATEGY_BACKOFF_KV_KEY = "strategy_backoff_state"
+STRATEGY_PRICE_CACHE_KV_KEY = "strategy_price_cache"
+# How long a persisted failed-fetch marker stays valid; mirrors the
+# FAILED_FETCH_CACHE_TTL the strategy customs use.
+FAILED_FETCH_CACHE_TTL = 900
+# Contract-address to coin-id mappings are kept across restarts for this long.
+COIN_ID_CACHE_TTL = 7 * 24 * 3600
+
+
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""
 
@@ -135,6 +146,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return
 
             # Check strategy evaluation backoff
+            yield from self._restore_strategy_state()
             if self._is_in_strategy_backoff():
                 yield from self.send_actions()
                 return
@@ -160,6 +172,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Track backoff state based on whether we produced actionable results
             self._update_strategy_backoff(actions)
+            yield from self._persist_strategy_state()
 
             # Send final actions
             yield from self.send_actions(actions)
@@ -1309,6 +1322,126 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"({state.consecutive_no_action_count} consecutive). "
                 f"Next retry in {next_backoff:.0f}s."
             )
+
+    def _restore_strategy_state(self) -> Generator[None, None, None]:
+        """Load the persisted backoff state and price cache, once per process.
+
+        The in-memory defaults are safe, so a missing, corrupt or unreadable
+        record is logged and ignored rather than retried.
+
+        :yield: None
+        """
+        state = self.shared_state
+        if state.strategy_state_restored:
+            return
+        state.strategy_state_restored = True
+        try:
+            result = yield from self._read_kv(
+                keys=(STRATEGY_BACKOFF_KV_KEY, STRATEGY_PRICE_CACHE_KV_KEY)
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.warning(
+                f"Strategy state not restored, kv store read failed: {e}"
+            )
+            return
+        if not result:
+            return
+
+        raw_backoff = result.get(STRATEGY_BACKOFF_KV_KEY)
+        if raw_backoff:
+            try:
+                backoff = json.loads(raw_backoff)
+                state.consecutive_no_action_count = int(
+                    backoff["consecutive_no_action_count"]
+                )
+                state.last_strategy_evaluation_time = float(
+                    backoff["last_strategy_evaluation_time"]
+                )
+                self.context.logger.info(f"Restored strategy backoff state: {backoff}")
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+                self.context.logger.warning(
+                    f"Ignoring corrupt strategy backoff state: {e}"
+                )
+
+        raw_cache = result.get(STRATEGY_PRICE_CACHE_KV_KEY)
+        if raw_cache:
+            try:
+                cache = json.loads(raw_cache)
+            except (json.JSONDecodeError, TypeError) as e:
+                self.context.logger.warning(
+                    f"Ignoring corrupt strategy price cache: {e}"
+                )
+                return
+            if isinstance(cache, dict):
+                state.strategy_coingecko_price_cache = self._prune_price_cache(cache)
+                self.context.logger.info(
+                    f"Restored {len(state.strategy_coingecko_price_cache)} "
+                    f"strategy price cache entries"
+                )
+
+    def _persist_strategy_state(self) -> Generator[None, None, None]:
+        """Write the backoff state and the pruned price cache to the kv store.
+
+        Runs after every strategy evaluation so a restarted process resumes
+        the backoff schedule and reuses paid price lookups instead of paying
+        for them again.
+
+        :yield: None
+        """
+        state = self.shared_state
+        try:
+            pruned = self._prune_price_cache(state.strategy_coingecko_price_cache)
+            state.strategy_coingecko_price_cache = pruned
+            backoff = {
+                "consecutive_no_action_count": state.consecutive_no_action_count,
+                "last_strategy_evaluation_time": state.last_strategy_evaluation_time,
+            }
+            ok = yield from self._write_kv(
+                {
+                    STRATEGY_BACKOFF_KV_KEY: json.dumps(backoff, ensure_ascii=True),
+                    STRATEGY_PRICE_CACHE_KV_KEY: json.dumps(pruned, ensure_ascii=True),
+                }
+            )
+            if not ok:
+                self.context.logger.warning(
+                    "Strategy state write to the kv store failed"
+                )
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.warning(f"Strategy state not persisted: {e}")
+
+    def _prune_price_cache(self, cache: Dict[str, Any]) -> Dict[str, Any]:
+        """Drop expired cache entries and keep only the fields strategies read.
+
+        History entries (``il_range_*``) are reduced to their ``prices`` series,
+        which is the only field the IL-risk calculations consume; this keeps
+        the persisted record small.
+
+        :param cache: the strategy price cache, keyed ``<prefix>_<id>_<period>``
+        :return: a new dict holding only the live entries
+        """
+        now = time_module.time()
+        ttl = self.params.strategy_price_cache_ttl
+        kept: Dict[str, Any] = {}
+        for key, entry in cache.items():
+            if not isinstance(entry, dict) or "timestamp" not in entry:
+                continue
+            try:
+                age = now - float(entry["timestamp"])
+            except (TypeError, ValueError):
+                continue
+            if entry.get("failed"):
+                max_age = FAILED_FETCH_CACHE_TTL
+            elif key.startswith("coin_id_"):
+                max_age = COIN_ID_CACHE_TTL
+            else:
+                max_age = ttl
+            if age > max_age:
+                continue
+            data = entry.get("data")
+            if key.startswith("il_range_") and isinstance(data, dict):
+                entry = {**entry, "data": {"prices": data.get("prices", [])}}
+            kept[key] = entry
+        return kept
 
     def update_position_metrics(self) -> Generator[None, None, None]:
         """Update metrics for all open positions."""

@@ -96,6 +96,8 @@ def get_cached_price(
     entry = cache.get(cache_key)
     if entry is None:
         return None
+    if entry.get("failed"):
+        return None
     elapsed = time.time() - entry["timestamp"]
     if elapsed > ttl:
         return None
@@ -122,6 +124,43 @@ def set_cached_price(
         "data": data,
         "timestamp": time.time(),
     }
+
+
+# A fetch that failed is remembered this long so it is not re-paid every cycle.
+FAILED_FETCH_CACHE_TTL: int = 900
+
+
+def set_failed_fetch(
+    token_id: str,
+    time_period: int,
+    cache: Optional[Dict[str, Any]],
+    prefix: str = "il_range",
+) -> None:
+    """Record a failed fetch; the next successful set_cached_price overwrites it."""
+    if cache is None:
+        return
+    cache[f"{prefix}_{token_id}_{time_period}"] = {
+        "data": None,
+        "timestamp": time.time(),
+        "failed": True,
+    }
+
+
+def is_recent_failure(
+    token_id: str,
+    time_period: int,
+    cache: Optional[Dict[str, Any]],
+    prefix: str = "il_range",
+) -> bool:
+    """Return True when the last fetch failed less than FAILED_FETCH_CACHE_TTL ago."""
+    if cache is None:
+        return False
+    entry = cache.get(f"{prefix}_{token_id}_{time_period}")
+    return bool(
+        entry
+        and entry.get("failed")
+        and time.time() - entry["timestamp"] <= FAILED_FETCH_CACHE_TTL
+    )
 
 
 def get_errors() -> Any:
@@ -530,6 +569,7 @@ def calculate_il_risk_score(
         price_cache = {}
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
+    fetching = token_0
     try:
         # Check price cache for both tokens
         cached_1 = get_cached_price(token_0, time_period, price_cache, price_cache_ttl)
@@ -539,6 +579,13 @@ def calculate_il_risk_score(
             prices_1 = cached_1
             prices_2 = cached_2
         else:
+            for token_id in (token_0, token_1):
+                if is_recent_failure(token_id, time_period, price_cache):
+                    logger.info(f"Skipping {token_id}: recent price fetch failure")
+                    return None
+
+            if cached_1 is not None:
+                fetching = token_1
             cg = CoinGeckoAPI()
             if x402_session is not None and x402_proxy is not None:
                 logger.info("Using x402 signer for CoinGecko API requests")
@@ -565,6 +612,7 @@ def calculate_il_risk_score(
             else:
                 prices_1 = cached_1
 
+            fetching = token_1
             if cached_2 is None:
                 prices_2 = cg.get_coin_market_chart_range_by_id(
                     id=token_1,
@@ -576,14 +624,18 @@ def calculate_il_risk_score(
             else:
                 prices_2 = cached_2
     except Exception as e:
-        get_errors().append(f"Error fetching price data: {e}")
+        logger.warning(f"Error fetching price data for {fetching}: {e}")
+        set_failed_fetch(fetching, time_period, price_cache)
         return None
 
+    parsing = token_0
     try:
         prices_1_data = np.array([x[1] for x in prices_1["prices"]])
+        parsing = token_1
         prices_2_data = np.array([x[1] for x in prices_2["prices"]])
     except (KeyError, TypeError) as e:
-        get_errors().append(f"Error parsing price data: {e}")
+        logger.warning(f"Error parsing price data for {parsing}: {e}")
+        set_failed_fetch(parsing, time_period, price_cache)
         return None
 
     min_length = min(len(prices_1_data), len(prices_2_data))

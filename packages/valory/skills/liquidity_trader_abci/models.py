@@ -174,6 +174,8 @@ class SharedState(BaseSharedState):
         self.last_strategy_evaluation_time: float = 0.0
         # Shared price cache passed to strategies via kwargs
         self.strategy_coingecko_price_cache: Dict[str, Any] = {}
+        # Set once the persisted backoff state and price cache have been loaded.
+        self.strategy_state_restored: bool = False
         # Per-endpoint circuit breakers for external dependencies.
         self._endpoint_breakers: Dict[str, EndpointCircuitBreaker] = {}
         self._endpoint_breakers_lock = threading.Lock()

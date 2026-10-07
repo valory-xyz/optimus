@@ -77,6 +77,15 @@ class TestSharedState:
         assert state.x402_eoa_sufficient is False
         assert state.x402_pot_checked is False
 
+    def test_strategy_state_defaults(self) -> None:
+        """A fresh SharedState has not restored anything and holds no cache."""
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        assert state.strategy_state_restored is False
+        assert state.consecutive_no_action_count == 0
+        assert state.last_strategy_evaluation_time == 0.0
+        assert state.strategy_coingecko_price_cache == {}
+
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""
         mock_context = MagicMock()

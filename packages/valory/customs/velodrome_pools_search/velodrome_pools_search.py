@@ -73,9 +73,12 @@ CHAIN_NAMES = {
 # velodrome-finance/sugar/deployments/base.env. LP_SUGAR_ABI's ``all``
 # signature and field order match the current Vyper source, so the
 # bump is ABI-compatible.
+# Every entry must be a deployment that exposes the three-argument
+# ``all(limit, offset, filter)``; the ones listed in
+# velodrome-finance/sugar/deployments/<chain>.env do.
 SUGAR_CONTRACT_ADDRESSES = {
-    MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
-    OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
+    MODE_CHAIN_ID: "0x1A3C63c8D442948085E47f88CB377183E23EA01f",
+    OPTIMISM_CHAIN_ID: "0x347512180804A8B40AA7525AE932a31198F074aA",
     BASE_CHAIN_ID: "0x69dD9db6d8f8E7d83887A704f447b1a584b599A1",  # Base LpSugar (V3)
 }
 
@@ -301,7 +304,7 @@ def get_cached_price(
     """Get cached CoinGecko price data if it exists and is not expired."""
     cache_key = f"{prefix}_{token_id}_{time_period}"
     entry = cache.get(cache_key)
-    if entry is None:
+    if entry is None or entry.get("failed"):
         return None
     elapsed = time.time() - entry["timestamp"]
     if elapsed > ttl:
@@ -329,6 +332,61 @@ def set_cached_price(
         "data": data,
         "timestamp": time.time(),
     }
+
+
+def set_cached_value(
+    token_id: str,
+    time_period: Any,
+    data: Any,
+    cache: Optional[Dict[str, Any]],
+    prefix: str,
+) -> None:
+    """Cache any non-None payload under the same key scheme as set_cached_price."""
+    if cache is None or data is None:
+        return
+    cache[f"{prefix}_{token_id}_{time_period}"] = {
+        "data": data,
+        "timestamp": time.time(),
+    }
+
+
+# A fetch that failed is remembered this long so it is not re-paid every cycle.
+# liquidity_trader_abci/behaviours/evaluate_strategy.py prunes these entries
+# with the same TTL; keep the two in step.
+FAILED_FETCH_CACHE_TTL: int = 900
+
+
+def set_failed_fetch(
+    token_id: str,
+    time_period: Any,
+    cache: Optional[Dict[str, Any]],
+    prefix: str = "il_range",
+) -> None:
+    """Record a failed fetch; a later successful cache write replaces it."""
+    if cache is None:
+        return
+    cache[f"{prefix}_{token_id}_{time_period}"] = {
+        "data": None,
+        "timestamp": time.time(),
+        "failed": True,
+    }
+
+
+def is_recent_failure(
+    token_id: str,
+    time_period: Any,
+    cache: Optional[Dict[str, Any]],
+    prefix: str = "il_range",
+) -> bool:
+    """Return True when the last fetch failed less than FAILED_FETCH_CACHE_TTL ago."""
+    if cache is None:
+        return False
+    entry = cache.get(f"{prefix}_{token_id}_{time_period}")
+    return bool(
+        entry
+        and entry.get("failed")
+        and time.time() - entry["timestamp"] <= FAILED_FETCH_CACHE_TTL
+    )
 
 
 # Cache metrics for monitoring
@@ -613,6 +671,9 @@ def calculate_velodrome_il_risk_score_multi(
                 if cached is not None:
                     prices_data.append([x[1] for x in cached["prices"]])
                     continue
+                if is_recent_failure(token_id, time_period, price_cache):
+                    logger.info(f"Skipping {token_id}: price fetch failed recently")
+                    return None
 
                 cg = CoinGeckoAPI()
                 if x402_session is not None and x402_proxy is not None:
@@ -642,6 +703,7 @@ def calculate_velodrome_il_risk_score_multi(
                 error_msg = f"Error fetching price data for {token_id}: {str(e)}"
                 logger.error(f"[COINGECKO] API Error - {error_msg}")
                 debug_data["errors"].append(error_msg)
+                set_failed_fetch(token_id, time_period, price_cache)
                 return None
 
         # Find minimum length to align all price series
@@ -1140,6 +1202,30 @@ def get_velodrome_pools(
         return {"error": error_msg}
 
 
+# A Sugar batch call is retried this many times before the batch counts as
+# failed; the delay doubles after each attempt.
+SUGAR_BATCH_RETRIES: int = 3
+SUGAR_BATCH_RETRY_DELAY_SECONDS: float = 1.0
+
+
+def _fetch_sugar_batch(contract_instance: Any, limit: int, offset: int) -> Any:
+    """Fetch one Sugar batch, retrying transient RPC errors before raising."""
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return contract_instance.functions.all(limit, offset, 0).call()
+        except Exception as e:
+            if attempt >= SUGAR_BATCH_RETRIES:
+                raise
+            delay = SUGAR_BATCH_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+            logger.warning(
+                f"Sugar batch at offset {offset} failed (attempt {attempt}/"
+                f"{SUGAR_BATCH_RETRIES}): {e}; retrying in {delay:.0f}s"
+            )
+            time.sleep(delay)
+
+
 def get_velodrome_pools_via_sugar(
     lp_sugar_address, rpc_url=None, chain_id=MODE_CHAIN_ID
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
@@ -1189,8 +1275,7 @@ def get_velodrome_pools_via_sugar(
         # Continue fetching until no more pools are found
         while True:
             try:
-                # Call the contract directly with filter parameter (0 = no filter)
-                raw_pools = contract_instance.functions.all(limit, offset, 0).call()
+                raw_pools = _fetch_sugar_batch(contract_instance, limit, offset)
 
                 if not raw_pools:
                     break
@@ -1252,7 +1337,19 @@ def get_velodrome_pools_via_sugar(
                 # Move to next batch
                 offset += limit
             except Exception as e:
-                logger.error(f"Error fetching pools batch (offset={offset}): {str(e)}")
+                error_msg = (
+                    f"Error fetching pools batch from Sugar {lp_sugar_address} "
+                    f"(offset={offset}) after {SUGAR_BATCH_RETRIES} attempts: "
+                    f"{str(e)}"
+                )
+                if not all_pools:
+                    logger.error(error_msg)
+                    get_errors().append(error_msg)
+                    return {"error": error_msg}
+                logger.warning(
+                    f"{error_msg}; continuing with the {len(all_pools)} pools "
+                    f"fetched so far"
+                )
                 break
 
         # Convert Sugar pool format to match subgraph format
@@ -2115,6 +2212,12 @@ def get_current_pool_price(pool_address: str, chain_id: int) -> Optional[float]:
         return None
 
 
+# A contract-address to coin-id mapping changes rarely, so it is kept this long.
+COIN_ID_CACHE_TTL: int = 7 * 24 * 3600
+# A "not listed" answer is re-checked sooner, so a new listing is picked up.
+NOT_LISTED_CACHE_TTL: int = 24 * 3600
+
+
 def get_coin_id_from_address(
     chain: str,
     address: str,
@@ -2122,6 +2225,7 @@ def get_coin_id_from_address(
     coingecko_api_key: Optional[str] = None,
     x402_session=None,
     x402_proxy=None,
+    price_cache: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """Retrieve CoinGecko coin ID"""
     try:
@@ -2154,6 +2258,28 @@ def get_coin_id_from_address(
             logger.info(f"Using stablecoin mapping for {address}: {coin_id}")
             return coin_id
 
+        cache_token = address.lower()
+        cached = get_cached_price(
+            cache_token,
+            platform,
+            price_cache or {},
+            COIN_ID_CACHE_TTL,
+            prefix="coin_id",
+        )
+        if cached is not None and cached.get("id") is None:
+            cached = get_cached_price(
+                cache_token,
+                platform,
+                price_cache or {},
+                NOT_LISTED_CACHE_TTL,
+                prefix="coin_id",
+            )
+        if cached is not None:
+            return cached.get("id")
+        if is_recent_failure(cache_token, platform, price_cache, prefix="coin_id"):
+            logger.info(f"Skipping coin ID lookup for {address}: failed recently")
+            return None
+
         # Rate limiting
         time.sleep(1)
 
@@ -2173,15 +2299,28 @@ def get_coin_id_from_address(
 
                 if response.status_code == 200:
                     data = response.json()
-                    return data.get("id")
+                    coin_id = data.get("id")
+                    set_cached_value(
+                        cache_token, platform, {"id": coin_id}, price_cache, "coin_id"
+                    )
+                    return coin_id
                 else:
                     logger.warning(
                         f"Failed to get coin ID via x402 for {chain}/{address}: {response.status_code}"
                     )
+                    if response.status_code == 404:
+                        set_cached_value(
+                            cache_token, platform, {"id": None}, price_cache, "coin_id"
+                        )
+                    else:
+                        set_failed_fetch(
+                            cache_token, platform, price_cache, prefix="coin_id"
+                        )
                     return None
 
             except Exception as e:
                 logger.error(f"Error using x402 for coin ID lookup: {str(e)}")
+                set_failed_fetch(cache_token, platform, price_cache, prefix="coin_id")
                 return None
         else:
             # Fallback to regular API
@@ -2201,10 +2340,15 @@ def get_coin_id_from_address(
                 response = cg.get_coin_info_from_contract_address_by_id(
                     platform, address
                 )
-                return response.get("id") if response else None
+                coin_id = response.get("id") if response else None
+                set_cached_value(
+                    cache_token, platform, {"id": coin_id}, price_cache, "coin_id"
+                )
+                return coin_id
 
             except Exception as e:
                 logger.error(f"Error getting coin ID via regular API: {str(e)}")
+                set_failed_fetch(cache_token, platform, price_cache, prefix="coin_id")
                 return None
 
     except Exception as e:
@@ -2232,6 +2376,9 @@ def get_historical_market_data(
         )
         if cached is not None:
             return cached
+        if is_recent_failure(coin_id, days, price_cache, prefix="velo_hist"):
+            logger.info(f"Skipping market data for {coin_id}: fetch failed recently")
+            return None
 
         # Rate limiting
         time.sleep(2)
@@ -2272,10 +2419,12 @@ def get_historical_market_data(
                     logger.warning(
                         f"Failed to fetch market data via x402 for {coin_id}"
                     )
+                    set_failed_fetch(coin_id, days, price_cache, prefix="velo_hist")
                     return None
 
             except Exception as e:
                 logger.error(f"Error using x402 for market data: {str(e)}")
+                set_failed_fetch(coin_id, days, price_cache, prefix="velo_hist")
                 return None
         else:
             # Fallback to regular API
@@ -2315,10 +2464,12 @@ def get_historical_market_data(
                     return result
                 else:
                     logger.warning(f"Failed to fetch market data for {coin_id}")
+                    set_failed_fetch(coin_id, days, price_cache, prefix="velo_hist")
                     return None
 
             except Exception as e:
                 logger.error(f"Error getting market data via regular API: {str(e)}")
+                set_failed_fetch(coin_id, days, price_cache, prefix="velo_hist")
                 return None
 
     except Exception as e:
@@ -2360,10 +2511,22 @@ def get_pool_token_history(
 
         # Get coin IDs for both tokens
         token0_id = get_coin_id_from_address(
-            chain, token0_address, platform, coingecko_api_key, x402_session, x402_proxy
+            chain,
+            token0_address,
+            platform,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
         )
         token1_id = get_coin_id_from_address(
-            chain, token1_address, platform, coingecko_api_key, x402_session, x402_proxy
+            chain,
+            token1_address,
+            platform,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache=price_cache,
         )
 
         if not token0_id or not token1_id:

@@ -265,9 +265,6 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[bool]]:
         """Count this period toward the rounds goal and publish the block.
 
-        Progress belongs to the staking epoch starting at ``tsCheckpoint`` and
-        restarts from zero when that moves. A period is counted once, however
-        many times this round runs in it, and only if it does not stand by.
         The verdict returned is taken before counting, so the period that
         reaches the goal still works and the next one stands by.
 
@@ -325,12 +322,17 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             state[KV_ACTIVITY_GOAL_LAST_MET_AT],
             now,
         )
-        written = yield from self._write_activity_goal_state(
+        state_to_write = {
+            KV_ACTIVITY_GOAL_PROGRESS: progress,
+            KV_ACTIVITY_GOAL_PERIOD_START: ts_checkpoint,
+            KV_ACTIVITY_GOAL_LAST_MET_AT: last_met_at,
+            KV_ACTIVITY_GOAL_LAST_COUNTED_PERIOD: last_counted_period,
+        }
+        written = yield from self._write_kv(
             {
-                KV_ACTIVITY_GOAL_PROGRESS: progress,
-                KV_ACTIVITY_GOAL_PERIOD_START: ts_checkpoint,
-                KV_ACTIVITY_GOAL_LAST_MET_AT: last_met_at,
-                KV_ACTIVITY_GOAL_LAST_COUNTED_PERIOD: last_counted_period,
+                key: str(value)
+                for key, value in state_to_write.items()
+                if value is not None
             }
         )
         if not written:

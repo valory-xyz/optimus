@@ -3066,25 +3066,6 @@ class TestStoreReadMethods:
         b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
         assert _exhaust(b._read_activity_goal_state()) is None
 
-    def test_write_activity_goal_state_skips_absent_values(self) -> None:
-        """Values are stored as strings and ``None`` keys are left alone."""
-        b = _make_behaviour()
-        written = {}
-
-        def fake_write(data: Any) -> Generator[Any, Any, bool]:
-            written.update(data)
-            yield
-            return False
-
-        b._write_kv = fake_write  # type: ignore[assignment,method-assign]
-        result = _exhaust(
-            b._write_activity_goal_state(
-                {"activity_goal_progress": 4, "activity_goal_last_met_at": None}
-            )
-        )
-        assert result is False
-        assert written == {"activity_goal_progress": "4"}
-
     def test_store_gas_costs(self) -> None:
         """Test store gas costs."""
         b = _make_behaviour()

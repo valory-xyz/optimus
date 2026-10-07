@@ -1029,7 +1029,9 @@ def _kv(progress, period_start=EPOCH, last_counted=4, target=None, last_met_at=N
         "activity_goal_progress": str(progress),
         "activity_goal_period_start": str(period_start),
         "activity_goal_last_met_at": None if last_met_at is None else str(last_met_at),
-        "activity_goal_last_counted_period": str(last_counted),
+        "activity_goal_last_counted_period": (
+            None if last_counted is None else str(last_counted)
+        ),
     }
 
 
@@ -1091,6 +1093,13 @@ class TestActivityGoalTracking:
         run = _GoalRun(tmp_path, _kv(10))
         assert run(kpi=True) is True
         assert run.progress == 10
+
+    def test_a_zero_goal_stands_by_from_the_first_period(self, tmp_path: Path) -> None:
+        """A goal of 0 is met at once, so the period stands by uncounted."""
+        run = _GoalRun(tmp_path, _kv(0, target=0, last_counted=None))
+        assert run(kpi=True) is True
+        assert run.progress == 0
+        assert run.block["is_met"] is True
 
     def test_met_goal_with_unmet_staking_side_keeps_counting(
         self, tmp_path: Path

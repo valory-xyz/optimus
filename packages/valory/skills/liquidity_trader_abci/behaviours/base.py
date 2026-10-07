@@ -1469,11 +1469,7 @@ class LiquidityTraderBaseBehaviour(
         self._read_data("portfolio_data", self.portfolio_data_filepath)
 
     def store_agent_performance(self) -> None:
-        """Merge the metrics and timestamp into the agent performance file.
-
-        The chat handler and the activity goal write other keys of the same
-        file from other threads, so those are only filled in when missing.
-        """
+        """Merge the metrics and timestamp into the agent performance file."""
         try:
             merge_agent_performance(
                 self.agent_performance_filepath,
@@ -2274,19 +2270,6 @@ class LiquidityTraderBaseBehaviour(
         if result is None:
             return None
         return {key: parse_stored_int(result.get(key)) for key in KV_ACTIVITY_GOAL_KEYS}
-
-    def _write_activity_goal_state(
-        self, state: Dict[str, Optional[int]]
-    ) -> Generator[None, None, bool]:
-        """Persist the activity goal state, skipping keys without a value.
-
-        :param state: goal KV keys mapped to their values.
-        :yield: the KV store request.
-        :return: whether the write succeeded.
-        """
-        data = {key: str(value) for key, value in state.items() if value is not None}
-        success = yield from self._write_kv(data)
-        return success
 
     def _write_kv(
         self,

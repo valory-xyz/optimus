@@ -186,6 +186,15 @@ class TestMergeAgentPerformance:
         merge_agent_performance(path, {"metrics": []})
         assert _read(path) == {"metrics": []}
 
+    def test_unreadable_file_is_not_overwritten(self, tmp_path: Path) -> None:
+        """A read failure other than a missing file raises and leaves the file as is."""
+        path = tmp_path / "perf.json"
+        _write(path, {"agent_behavior": "hi", "activity_goal": _block()})
+        with patch("builtins.open", side_effect=PermissionError("denied")):
+            with pytest.raises(PermissionError):
+                merge_agent_performance(path, {"metrics": []})
+        assert _read(path) == {"agent_behavior": "hi", "activity_goal": _block()}
+
     def test_failed_write_leaves_the_file_and_no_temp(self, tmp_path: Path) -> None:
         """A failure mid-write keeps the old content and cleans up the temp file."""
         path = tmp_path / "perf.json"
@@ -248,6 +257,13 @@ class TestReadActivityGoalBlock:
         """No file reads as ``None``."""
         assert read_activity_goal_block(tmp_path / "perf.json") is None
 
+    def test_unreadable_file_is_none(self, tmp_path: Path) -> None:
+        """A file that cannot be read reads as ``None``."""
+        path = tmp_path / "perf.json"
+        _write(path, {"activity_goal": _block()})
+        with patch("builtins.open", side_effect=PermissionError("denied")):
+            assert read_activity_goal_block(path) is None
+
 
 class TestRetargetActivityGoal:
     """A goal change from the chat applies to the current epoch at once."""
@@ -274,6 +290,15 @@ class TestRetargetActivityGoal:
         _write(path, {"activity_goal": _block(last_met_at="yesterday")})
         block = retarget_activity_goal(path, 20, NOW + 1)
         assert block is not None and block["last_met_at"] is None
+
+    def test_unreadable_file_is_not_overwritten(self, tmp_path: Path) -> None:
+        """A read failure raises instead of rewriting the file blind."""
+        path = tmp_path / "perf.json"
+        _write(path, {"metrics": [1], "activity_goal": _block()})
+        with patch("builtins.open", side_effect=PermissionError("denied")):
+            with pytest.raises(PermissionError):
+                retarget_activity_goal(path, 5, NOW)
+        assert _read(path) == {"metrics": [1], "activity_goal": _block()}
 
     def test_no_block_yet_writes_nothing(self, tmp_path: Path) -> None:
         """Without a block there is no progress to keep; the FSM writes it later."""

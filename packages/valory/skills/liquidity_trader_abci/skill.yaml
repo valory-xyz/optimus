@@ -82,12 +82,12 @@ fingerprint:
   tests/test_rounds.py: bafybeicds45l43ifbungxginlvmqatgczsfhane4hjm465llll33tfcu44
   tests/test_rounds_info.py: bafybeicjjnlimixrbzyouasifrkcxycl4aitutlwm7ellq27xq55zog6ge
   tests/utils/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
-  tests/utils/test_activity_goal.py: bafybeievtegphr543zuebwvlkdvcmdzr4rddeqnzynz4b2il4jil4uxe7e
+  tests/utils/test_activity_goal.py: bafybeid7jbb3kopzaau2z3t5wfjqjykkyriydzbkibdurpimw6to3bbmzu
   tests/utils/test_balancer_math.py: bafybeig4aixtnrm3oqewfba7m3v7boc6htpetkcdcpf35y35xzjpwh4drq
   tests/utils/test_protocol_validation.py: bafybeibqqzpz3a63zklyxsusren2vgwnyu4jcb34wka24d2szctfciewuy
   tests/utils/test_tick_math.py: bafybeie6vfua3xi25qhgtwfvuayzbxe3dnwd72jmiyqzcgf2jlxafixj4m
   utils/__init__.py: bafybeiefovpcxnqaggn65tcrvbxguk763wo74y4mj2wevpcdv2hvkuskle
-  utils/activity_goal.py: bafybeia4oh5u2baa2j6thwadi5ajesobuwkz6osydfbng6hev5yngwiqhe
+  utils/activity_goal.py: bafybeihza7bgrhfzl56jrl7fvqa52gnbwwissf3tdac3ssdnms7htuszca
   utils/balancer_math.py: bafybeiftkdxicyxcwbkncwhmnoafjaalratvijqdcj2kvqygtto62dbfhi
   utils/protocol_validation.py: bafybeihzmkyug6cnsjgarutukq5q3biyhtrz2tyb64jva7zvwmle7kyfhq
   utils/tick_math.py: bafybeiehijphwni4zfu57rhhbgdyxn5evyokvvckiwzmldmrbzg3nd7cmy

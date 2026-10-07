@@ -165,13 +165,16 @@ def build_activity_goal_block(
 def _read_json_object(file_path: PathLike) -> Dict[str, Any]:
     """Read a JSON object, treating a missing, corrupt or non-object file as empty.
 
+    Any other read failure propagates, so a writer that merges into the result
+    does not overwrite a file it could not read.
+
     :param file_path: the file to read.
     :return: the object.
     """
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             data = json.load(file)
-    except (OSError, json.JSONDecodeError):
+    except (FileNotFoundError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -235,10 +238,15 @@ def read_activity_goal_block(file_path: PathLike) -> Optional[Dict[str, Any]]:
     """Return the ``activity_goal`` block on disk.
 
     :param file_path: the agent performance file.
-    :return: the block, or ``None`` when the file or the block is missing or invalid.
+    :return: the block, or ``None`` when the file or the block is missing,
+        invalid or unreadable.
     """
     with _AGENT_PERFORMANCE_LOCK:
-        return _valid_block(_read_json_object(file_path))
+        try:
+            data = _read_json_object(file_path)
+        except OSError:
+            return None
+        return _valid_block(data)
 
 
 def retarget_activity_goal(

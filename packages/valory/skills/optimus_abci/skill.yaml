@@ -61,7 +61,7 @@ fingerprint:
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeielhxk7hstefud4xkvw2cxysverkegttcpm6uec7en7cmeuli2d6q
-  handlers.py: bafybeihuoj6tnzkzm464mubmawym3jq654b775wtepb6rkreiszn4c43qa
+  handlers.py: bafybeidypm3xmt3tpmttsxbpxpckqbxgnohsfik3oeubgnqvlsskgjdnum
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -153,15 +153,15 @@ fingerprint:
   optimus-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   optimus-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  prompts.py: bafybeib64hnbhkt4bvdetufk3v2kmts2hs5o5h6p7otb6efkmbve33sgwi
+  prompts.py: bafybeih6chhx6zlwodqrsjbwwqcnx76ffujlyogxjmyjuwzuzqsrfkoada
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeiaesae76gwb2etlmdpppmopnb5hh5g5mnzicbxhvcsxbluab4c7su
+  tests/test_handlers.py: bafybeidqm3poboxwolxltsen2u2vgxt3guubqpabiuhroflpxopmdpi45u
   tests/test_models.py: bafybeiashcolhjijpi7deibstjm35dgv3cajqwet577yl2vovvvgfzja7y
-  tests/test_prompts.py: bafybeibpbnuqhgntud3jiw4fjq77tffdcjoczg4mwu2qryka7vt7g5rl7i
+  tests/test_prompts.py: bafybeic6mdo2qk7m3e2hqb43myglfk2xs6o2i73w2vfgoc7nudfntxmqcy
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
@@ -177,7 +177,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
-- valory/liquidity_trader_abci:0.1.0:bafybeidqotjaprnl26uenuoea2rzmsxshha7wsf476jyaeti2xmwapy2xu
+- valory/liquidity_trader_abci:0.1.0:bafybeihfhgucesqnsweosvg4odcmkyzc5ispnxkhwjatdu3pfbzw2mrqta
 - valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
 behaviours:

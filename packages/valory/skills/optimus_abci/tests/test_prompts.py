@@ -23,7 +23,10 @@
 
 import pickle  # nosec
 
+import pytest
+
 from packages.valory.skills.optimus_abci.prompts import (
+    Intent,
     STRATEGY_PROMPT,
     StrategyConfig,
     TradingType,
@@ -42,6 +45,7 @@ class TestStrategyConfig:
     def test_creation(self) -> None:
         """Test creating a StrategyConfig instance."""
         config = StrategyConfig(
+            intent=Intent.UPDATE,
             selected_protocols=["balancerPool", "velodrome"],
             trading_type=TradingType.BALANCED,
             max_loss_percentage=5.0,
@@ -55,6 +59,7 @@ class TestStrategyConfig:
     def test_risky_trading_type(self) -> None:
         """Test creating a StrategyConfig with risky trading type."""
         config = StrategyConfig(
+            intent=Intent.UPDATE,
             selected_protocols=["sturdy"],
             trading_type=TradingType.RISKY,
             max_loss_percentage=15.0,
@@ -66,12 +71,30 @@ class TestStrategyConfig:
     def test_empty_protocols(self) -> None:
         """Test creating a StrategyConfig with empty protocols list."""
         config = StrategyConfig(
+            intent=Intent.QUERY,
             selected_protocols=[],
             trading_type=TradingType.BALANCED,
             max_loss_percentage=5.0,
             reasoning="no protocols selected",
         )
         assert config.selected_protocols == []
+
+    def test_intent_is_required(self) -> None:
+        """The LLM must say whether the user asked a question or for a change."""
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            StrategyConfig(
+                selected_protocols=[],
+                trading_type=TradingType.BALANCED,
+                max_loss_percentage=5.0,
+                reasoning="no intent",
+            )
+
+    def test_intent_values(self) -> None:
+        """The prompt's intent words match the enum the handler compares against."""
+        assert {i.value for i in Intent} == {"query", "update"}
+        assert "intent" in STRATEGY_PROMPT
 
 
 class TestBuildStrategyConfigSchema:

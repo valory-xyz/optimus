@@ -163,6 +163,8 @@ class SharedState(BaseSharedState):
         self.strategies_executables: Dict[str, Tuple[str, str]] = {}
         self.trading_type: str = ""
         self.selected_protocols: List[str] = []
+        # Set by a chat update; None until then, so a trading-type default applies.
+        self.max_loss_percentage: Optional[float] = None
         self.request_count: int = 0
         self.request_queue: List[Any] = []
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}

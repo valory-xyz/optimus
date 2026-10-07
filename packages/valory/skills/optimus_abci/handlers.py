@@ -104,6 +104,9 @@ from packages.valory.skills.optimus_abci.dialogues import (
 )
 from packages.valory.skills.optimus_abci.models import Params, SharedState
 from packages.valory.skills.optimus_abci.prompts import (
+    DEFAULT_MAX_LOSS_PERCENTAGE,
+    Intent,
+    MAX_LOSS_PERCENTAGE_RANGE,
     STRATEGY_PROMPT,
     build_strategy_config_schema,
 )
@@ -2650,7 +2653,7 @@ class HttpHandler(BaseHttpHandler):
                 self.shared_state, "sufficient_funds_for_x402_payments", False
             )
             if not sufficient_funds_for_x402_payments:
-                self.context.state.request_queue.pop()
+                self._release_request_slot(request_id)
                 self._send_ok_response(
                     http_msg,
                     http_dialogue,
@@ -2677,7 +2680,9 @@ class HttpHandler(BaseHttpHandler):
                 else self.context.state.selected_protocols or self.available_strategies
             )
 
-            last_selected_threshold = THRESHOLDS.get(previous_trading_type, 10)
+            last_selected_threshold = self._current_max_loss_percentage(
+                previous_trading_type
+            )
 
             # Convert previous selected protocols to their protocol names
             previous_protocols_for_llm = [
@@ -2719,7 +2724,36 @@ class HttpHandler(BaseHttpHandler):
 
         except (json.JSONDecodeError, ValueError) as e:
             self.context.logger.error(f"Error processing prompt: {str(e)}")
+            self._release_request_slot(request_id)
             self._handle_bad_request(http_msg, http_dialogue)
+        except Exception:
+            self._release_request_slot(request_id)
+            raise
+
+    def _release_request_slot(self, request_id: Optional[str]) -> None:
+        """Give a chat request's queue slot back, whichever path ended it.
+
+        :param request_id: the request id appended by the prompt handler
+        """
+        if request_id is None:
+            return
+        try:
+            self.context.state.request_queue.remove(request_id)
+        except ValueError:
+            pass
+
+    def _current_max_loss_percentage(self, trading_type: str) -> float:
+        """The max loss percentage in force, or the trading type's default.
+
+        :param trading_type: the trading type the default is taken from
+        :return: the percentage, within MAX_LOSS_PERCENTAGE_RANGE
+        """
+        stored = getattr(self.context.state, "max_loss_percentage", None)
+        if isinstance(stored, (int, float)) and not isinstance(stored, bool):
+            return float(stored)
+        return DEFAULT_MAX_LOSS_PERCENTAGE.get(
+            trading_type, DEFAULT_MAX_LOSS_PERCENTAGE[TradingType.BALANCED.value]
+        )
 
     def _parse_llm_response(
         self,
@@ -2916,6 +2950,7 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the original HttpMessage
         :param http_dialogue: the original HttpDialogue
         """
+        request_id = http_dialogue.dialogue_label.dialogue_reference[0]
 
         try:
             # Parse the outer payload
@@ -2926,6 +2961,7 @@ class HttpHandler(BaseHttpHandler):
             if "error" in genai_response:
                 error_msg = genai_response["error"]
                 self.context.logger.error(f"GenAI error: {error_msg}")
+                self._release_request_slot(request_id)
                 self._send_ok_response(http_msg, http_dialogue, {"error": error_msg})
                 return
 
@@ -2938,19 +2974,24 @@ class HttpHandler(BaseHttpHandler):
             # Extract fields from the parsed JSON
             selected_protocol_names = strategy_data.get("selected_protocols", [])
             trading_type = strategy_data.get("trading_type", "balanced")
-            max_loss_percentage = float(strategy_data.get("max_loss_percentage", 10))
+            max_loss_percentage = self._clamp_max_loss_percentage(
+                float(strategy_data.get("max_loss_percentage", 10))
+            )
             reasoning = strategy_data.get("reasoning", "")
+            intent = strategy_data.get("intent", Intent.UPDATE.value)
 
             # Get previous trading type from state
             previous_trading_type = self.context.state.trading_type or "balanced"
 
             self.context.logger.info(
-                f"Parsed response - Protocols: {selected_protocol_names}, "
+                f"Parsed response - Intent: {intent}, "
+                f"Protocols: {selected_protocol_names}, "
                 f"Type: {trading_type}, Loss %: {max_loss_percentage}"
             )
 
         except json.JSONDecodeError as e:
             self.context.logger.error(f"JSON decode error: {e}", exc_info=True)
+            self._release_request_slot(request_id)
             self._send_ok_response(
                 http_msg,
                 http_dialogue,
@@ -2959,6 +3000,7 @@ class HttpHandler(BaseHttpHandler):
             return
         except Exception as e:
             self.context.logger.error(f"Error parsing LLM response: {e}", exc_info=True)
+            self._release_request_slot(request_id)
             self._send_ok_response(
                 http_msg,
                 http_dialogue,
@@ -3011,18 +3053,45 @@ class HttpHandler(BaseHttpHandler):
             for protocol in validated_protocol_names
         ]
 
-        response_data = {
-            "selected_protocols": validated_protocol_names,
+        # The UI renders an "updated" card whenever previous_trading_type and
+        # trading_type are both present, and a protocols card whenever
+        # selected_protocols is non-empty, so those fields are only sent for a
+        # change the user asked for.
+        type_changed = trading_type != previous_trading_type
+        protocols_changed = set(selected_protocols) != set(
+            previous_selected_protocols or []
+        )
+        loss_changed = max_loss_percentage != self._current_max_loss_percentage(
+            previous_trading_type
+        )
+        is_update = intent == Intent.UPDATE.value and (
+            type_changed or protocols_changed or loss_changed
+        )
+
+        response_data: Dict[str, Any] = {
             "trading_type": trading_type,
             "max_loss_percentage": max_loss_percentage,
             "composite_score": round(composite_score, 4),
             "reasoning": reasoning,
-            "previous_trading_type": previous_trading_type,
+            "updated": is_update,
+            "selected_protocols": (
+                validated_protocol_names if is_update and protocols_changed else []
+            ),
         }
+        if is_update and type_changed:
+            response_data["previous_trading_type"] = previous_trading_type
 
         self.context.logger.info(f"response_data: {response_data}")
         self._send_ok_response(http_msg, http_dialogue, response_data)
-        # Store the calculated composite score in the state
+
+        if not is_update:
+            self.context.logger.info(
+                f"Chat request {request_id} is a {intent} with no change; "
+                f"nothing written"
+            )
+            self._release_request_slot(request_id)
+            return
+
         self.context.logger.info(f"trading_type: {trading_type}")
 
         storage_data = {
@@ -3034,7 +3103,19 @@ class HttpHandler(BaseHttpHandler):
         }
 
         # Offload KV store update to a separate thread
-        self._submit_background(self._delayed_write_kv_extended, storage_data)
+        self._submit_background(
+            self._delayed_write_kv_extended, storage_data, request_id
+        )
+
+    @staticmethod
+    def _clamp_max_loss_percentage(value: float) -> float:
+        """Keep a max loss percentage inside MAX_LOSS_PERCENTAGE_RANGE.
+
+        :param value: the percentage the LLM returned
+        :return: the value clamped to the allowed range
+        """
+        low, high = MAX_LOSS_PERCENTAGE_RANGE
+        return min(max(value, low), high)
 
     def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
         """Fallback to previous strategy in case of parsing errors."""
@@ -3065,24 +3146,38 @@ class HttpHandler(BaseHttpHandler):
 
         return selected_protocols, trading_type, reasoning, trading_type
 
-    def _delayed_write_kv_extended(self, data: Dict[str, str]) -> None:
+    def _delayed_write_kv_extended(
+        self, data: Dict[str, str], request_id: Optional[str] = None
+    ) -> None:
         """
-        Write to the KV store after a delay if this was the only request in queue.
+        Write to the KV store after a delay, unless a newer request superseded it.
+
+        The acceptance delay lets a burst of chat messages settle; only the
+        most recent request's configuration is written. The request's queue
+        slot is released on every exit so later requests are never blocked.
 
         :param data: Dictionary of data to store
+        :param request_id: the chat request this write belongs to; without it,
+            the write only proceeds when no other request is queued
         """
-        # Concurrent invocations would write the same KV state twice; gate on
-        # a process-wide lock and skip the duplicate.
-        if not _KV_WRITE_LOCK.acquire(blocking=False):
-            self.context.logger.info(
-                "delayed KV write already in flight, skipping duplicate"
-            )
-            return
         try:
             self.context.logger.info("Waiting for default acceptance time...")
             time.sleep(self.context.params.default_acceptance_time)
 
-            if len(self.context.state.request_queue) == 1:
+            queue = self.context.state.request_queue
+            if request_id is not None:
+                superseded = bool(queue) and queue[-1] != request_id
+            else:
+                superseded = len(queue) > 1
+            if superseded:
+                self.context.logger.info(
+                    f"Chat request {request_id} superseded by a newer request; "
+                    f"skipping its KV write"
+                )
+                return
+
+            # Writes are serialised so two requests never interleave KV state.
+            with _KV_WRITE_LOCK:
                 self._write_kv(data)
 
                 self._update_agent_performance_chat(data.get("reasoning"))
@@ -3100,10 +3195,15 @@ class HttpHandler(BaseHttpHandler):
                         f"KV composite_score {(data['composite_score'])}"
                     )
                     self.context.state.composite_score = float(data["composite_score"])
-
-            self.context.state.request_queue.pop()
+                if "max_loss_percentage" in data:
+                    self.context.state.max_loss_percentage = float(
+                        data["max_loss_percentage"]
+                    )
         finally:
-            _KV_WRITE_LOCK.release()
+            if request_id is not None:
+                self._release_request_slot(request_id)
+            elif self.context.state.request_queue:
+                self.context.state.request_queue.pop()
 
     def _write_kv(self, data: Dict[str, str]) -> None:
         """

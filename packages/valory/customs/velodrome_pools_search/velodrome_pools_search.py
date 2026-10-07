@@ -73,11 +73,11 @@ CHAIN_NAMES = {
 # velodrome-finance/sugar/deployments/base.env. LP_SUGAR_ABI's ``all``
 # signature and field order match the current Vyper source, so the
 # bump is ABI-compatible.
-# Optimism must point at a deployment that exposes the three-argument
-# ``all(limit, offset, filter)``; the one listed in
-# velodrome-finance/sugar/deployments/optimism.env does.
+# Every entry must be a deployment that exposes the three-argument
+# ``all(limit, offset, filter)``; the ones listed in
+# velodrome-finance/sugar/deployments/<chain>.env do.
 SUGAR_CONTRACT_ADDRESSES = {
-    MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
+    MODE_CHAIN_ID: "0x1A3C63c8D442948085E47f88CB377183E23EA01f",  # Mode LpSugar
     OPTIMISM_CHAIN_ID: "0x347512180804A8B40AA7525AE932a31198F074aA",  # Optimism LpSugar
     BASE_CHAIN_ID: "0x69dD9db6d8f8E7d83887A704f447b1a584b599A1",  # Base LpSugar (V3)
 }
@@ -2182,6 +2182,8 @@ def get_current_pool_price(pool_address: str, chain_id: int) -> Optional[float]:
 
 # A contract-address to coin-id mapping changes rarely, so it is kept this long.
 COIN_ID_CACHE_TTL: int = 7 * 24 * 3600
+# A "not listed" answer is re-checked sooner, so a new listing is picked up.
+NOT_LISTED_CACHE_TTL: int = 24 * 3600
 
 
 def get_coin_id_from_address(
@@ -2232,6 +2234,14 @@ def get_coin_id_from_address(
             COIN_ID_CACHE_TTL,
             prefix="coin_id",
         )
+        if cached is not None and cached.get("id") is None:
+            cached = get_cached_price(
+                cache_token,
+                platform,
+                price_cache or {},
+                NOT_LISTED_CACHE_TTL,
+                prefix="coin_id",
+            )
         if cached is not None:
             return cached.get("id")
         if is_recent_failure(cache_token, platform, price_cache, prefix="coin_id"):

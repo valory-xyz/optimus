@@ -4828,17 +4828,31 @@ class TestRunRpcOverrideSnapshotRestore:
 class TestSugarDeploymentAddresses:
     """The LpSugar addresses must be deployments that implement the ABI in use."""
 
-    def test_optimism_lp_sugar_matches_upstream_deployment(self) -> None:
-        """Optimism must point at the LpSugar listed in velodrome-finance/sugar.
+    @pytest.mark.parametrize(
+        ("chain_id", "upstream"),
+        [
+            pytest.param(
+                OPTIMISM_CHAIN_ID,
+                "0x347512180804A8B40AA7525AE932a31198F074aA",
+                id="optimism",
+            ),
+            pytest.param(
+                MODE_CHAIN_ID,
+                "0x1A3C63c8D442948085E47f88CB377183E23EA01f",
+                id="mode",
+            ),
+        ],
+    )
+    def test_lp_sugar_matches_upstream_deployment(
+        self, chain_id: int, upstream: str
+    ) -> None:
+        """Each chain must point at the LpSugar listed in velodrome-finance/sugar.
 
-        ``deployments/optimism.env`` lists LP_SUGAR_ADDRESS_10; the previous
-        address only exposed the two-argument ``all`` and every batch call
-        reverted, which left the strategy with no pools at all.
+        ``deployments/<chain>.env`` lists LP_SUGAR_ADDRESS_<id>; the previous
+        Optimism and Mode addresses only exposed the two-argument ``all`` and
+        every batch call reverted, which left the strategy with no pools at all.
         """
-        assert (
-            vel_mod.SUGAR_CONTRACT_ADDRESSES[OPTIMISM_CHAIN_ID]
-            == "0x347512180804A8B40AA7525AE932a31198F074aA"
-        )
+        assert vel_mod.SUGAR_CONTRACT_ADDRESSES[chain_id] == upstream
 
     @pytest.mark.parametrize("chain_id", sorted(vel_mod.SUGAR_CONTRACT_ADDRESSES))
     def test_lp_sugar_addresses_are_checksummed(self, chain_id: int) -> None:
@@ -5096,6 +5110,41 @@ class TestCoinIdLookupCache:
             assert result is None
         assert session.get.call_count == 1
         assert cache["coin_id_0xunlisted_optimistic-ethereum"]["data"] == {"id": None}
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.CoinGeckoAPI"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    def test_not_listed_is_rechecked_after_a_day(
+        self, mock_sleep: MagicMock, cg_class: MagicMock
+    ) -> None:
+        """A new listing is picked up once the shorter not-listed window passes."""
+        session = self._session(404)
+        cache: Dict[str, Any] = {}
+        get_coin_id_from_address(
+            "optimism",
+            "0xunlisted",
+            "optimistic-ethereum",
+            x402_session=session,
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        entry = cache["coin_id_0xunlisted_optimistic-ethereum"]
+        entry["timestamp"] -= vel_mod.NOT_LISTED_CACHE_TTL + 1
+        session.get.return_value.status_code = 200
+        session.get.return_value.json.return_value = {"id": "newly-listed"}
+        result = get_coin_id_from_address(
+            "optimism",
+            "0xunlisted",
+            "optimistic-ethereum",
+            x402_session=session,
+            x402_proxy="https://proxy.example.com",
+            price_cache=cache,
+        )
+        assert result == "newly-listed"
+        assert session.get.call_count == 2
 
     @pytest.mark.parametrize(
         "session_factory",

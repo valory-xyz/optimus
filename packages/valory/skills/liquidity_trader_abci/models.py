@@ -166,7 +166,6 @@ class SharedState(BaseSharedState):
         self.max_loss_percentage: Optional[float] = None
         self.latest_chat_write_request_id: Optional[str] = None
         self.request_count: int = 0
-        self.request_queue: List[Any] = []
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""
         self._token_price_cache: Dict[Any, Any] = {}

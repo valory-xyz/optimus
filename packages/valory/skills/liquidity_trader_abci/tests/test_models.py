@@ -58,7 +58,6 @@ class TestSharedState:
         assert state.trading_type == ""
         assert state.selected_protocols == []
         assert state.request_count == 0
-        assert state.request_queue == []
         assert state.req_to_callback == {}
         assert state.agent_reasoning == ""
 
@@ -83,7 +82,6 @@ class TestSharedState:
         state = SharedState(name="state", skill_context=mock_context)
         assert state.max_loss_percentage is None
         assert state.latest_chat_write_request_id is None
-        assert state.request_queue == []
 
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""

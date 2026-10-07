@@ -2670,7 +2670,6 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt processes prompt successfully."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         ctx.state.trading_type = "balanced"
         ctx.state.selected_protocols = json.dumps(["balancer_pools_search"])
         ctx.state.req_to_callback = {}
@@ -2682,14 +2681,11 @@ class TestHttpHandlerMethods:
         mock_dialogue.dialogue_label.dialogue_reference = ("req1", "")
         handler._handle_post_process_prompt(mock_msg, mock_dialogue)
         ctx.outbox.put_message.assert_called_once()
-        # The slot is held until the request's own delayed write ends.
-        assert ctx.state.request_queue == ["req1"]
 
     def test_handle_post_process_prompt_empty_prompt(self) -> None:
         """Test _handle_post_process_prompt with empty prompt."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         handler._handle_bad_request = MagicMock()
         mock_msg = MagicMock()
         mock_msg.body = json.dumps({"prompt": ""}).encode()
@@ -2697,13 +2693,11 @@ class TestHttpHandlerMethods:
         mock_dialogue.dialogue_label.dialogue_reference = ("req1", "")
         handler._handle_post_process_prompt(mock_msg, mock_dialogue)
         handler._handle_bad_request.assert_called_once()
-        assert ctx.state.request_queue == []
 
     def test_handle_post_process_prompt_invalid_json(self) -> None:
         """Test _handle_post_process_prompt with invalid JSON."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         handler._handle_bad_request = MagicMock()
         mock_msg = MagicMock()
         mock_msg.body = b"not json"
@@ -2711,13 +2705,11 @@ class TestHttpHandlerMethods:
         mock_dialogue.dialogue_label.dialogue_reference = ("req1", "")
         handler._handle_post_process_prompt(mock_msg, mock_dialogue)
         handler._handle_bad_request.assert_called_once()
-        assert ctx.state.request_queue == []
 
     def test_handle_post_process_prompt_x402_insufficient_funds(self) -> None:
         """Test _handle_post_process_prompt with x402 and insufficient funds."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = True
-        ctx.state.request_queue = ["other"]
         handler._send_ok_response = MagicMock()
         with patch.object(
             type(handler), "shared_state", new_callable=PropertyMock
@@ -2730,8 +2722,6 @@ class TestHttpHandlerMethods:
             mock_dialogue.dialogue_label.dialogue_reference = ("req1", "")
             handler._handle_post_process_prompt(mock_msg, mock_dialogue)
         handler._send_ok_response.assert_called_once()
-        # Only the refused request's own slot is given back.
-        assert ctx.state.request_queue == ["other"]
 
     def test_handle_post_process_prompt_x402_sufficient_funds(self) -> None:
         """Test _handle_post_process_prompt with x402 enabled and sufficient funds.
@@ -2742,7 +2732,6 @@ class TestHttpHandlerMethods:
         """
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = True
-        ctx.state.request_queue = []
         ctx.state.trading_type = "balanced"
         ctx.state.selected_protocols = json.dumps(["balancer_pools_search"])
         ctx.state.req_to_callback = {}
@@ -2764,7 +2753,6 @@ class TestHttpHandlerMethods:
         """Test _handle_post_process_prompt when selected_protocols is None."""
         handler, ctx = _make_http_handler()
         ctx.params.use_x402 = False
-        ctx.state.request_queue = []
         ctx.state.trading_type = None
         ctx.state.selected_protocols = None
         ctx.state.req_to_callback = {}
@@ -2928,7 +2916,6 @@ class TestHttpHandlerMethods:
         """Test _delayed_write_kv_extended with one request in queue."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
         ctx.state.latest_chat_write_request_id = "req1"
@@ -2947,7 +2934,6 @@ class TestHttpHandlerMethods:
         """An older write steps aside once a newer request has scheduled its own."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1", "req2"]
         ctx.state.latest_chat_write_request_id = "req2"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
@@ -2955,7 +2941,6 @@ class TestHttpHandlerMethods:
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._delayed_write_kv_extended(data, "req1")
         handler._write_kv.assert_not_called()
-        assert ctx.state.request_queue == ["req2"]
 
     def test_delayed_write_waits_for_an_in_flight_write(self) -> None:
         """A write that overlaps another one is serialised, not dropped."""
@@ -2966,7 +2951,6 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
-        ctx.state.request_queue = ["req1"]
         ctx.state.latest_chat_write_request_id = "req1"
         ctx.params.default_acceptance_time = 0
         handlers_mod._KV_WRITE_LOCK.acquire()
@@ -2980,7 +2964,6 @@ class TestHttpHandlerMethods:
         finally:
             releaser.join()
         handler._write_kv.assert_called_once()
-        assert ctx.state.request_queue == []
 
     def test_delayed_write_kv_extended_releases_lock_after_exception(
         self,
@@ -2990,7 +2973,6 @@ class TestHttpHandlerMethods:
 
         handler, ctx = _make_http_handler()
         handler._write_kv = MagicMock(side_effect=RuntimeError("boom"))
-        ctx.state.request_queue = ["req1"]
         ctx.state.latest_chat_write_request_id = "req1"
         ctx.params.default_acceptance_time = 0
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
@@ -3004,7 +2986,6 @@ class TestHttpHandlerMethods:
         finally:
             if acquired:
                 handlers_mod._KV_WRITE_LOCK.release()
-        assert ctx.state.request_queue == [], "queue slot leaked across exception"
 
     def test_handle_get_withdrawal_amount_success(self) -> None:
         """Test _handle_get_withdrawal_amount with valid portfolio data."""
@@ -4687,7 +4668,6 @@ class TestHttpHandlerMethods:
         """Test _delayed_write_kv_extended with only trading_type and composite_score."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
         ctx.state.latest_chat_write_request_id = "req1"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
@@ -4700,7 +4680,6 @@ class TestHttpHandlerMethods:
         """Test _delayed_write_kv_extended with only composite_score."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
         ctx.state.latest_chat_write_request_id = "req1"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
@@ -4713,7 +4692,6 @@ class TestHttpHandlerMethods:
         """Test _delayed_write_kv_extended with no matching keys."""
         handler, ctx = _make_http_handler()
         ctx.params.default_acceptance_time = 0
-        ctx.state.request_queue = ["req1"]
         ctx.state.latest_chat_write_request_id = "req1"
         handler._write_kv = MagicMock()
         handler._update_agent_performance_chat = MagicMock()
@@ -6343,7 +6321,6 @@ class TestPaidCallUnavailableMessage:
     @staticmethod
     def _refused_prompt(handler: Any, state: Any) -> str:
         handler.context.params.use_x402 = True
-        handler.context.state.request_queue = []
         handler._send_ok_response = MagicMock()
         dialogue = MagicMock()
         dialogue.dialogue_label.dialogue_reference = ("req1", "")
@@ -6351,9 +6328,7 @@ class TestPaidCallUnavailableMessage:
             type(handler), "shared_state", new_callable=PropertyMock, return_value=state
         ):
             handler._handle_post_process_prompt(MagicMock(), dialogue)
-        # A refused prompt must give its queue slot back, or every later
         # strategy write from chat is dropped until the agent restarts.
-        assert handler.context.state.request_queue == []
         return handler._send_ok_response.call_args[0][2]["error"]
 
     def test_before_any_check_has_reported_it_is_initializing(self) -> None:
@@ -6583,7 +6558,6 @@ def _chat_handler(trading_type: str = "balanced", protocols: Any = None) -> Any:
     handler._submit_background = MagicMock()
     handler._write_kv = MagicMock()
     handler._update_agent_performance_chat = MagicMock()
-    ctx.state.request_queue = []
     ctx.state.latest_chat_write_request_id = None
     ctx.state.trading_type = trading_type
     ctx.state.selected_protocols = json.dumps(protocols or ["balancer_pools_search"])
@@ -6628,8 +6602,8 @@ def _reply(
     return handler._send_ok_response.call_args[0][2]
 
 
-class TestChatRequestQueue:
-    """Every chat request gives its queue slot back, so later writes are never blocked."""
+class TestChatWriteOrdering:
+    """Only the latest scheduled write lands, and nothing else blocks it."""
 
     @pytest.mark.parametrize(
         "payload",
@@ -6643,17 +6617,15 @@ class TestChatRequestQueue:
             ),
         ],
     )
-    def test_llm_failure_releases_the_slot(self, payload: str) -> None:
-        """A failed LLM round trip ends the request and frees its slot."""
+    def test_llm_failure_schedules_no_write(self, payload: str) -> None:
+        """A failed LLM round trip answers with an error and writes nothing."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["req1"]
         llm_msg = MagicMock()
         llm_msg.payload = payload
         handler._handle_llm_response(
             llm_msg, MagicMock(), MagicMock(), _http_dialogue("req1")
         )
         assert "error" in handler._send_ok_response.call_args[0][2]
-        assert ctx.state.request_queue == []
         handler._submit_background.assert_not_called()
 
     @pytest.mark.parametrize(
@@ -6664,10 +6636,9 @@ class TestChatRequestQueue:
             "_send_ok_response",
         ],
     )
-    def test_exception_after_parsing_releases_the_slot(self, failing: str) -> None:
-        """A failure anywhere before the hand-off frees the slot and surfaces."""
+    def test_exception_after_parsing_schedules_no_write(self, failing: str) -> None:
+        """A failure before the hand-off surfaces and schedules nothing."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["req1"]
         boom = MagicMock(side_effect=RuntimeError("boom"))
         if failing == "validate_and_fix_protocols":
             patcher: Any = patch(
@@ -6687,11 +6658,10 @@ class TestChatRequestQueue:
                 MagicMock(),
                 _http_dialogue("req1"),
             )
-        assert ctx.state.request_queue == []
         handler._submit_background.assert_not_called()
 
-    def test_prompt_path_exception_releases_the_slot(self) -> None:
-        """An unexpected error while sending to the LLM does not keep the slot."""
+    def test_prompt_path_exception_propagates(self) -> None:
+        """An unexpected error while sending to the LLM is not swallowed."""
         handler, ctx = _chat_handler()
         ctx.params.use_x402 = False
         ctx.srr_dialogues.create.side_effect = RuntimeError("connection down")
@@ -6699,24 +6669,20 @@ class TestChatRequestQueue:
         msg.body = json.dumps({"prompt": "go risky"}).encode()
         with pytest.raises(RuntimeError):
             handler._handle_post_process_prompt(msg, _http_dialogue("req1"))
-        assert ctx.state.request_queue == []
 
-    def test_superseded_request_skips_its_write_and_releases_its_slot(self) -> None:
+    def test_superseded_request_skips_its_write(self) -> None:
         """Only the newest write in a burst lands; older ones step aside."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["old", "new"]
         ctx.state.latest_chat_write_request_id = "new"
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._delayed_write_kv_extended(
                 {"trading_type": "risky"}, request_id="old"
             )
         handler._write_kv.assert_not_called()
-        assert ctx.state.request_queue == ["new"]
 
     def test_latest_request_writes(self) -> None:
         """The newest write lands even while an older slot is still held."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["old", "new"]
         ctx.state.latest_chat_write_request_id = "new"
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._delayed_write_kv_extended(
@@ -6724,12 +6690,10 @@ class TestChatRequestQueue:
             )
         handler._write_kv.assert_called_once()
         assert ctx.state.trading_type == "risky"
-        assert ctx.state.request_queue == ["old"]
 
     def test_update_after_an_overlapping_burst_is_written(self) -> None:
         """Two overlapping messages must not block the next strategy change."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["a", "b"]
         ctx.state.latest_chat_write_request_id = "b"
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._delayed_write_kv_extended(
@@ -6738,29 +6702,16 @@ class TestChatRequestQueue:
             handler._delayed_write_kv_extended(
                 {"trading_type": "balanced"}, request_id="b"
             )
-            assert ctx.state.request_queue == []
-            ctx.state.request_queue.append("c")
             ctx.state.latest_chat_write_request_id = "c"
             handler._delayed_write_kv_extended(
                 {"trading_type": "risky"}, request_id="c"
             )
         assert handler._write_kv.call_count == 2
         assert ctx.state.trading_type == "risky"
-        assert ctx.state.request_queue == []
-
-    def test_release_is_idempotent_and_tolerates_no_id(self) -> None:
-        """Releasing twice, or with no id, never raises or removes another slot."""
-        handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["a", "b"]
-        handler._release_request_slot("a")
-        handler._release_request_slot("a")
-        handler._release_request_slot(None)
-        assert ctx.state.request_queue == ["b"]
 
     def test_a_question_after_an_update_does_not_cancel_the_write(self) -> None:
         """A query queued during the acceptance delay leaves the update intact."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["update", "question"]
         ctx.state.latest_chat_write_request_id = "update"
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._delayed_write_kv_extended(
@@ -6768,26 +6719,46 @@ class TestChatRequestQueue:
             )
         handler._write_kv.assert_called_once()
         assert ctx.state.trading_type == "risky"
-        assert ctx.state.request_queue == ["question"]
 
     def test_update_followed_by_a_question_end_to_end(self) -> None:
         """The reply's confirmed update survives a follow-up question."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["u1"]
         body = _reply(
             handler, _llm_reply(trading_type="risky", max_loss_percentage=20.0), "u1"
         )
         assert body["updated"] is True
         assert ctx.state.latest_chat_write_request_id == "u1"
         fn, data, request_id = handler._submit_background.call_args[0]
-        ctx.state.request_queue.append("q1")
         _reply(handler, _llm_reply(intent="query", reasoning="risky"), "q1")
         assert ctx.state.latest_chat_write_request_id == "u1"
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             fn(data, request_id)
         handler._write_kv.assert_called_once()
         assert ctx.state.trading_type == "risky"
-        assert ctx.state.request_queue == []
+
+    def test_second_change_within_the_delay_starts_from_the_confirmed_settings(
+        self,
+    ) -> None:
+        """A follow-up change sees the first change even before its write lands."""
+        handler, ctx = _chat_handler()
+        first = _reply(
+            handler, _llm_reply(trading_type="risky", max_loss_percentage=20.0), "u1"
+        )
+        assert first["updated"] is True
+        assert ctx.state.trading_type == "risky"
+        assert ctx.state.max_loss_percentage == 20.0
+        handler._write_kv.assert_not_called()
+
+        second = _reply(
+            handler, _llm_reply(trading_type="risky", max_loss_percentage=15.0), "u2"
+        )
+        assert second["updated"] is True
+        assert "previous_trading_type" not in second
+        _, data, request_id = handler._submit_background.call_args[0]
+        assert request_id == "u2"
+        assert data["trading_type"] == "risky"
+        assert data["max_loss_percentage"] == "15.0"
+        assert ctx.state.latest_chat_write_request_id == "u2"
 
     def test_write_requires_a_request_id(self) -> None:
         """There is no anonymous write path left."""
@@ -6798,7 +6769,6 @@ class TestChatRequestQueue:
     def test_write_records_the_max_loss_in_state(self) -> None:
         """The stored loss figure is what the next prompt reports as current."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["req1"]
         ctx.state.latest_chat_write_request_id = "req1"
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._delayed_write_kv_extended(
@@ -6815,7 +6785,6 @@ class TestChatIntent:
     def test_query_writes_nothing_and_shows_no_update(self) -> None:
         """Asking about the strategy must not re-save it or render a card."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["req1"]
         body = _reply(
             handler, _llm_reply(intent="query", reasoning="You are balanced.")
         )
@@ -6824,7 +6793,6 @@ class TestChatIntent:
         assert body["selected_protocols"] == []
         assert body["reasoning"] == "You are balanced."
         handler._submit_background.assert_not_called()
-        assert ctx.state.request_queue == []
 
     def test_query_echoing_a_different_config_still_writes_nothing(self) -> None:
         """A query is read-only even if the LLM returns a changed config."""
@@ -6839,7 +6807,6 @@ class TestChatIntent:
     ) -> None:
         """A requested change is persisted and the UI gets the from/to pair."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["req1"]
         body = _reply(
             handler, _llm_reply(trading_type="risky", max_loss_percentage=20.0)
         )
@@ -6851,18 +6818,15 @@ class TestChatIntent:
         assert fn == handler._delayed_write_kv_extended
         assert data["trading_type"] == "risky"
         assert request_id == "req1"
-        assert ctx.state.request_queue == ["req1"]
 
     def test_update_that_changes_nothing_writes_nothing(self) -> None:
         """Setting the strategy to what it already is produces no update."""
         handler, ctx = _chat_handler()
-        ctx.state.request_queue = ["req1"]
         body = _reply(handler, _llm_reply())
         assert body["updated"] is False
         assert "previous_trading_type" not in body
         assert body["selected_protocols"] == []
         handler._submit_background.assert_not_called()
-        assert ctx.state.request_queue == []
 
     def test_loss_only_change_writes_without_a_type_card(self) -> None:
         """A changed loss limit is saved, but no from/to type pair is sent."""
@@ -6888,7 +6852,6 @@ class TestChatIntent:
         """A reply without a full configuration must not store field defaults."""
         handler, ctx = _chat_handler(trading_type="risky")
         ctx.state.max_loss_percentage = 25.0
-        ctx.state.request_queue = ["req1"]
         reply = _llm_reply()
         data = json.loads(json.loads(reply.payload)["response"])
         del data[missing]
@@ -6900,7 +6863,6 @@ class TestChatIntent:
         handler._submit_background.assert_not_called()
         assert ctx.state.trading_type == "risky"
         assert ctx.state.max_loss_percentage == 25.0
-        assert ctx.state.request_queue == []
 
     def test_no_change_update_through_the_real_validator(self) -> None:
         """The stored strategy and the model's protocol name must round-trip as equal."""
@@ -6920,7 +6882,6 @@ class TestChatIntent:
         """With nothing saved yet, the defaults count as the current protocols."""
         handler, ctx = _chat_handler()
         ctx.state.selected_protocols = []
-        ctx.state.request_queue = ["req1"]
         body = _reply(handler, _llm_reply())
         assert body["updated"] is False
         assert body["selected_protocols"] == []

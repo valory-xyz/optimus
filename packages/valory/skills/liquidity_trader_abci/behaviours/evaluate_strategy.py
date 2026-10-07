@@ -77,14 +77,12 @@ from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy impor
 MIN_SWAP_VALUE_USD = 0.5
 
 
-# KV-store keys under which the strategy backoff state and the price cache
-# survive a process restart.
 STRATEGY_BACKOFF_KV_KEY = "strategy_backoff_state"
 STRATEGY_PRICE_CACHE_KV_KEY = "strategy_price_cache"
-# How long a persisted failed-fetch marker stays valid; mirrors the
-# FAILED_FETCH_CACHE_TTL the strategy customs use.
+# These TTLs and the ``il_range_`` / ``coin_id_`` key prefixes must match the
+# FAILED_FETCH_CACHE_TTL / COIN_ID_CACHE_TTL constants and cache keys in the
+# *_pools_search customs, which own the entries this behaviour prunes.
 FAILED_FETCH_CACHE_TTL = 900
-# Contract-address to coin-id mappings are kept across restarts for this long.
 COIN_ID_CACHE_TTL = 7 * 24 * 3600
 
 
@@ -1324,17 +1322,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
 
     def _restore_strategy_state(self) -> Generator[None, None, None]:
-        """Load the persisted backoff state and price cache, once per process.
-
-        The in-memory defaults are safe, so a missing, corrupt or unreadable
-        record is logged and ignored rather than retried.
+        """Load the persisted backoff state and price cache after a restart.
 
         :yield: None
         """
         state = self.shared_state
         if state.strategy_state_restored:
             return
-        state.strategy_state_restored = True
         try:
             result = yield from self._read_kv(
                 keys=(STRATEGY_BACKOFF_KV_KEY, STRATEGY_PRICE_CACHE_KV_KEY)
@@ -1344,6 +1338,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"Strategy state not restored, kv store read failed: {e}"
             )
             return
+        if result is None:
+            self.context.logger.warning(
+                "Strategy state not restored, the kv store did not answer"
+            )
+            return
+        # Persisting is unlocked only by a successful read, so an unanswered
+        # restore never gets overwritten by this process's empty defaults.
+        state.strategy_state_restored = True
         if not result:
             return
 
@@ -1382,13 +1384,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _persist_strategy_state(self) -> Generator[None, None, None]:
         """Write the backoff state and the pruned price cache to the kv store.
 
-        Runs after every strategy evaluation so a restarted process resumes
-        the backoff schedule and reuses paid price lookups instead of paying
-        for them again.
-
         :yield: None
         """
         state = self.shared_state
+        if not state.strategy_state_restored:
+            self.context.logger.warning(
+                "Strategy state not persisted, the stored state was never read"
+            )
+            return
         try:
             pruned = self._prune_price_cache(state.strategy_coingecko_price_cache)
             state.strategy_coingecko_price_cache = pruned
@@ -1410,11 +1413,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning(f"Strategy state not persisted: {e}")
 
     def _prune_price_cache(self, cache: Dict[str, Any]) -> Dict[str, Any]:
-        """Drop expired cache entries and keep only the fields strategies read.
-
-        History entries (``il_range_*``) are reduced to their ``prices`` series,
-        which is the only field the IL-risk calculations consume; this keeps
-        the persisted record small.
+        """Drop expired entries and reduce histories to the ``prices`` series.
 
         :param cache: the strategy price cache, keyed ``<prefix>_<id>_<period>``
         :return: a new dict holding only the live entries

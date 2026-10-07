@@ -917,6 +917,113 @@ class TestGetOpportunitiesForUniswap:
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
     )
+    def test_no_scorable_pool_reports_one_strategy_error(
+        self,
+        mock_fetch: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liquidity: MagicMock,
+    ) -> None:
+        """When every pool lacks an IL score the root cause is reported once."""
+        pools = [
+            {
+                "id": f"0x{i}",
+                "chain": "optimism",
+                "apr": 10,
+                "token0": {"id": "0xt0", "symbol": "TK0"},
+                "token1": {"id": "0xt1", "symbol": "TK1"},
+            }
+            for i in range(2)
+        ]
+        mock_fetch.return_value = pools
+        mock_filter.return_value = pools
+        mock_il.return_value = None
+        mock_sharpe.return_value = 1.5
+        mock_liquidity.return_value = (100, 5000)
+        coin_id_mapping = {"optimism": {"tk0": "tk0-id", "tk1": "tk1-id"}}
+        result = get_opportunities_for_uniswap(
+            ["optimism"],
+            {"optimism": "url"},
+            [],
+            "key",
+            {},
+            coin_id_mapping,
+            None,
+            None,
+        )
+        assert isinstance(result, list)
+        assert len(get_errors()) == 1
+        assert "all 2 pools" in get_errors()[0]
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
+    )
+    def test_a_partly_scored_set_reports_no_strategy_error(
+        self,
+        mock_fetch: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liquidity: MagicMock,
+    ) -> None:
+        """One unscored pool among scored ones is not a strategy failure."""
+        pools = [
+            {
+                "id": f"0x{i}",
+                "chain": "optimism",
+                "apr": 10,
+                "token0": {"id": "0xt0", "symbol": "TK0"},
+                "token1": {"id": "0xt1", "symbol": "TK1"},
+            }
+            for i in range(2)
+        ]
+        mock_fetch.return_value = pools
+        mock_filter.return_value = pools
+        mock_il.side_effect = [None, -0.05]
+        mock_sharpe.return_value = 1.5
+        mock_liquidity.return_value = (100, 5000)
+        coin_id_mapping = {"optimism": {"tk0": "tk0-id", "tk1": "tk1-id"}}
+        result = get_opportunities_for_uniswap(
+            ["optimism"],
+            {"optimism": "url"},
+            [],
+            "key",
+            {},
+            coin_id_mapping,
+            None,
+            None,
+        )
+        assert isinstance(result, list)
+        assert get_errors() == []
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_filtered_pools_for_uniswap"
+    )
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_graphql_data"
+    )
     def test_successful_flow(
         self,
         mock_fetch: MagicMock,

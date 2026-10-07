@@ -2186,6 +2186,133 @@ class TestGetOpportunitiesForBalancer:
     @patch(
         "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
     )
+    def test_no_scorable_pool_reports_one_strategy_error(
+        self,
+        mock_get: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_format: MagicMock,
+        mock_valid: MagicMock,
+    ) -> None:
+        """When every pool lacks an IL score the root cause is reported once."""
+        pools = [
+            {
+                "id": f"pool{i}",
+                "chain": "OPTIMISM",
+                "type": "Weighted",
+                "poolTokens": [
+                    {"address": "0xt0", "symbol": "TK0"},
+                    {"address": "0xt1", "symbol": "TK1"},
+                ],
+            }
+            for i in range(2)
+        ]
+        mock_get.return_value = pools
+        mock_filter.return_value = pools
+        mock_il.return_value = None
+        mock_sharpe.return_value = 1.0
+        mock_liq.return_value = (100, 5000)
+        mock_format.return_value = pools
+        mock_valid.return_value = pools
+        get_opportunities_for_balancer(
+            ["optimism"],
+            "url",
+            [],
+            "key",
+            {"optimism": {}},
+            {"optimism": {"tk0": "a", "tk1": "b"}},
+            None,
+            None,
+        )
+        assert len(get_errors()) == 1
+        assert "all 2 pools" in get_errors()[0]
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
+    def test_a_partly_scored_set_reports_no_strategy_error(
+        self,
+        mock_get: MagicMock,
+        mock_filter: MagicMock,
+        mock_il: MagicMock,
+        mock_sharpe: MagicMock,
+        mock_liq: MagicMock,
+        mock_format: MagicMock,
+        mock_valid: MagicMock,
+    ) -> None:
+        """One unscored pool among scored ones is not a strategy failure."""
+        pools = [
+            {
+                "id": f"pool{i}",
+                "chain": "OPTIMISM",
+                "type": "Weighted",
+                "poolTokens": [
+                    {"address": "0xt0", "symbol": "TK0"},
+                    {"address": "0xt1", "symbol": "TK1"},
+                ],
+            }
+            for i in range(2)
+        ]
+        mock_get.return_value = pools
+        mock_filter.return_value = pools
+        mock_il.side_effect = [None, -0.05]
+        mock_sharpe.return_value = 1.0
+        mock_liq.return_value = (100, 5000)
+        mock_format.return_value = pools
+        mock_valid.return_value = pools
+        get_opportunities_for_balancer(
+            ["optimism"],
+            "url",
+            [],
+            "key",
+            {"optimism": {}},
+            {"optimism": {"tk0": "a", "tk1": "b"}},
+            None,
+            None,
+        )
+        assert get_errors() == []
+
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.filter_valid_investment_pools"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.format_pool_data"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.analyze_pool_liquidity"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pool_sharpe_ratio"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.calculate_il_risk_score_multi"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_filtered_pools_for_balancer"
+    )
+    @patch(
+        "packages.valory.customs.balancer_pools_search.balancer_pools_search.get_balancer_pools"
+    )
     def test_successful(
         self,
         mock_get: MagicMock,
@@ -2762,13 +2889,28 @@ class TestRun:
         mock_liq: MagicMock,
         mock_sleep: MagicMock,
     ) -> None:
-        """One failed IL history fetch leaves the pool ranked, without an IL score."""
+        """One pool's failed IL history leaves it ranked without a score; the rest proceed."""
         mock_pro.return_value = False
-        mock_query.return_value = {"poolGetPools": [dict(RUN_POOL)]}
+        other_pool = {
+            **RUN_POOL,
+            "id": "pool2",
+            "address": "0x" + "cd" * 20,
+            "poolTokens": [
+                {"address": "0xt2", "symbol": "TK2"},
+                {"address": "0xt3", "symbol": "TK3"},
+            ],
+        }
+        mock_query.return_value = {"poolGetPools": [dict(RUN_POOL), other_pool]}
         mock_sharpe.return_value = 1.0
         mock_liq.return_value = (100, 5000)
         inst = MagicMock()
-        inst.get_coin_market_chart_range_by_id.side_effect = Exception("rate limit")
+
+        def _history(id, **_):  # pylint: disable=redefined-builtin
+            if id == "id0":
+                raise Exception("rate limit")
+            return _price_history(100.0, 0.5)
+
+        inst.get_coin_market_chart_range_by_id.side_effect = _history
         inst.get_price.side_effect = lambda ids, **_: {ids: {"usd": 10.0}}
         mock_cg.return_value = inst
         cache: Dict[str, Any] = {}
@@ -2778,16 +2920,22 @@ class TestRun:
             graphql_endpoint="url",
             current_positions=[],
             whitelisted_assets={"optimism": {}},
-            coin_id_mapping={"optimism": {"tk0": "id0", "tk1": "id1"}},
+            coin_id_mapping={
+                "optimism": {"tk0": "id0", "tk1": "id1", "tk2": "id2", "tk3": "id3"}
+            },
             coingecko_api_key="key",
             x402_session=None,
             x402_proxy=None,
             price_cache=cache,
         )
         assert result["error"] == []
-        assert len(result["result"]) == 1
-        assert result["result"][0]["il_risk_score"] is None
-        assert result["result"][0]["max_investment_usd"] > 0
+        # The scored pool is the one that comes out on top; the unscored one
+        # neither aborts the strategy nor outranks it.
+        returned = {p["pool_id"]: p for p in result["result"]}
+        assert "pool2" in returned, result
+        assert isinstance(returned["pool2"]["il_risk_score"], float)
+        assert returned["pool2"]["max_investment_usd"] > 0
+        assert all(p["il_risk_score"] is not None or p["pool_id"] == "pool1" for p in result["result"])
         assert is_recent_failure("id0", IL_TIME_PERIOD, cache) is True
 
 

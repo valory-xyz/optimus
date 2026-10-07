@@ -6914,6 +6914,7 @@ class TestStrategyStatePersistence:
     def test_backoff_state_survives_restart(self):
         """A restarted process must not run the paid search while in backoff."""
         first = self._fresh()
+        first.shared_state.strategy_state_restored = True
         writes, write_kv = self._capture_writes()
         first._write_kv = write_kv
         first._update_strategy_backoff([])
@@ -6933,6 +6934,7 @@ class TestStrategyStatePersistence:
     def test_price_cache_survives_restart(self):
         """Price history paid for before a restart is reused after it."""
         first = self._fresh()
+        first.shared_state.strategy_state_restored = True
         first.shared_state.strategy_coingecko_price_cache = {
             "il_range_eth_90": {
                 "data": {"prices": [[1, 2.0]]},
@@ -6955,8 +6957,8 @@ class TestStrategyStatePersistence:
             }
         }
 
-    def test_restore_runs_once_per_process(self):
-        """The kv store is read once; later cycles keep the in-memory state."""
+    def test_restore_runs_once_after_a_successful_read(self):
+        """Once the store has answered, later cycles keep the in-memory state."""
         b = self._fresh()
         reads = []
 
@@ -6970,6 +6972,37 @@ class TestStrategyStatePersistence:
         _drive(b._restore_strategy_state())
         assert len(reads) == 1
         assert b.shared_state.strategy_state_restored is True
+
+    def test_restore_retries_until_the_store_answers(self):
+        """An unanswered read is tried again next cycle, not written off."""
+        b = self._fresh()
+        b._read_kv = MagicMock(side_effect=[_gen_return(None)(), _gen_return({})()])
+        _drive(b._restore_strategy_state())
+        assert b.shared_state.strategy_state_restored is False
+        _drive(b._restore_strategy_state())
+        assert b.shared_state.strategy_state_restored is True
+        assert b._read_kv.call_count == 2
+
+    @pytest.mark.parametrize("failure", ["unanswered", "raises"])
+    def test_persist_is_skipped_until_a_restore_succeeded(self, failure):
+        """A process that could not read the stored state must not overwrite it."""
+        b = self._fresh()
+        if failure == "unanswered":
+            b._read_kv = _gen_return(None)
+        else:
+
+            def _read_kv(keys):
+                yield
+                raise RuntimeError("kv down")
+
+            b._read_kv = _read_kv
+        _drive(b._restore_strategy_state())
+        writes, write_kv = self._capture_writes()
+        b._write_kv = write_kv
+        b._update_strategy_backoff([])
+        _drive(b._persist_strategy_state())
+        assert writes == {}
+        assert b.shared_state.strategy_state_restored is False
 
     def test_restore_reads_both_keys(self):
         """Both records are requested in a single read."""
@@ -7020,6 +7053,8 @@ class TestStrategyStatePersistence:
         assert b.shared_state.consecutive_no_action_count == 0
         assert b.shared_state.last_strategy_evaluation_time == 0.0
         assert b.shared_state.strategy_coingecko_price_cache == {}
+        # The store answered, so this process may persist its own state.
+        assert b.shared_state.strategy_state_restored is True
 
     def test_restore_tolerates_kv_read_failure(self):
         """An unreachable kv store does not stop the round."""
@@ -7032,11 +7067,12 @@ class TestStrategyStatePersistence:
         b._read_kv = _read_kv
         _drive(b._restore_strategy_state())
         assert b.shared_state.consecutive_no_action_count == 0
-        assert b.shared_state.strategy_state_restored is True
+        assert b.shared_state.strategy_state_restored is False
 
     def test_persist_tolerates_kv_write_failure(self):
         """A failed or raising write is logged, never raised."""
         b = self._fresh()
+        b.shared_state.strategy_state_restored = True
         b._write_kv = _gen_return(False)
         _drive(b._persist_strategy_state())
 
@@ -7052,6 +7088,7 @@ class TestStrategyStatePersistence:
         """Only live entries are written, and histories keep just their prices."""
         now = time.time()
         b = self._fresh()
+        b.shared_state.strategy_state_restored = True
         b.shared_state.strategy_coingecko_price_cache = {
             "il_range_fresh_90": {
                 "data": {
@@ -7105,6 +7142,7 @@ class TestStrategyStatePersistence:
     def test_persist_writes_backoff_counters(self):
         """The written backoff record carries the live counters."""
         b = self._fresh()
+        b.shared_state.strategy_state_restored = True
         b.shared_state.consecutive_no_action_count = 3
         b.shared_state.last_strategy_evaluation_time = 123.5
         writes, write_kv = self._capture_writes()

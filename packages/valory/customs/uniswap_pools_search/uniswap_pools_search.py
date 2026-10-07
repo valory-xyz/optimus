@@ -127,6 +127,8 @@ def set_cached_price(
 
 
 # A fetch that failed is remembered this long so it is not re-paid every cycle.
+# liquidity_trader_abci/behaviours/evaluate_strategy.py prunes these entries
+# with the same TTL; keep the two in step.
 FAILED_FETCH_CACHE_TTL: int = 900
 
 
@@ -136,7 +138,7 @@ def set_failed_fetch(
     cache: Optional[Dict[str, Any]],
     prefix: str = "il_range",
 ) -> None:
-    """Record a failed fetch; the next successful set_cached_price overwrites it."""
+    """Record a failed fetch; a later successful cache write replaces it."""
     if cache is None:
         return
     cache[f"{prefix}_{token_id}_{time_period}"] = {
@@ -743,6 +745,15 @@ def format_pool_data(pool: Any) -> Dict[str, Any]:
     }
 
 
+def _report_missing_il_scores(pools: List[Dict[str, Any]]) -> None:
+    """Record one strategy error when no pool could be scored for IL risk."""
+    if pools and all(pool.get("il_risk_score") is None for pool in pools):
+        get_errors().append(
+            f"IL risk score unavailable for all {len(pools)} pools: "
+            f"price history could not be fetched"
+        )
+
+
 def get_opportunities_for_uniswap(
     chains: Any,
     graphql_endpoints: Any,
@@ -840,6 +851,8 @@ def get_opportunities_for_uniswap(
         pool["depth_score"] = depth_score
         pool["max_position_size"] = max_position_size
         pool["type"] = LP
+
+    _report_missing_il_scores(filtered_pools)
 
     formatted_results = [format_pool_data(pool) for pool in filtered_pools]
     logger.info(f"Returning {len(formatted_results)} formatted Uniswap opportunities")

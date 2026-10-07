@@ -77,8 +77,8 @@ CHAIN_NAMES = {
 # ``all(limit, offset, filter)``; the ones listed in
 # velodrome-finance/sugar/deployments/<chain>.env do.
 SUGAR_CONTRACT_ADDRESSES = {
-    MODE_CHAIN_ID: "0x1A3C63c8D442948085E47f88CB377183E23EA01f",  # Mode LpSugar
-    OPTIMISM_CHAIN_ID: "0x347512180804A8B40AA7525AE932a31198F074aA",  # Optimism LpSugar
+    MODE_CHAIN_ID: "0x1A3C63c8D442948085E47f88CB377183E23EA01f",
+    OPTIMISM_CHAIN_ID: "0x347512180804A8B40AA7525AE932a31198F074aA",
     BASE_CHAIN_ID: "0x69dD9db6d8f8E7d83887A704f447b1a584b599A1",  # Base LpSugar (V3)
 }
 
@@ -351,6 +351,8 @@ def set_cached_value(
 
 
 # A fetch that failed is remembered this long so it is not re-paid every cycle.
+# liquidity_trader_abci/behaviours/evaluate_strategy.py prunes these entries
+# with the same TTL; keep the two in step.
 FAILED_FETCH_CACHE_TTL: int = 900
 
 
@@ -360,7 +362,7 @@ def set_failed_fetch(
     cache: Optional[Dict[str, Any]],
     prefix: str = "il_range",
 ) -> None:
-    """Record a failed fetch; the next successful set_cached_price overwrites it."""
+    """Record a failed fetch; a later successful cache write replaces it."""
     if cache is None:
         return
     cache[f"{prefix}_{token_id}_{time_period}"] = {
@@ -1207,10 +1209,7 @@ SUGAR_BATCH_RETRY_DELAY_SECONDS: float = 1.0
 
 
 def _fetch_sugar_batch(contract_instance: Any, limit: int, offset: int) -> Any:
-    """Fetch one ``all(limit, offset, 0)`` batch, retrying transient RPC errors.
-
-    Raises the last error when every attempt fails.
-    """
+    """Fetch one Sugar batch, retrying transient RPC errors before raising."""
     attempt = 0
     while True:
         attempt += 1
@@ -1347,9 +1346,6 @@ def get_velodrome_pools_via_sugar(
                     logger.error(error_msg)
                     get_errors().append(error_msg)
                     return {"error": error_msg}
-                # Later batches may hit RPC rate limits on chains with tens of
-                # thousands of pools; the pools already fetched are still a
-                # usable, if partial, view of the market.
                 logger.warning(
                     f"{error_msg}; continuing with the {len(all_pools)} pools "
                     f"fetched so far"

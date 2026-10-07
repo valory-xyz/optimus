@@ -2990,13 +2990,102 @@ class TestStoreReadMethods:
             b.read_portfolio_data()
             mock_read.assert_called_once()
 
-    def test_store_agent_performance(self) -> None:
-        """Test store agent performance."""
-        b = _make_behaviour()
-        b.agent_performance = {"ts": 1}
-        with patch.object(b, "_store_data") as mock_store:
+    def test_store_agent_performance_keeps_other_writers_keys(self) -> None:
+        """Only metrics and timestamp overwrite; the chat and goal keys survive."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "perf.json")
+            with open(path, "w") as f:
+                json.dump(
+                    {
+                        "metrics": [],
+                        "agent_behavior": "fresh chat",
+                        "activity_goal": {"progress": 3},
+                    },
+                    f,
+                )
+            b = _make_behaviour(agent_performance_filepath=path)
+            b.agent_performance = {
+                "timestamp": 7,
+                "metrics": [{"name": "x"}],
+                "agent_behavior": "stale chat",
+                "activity_goal": {"progress": 1},
+            }
             b.store_agent_performance()
-            mock_store.assert_called_once()
+            with open(path) as f:
+                assert json.load(f) == {
+                    "timestamp": 7,
+                    "metrics": [{"name": "x"}],
+                    "agent_behavior": "fresh chat",
+                    "activity_goal": {"progress": 3},
+                }
+
+    def test_store_agent_performance_fills_the_initial_shape(self) -> None:
+        """A missing file gets the full initial shape."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "perf.json")
+            b = _make_behaviour(agent_performance_filepath=path)
+            b.initialize_agent_performance()
+            b.store_agent_performance()
+            with open(path) as f:
+                assert json.load(f) == {
+                    "timestamp": None,
+                    "metrics": [],
+                    "agent_behavior": None,
+                }
+
+    def test_store_agent_performance_logs_write_errors(self) -> None:
+        """A failed write is logged, not raised into the round."""
+        b = _make_behaviour(
+            agent_performance_filepath="/nonexistent_dir_xyz/perf.json"
+        )
+        b.agent_performance = {"timestamp": 1, "metrics": []}
+        b.store_agent_performance()
+        b.context.logger.error.assert_called_once()
+
+    def test_read_activity_goal_state_parses_kv_strings(self) -> None:
+        """Stored strings parse to ints; absent and malformed keys read as None."""
+        b = _make_behaviour()
+        b._read_kv = _make_gen(  # type: ignore[assignment,method-assign]
+            {
+                "activity_goal_target": "20",
+                "activity_goal_progress": "3",
+                "activity_goal_period_start": "1000",
+                "activity_goal_last_met_at": None,
+                "activity_goal_last_counted_period": "oops",
+            }
+        )
+        assert _exhaust(b._read_activity_goal_state()) == {
+            "activity_goal_target": 20,
+            "activity_goal_progress": 3,
+            "activity_goal_period_start": 1000,
+            "activity_goal_last_met_at": None,
+            "activity_goal_last_counted_period": None,
+        }
+
+    def test_read_activity_goal_state_kv_failure(self) -> None:
+        """An unreachable KV store is reported as None, not as an empty state."""
+        b = _make_behaviour()
+        b._read_kv = _make_gen(None)  # type: ignore[assignment,method-assign]
+        assert _exhaust(b._read_activity_goal_state()) is None
+
+    def test_write_activity_goal_state_skips_absent_values(self) -> None:
+        """Values are stored as strings and ``None`` keys are left alone."""
+        b = _make_behaviour()
+        written = {}
+
+        def fake_write(data: Any) -> Generator[Any, Any, bool]:
+            written.update(data)
+            yield
+            return False
+
+        b._write_kv = fake_write  # type: ignore[assignment,method-assign]
+        result = _exhaust(
+            b._write_activity_goal_state(
+                {"activity_goal_progress": 4, "activity_goal_last_met_at": None}
+            )
+        )
+        assert result is False
+        assert written == {"activity_goal_progress": "4"}
 
     def test_store_gas_costs(self) -> None:
         """Test store gas costs."""

@@ -446,6 +446,7 @@ class KvStoreHandler(AbstractResponseHandler):
         if kv_store_msg.performative in [
             KvStoreMessage.Performative.SUCCESS,
             KvStoreMessage.Performative.READ_RESPONSE,
+            KvStoreMessage.Performative.ERROR,
         ]:
             nonce = kv_store_msg.dialogue_reference[0]
             callback, kwargs = self.context.state.req_to_callback.pop(nonce, (None, {}))
@@ -2745,12 +2746,13 @@ class HttpHandler(BaseHttpHandler):
     def _current_activity_goal(self) -> Tuple[int, int]:
         """The rounds goal in effect and the rounds counted toward it this epoch.
 
-        Progress comes from the block the FSM last published; a goal set from
-        the chat but not yet written wins over the block's.
-
         :return: the goal and the progress.
         """
-        block = read_activity_goal_block(self._agent_performance_filepath)
+        try:
+            block = read_activity_goal_block(self._agent_performance_filepath)
+        except OSError as e:
+            self.context.logger.error(f"Failed to read the activity goal: {e}")
+            block = None
         target = self.context.state.activity_goal_target
         if target is None:
             target = (
@@ -3076,9 +3078,9 @@ class HttpHandler(BaseHttpHandler):
             chain_info = ", ".join(self.params.target_investment_chains)
             reasoning += f"<br><br><strong>Note:</strong> The following protocols were filtered out as they are not available on the selected chains ({chain_info}): {', '.join(filtered_protocols)}. Only protocols compatible with your selected chains are included."
 
-        current_goal, goal_progress = self._current_activity_goal()
         activity_goal: Optional[int] = None
         if requested_goal is not None:
+            current_goal, goal_progress = self._current_activity_goal()
             if is_non_negative_int(requested_goal):
                 activity_goal = requested_goal
                 reasoning += f"<br><br><strong>Note:</strong> Your daily goal is now {activity_goal} rounds ({goal_progress} done this epoch)."
@@ -3255,21 +3257,64 @@ class HttpHandler(BaseHttpHandler):
             return
 
         with _KV_WRITE_LOCK:
-            self._write_kv({KV_ACTIVITY_GOAL_TARGET: str(target)})
-            # Pearl sees the new goal at once; the next staking check rebuilds
-            # the block from the KV store.
-            retarget_activity_goal(
+            self._write_kv(
+                {KV_ACTIVITY_GOAL_TARGET: str(target)},
+                self._handle_activity_goal_write_response,
+                {"target": target, "request_id": request_id},
+            )
+
+    def _handle_activity_goal_write_response(
+        self,
+        kv_store_response_message: KvStoreMessage,
+        dialogue: Dialogue,
+        target: int,
+        request_id: str,
+    ) -> None:
+        """Show a stored goal to Pearl, and drop the pending one either way.
+
+        :param kv_store_response_message: the KvStoreMessage response
+        :param dialogue: the KvStoreDialogue
+        :param target: the goal that was written.
+        :param request_id: the chat request this write belongs to
+        """
+        state = self.context.state
+        is_latest = state.latest_goal_write_request_id == request_id
+        if (
+            kv_store_response_message.performative
+            != KvStoreMessage.Performative.SUCCESS
+        ):
+            self.context.logger.error(
+                f"Failed to store the activity goal of chat request {request_id}."
+            )
+            if is_latest:
+                state.activity_goal_target = None
+            return
+
+        try:
+            block = retarget_activity_goal(
                 self._agent_performance_filepath,
                 target,
                 int(datetime.now(timezone.utc).timestamp()),
             )
+        except OSError as e:
+            self.context.logger.error(f"Failed to publish the activity goal: {e}")
+            block = None
+        # Without a block on disk, the pending goal is all the chat can show.
+        if is_latest and block is not None:
+            state.activity_goal_target = None
 
-    def _write_kv(self, data: Dict[str, str]) -> None:
+    def _write_kv(
+        self,
+        data: Dict[str, str],
+        callback: Optional[Callable] = None,
+        callback_kwargs: Optional[Dict] = None,
+    ) -> None:
         """
         Create or update data in the KV store.
 
         :param data: key-value data to store
-        :return: success flag
+        :param callback: handles the response; defaults to logging it
+        :param callback_kwargs: optional kwargs for the callback
         """
         kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
         kv_store_message, srr_dialogue = kv_store_dialogues.create(
@@ -3280,7 +3325,10 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info(f"Writing to KV store... {kv_store_message}")
         kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
         self._send_message(
-            kv_store_message, kv_store_dialogue, self._handle_kv_store_response
+            kv_store_message,
+            kv_store_dialogue,
+            callback or self._handle_kv_store_response,
+            callback_kwargs,
         )
 
     def _handle_kv_store_response(

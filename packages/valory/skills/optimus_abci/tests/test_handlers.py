@@ -34,6 +34,7 @@ from web3 import Web3
 from web3.exceptions import BadFunctionCallOutput, ContractLogicError
 
 import packages.valory.skills.optimus_abci.handlers as handlers_module
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
 from packages.valory.skills.optimus_abci.handlers import (
     BASIUS_AGENT_PROFILE_PATH,
@@ -276,12 +277,33 @@ class TestKvStoreHandler:
         mock_context = MagicMock()
         object.__setattr__(handler, "_context", mock_context)
 
+        mock_context.state.req_to_callback = {}
+
         msg = MagicMock()
         msg.performative = KvStoreMessage.Performative.ERROR
+        msg.dialogue_reference = ("nonce_missing", "")
 
         with patch.object(KvStoreHandler.__bases__[0], "handle") as mock_super_handle:
             handler.handle(msg)
             mock_super_handle.assert_called_once()
+
+    def test_handle_error_with_callback(self) -> None:
+        """An ERROR reaches the handler callback that asked for the write."""
+        from packages.valory.protocols.kv_store.message import KvStoreMessage
+
+        handler = KvStoreHandler.__new__(KvStoreHandler)
+        mock_context = MagicMock()
+        object.__setattr__(handler, "_context", mock_context)
+
+        callback = MagicMock()
+        mock_context.state.req_to_callback = {"nonce3": (callback, {})}
+
+        msg = MagicMock()
+        msg.performative = KvStoreMessage.Performative.ERROR
+        msg.dialogue_reference = ("nonce3", "")
+
+        handler.handle(msg)
+        callback.assert_called_once()
 
 
 class TestSrrHandler:
@@ -7029,20 +7051,113 @@ class TestActivityGoalChat:
         assert ctx.state.latest_goal_write_request_id == "req1"
         assert ctx.state.latest_chat_write_request_id == "req1"
 
-    def test_lowering_the_goal_to_progress_meets_it(self, tmp_path: Path) -> None:
-        """The write stores the goal and Pearl sees it met at once."""
+    def test_the_goal_write_reports_back(self) -> None:
+        """The goal is stored with a callback that publishes it on success."""
         handler, ctx = _chat_handler()
-        path = self._with_block(ctx, tmp_path, _goal_block(target=10, progress=4))
         ctx.state.latest_goal_write_request_id = "req1"
         with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
             handler._delayed_write_activity_goal(4, "req1")
-        handler._write_kv.assert_called_once_with({"activity_goal_target": "4"})
+        handler._write_kv.assert_called_once_with(
+            {"activity_goal_target": "4"},
+            handler._handle_activity_goal_write_response,
+            {"target": 4, "request_id": "req1"},
+        )
+
+    @staticmethod
+    def _goal_written(handler: Any, ok: bool, target: int, request_id: str) -> None:
+        response = MagicMock()
+        response.performative = (
+            KvStoreMessage.Performative.SUCCESS
+            if ok
+            else KvStoreMessage.Performative.ERROR
+        )
+        handler._handle_activity_goal_write_response(
+            response, MagicMock(), target, request_id
+        )
+
+    def test_lowering_the_goal_to_progress_meets_it(self, tmp_path: Path) -> None:
+        """Once stored, Pearl sees the goal met and the block takes over."""
+        handler, ctx = _chat_handler()
+        path = self._with_block(ctx, tmp_path, _goal_block(target=10, progress=4))
+        ctx.state.activity_goal_target = 4
+        ctx.state.latest_goal_write_request_id = "req1"
+        self._goal_written(handler, True, 4, "req1")
         data = json.loads(path.read_text())
         assert data["metrics"] == ["m"]
         assert data["activity_goal"]["target"] == 4
         assert data["activity_goal"]["progress"] == 4
         assert data["activity_goal"]["is_met"] is True
         assert data["activity_goal"]["last_met_at"] is not None
+        assert ctx.state.activity_goal_target is None
+
+    def test_a_failed_goal_write_keeps_the_old_goal_everywhere(
+        self, tmp_path: Path
+    ) -> None:
+        """Pearl and the chat stay on the goal the FSM still uses."""
+        handler, ctx = _chat_handler()
+        path = self._with_block(ctx, tmp_path, _goal_block(target=10))
+        ctx.state.activity_goal_target = 4
+        ctx.state.latest_goal_write_request_id = "req1"
+        self._goal_written(handler, False, 4, "req1")
+        ctx.logger.error.assert_called_once()
+        assert json.loads(path.read_text())["activity_goal"] == _goal_block()
+        assert ctx.state.activity_goal_target is None
+        assert handler._current_activity_goal() == (10, 4)
+
+    def test_an_older_write_leaves_a_newer_pending_goal(self, tmp_path: Path) -> None:
+        """A goal still waiting to be written keeps showing in the chat."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block())
+        ctx.state.activity_goal_target = 8
+        ctx.state.latest_goal_write_request_id = "newer"
+        self._goal_written(handler, True, 4, "older")
+        self._goal_written(handler, False, 4, "older")
+        assert ctx.state.activity_goal_target == 8
+
+    def test_a_stored_goal_without_a_block_stays_pending(self, tmp_path: Path) -> None:
+        """Before the FSM publishes a block, the chat keeps showing the new goal."""
+        handler, ctx = _chat_handler()
+        ctx.params.store_path = tmp_path
+        ctx.state.activity_goal_target = 4
+        ctx.state.latest_goal_write_request_id = "req1"
+        self._goal_written(handler, True, 4, "req1")
+        assert ctx.state.activity_goal_target == 4
+
+    def test_an_unreadable_file_is_logged(self, tmp_path: Path) -> None:
+        """A read error neither crashes the chat nor rewrites the file."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block(target=12))
+        ctx.state.activity_goal_target = 4
+        ctx.state.latest_goal_write_request_id = "req1"
+        with patch("builtins.open", side_effect=PermissionError("denied")):
+            self._goal_written(handler, True, 4, "req1")
+            assert handler._current_activity_goal() == (4, 0)
+        assert ctx.logger.error.call_count == 2
+
+    @pytest.mark.parametrize("goal_first", [True, False])
+    def test_a_goal_and_a_strategy_in_separate_messages_both_land(
+        self, goal_first: bool
+    ) -> None:
+        """Neither kind of pending write cancels the other."""
+        handler, ctx = _chat_handler()
+        goal_message = _llm_reply(intent="query", activity_goal=20)
+        strategy_message = _llm_reply(trading_type="risky")
+        messages = (
+            [goal_message, strategy_message]
+            if goal_first
+            else [strategy_message, goal_message]
+        )
+        for request_id, message in zip(("req1", "req2"), messages):
+            _reply(handler, message, request_id)
+
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            for call in handler._submit_background.call_args_list:
+                fn, *args = call.args
+                fn(*args)
+
+        written = [c.args[0] for c in handler._write_kv.call_args_list]
+        assert {"activity_goal_target": "20"} in written
+        assert any(data.get("trading_type") == "risky" for data in written)
 
     def test_a_superseded_goal_is_not_written(self, tmp_path: Path) -> None:
         """Only the newest goal in a burst lands."""

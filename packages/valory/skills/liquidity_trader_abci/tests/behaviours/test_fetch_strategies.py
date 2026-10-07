@@ -10748,3 +10748,67 @@ class TestUpdatePositionPreservesYieldOnPriceMiss:
         # Both the cached yield and cost_recovered must be untouched.
         assert position["yield_usd"] == prior_yield
         assert position["cost_recovered"] is True
+
+
+class TestChatConfigRestore:
+    """The loss limit a chat update stored is restored after a restart."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            pytest.param("12.5", 12.5, id="stored"),
+            pytest.param("20", 20.0, id="integer string"),
+            pytest.param(None, None, id="never set"),
+            pytest.param("", None, id="empty"),
+            pytest.param("not-a-number", None, id="garbage"),
+        ],
+    )
+    def test_parse_max_loss(self, raw: Any, expected: Any) -> None:
+        """Only a numeric stored value is restored; anything else means unset."""
+        assert FetchStrategiesBehaviour._parse_max_loss(raw) == expected
+
+    def test_async_act_restores_the_stored_loss_limit(self) -> None:
+        """The value the chat wrote is what the next prompt reports as current."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = (
+            TestFetchStrategiesWithdrawalGate._mk_benchmark()
+        )
+        obj.context.agent_address = "0xagent"
+        obj.current_positions = []
+        requested: List[Any] = []
+
+        def read_kv(keys):  # type: ignore[no-untyped-def]
+            requested.append(keys)
+            yield
+            if "max_loss_percentage" in keys:
+                return {
+                    "selected_protocols": json.dumps(["uniswapV3"]),
+                    "trading_type": "risky",
+                    "max_loss_percentage": "17.5",
+                }
+            return {}
+
+        sd = MagicMock(period_count=1)
+        with patch.object(
+            type(obj), "synchronized_data", new_callable=PropertyMock, return_value=sd
+        ):
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                state = MagicMock()
+                mock_ss.return_value = state
+                TestFetchStrategiesWithdrawalGate._wire_common_path(obj)
+                obj._read_kv = read_kv
+                obj.store_portfolio_data = MagicMock()
+                obj._read_investing_paused = _gen_return(True)
+                obj.send_a2a_transaction = _gen_none
+
+                _drive(obj.async_act())
+
+        assert (
+            "selected_protocols",
+            "trading_type",
+            "max_loss_percentage",
+        ) in requested
+        assert state.trading_type == "risky"
+        assert state.max_loss_percentage == 17.5

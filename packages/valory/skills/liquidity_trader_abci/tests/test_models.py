@@ -77,6 +77,14 @@ class TestSharedState:
         assert state.x402_eoa_sufficient is False
         assert state.x402_pot_checked is False
 
+    def test_chat_state_defaults(self) -> None:
+        """A fresh SharedState has no stored loss limit and no pending chat write."""
+        mock_context = MagicMock()
+        state = SharedState(name="state", skill_context=mock_context)
+        assert state.max_loss_percentage is None
+        assert state.latest_chat_write_request_id is None
+        assert state.request_queue == []
+
     def test_setup_success(self) -> None:
         """Test setup with valid strategies."""
         mock_context = MagicMock()

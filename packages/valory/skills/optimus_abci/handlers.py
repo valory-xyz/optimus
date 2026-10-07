@@ -2749,7 +2749,12 @@ class HttpHandler(BaseHttpHandler):
         :return: the percentage, within MAX_LOSS_PERCENTAGE_RANGE
         """
         stored = getattr(self.context.state, "max_loss_percentage", None)
-        if isinstance(stored, (int, float)) and not isinstance(stored, bool):
+        low, high = MAX_LOSS_PERCENTAGE_RANGE
+        if (
+            isinstance(stored, (int, float))
+            and not isinstance(stored, bool)
+            and low <= stored <= high
+        ):
             return float(stored)
         return DEFAULT_MAX_LOSS_PERCENTAGE.get(
             trading_type, DEFAULT_MAX_LOSS_PERCENTAGE[TradingType.BALANCED.value]
@@ -3018,7 +3023,7 @@ class HttpHandler(BaseHttpHandler):
         previous_selected_protocols = (
             json.loads(self.context.state.selected_protocols)
             if isinstance(self.context.state.selected_protocols, str)
-            else self.context.state.selected_protocols or []
+            else self.context.state.selected_protocols or self.available_strategies
         )
         # Convert previous strategies to protocol names
         previous_protocol_names = [
@@ -3103,6 +3108,7 @@ class HttpHandler(BaseHttpHandler):
         }
 
         # Offload KV store update to a separate thread
+        self.context.state.latest_chat_write_request_id = request_id
         self._submit_background(
             self._delayed_write_kv_extended, storage_data, request_id
         )
@@ -3146,33 +3152,24 @@ class HttpHandler(BaseHttpHandler):
 
         return selected_protocols, trading_type, reasoning, trading_type
 
-    def _delayed_write_kv_extended(
-        self, data: Dict[str, str], request_id: Optional[str] = None
-    ) -> None:
+    def _delayed_write_kv_extended(self, data: Dict[str, str], request_id: str) -> None:
         """
-        Write to the KV store after a delay, unless a newer request superseded it.
+        Write to the KV store after a delay, unless a newer write superseded it.
 
-        The acceptance delay lets a burst of chat messages settle; only the
-        most recent request's configuration is written. The request's queue
-        slot is released on every exit so later requests are never blocked.
+        Only a later request that scheduled a write of its own takes precedence;
+        a question sent in between does not.
 
         :param data: Dictionary of data to store
-        :param request_id: the chat request this write belongs to; without it,
-            the write only proceeds when no other request is queued
+        :param request_id: the chat request this write belongs to
         """
         try:
             self.context.logger.info("Waiting for default acceptance time...")
             time.sleep(self.context.params.default_acceptance_time)
 
-            queue = self.context.state.request_queue
-            if request_id is not None:
-                superseded = bool(queue) and queue[-1] != request_id
-            else:
-                superseded = len(queue) > 1
-            if superseded:
+            if self.context.state.latest_chat_write_request_id != request_id:
                 self.context.logger.info(
-                    f"Chat request {request_id} superseded by a newer request; "
-                    f"skipping its KV write"
+                    f"Chat request {request_id} superseded by a newer strategy "
+                    f"write; skipping its KV write"
                 )
                 return
 
@@ -3200,10 +3197,7 @@ class HttpHandler(BaseHttpHandler):
                         data["max_loss_percentage"]
                     )
         finally:
-            if request_id is not None:
-                self._release_request_slot(request_id)
-            elif self.context.state.request_queue:
-                self.context.state.request_queue.pop()
+            self._release_request_slot(request_id)
 
     def _write_kv(self, data: Dict[str, str]) -> None:
         """

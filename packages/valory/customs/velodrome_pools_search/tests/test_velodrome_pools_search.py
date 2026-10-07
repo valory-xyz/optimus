@@ -3799,10 +3799,13 @@ class TestGetVelodromePoolsViaSugarBranches:
         assert len(result) == 4
 
     @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
     )
     def test_reverted_batch_returns_error_and_caches_nothing(
-        self, mock_conn: MagicMock
+        self, mock_conn: MagicMock, mock_sleep: MagicMock
     ) -> None:
         """A reverted ``all()`` call is a discovery failure, not an empty market.
 
@@ -3824,20 +3827,32 @@ class TestGetVelodromePoolsViaSugarBranches:
         assert isinstance(result, dict)
         assert "batch error" in result["error"]
         assert "0xsugar" in result["error"]
+        assert f"after {vel_mod.SUGAR_BATCH_RETRIES} attempts" in result["error"]
         assert any("batch error" in e for e in get_errors())
         assert get_cached_data("pools", f"{MODE_CHAIN_ID}:0xsugar") is None
         get_velodrome_pools_via_sugar(
             "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
         )
-        assert mock_contract.functions.all.return_value.call.call_count == 2
+        assert (
+            mock_contract.functions.all.return_value.call.call_count
+            == 2 * vel_mod.SUGAR_BATCH_RETRIES
+        )
 
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
     @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
     )
-    def test_second_batch_revert_discards_partial_results(
-        self, mock_conn: MagicMock
+    def test_later_batch_failure_keeps_pools_already_fetched(
+        self, mock_conn: MagicMock, mock_sleep: MagicMock
     ) -> None:
-        """A revert after a full first batch must not return a partial pool list."""
+        """A batch that keeps failing after a full first batch ends discovery.
+
+        Chains with tens of thousands of pools hit RPC rate limits part way
+        through; the pools already fetched are still a usable view, so they
+        are returned and cached rather than discarded.
+        """
 
         def _pool(idx: int) -> Any:
             return (
@@ -3880,16 +3895,88 @@ class TestGetVelodromePoolsViaSugarBranches:
         mock_contract = MagicMock()
         mock_contract.functions.all.return_value.call.side_effect = [
             [_pool(i) for i in range(500)],
-            Exception("revert on second batch"),
+            Exception("rate limited"),
+            Exception("rate limited"),
+            Exception("rate limited"),
         ]
         mock_w3.eth.contract.return_value = mock_contract
         mock_conn.return_value = mock_w3
         result = get_velodrome_pools_via_sugar(
             "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
         )
-        assert isinstance(result, dict)
-        assert "offset=500" in result["error"]
-        assert get_cached_data("pools", f"{MODE_CHAIN_ID}:0xsugar") is None
+        assert isinstance(result, list)
+        assert len(result) == 500
+        assert get_errors() == []
+        assert (
+            mock_contract.functions.all.return_value.call.call_count
+            == 1 + vel_mod.SUGAR_BATCH_RETRIES
+        )
+        assert len(get_cached_data("pools", f"{MODE_CHAIN_ID}:0xsugar")) == 500
+
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.time.sleep"
+    )
+    @patch(
+        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"
+    )
+    def test_failed_batch_is_retried_with_backoff(
+        self, mock_conn: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """A transient batch error is retried, with the delay doubling each time."""
+        pool = (
+            "0xlp",
+            "SYM",
+            18,
+            1000,
+            0,
+            0,
+            1000,
+            "0xt0",
+            500,
+            100,
+            "0xt1",
+            500,
+            100,
+            "0xgauge",
+            500,
+            True,
+            100,
+            "0xbribe",
+            "0xfactory",
+            1000,
+            "0xemtoken",
+            500,
+            500,
+            0,
+            100,
+            200,
+            0,
+            100,
+            200,
+            "0xnfpm",
+            "0xalm",
+            "0xroot",
+        )
+        mock_w3 = MagicMock()
+        mock_w3.is_connected.return_value = True
+        mock_contract = MagicMock()
+        mock_contract.functions.all.return_value.call.side_effect = [
+            Exception("rate limited"),
+            Exception("rate limited"),
+            [pool],
+        ]
+        mock_w3.eth.contract.return_value = mock_contract
+        mock_conn.return_value = mock_w3
+        result = get_velodrome_pools_via_sugar(
+            "0xsugar", chain_id=MODE_CHAIN_ID, rpc_url="https://rpc.example.com"
+        )
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert get_errors() == []
+        assert [c.args[0] for c in mock_sleep.call_args_list] == [
+            vel_mod.SUGAR_BATCH_RETRY_DELAY_SECONDS,
+            vel_mod.SUGAR_BATCH_RETRY_DELAY_SECONDS * 2,
+        ]
 
     @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_web3_connection"

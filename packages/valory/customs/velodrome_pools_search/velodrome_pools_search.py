@@ -1200,6 +1200,33 @@ def get_velodrome_pools(
         return {"error": error_msg}
 
 
+# A Sugar batch call is retried this many times before the batch counts as
+# failed; the delay doubles after each attempt.
+SUGAR_BATCH_RETRIES: int = 3
+SUGAR_BATCH_RETRY_DELAY_SECONDS: float = 1.0
+
+
+def _fetch_sugar_batch(contract_instance: Any, limit: int, offset: int) -> Any:
+    """Fetch one ``all(limit, offset, 0)`` batch, retrying transient RPC errors.
+
+    Raises the last error when every attempt fails.
+    """
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return contract_instance.functions.all(limit, offset, 0).call()
+        except Exception as e:
+            if attempt >= SUGAR_BATCH_RETRIES:
+                raise
+            delay = SUGAR_BATCH_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+            logger.warning(
+                f"Sugar batch at offset {offset} failed (attempt {attempt}/"
+                f"{SUGAR_BATCH_RETRIES}): {e}; retrying in {delay:.0f}s"
+            )
+            time.sleep(delay)
+
+
 def get_velodrome_pools_via_sugar(
     lp_sugar_address, rpc_url=None, chain_id=MODE_CHAIN_ID
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
@@ -1249,8 +1276,7 @@ def get_velodrome_pools_via_sugar(
         # Continue fetching until no more pools are found
         while True:
             try:
-                # Call the contract directly with filter parameter (0 = no filter)
-                raw_pools = contract_instance.functions.all(limit, offset, 0).call()
+                raw_pools = _fetch_sugar_batch(contract_instance, limit, offset)
 
                 if not raw_pools:
                     break
@@ -1314,11 +1340,21 @@ def get_velodrome_pools_via_sugar(
             except Exception as e:
                 error_msg = (
                     f"Error fetching pools batch from Sugar {lp_sugar_address} "
-                    f"(offset={offset}): {str(e)}"
+                    f"(offset={offset}) after {SUGAR_BATCH_RETRIES} attempts: "
+                    f"{str(e)}"
                 )
-                logger.error(error_msg)
-                get_errors().append(error_msg)
-                return {"error": error_msg}
+                if not all_pools:
+                    logger.error(error_msg)
+                    get_errors().append(error_msg)
+                    return {"error": error_msg}
+                # Later batches may hit RPC rate limits on chains with tens of
+                # thousands of pools; the pools already fetched are still a
+                # usable, if partial, view of the market.
+                logger.warning(
+                    f"{error_msg}; continuing with the {len(all_pools)} pools "
+                    f"fetched so far"
+                )
+                break
 
         # Convert Sugar pool format to match subgraph format
         formatted_pools = []

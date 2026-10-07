@@ -129,6 +129,21 @@ class TestCheckStakingKPIMetPayload:
             is_staking_kpi_met=None,
         )
         assert payload.is_staking_kpi_met is None
+        assert payload.is_activity_goal_met is None
+
+    def test_activity_goal_met_is_carried_before_event(self) -> None:
+        """The goal flag sits just before ``event`` so the selection key lines up."""
+        payload = CheckStakingKPIMetPayload(
+            sender=SENDER,
+            tx_submitter="submitter",
+            tx_hash=None,
+            safe_contract_address=None,
+            chain_id=None,
+            is_staking_kpi_met=True,
+            is_activity_goal_met=True,
+        )
+        assert payload.is_activity_goal_met is True
+        assert payload.values[-2:] == (True, None)
 
 
 class TestGetPositionsPayload:

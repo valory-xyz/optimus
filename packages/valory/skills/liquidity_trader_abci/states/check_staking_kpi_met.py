@@ -34,6 +34,9 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
     SynchronizedData,
     peek_withdrawal_event,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    should_stand_by,
+)
 
 
 class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
@@ -54,6 +57,7 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         get_name(SynchronizedData.is_activity_target_met),
         get_name(SynchronizedData.activity_target),
         get_name(SynchronizedData.activity_completed),
+        get_name(SynchronizedData.is_activity_goal_met),
     )
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
@@ -75,6 +79,12 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         if synced_data.most_voted_tx_hash is not None:
             # Old regime: the vanity Safe tx was built; settle it normally.
             return synced_data, Event.SETTLE
+        if should_stand_by(
+            synced_data.is_staking_kpi_met,
+            synced_data.is_activity_target_met,
+            synced_data.is_activity_goal_met,
+        ):
+            return synced_data, Event.STANDBY
         if synced_data.is_staking_kpi_met is True:
             return synced_data, Event.STAKING_KPI_MET
         if synced_data.is_staking_kpi_met is False:

@@ -52,6 +52,7 @@ def test_abci_app_transition_mapping_keys() -> None:
         LiquidityTraderAbci.FinishedDecisionMakingRound,
         LiquidityTraderAbci.FinishedEvaluateStrategyRound,
         LiquidityTraderAbci.FinishedTxPreparationRound,
+        LiquidityTraderAbci.FinishedStandbyRound,
         LiquidityTraderAbci.FailedMultiplexerRound,
         TxSettlementAbci.FinishedTransactionSubmissionRound,
         TxSettlementAbci.FailedRound,
@@ -86,6 +87,10 @@ def test_abci_app_transition_mapping_specific_transitions() -> None:
     assert (
         abci_app_transition_mapping[TxSettlementAbci.FinishedTransactionSubmissionRound]
         == LiquidityTraderAbci.PostTxSettlementRound
+    )
+    assert (
+        abci_app_transition_mapping[LiquidityTraderAbci.FinishedStandbyRound]
+        == ResetAndPauseAbci.ResetAndPauseRound
     )
     assert (
         abci_app_transition_mapping[TxSettlementAbci.FailedRound]

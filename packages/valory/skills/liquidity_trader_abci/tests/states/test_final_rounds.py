@@ -21,7 +21,17 @@
 
 # pylint: skip-file
 
+from packages.valory.skills.abstract_round_abci.base import DegenerateRound
+from packages.valory.skills.liquidity_trader_abci.states.final_rounds import (
+    FinishedStandbyRound,
+)
+
 
 def test_import() -> None:
     """Test that the final_rounds module can be imported."""
     import packages.valory.skills.liquidity_trader_abci.states.final_rounds  # noqa
+
+
+def test_finished_standby_round_is_degenerate() -> None:
+    """The standby exit is a degenerate round the composition can map onward."""
+    assert issubclass(FinishedStandbyRound, DegenerateRound)

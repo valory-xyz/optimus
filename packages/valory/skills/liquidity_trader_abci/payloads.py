@@ -54,6 +54,8 @@ class CheckStakingKPIMetPayload(MultisigTxPayload):
     is_activity_target_met: Optional[bool] = None
     activity_target: Optional[int] = None
     activity_completed: Optional[int] = None
+    # Whether the rounds goal was met before this period; half of the standby gate.
+    is_activity_goal_met: Optional[bool] = None
     # Field order matters: ``event`` must remain the last declared field so
     # ``zip(selection_key, payload.values)`` (see ``CollectSameUntilThresholdRound.end_block``)
     # aligns each selection_key entry with its same-named payload position. The

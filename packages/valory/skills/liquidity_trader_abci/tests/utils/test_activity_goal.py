@@ -24,6 +24,7 @@
 import json
 import os
 import stat
+import sys
 import threading
 from pathlib import Path
 from unittest.mock import patch
@@ -142,6 +143,10 @@ class TestStampLastMetAt:
         assert stamp_last_met_at(3, 10, EPOCH, EPOCH - 1, NOW) == EPOCH - 1
 
 
+# Windows has no POSIX mode bits: os.chmod only toggles read-only.
+posix_modes = pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+
+
 class TestMergeAgentPerformance:
     """The merge writer keeps every key it was not asked to change."""
 
@@ -204,6 +209,7 @@ class TestMergeAgentPerformance:
             merge_agent_performance(path, {"metrics": []})
         assert "is not a JSON object (got list)" in caplog.text
 
+    @posix_modes
     def test_write_keeps_the_file_mode(self, tmp_path: Path) -> None:
         """Rewriting the file keeps its permissions."""
         path = tmp_path / "perf.json"
@@ -212,6 +218,7 @@ class TestMergeAgentPerformance:
         merge_agent_performance(path, {"metrics": []})
         assert stat.S_IMODE(path.stat().st_mode) == 0o664
 
+    @posix_modes
     def test_first_write_is_readable_by_others(self, tmp_path: Path) -> None:
         """A new file is not left at the temp file's owner-only mode."""
         path = tmp_path / "perf.json"

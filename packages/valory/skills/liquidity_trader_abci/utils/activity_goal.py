@@ -27,6 +27,7 @@ Both the FSM (main loop) and the HTTP handler (background threads) write
 import json
 import logging
 import os
+import shutil
 import tempfile
 import threading
 from pathlib import Path
@@ -34,6 +35,10 @@ from typing import Any, Dict, Optional, Union
 
 ACTIVITY_GOAL_KEY = "activity_goal"
 ACTIVITY_GOAL_UNIT = "rounds"
+
+# What the file got from a plain open() under the usual umask, before writes
+# went through a 0600 temp file.
+_NEW_FILE_MODE = 0o644
 
 # KV store keys holding the goal state across restarts.
 KV_ACTIVITY_GOAL_TARGET = "activity_goal_target"
@@ -160,10 +165,16 @@ def _read_json_object(file_path: PathLike) -> Dict[str, Any]:
             data = json.load(file)
     except FileNotFoundError:
         return {}
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         _logger.warning(f"Corrupt {str(file_path)!r} will be replaced: {e}")
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        _logger.warning(
+            f"{str(file_path)!r} is not a JSON object "
+            f"(got {type(data).__name__}); replacing it"
+        )
+        return {}
+    return data
 
 
 def _write_json_atomically(file_path: PathLike, data: Dict[str, Any]) -> None:
@@ -178,6 +189,11 @@ def _write_json_atomically(file_path: PathLike, data: Dict[str, Any]) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as file:
             json.dump(data, file)
+        # Keep the mode a reader under another uid (Pearl) relies on.
+        try:
+            shutil.copymode(path, tmp_path)
+        except FileNotFoundError:
+            os.chmod(tmp_path, _NEW_FILE_MODE)
         os.replace(tmp_path, path)
     except Exception:
         try:

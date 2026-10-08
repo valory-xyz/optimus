@@ -22,6 +22,8 @@
 # pylint: skip-file
 
 import json
+import os
+import stat
 import threading
 from pathlib import Path
 from unittest.mock import patch
@@ -164,14 +166,16 @@ class TestMergeAgentPerformance:
         )
         assert _read(path) == {"agent_behavior": "hi", "metrics": [2], "x": 0}
 
-    @pytest.mark.parametrize("content", [None, "{not json", "[1, 2]"])
+    @pytest.mark.parametrize(
+        "content", [None, b"{not json", b"[1, 2]", b'{"a": "\xff"}']
+    )
     def test_missing_or_corrupt_file_starts_empty(
         self, tmp_path: Path, content
     ) -> None:
-        """A missing, corrupt or non-object file is replaced by the merged keys."""
+        """A missing, corrupt, non-UTF-8 or non-object file is replaced."""
         path = tmp_path / "perf.json"
         if content is not None:
-            path.write_text(content)
+            path.write_bytes(content)
         merge_agent_performance(path, {"metrics": []})
         assert _read(path) == {"metrics": []}
 
@@ -191,6 +195,28 @@ class TestMergeAgentPerformance:
         with caplog.at_level("WARNING"):
             merge_agent_performance(path, {"metrics": []})
         assert "Corrupt" in caplog.text
+
+    def test_non_object_file_is_logged(self, tmp_path: Path, caplog) -> None:
+        """Replacing a file that holds no JSON object leaves a warning behind."""
+        path = tmp_path / "perf.json"
+        path.write_text("[1, 2]")
+        with caplog.at_level("WARNING"):
+            merge_agent_performance(path, {"metrics": []})
+        assert "is not a JSON object (got list)" in caplog.text
+
+    def test_write_keeps_the_file_mode(self, tmp_path: Path) -> None:
+        """Rewriting the file keeps its permissions."""
+        path = tmp_path / "perf.json"
+        _write(path, {})
+        os.chmod(path, 0o664)
+        merge_agent_performance(path, {"metrics": []})
+        assert stat.S_IMODE(path.stat().st_mode) == 0o664
+
+    def test_first_write_is_readable_by_others(self, tmp_path: Path) -> None:
+        """A new file is not left at the temp file's owner-only mode."""
+        path = tmp_path / "perf.json"
+        merge_agent_performance(path, {"metrics": []})
+        assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
     def test_failed_write_leaves_the_file_and_no_temp(self, tmp_path: Path) -> None:
         """A failure mid-write keeps the old content and cleans up the temp file."""
@@ -229,6 +255,27 @@ class TestMergeAgentPerformance:
 
         data = _read(path)
         assert all(data[f"{p}{i}"] == i for p in "ab" for i in range(50))
+
+    @pytest.mark.parametrize(
+        "access",
+        [
+            lambda path: merge_agent_performance(path, {"metrics": []}),
+            lambda path: read_activity_goal_block(path),
+            lambda path: retarget_activity_goal(path, 5, NOW),
+        ],
+        ids=["merge", "read", "retarget"],
+    )
+    def test_file_access_waits_for_the_lock(self, tmp_path: Path, access) -> None:
+        """Every reader and writer of the file waits while another holds the lock."""
+        path = tmp_path / "perf.json"
+        _write(path, {"activity_goal": _block()})
+        thread = threading.Thread(target=access, args=(path,))
+        with activity_goal._AGENT_PERFORMANCE_LOCK:
+            thread.start()
+            thread.join(timeout=0.2)
+            assert thread.is_alive()
+        thread.join(timeout=5)
+        assert not thread.is_alive()
 
 
 class TestReadActivityGoalBlock:

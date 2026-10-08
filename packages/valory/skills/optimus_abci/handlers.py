@@ -217,6 +217,10 @@ GAS_ESTIMATE_HEADROOM = 1.3
 # A deposit can mine well after the default receipt wait, and reporting it as
 # failed is what makes the next cycle deposit again.
 MECH_DEPOSIT_RECEIPT_TIMEOUT = 180
+
+# The local KV store answers in milliseconds; past this a goal write is lost
+# and its pending value must stop showing in the chat.
+GOAL_WRITE_ACK_TIMEOUT = 30
 MECH_DEPOSIT_READBACK_RETRY_SECS = 2
 
 
@@ -3078,6 +3082,12 @@ class HttpHandler(BaseHttpHandler):
             chain_info = ", ".join(self.params.target_investment_chains)
             reasoning += f"<br><br><strong>Note:</strong> The following protocols were filtered out as they are not available on the selected chains ({chain_info}): {', '.join(filtered_protocols)}. Only protocols compatible with your selected chains are included."
 
+        failed_goal = self.context.state.failed_activity_goal_target
+        if failed_goal is not None:
+            self.context.state.failed_activity_goal_target = None
+            current_goal, _ = self._current_activity_goal()
+            reasoning += f"<br><br><strong>Note:</strong> I could not save your daily goal of {failed_goal} rounds. It stays at {current_goal} rounds."
+
         activity_goal: Optional[int] = None
         if requested_goal is not None:
             current_goal, goal_progress = self._current_activity_goal()
@@ -3256,12 +3266,33 @@ class HttpHandler(BaseHttpHandler):
             )
             return
 
+        acked = threading.Event()
         with _KV_WRITE_LOCK:
-            self._write_kv(
+            nonce = self._write_kv(
                 {KV_ACTIVITY_GOAL_TARGET: str(target)},
                 self._handle_activity_goal_write_response,
-                {"target": target, "request_id": request_id},
+                {"target": target, "request_id": request_id, "acked": acked},
             )
+        if acked.wait(GOAL_WRITE_ACK_TIMEOUT):
+            return
+        if self.context.state.req_to_callback.pop(nonce, None) is None:
+            # The reply arrived just now and its callback has taken over.
+            return
+        self.context.logger.error(
+            f"No KV store reply to the activity goal of chat request {request_id}."
+        )
+        self._drop_failed_goal(target, request_id)
+
+    def _drop_failed_goal(self, target: int, request_id: str) -> None:
+        """Stop showing a goal that was not stored, and report it in the next reply.
+
+        :param target: the goal that was not stored.
+        :param request_id: the chat request it belongs to
+        """
+        state = self.context.state
+        if state.latest_goal_write_request_id == request_id:
+            state.activity_goal_target = None
+            state.failed_activity_goal_target = target
 
     def _handle_activity_goal_write_response(
         self,
@@ -3269,6 +3300,7 @@ class HttpHandler(BaseHttpHandler):
         dialogue: Dialogue,
         target: int,
         request_id: str,
+        acked: threading.Event,
     ) -> None:
         """Show a stored goal to Pearl, and drop the pending one either way.
 
@@ -3276,7 +3308,9 @@ class HttpHandler(BaseHttpHandler):
         :param dialogue: the KvStoreDialogue
         :param target: the goal that was written.
         :param request_id: the chat request this write belongs to
+        :param acked: set once the reply is handled
         """
+        acked.set()
         state = self.context.state
         is_latest = state.latest_goal_write_request_id == request_id
         if (
@@ -3286,8 +3320,7 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(
                 f"Failed to store the activity goal of chat request {request_id}."
             )
-            if is_latest:
-                state.activity_goal_target = None
+            self._drop_failed_goal(target, request_id)
             return
 
         try:
@@ -3308,13 +3341,14 @@ class HttpHandler(BaseHttpHandler):
         data: Dict[str, str],
         callback: Optional[Callable] = None,
         callback_kwargs: Optional[Dict] = None,
-    ) -> None:
+    ) -> str:
         """
         Create or update data in the KV store.
 
         :param data: key-value data to store
         :param callback: handles the response; defaults to logging it
         :param callback_kwargs: optional kwargs for the callback
+        :return: the nonce the response callback is registered under
         """
         kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
         kv_store_message, srr_dialogue = kv_store_dialogues.create(
@@ -3324,7 +3358,7 @@ class HttpHandler(BaseHttpHandler):
         )
         self.context.logger.info(f"Writing to KV store... {kv_store_message}")
         kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
-        self._send_message(
+        return self._send_message(
             kv_store_message,
             kv_store_dialogue,
             callback or self._handle_kv_store_response,
@@ -3355,7 +3389,7 @@ class HttpHandler(BaseHttpHandler):
         dialogue: Dialogue,
         callback: Callable,
         callback_kwargs: Optional[Dict] = None,
-    ) -> None:
+    ) -> str:
         """
         Send a message and set up a callback for the response.
 
@@ -3363,11 +3397,13 @@ class HttpHandler(BaseHttpHandler):
         :param dialogue: the Dialogue context
         :param callback: the callback function upon response
         :param callback_kwargs: optional kwargs for the callback
+        :return: the nonce the callback is registered under
         """
         self.context.outbox.put_message(message=message)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.context.state.req_to_callback[nonce] = (callback, callback_kwargs or {})
         self.context.state.in_flight_req = True
+        return nonce
 
     def _handle_get_withdrawal_amount(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

@@ -23,10 +23,11 @@
 
 import json
 import tempfile
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import ANY, MagicMock, PropertyMock, patch
 
 import pytest
 import requests
@@ -401,6 +402,7 @@ def _make_http_handler() -> Any:
     mock_context.params.agent_performance_filename = "agent_performance.json"
     mock_context.params.activity_goal_target = 10
     mock_context.state.activity_goal_target = None
+    mock_context.state.failed_activity_goal_target = None
     return handler, mock_context
 
 
@@ -6943,6 +6945,9 @@ class TestChatIntent:
         assert "intent" in payload["prompt"]
 
 
+_GOAL_ACK_TIMEOUT = f"{handlers_module.__name__}.GOAL_WRITE_ACK_TIMEOUT"
+
+
 def _goal_block(target: int = 10, progress: int = 4) -> Dict[str, Any]:
     return {
         "unit": "rounds",
@@ -7055,13 +7060,83 @@ class TestActivityGoalChat:
         """The goal is stored with a callback that publishes it on success."""
         handler, ctx = _chat_handler()
         ctx.state.latest_goal_write_request_id = "req1"
-        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+        ctx.state.req_to_callback = {}
+        with (
+            patch("packages.valory.skills.optimus_abci.handlers.time.sleep"),
+            patch(_GOAL_ACK_TIMEOUT, 0),
+        ):
             handler._delayed_write_activity_goal(4, "req1")
         handler._write_kv.assert_called_once_with(
             {"activity_goal_target": "4"},
             handler._handle_activity_goal_write_response,
-            {"target": 4, "request_id": "req1"},
+            {"target": 4, "request_id": "req1", "acked": ANY},
         )
+
+    @staticmethod
+    def _unanswered_goal_write(handler: Any, ctx: Any, target: int) -> None:
+        handler._write_kv.return_value = "n1"
+        with (
+            patch("packages.valory.skills.optimus_abci.handlers.time.sleep"),
+            patch(_GOAL_ACK_TIMEOUT, 0),
+        ):
+            handler._delayed_write_activity_goal(target, "req1")
+
+    def test_an_unanswered_goal_write_stops_showing(self) -> None:
+        """Without a KV reply the pending goal expires and is reported as lost."""
+        handler, ctx = _chat_handler()
+        ctx.state.activity_goal_target = 4
+        ctx.state.latest_goal_write_request_id = "req1"
+        ctx.state.req_to_callback = {"n1": (MagicMock(), {})}
+        self._unanswered_goal_write(handler, ctx, 4)
+        assert ctx.state.req_to_callback == {}
+        assert ctx.state.activity_goal_target is None
+        assert ctx.state.failed_activity_goal_target == 4
+        ctx.logger.error.assert_called_once()
+
+    def test_a_reply_racing_the_timeout_is_left_to_its_callback(self) -> None:
+        """A reply the KV handler already took is not also treated as lost."""
+        handler, ctx = _chat_handler()
+        ctx.state.activity_goal_target = 4
+        ctx.state.latest_goal_write_request_id = "req1"
+        ctx.state.req_to_callback = {}
+        self._unanswered_goal_write(handler, ctx, 4)
+        assert ctx.state.activity_goal_target == 4
+        assert ctx.state.failed_activity_goal_target is None
+        ctx.logger.error.assert_not_called()
+
+    def test_an_answered_goal_write_does_not_expire(self, tmp_path: Path) -> None:
+        """A reply within the timeout leaves the outcome to the callback."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block())
+        ctx.state.activity_goal_target = 4
+        ctx.state.latest_goal_write_request_id = "req1"
+        ctx.state.req_to_callback = {"n1": (MagicMock(), {})}
+
+        def reply(data, callback, kwargs):
+            response = MagicMock()
+            response.performative = KvStoreMessage.Performative.SUCCESS
+            callback(response, MagicMock(), **kwargs)
+            return "n1"
+
+        handler._write_kv.side_effect = reply
+        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+            handler._delayed_write_activity_goal(4, "req1")
+        assert "n1" in ctx.state.req_to_callback
+        assert ctx.state.failed_activity_goal_target is None
+        ctx.logger.error.assert_not_called()
+
+    def test_the_next_reply_reports_a_lost_goal(self) -> None:
+        """The user learns that the goal they were told about did not stick."""
+        handler, ctx = _chat_handler()
+        ctx.state.failed_activity_goal_target = 4
+        body = _reply(handler, _llm_reply(intent="query"))
+        assert (
+            "I could not save your daily goal of 4 rounds. It stays at 10 rounds."
+            in body["reasoning"]
+        )
+        assert ctx.state.failed_activity_goal_target is None
+        body = _reply(handler, _llm_reply(intent="query"), "req2")
+        assert body["reasoning"] == "ok"
 
     @staticmethod
     def _goal_written(handler: Any, ok: bool, target: int, request_id: str) -> None:
@@ -7072,7 +7147,7 @@ class TestActivityGoalChat:
             else KvStoreMessage.Performative.ERROR
         )
         handler._handle_activity_goal_write_response(
-            response, MagicMock(), target, request_id
+            response, MagicMock(), target, request_id, threading.Event()
         )
 
     def test_lowering_the_goal_to_progress_meets_it(self, tmp_path: Path) -> None:
@@ -7102,6 +7177,7 @@ class TestActivityGoalChat:
         ctx.logger.error.assert_called_once()
         assert json.loads(path.read_text())["activity_goal"] == _goal_block()
         assert ctx.state.activity_goal_target is None
+        assert ctx.state.failed_activity_goal_target == 4
         assert handler._current_activity_goal() == (10, 4)
 
     def test_an_older_write_leaves_a_newer_pending_goal(self, tmp_path: Path) -> None:
@@ -7113,6 +7189,7 @@ class TestActivityGoalChat:
         self._goal_written(handler, True, 4, "older")
         self._goal_written(handler, False, 4, "older")
         assert ctx.state.activity_goal_target == 8
+        assert ctx.state.failed_activity_goal_target is None
 
     def test_a_stored_goal_without_a_block_stays_pending(self, tmp_path: Path) -> None:
         """Before the FSM publishes a block, the chat keeps showing the new goal."""
@@ -7150,7 +7227,11 @@ class TestActivityGoalChat:
         for request_id, message in zip(("req1", "req2"), messages):
             _reply(handler, message, request_id)
 
-        with patch("packages.valory.skills.optimus_abci.handlers.time.sleep"):
+        ctx.state.req_to_callback = {}
+        with (
+            patch("packages.valory.skills.optimus_abci.handlers.time.sleep"),
+            patch(_GOAL_ACK_TIMEOUT, 0),
+        ):
             for call in handler._submit_background.call_args_list:
                 fn, *args = call.args
                 fn(*args)

@@ -171,6 +171,8 @@ class SharedState(BaseSharedState):
         # Lets the next chat prompt show a goal whose KV write is still delayed.
         self.activity_goal_target: Optional[int] = None
         self.latest_goal_write_request_id: Optional[str] = None
+        # A chat goal the KV store did not take, reported in the next reply.
+        self.failed_activity_goal_target: Optional[int] = None
         self.request_count: int = 0
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""

@@ -10,7 +10,7 @@ fingerprint:
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
   behaviours/base.py: bafybeifcum7k2mxlusopkb5rceupulz4tkqavd3zt4jivchybwiqie7wqa
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
-  behaviours/check_staking_kpi_met.py: bafybeidftttpal53e7chodxnty2ug6gmjrbuup3sw2vfmr7xitwc2pbb7e
+  behaviours/check_staking_kpi_met.py: bafybeicjkta6tmi4zjexy6xekst7bhpbqnbh22gx34ugkylioj2isc3k6y
   behaviours/decision_making.py: bafybeiegwhchjw3gzq6ej7v5bl3jtrpkvf6x5zbwribcbwp75iwzsc3js4
   behaviours/evaluate_strategy.py: bafybeihphcu7roqiwfsnsr22rldfjjfi4j7awzjym2x55r6rnnkt2flbsa
   behaviours/fetch_strategies.py: bafybeieqos435cxah3u6joyhgodabac3vdlyqc5ynskkbs3o47f33fllpu
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiehckumwx6zm6w7cskuvwk2utqm64527jolzfrkwbveewtf5k7mse
+  models.py: bafybeih3zpqvrwyfkeshtzpkcawqopxgbthiqjowrzlj5pbzpe3mw5n6ta
   payloads.py: bafybeihs7zaev5mqt4gfb5e7j7nb5qaxnlyd5mzd4jbyduau5vofw4pcvu
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -48,7 +48,7 @@ fingerprint:
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
   tests/behaviours/test_base.py: bafybeic7nbv6djppkyf2wncxszg26twqr4mtm4ag7j6zwaxwyqlo2aeorm
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
-  tests/behaviours/test_check_staking_kpi_met.py: bafybeicc7o7reibxwygyaspefsmtr7mgvduiprpkmzn4bfji5p325nkugi
+  tests/behaviours/test_check_staking_kpi_met.py: bafybeiahasmgkystu47ghqbl3zzbegasrdsbjgniiouvm2y3twcxrczq2a
   tests/behaviours/test_decision_making.py: bafybeihksu3ty7xossbcalev7kqwsvb4v4wlixqii4gctbeigcglfnueyq
   tests/behaviours/test_evaluate_strategy.py: bafybeidp5fpribp6yo3wzslefubosp5udgk3ndxguskaoor6rxi6zv36lq
   tests/behaviours/test_fetch_strategies.py: bafybeigz4cy4ounfly7rbilnvani7iv7m4qe76ryw3by6i4353ob55cf5u
@@ -82,12 +82,12 @@ fingerprint:
   tests/test_rounds.py: bafybeicds45l43ifbungxginlvmqatgczsfhane4hjm465llll33tfcu44
   tests/test_rounds_info.py: bafybeicjjnlimixrbzyouasifrkcxycl4aitutlwm7ellq27xq55zog6ge
   tests/utils/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
-  tests/utils/test_activity_goal.py: bafybeigmufpa3hjnbe7qxtcull2gqgrxmicux5pblfuz42y4x3dteipuu4
+  tests/utils/test_activity_goal.py: bafybeiawe67mdokzxhic2ar5zjfgnk33opsmtunevodp2inasqpvvzpptq
   tests/utils/test_balancer_math.py: bafybeig4aixtnrm3oqewfba7m3v7boc6htpetkcdcpf35y35xzjpwh4drq
   tests/utils/test_protocol_validation.py: bafybeibqqzpz3a63zklyxsusren2vgwnyu4jcb34wka24d2szctfciewuy
   tests/utils/test_tick_math.py: bafybeie6vfua3xi25qhgtwfvuayzbxe3dnwd72jmiyqzcgf2jlxafixj4m
   utils/__init__.py: bafybeiefovpcxnqaggn65tcrvbxguk763wo74y4mj2wevpcdv2hvkuskle
-  utils/activity_goal.py: bafybeif6hg4ry5maeym4et7ttlezyj7xwaow6ckdomyghtq6y4o7626ziq
+  utils/activity_goal.py: bafybeih6ljtcdoc3uec24jjelzqrmg5s4tdpywwjatkfxngdtncp3xqkha
   utils/balancer_math.py: bafybeiftkdxicyxcwbkncwhmnoafjaalratvijqdcj2kvqygtto62dbfhi
   utils/protocol_validation.py: bafybeihzmkyug6cnsjgarutukq5q3biyhtrz2tyb64jva7zvwmle7kyfhq
   utils/tick_math.py: bafybeiehijphwni4zfu57rhhbgdyxn5evyokvvckiwzmldmrbzg3nd7cmy

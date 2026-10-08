@@ -328,11 +328,12 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             KV_ACTIVITY_GOAL_LAST_MET_AT: last_met_at,
             KV_ACTIVITY_GOAL_LAST_COUNTED_PERIOD: last_counted_period,
         }
+        # An empty string reads back as absent, so a reset key does not keep
+        # the previous epoch's value.
         written = yield from self._write_kv(
             {
-                key: str(value)
+                key: "" if value is None else str(value)
                 for key, value in state_to_write.items()
-                if value is not None
             }
         )
         if not written:

@@ -71,7 +71,7 @@ def test_is_non_negative_int(value, expected) -> None:
 
 @pytest.mark.parametrize(
     "raw,expected",
-    [("7", 7), ("0", 0), (None, None), ("x", None), ("-3", None), (5, 5)],
+    [("7", 7), ("0", 0), (None, None), ("x", None), ("", None), ("-3", None), (5, 5)],
 )
 def test_parse_stored_int(raw, expected) -> None:
     """KV strings parse to non-negative ints; anything else is absent."""

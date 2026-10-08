@@ -1045,6 +1045,7 @@ class TestActivityGoalTracking:
         assert run.written == {
             "activity_goal_progress": "4",
             "activity_goal_period_start": str(EPOCH),
+            "activity_goal_last_met_at": "",
             "activity_goal_last_counted_period": "5",
         }
         assert run.block == {
@@ -1100,6 +1101,16 @@ class TestActivityGoalTracking:
         assert run(kpi=True) is True
         assert run.progress == 0
         assert run.block["is_met"] is True
+
+    def test_a_rollover_into_standby_clears_the_counted_period(
+        self, tmp_path: Path
+    ) -> None:
+        """The previous epoch's counted period is overwritten, not left behind."""
+        run = _GoalRun(
+            tmp_path, _kv(12, period_start=EPOCH - 86400, last_counted=5, target=0)
+        )
+        assert run(kpi=True) is True
+        assert run.written["activity_goal_last_counted_period"] == ""
 
     def test_met_goal_with_unmet_staking_side_keeps_counting(
         self, tmp_path: Path

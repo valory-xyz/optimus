@@ -44,6 +44,19 @@ from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met i
     CheckStakingKPIMetRound,
     Event,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    ACTIVITY_GOAL_KEY,
+    KV_ACTIVITY_GOAL_LAST_COUNTED_PERIOD,
+    KV_ACTIVITY_GOAL_LAST_MET_AT,
+    KV_ACTIVITY_GOAL_PERIOD_START,
+    KV_ACTIVITY_GOAL_PROGRESS,
+    KV_ACTIVITY_GOAL_TARGET,
+    build_activity_goal_block,
+    is_non_negative_int,
+    merge_agent_performance,
+    should_stand_by,
+    stamp_last_met_at,
+)
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -217,6 +230,14 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                                 )
                                 self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
+            is_activity_goal_met = None
+            if is_staking_kpi_met is not None:
+                is_activity_goal_met = yield from self._track_activity_goal(
+                    is_staking_kpi_met,
+                    is_activity_target_met,
+                    settling=vanity_tx_hex is not None,
+                )
+
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(
                 self.context.agent_address,
@@ -228,12 +249,111 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 is_activity_target_met=is_activity_target_met,
                 activity_target=activity_target,
                 activity_completed=activity_completed,
+                is_activity_goal_met=is_activity_goal_met,
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
+
+    def _track_activity_goal(
+        self,
+        is_staking_kpi_met: bool,
+        is_activity_target_met: Optional[bool],
+        settling: bool,
+    ) -> Generator[None, None, Optional[bool]]:
+        """Count this period toward the rounds goal and publish the block.
+
+        The verdict returned is taken before counting, so the period that
+        reaches the goal still works and the next one stands by.
+
+        :param is_staking_kpi_met: the on-chain KPI verdict.
+        :param is_activity_target_met: the new-regime activity-target verdict.
+        :param settling: whether this period settles a vanity tx first.
+        :yield: the contract and KV store requests.
+        :return: whether the goal was met before this period, or ``None`` when
+            the epoch or the stored state cannot be read.
+        """
+        ts_checkpoint = yield from self._get_ts_checkpoint(
+            chain=self.params.staking_chain
+        )
+        if not is_non_negative_int(ts_checkpoint):
+            self.context.logger.warning(
+                f"Cannot read tsCheckpoint ({ts_checkpoint!r}); activity goal "
+                "not updated this period."
+            )
+            return None
+
+        state = yield from self._read_activity_goal_state()
+        if state is None:
+            self.context.logger.warning(
+                "KV store unreachable; activity goal not updated this period."
+            )
+            return None
+
+        target = state[KV_ACTIVITY_GOAL_TARGET]
+        if target is None:
+            target = self.params.activity_goal_target
+        progress = state[KV_ACTIVITY_GOAL_PROGRESS] or 0
+        last_counted_period = state[KV_ACTIVITY_GOAL_LAST_COUNTED_PERIOD]
+        if state[KV_ACTIVITY_GOAL_PERIOD_START] != ts_checkpoint:
+            progress, last_counted_period = 0, None
+
+        is_activity_goal_met = progress >= target
+        period = self.synchronized_data.period_count
+        stands_by = not settling and should_stand_by(
+            is_staking_kpi_met, is_activity_target_met, is_activity_goal_met
+        )
+        if stands_by:
+            self.context.logger.info(
+                f"Activity goal ({progress}/{target} rounds) and staking target "
+                "met; standing by until the next epoch."
+            )
+        elif last_counted_period != period:
+            progress += 1
+            last_counted_period = period
+
+        now = self._get_current_timestamp()
+        last_met_at = stamp_last_met_at(
+            progress,
+            target,
+            ts_checkpoint,
+            state[KV_ACTIVITY_GOAL_LAST_MET_AT],
+            now,
+        )
+        state_to_write = {
+            KV_ACTIVITY_GOAL_PROGRESS: progress,
+            KV_ACTIVITY_GOAL_PERIOD_START: ts_checkpoint,
+            KV_ACTIVITY_GOAL_LAST_MET_AT: last_met_at,
+            KV_ACTIVITY_GOAL_LAST_COUNTED_PERIOD: last_counted_period,
+        }
+        # An empty string reads back as absent, so a reset key does not keep
+        # the previous epoch's value.
+        written = yield from self._write_kv(
+            {
+                key: "" if value is None else str(value)
+                for key, value in state_to_write.items()
+            }
+        )
+        if not written:
+            # Publishing progress the KV store does not hold would make it go
+            # backwards on the next period.
+            self.context.logger.error(
+                "Failed to persist the activity goal; not publishing it."
+            )
+            return is_activity_goal_met
+
+        block = build_activity_goal_block(
+            target, progress, ts_checkpoint, last_met_at, now
+        )
+        try:
+            merge_agent_performance(
+                self.agent_performance_filepath, {ACTIVITY_GOAL_KEY: block}
+            )
+        except OSError as e:
+            self.context.logger.error(f"Failed to publish the activity goal: {e}")
+        return is_activity_goal_met
 
     def _real_tx_cost_vs_balance(self, chain: str) -> Optional[_FundingSignal]:
         """Read the agent EOA balance and recent real-tx cost on ``chain``.

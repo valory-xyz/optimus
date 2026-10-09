@@ -41,6 +41,7 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     LiquidityTraderAbci.FinishedDecisionMakingRound: ResetAndPauseAbci.ResetAndPauseRound,
     LiquidityTraderAbci.FinishedEvaluateStrategyRound: ResetAndPauseAbci.ResetAndPauseRound,
     LiquidityTraderAbci.FinishedTxPreparationRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
+    LiquidityTraderAbci.FinishedStandbyRound: ResetAndPauseAbci.ResetAndPauseRound,
     LiquidityTraderAbci.FailedMultiplexerRound: ResetAndPauseAbci.ResetAndPauseRound,
     TxSettlementAbci.FinishedTransactionSubmissionRound: LiquidityTraderAbci.PostTxSettlementRound,
     TxSettlementAbci.FailedRound: ResetAndPauseAbci.ResetAndPauseRound,

@@ -28,6 +28,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     EvaluateStrategyRound,
     Event,
     FetchStrategiesRound,
+    FinishedStandbyRound,
     GetPositionsRound,
     LiquidityTraderAbciApp,
     PostTxSettlementRound,
@@ -110,3 +111,22 @@ class TestCoreCycleTransitions:
             ]
             is DecisionMakingRound
         )
+
+
+class TestStandbyTransitions:
+    """A met goal and staking side end the period without trading."""
+
+    def test_standby_leaves_through_its_own_final_round(self) -> None:
+        """STANDBY from the staking check lands in FinishedStandbyRound."""
+        assert (
+            LiquidityTraderAbciApp.transition_function[CheckStakingKPIMetRound][
+                Event.STANDBY
+            ]
+            is FinishedStandbyRound
+        )
+
+    def test_standby_round_is_final_with_no_post_conditions(self) -> None:
+        """The composed app needs nothing from the db to reset and pause."""
+        assert FinishedStandbyRound in LiquidityTraderAbciApp.final_states
+        assert LiquidityTraderAbciApp.transition_function[FinishedStandbyRound] == {}
+        assert LiquidityTraderAbciApp.db_post_conditions[FinishedStandbyRound] == set()

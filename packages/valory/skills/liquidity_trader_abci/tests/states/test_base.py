@@ -176,6 +176,11 @@ class TestSynchronizedData:
         assert data.activity_target == 1
         assert data.activity_completed == 2
 
+    def test_activity_goal_met_defaults_none(self) -> None:
+        """The goal flag is None until the staking check computes it."""
+        assert _make_synced_data().is_activity_goal_met is None
+        assert _make_synced_data(is_activity_goal_met=True).is_activity_goal_met
+
     def test_chain_id_default(self) -> None:
         """Test chain_id returns None by default."""
         data = _make_synced_data()

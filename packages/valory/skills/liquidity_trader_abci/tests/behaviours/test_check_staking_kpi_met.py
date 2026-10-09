@@ -21,8 +21,12 @@
 
 # pylint: skip-file
 
-from typing import Any
+import json
+from pathlib import Path
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
+
+import pytest
 
 from packages.valory.skills.funds_manager.behaviours import (
     GET_FUNDS_STATUS_METHOD_NAME,
@@ -90,6 +94,9 @@ def _make_behaviour():
     obj._read_investing_paused = _gen_return_false
     obj.gas_cost_tracker = MagicMock()
     obj.gas_cost_tracker.data = {}
+    # Goal tracking is covered by TestActivityGoalTracking; keep it out of the
+    # staking-path tests, which do not stub its contract and KV reads.
+    obj._track_activity_goal = _gen_value(None)
     return obj
 
 
@@ -411,6 +418,9 @@ class TestCheckStakingKPIMetWithdrawalGate:
             side_effect=AssertionError(
                 "KPI lookup must not run when investing is paused"
             )
+        )
+        obj._track_activity_goal = MagicMock(
+            side_effect=AssertionError("a withdrawal period must not be counted")
         )
         obj._read_investing_paused = fake_read_investing_paused
         obj.send_a2a_transaction = fake_send
@@ -948,3 +958,285 @@ class TestTheNewRegimeSendsNoActivityTx:
     def test_the_old_regime_still_sends_its_vanity_safe_tx(self) -> None:
         """Its counter is Safe nonces, which the facilitator never moves."""
         assert self._drive(False)["vanity"] is True
+
+
+EPOCH = 1_000
+NOW = 1_500
+
+
+class _GoalRun:
+    """One call of ``_track_activity_goal`` against stubbed reads and writes."""
+
+    def __init__(
+        self,
+        tmp_path: Path,
+        kv: Optional[Dict[str, Optional[str]]],
+        ts_checkpoint: Any = EPOCH,
+        period: int = 5,
+        write_ok: bool = True,
+    ) -> None:
+        self.obj = _make_behaviour()
+        del self.obj.__dict__["_track_activity_goal"]
+        self.perf_path = tmp_path / "perf.json"
+        self.perf_path.write_text(json.dumps({"metrics": ["kept"]}))
+        self.obj.agent_performance_filepath = str(self.perf_path)
+        self.obj._get_ts_checkpoint = _gen_value(ts_checkpoint)
+        self.obj._read_kv = _gen_value(kv)
+        self.obj._get_current_timestamp = lambda: NOW
+        self.written: Dict[str, str] = {}
+
+        def fake_write_kv(data):
+            self.written.update(data)
+            yield
+            return write_ok
+
+        self.obj._write_kv = fake_write_kv
+        self.params = MagicMock()
+        self.params.staking_chain = "optimism"
+        self.params.activity_goal_target = 10
+        self.synced = MagicMock()
+        self.synced.period_count = period
+
+    def __call__(self, kpi=True, target_met=None, settling=False):
+        with (
+            patch.object(
+                type(self.obj),
+                "params",
+                new_callable=PropertyMock,
+                return_value=self.params,
+            ),
+            patch.object(
+                type(self.obj),
+                "synchronized_data",
+                new_callable=PropertyMock,
+                return_value=self.synced,
+            ),
+        ):
+            return _drive(self.obj._track_activity_goal(kpi, target_met, settling))
+
+    @property
+    def block(self):
+        return json.loads(self.perf_path.read_text()).get("activity_goal")
+
+    @property
+    def progress(self):
+        return int(self.written["activity_goal_progress"])
+
+
+def _kv(progress, period_start=EPOCH, last_counted=4, target=None, last_met_at=None):
+    return {
+        "activity_goal_target": None if target is None else str(target),
+        "activity_goal_progress": str(progress),
+        "activity_goal_period_start": str(period_start),
+        "activity_goal_last_met_at": None if last_met_at is None else str(last_met_at),
+        "activity_goal_last_counted_period": (
+            None if last_counted is None else str(last_counted)
+        ),
+    }
+
+
+class TestActivityGoalTracking:
+    """Counting rounds per epoch and publishing the block."""
+
+    def test_a_working_period_adds_exactly_one(self, tmp_path: Path) -> None:
+        """A period not standing by counts once and is recorded as counted."""
+        run = _GoalRun(tmp_path, _kv(3))
+        assert run() is False
+        assert run.written == {
+            "activity_goal_progress": "4",
+            "activity_goal_period_start": str(EPOCH),
+            "activity_goal_last_met_at": "",
+            "activity_goal_last_counted_period": "5",
+        }
+        assert run.block == {
+            "unit": "rounds",
+            "target": 10,
+            "progress": 4,
+            "is_met": False,
+            "period_start": EPOCH,
+            "last_met_at": None,
+            "updated_at": NOW,
+        }
+        assert json.loads(run.perf_path.read_text())["metrics"] == ["kept"]
+
+    def test_a_second_run_in_the_same_period_adds_nothing(self, tmp_path: Path) -> None:
+        """After a checkpoint or vanity tx the round runs again; no double count."""
+        run = _GoalRun(tmp_path, _kv(3, last_counted=5))
+        assert run() is False
+        assert run.progress == 3
+
+    def test_epoch_rollover_resets_progress(self, tmp_path: Path) -> None:
+        """A new tsCheckpoint starts the count again from this period."""
+        run = _GoalRun(tmp_path, _kv(12, period_start=EPOCH - 86400, last_counted=5))
+        assert run() is False
+        assert run.progress == 1
+        assert run.written["activity_goal_period_start"] == str(EPOCH)
+
+    def test_the_period_reaching_the_goal_works_and_the_next_stands_by(
+        self, tmp_path: Path
+    ) -> None:
+        """The tenth round is counted and reported met; the eleventh stands by."""
+        run = _GoalRun(tmp_path, _kv(9))
+        assert run() is False
+        assert run.progress == 10
+        assert run.block["is_met"] is True
+        assert run.block["last_met_at"] == NOW
+
+        following = _GoalRun(
+            tmp_path, _kv(10, last_counted=5, last_met_at=NOW), period=6
+        )
+        assert following() is True
+        assert following.progress == 10
+        assert "standing by" in str(following.obj.context.logger.info.call_args)
+
+    def test_a_standby_period_adds_nothing(self, tmp_path: Path) -> None:
+        """Standby periods are never counted."""
+        run = _GoalRun(tmp_path, _kv(10))
+        assert run(kpi=True) is True
+        assert run.progress == 10
+
+    def test_a_zero_goal_stands_by_from_the_first_period(self, tmp_path: Path) -> None:
+        """A goal of 0 is met at once, so the period stands by uncounted."""
+        run = _GoalRun(tmp_path, _kv(0, target=0, last_counted=None))
+        assert run(kpi=True) is True
+        assert run.progress == 0
+        assert run.block["is_met"] is True
+
+    def test_a_rollover_into_standby_clears_the_counted_period(
+        self, tmp_path: Path
+    ) -> None:
+        """The previous epoch's counted period is overwritten, not left behind."""
+        run = _GoalRun(
+            tmp_path, _kv(12, period_start=EPOCH - 86400, last_counted=5, target=0)
+        )
+        assert run(kpi=True) is True
+        assert run.written["activity_goal_last_counted_period"] == ""
+
+    def test_met_goal_with_unmet_staking_side_keeps_counting(
+        self, tmp_path: Path
+    ) -> None:
+        """Without the staking side the agent works, so the period counts."""
+        run = _GoalRun(tmp_path, _kv(10))
+        assert run(kpi=True, target_met=False) is True
+        assert run.progress == 11
+
+    def test_a_settling_period_is_not_standby(self, tmp_path: Path) -> None:
+        """A vanity tx to settle keeps priority, so the period counts."""
+        run = _GoalRun(tmp_path, _kv(10))
+        assert run(kpi=True, settling=True) is True
+        assert run.progress == 11
+
+    def test_a_restart_keeps_progress_in_the_same_epoch(self, tmp_path: Path) -> None:
+        """period_count restarts from 0, but the stored progress carries on."""
+        run = _GoalRun(tmp_path, _kv(6, last_counted=40), period=0)
+        assert run() is False
+        assert run.progress == 7
+
+    def test_the_users_target_overrides_the_default(self, tmp_path: Path) -> None:
+        """A goal set from the chat wins over the param."""
+        run = _GoalRun(tmp_path, _kv(3, target=3))
+        assert run() is True
+        assert run.block["target"] == 3
+        assert "activity_goal_target" not in run.written
+
+    def test_last_met_at_is_stamped_once_per_epoch(self, tmp_path: Path) -> None:
+        """A later met period keeps the first stamp of the epoch."""
+        run = _GoalRun(tmp_path, _kv(11, target=10, last_met_at=EPOCH + 5))
+        run(kpi=False)
+        assert run.written["activity_goal_last_met_at"] == str(EPOCH + 5)
+
+    @pytest.mark.parametrize("ts_checkpoint", [None, -1, "x"])
+    def test_unreadable_epoch_changes_nothing(
+        self, tmp_path: Path, ts_checkpoint
+    ) -> None:
+        """Without tsCheckpoint the flag is None and nothing is written."""
+        run = _GoalRun(tmp_path, _kv(3), ts_checkpoint=ts_checkpoint)
+        assert run() is None
+        assert run.written == {}
+        assert run.block is None
+
+    def test_unreadable_kv_changes_nothing(self, tmp_path: Path) -> None:
+        """An unreachable KV store leaves the state and the block alone."""
+        run = _GoalRun(tmp_path, None)
+        assert run() is None
+        assert run.written == {}
+        assert run.block is None
+
+    def test_failed_kv_write_does_not_publish(self, tmp_path: Path) -> None:
+        """Progress the KV store does not hold is not shown to Pearl."""
+        run = _GoalRun(tmp_path, _kv(10), write_ok=False)
+        assert run() is True
+        assert run.block is None
+        run.obj.context.logger.error.assert_called_once()
+
+    def test_failed_block_write_is_logged(self, tmp_path: Path) -> None:
+        """A file error is logged and the verdict still returned."""
+        run = _GoalRun(tmp_path, _kv(3))
+        run.obj.agent_performance_filepath = str(tmp_path / "missing" / "perf.json")
+        assert run() is False
+        run.obj.context.logger.error.assert_called_once()
+
+    def test_a_fresh_install_starts_from_the_default(self, tmp_path: Path) -> None:
+        """No stored state means progress 0 against the param goal."""
+        empty = {key: None for key in _kv(0)}
+        run = _GoalRun(tmp_path, empty)
+        assert run() is False
+        assert run.progress == 1
+        assert run.block["target"] == 10
+
+
+class TestActivityGoalInThePayload:
+    """The round receives the goal verdict through the payload."""
+
+    def test_payload_carries_the_goal_verdict(self) -> None:
+        """A staked period sends what the tracker computed."""
+        obj = _make_behaviour()
+        obj._is_staking_kpi_met = _gen_value((True, 10))
+        _stub_staking_reads(obj)
+        obj._track_activity_goal = _gen_value(True)
+        captured = {}
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            obj.context.benchmark_tool.measure.return_value = MagicMock()
+            obj.send_a2a_transaction = fake_send
+            obj.wait_until_round_end = _gen_value(None)
+            obj.set_done = MagicMock()
+            _drive(obj.async_act())
+
+        assert captured["payload"].is_activity_goal_met is True
+
+    def test_undetermined_kpi_skips_the_goal(self) -> None:
+        """Without a KPI verdict the period is not counted and the flag is None."""
+        obj = _make_behaviour()
+        obj._is_staking_kpi_met = _gen_value((None, None))
+        obj._track_activity_goal = MagicMock(
+            side_effect=AssertionError("must not count an undetermined period")
+        )
+        captured = {}
+
+        def fake_send(payload):
+            captured["payload"] = payload
+            yield
+
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        with patch.object(
+            type(obj), "params", new_callable=PropertyMock, return_value=params_mock
+        ):
+            obj.context.benchmark_tool.measure.return_value = MagicMock()
+            obj.send_a2a_transaction = fake_send
+            obj.wait_until_round_end = _gen_value(None)
+            obj.set_done = MagicMock()
+            _drive(obj.async_act())
+
+        assert captured["payload"].is_activity_goal_met is None

@@ -48,6 +48,9 @@ from packages.valory.skills.abstract_round_abci.models import (
     TypeCheckMixin,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    is_non_negative_int,
+)
 
 HTTP_OK = [200, 201]
 MINUTE_UNIX = 60
@@ -165,6 +168,11 @@ class SharedState(BaseSharedState):
         self.selected_protocols: List[str] = []
         self.max_loss_percentage: Optional[float] = None
         self.latest_chat_write_request_id: Optional[str] = None
+        # Lets the next chat prompt show a goal whose KV write is still delayed.
+        self.activity_goal_target: Optional[int] = None
+        self.latest_goal_write_request_id: Optional[str] = None
+        # A chat goal the KV store did not take, reported in the next reply.
+        self.failed_activity_goal_target: Optional[int] = None
         self.request_count: int = 0
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""
@@ -571,6 +579,15 @@ class Params(BaseParams):
         # contracts). Optimus/Basius default: 1. Feeds ``is_activity_target_met``
         # in /healthcheck (the Pearl auto-run rotation signal).
         self.activity_target: int = self._ensure("activity_target", kwargs, int)
+        # User-facing rounds goal per epoch; not activity_target.
+        self.activity_goal_target: int = self._ensure(
+            "activity_goal_target", kwargs, int
+        )
+        if not is_non_negative_int(self.activity_goal_target):
+            raise ValueError(
+                "activity_goal_target must be a whole number of rounds, 0 or "
+                f"more; got {self.activity_goal_target!r}"
+            )
         # The fixed tool string and static prompt the producer puts on the single
         # mech request fired to tick ``mapRequestCounts`` on the new regime. The
         # Response leg is composed (poll-then-discard); the response content is

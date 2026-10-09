@@ -12,6 +12,7 @@ alphabet_in:
 - SETTLE
 - STAKING_KPI_MET
 - STAKING_KPI_NOT_MET
+- STANDBY
 - TRANSFER_COMPLETED
 - UNRECOGNIZED
 - UPDATE
@@ -26,6 +27,7 @@ final_states:
 - FinishedCheckStakingKPIMetRound
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
+- FinishedStandbyRound
 - FinishedTxPreparationRound
 label: LiquidityTraderAbciApp
 start_states:
@@ -47,6 +49,7 @@ states:
 - FinishedCheckStakingKPIMetRound
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
+- FinishedStandbyRound
 - FinishedTxPreparationRound
 - GetPositionsRound
 - PostTxSettlementRound
@@ -69,6 +72,7 @@ transition_func:
     (CheckStakingKPIMetRound, SETTLE): FinishedCheckStakingKPIMetRound
     (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
     (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
+    (CheckStakingKPIMetRound, STANDBY): FinishedStandbyRound
     (CheckStakingKPIMetRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound

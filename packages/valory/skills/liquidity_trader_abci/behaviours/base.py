@@ -69,6 +69,11 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
     StakingState,
     SynchronizedData,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    KV_ACTIVITY_GOAL_KEYS,
+    merge_agent_performance,
+    parse_stored_int,
+)
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 SAFE_TX_GAS = 0
@@ -109,6 +114,9 @@ RATE_LIMIT_BACKOFF_SCHEDULE = (5, 10, 15)
 # and the PostTxSettlement hook both invalidate the cache eagerly, so
 # the TTL is a safety floor, not the primary freshness mechanism.
 SAFE_BALANCES_CACHE_TTL_SECONDS = 3 * 3600
+
+# The keys of agent_performance.json the main loop owns.
+AGENT_PERFORMANCE_METRICS_KEYS = ("timestamp", "metrics")
 
 
 # Single source of truth for the chain-scoped kv keys this skill uses.
@@ -1461,10 +1469,20 @@ class LiquidityTraderBaseBehaviour(
         self._read_data("portfolio_data", self.portfolio_data_filepath)
 
     def store_agent_performance(self) -> None:
-        """Store the agent performance as JSON."""
-        self._store_data(
-            self.agent_performance, "agent_performance", self.agent_performance_filepath
-        )
+        """Merge the metrics and timestamp into the agent performance file."""
+        try:
+            merge_agent_performance(
+                self.agent_performance_filepath,
+                {
+                    key: self.agent_performance.get(key)
+                    for key in AGENT_PERFORMANCE_METRICS_KEYS
+                },
+                defaults=self.agent_performance,
+            )
+        except OSError as e:
+            self.context.logger.error(
+                f"Error writing to file {self.agent_performance_filepath!r}: {e}"
+            )
 
     def read_agent_performance(self) -> None:
         """Read the agent performance as JSON."""
@@ -2238,6 +2256,20 @@ class LiquidityTraderBaseBehaviour(
             return False
 
         return raw.lower() == "true"
+
+    def _read_activity_goal_state(
+        self,
+    ) -> Generator[None, None, Optional[Dict[str, Optional[int]]]]:
+        """Read the persisted activity goal state.
+
+        :yield: the KV store request.
+        :return: each goal KV key mapped to its value, ``None`` where absent or
+            malformed; ``None`` overall when the KV store cannot be read.
+        """
+        result = yield from self._read_kv(KV_ACTIVITY_GOAL_KEYS)
+        if result is None:
+            return None
+        return {key: parse_stored_int(result.get(key)) for key in KV_ACTIVITY_GOAL_KEYS}
 
     def _write_kv(
         self,

@@ -92,6 +92,7 @@ class Event(Enum):
     SERVICE_EVICTED = "service_evicted"
     STAKING_KPI_MET = "staking_kpi_met"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
+    STANDBY = "standby"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -246,6 +247,14 @@ class SynchronizedData(BaseSynchronizedData):
     def activity_completed(self) -> Optional[int]:
         """Mech requests completed since the last checkpoint (new regime; else ``None``)."""
         return cast(Optional[int], self.db.get("activity_completed", None))
+
+    @property
+    def is_activity_goal_met(self) -> Optional[bool]:
+        """Whether the rounds goal was met before this period was counted.
+
+        :return: the goal verdict, or ``None`` when it could not be computed.
+        """
+        return cast(Optional[bool], self.db.get("is_activity_goal_met", None))
 
     @property
     def chain_id(self) -> Optional[str]:

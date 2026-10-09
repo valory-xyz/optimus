@@ -22,6 +22,7 @@ alphabet_in:
 - SETTLE
 - STAKING_KPI_MET
 - STAKING_KPI_NOT_MET
+- STANDBY
 - SUSPICIOUS_ACTIVITY
 - TRANSFER_COMPLETED
 - UNRECOGNIZED
@@ -84,6 +85,7 @@ transition_func:
     (CheckStakingKPIMetRound, SETTLE): RandomnessTransactionSubmissionRound
     (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
     (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
+    (CheckStakingKPIMetRound, STANDBY): ResetAndPauseRound
     (CheckStakingKPIMetRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CheckTransactionHistoryRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckTransactionHistoryRound, CHECK_TIMEOUT): CheckTransactionHistoryRound

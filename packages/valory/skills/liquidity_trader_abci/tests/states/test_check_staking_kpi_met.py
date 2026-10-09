@@ -24,6 +24,8 @@
 from dataclasses import fields
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
+
 from packages.valory.skills.abstract_round_abci.base import (
     BaseTxPayload,
     CollectSameUntilThresholdRound,
@@ -248,3 +250,71 @@ def test_payload_field_order_still_aligns_with_the_selection_key() -> None:
         "selection_key and the payload's carried fields no longer line up; "
         "every db key after the mismatch would be written from the wrong value"
     )
+
+
+def _end_block_with(
+    kpi, activity_target_met, goal_met, tx_hash=None, payload_values=()
+):
+    """Run ``end_block`` with the given consensus values after a DONE."""
+    round_obj = object.__new__(CheckStakingKPIMetRound)
+    type(round_obj).threshold_reached = PropertyMock(return_value=bool(payload_values))
+    type(round_obj).most_voted_payload_values = PropertyMock(
+        return_value=payload_values
+    )
+    synced = MagicMock(spec=SynchronizedData)
+    synced.is_staking_kpi_met = kpi
+    synced.is_activity_target_met = activity_target_met
+    synced.is_activity_goal_met = goal_met
+    synced.most_voted_tx_hash = tx_hash
+    type(round_obj).synchronized_data = PropertyMock(return_value=synced)
+    with patch.object(
+        CollectSameUntilThresholdRound, "end_block", return_value=(synced, Event.DONE)
+    ):
+        result = round_obj.end_block()
+    return result[1]
+
+
+_KPI_EVENT = {
+    True: Event.STAKING_KPI_MET,
+    False: Event.STAKING_KPI_NOT_MET,
+    None: Event.ERROR,
+}
+
+
+class TestStandbyGate:
+    """``STANDBY`` fires only when the staking side and the goal are both met."""
+
+    @pytest.mark.parametrize("goal_met", [True, False, None])
+    @pytest.mark.parametrize("kpi", [True, False, None])
+    def test_old_regime_uses_the_kpi(self, kpi, goal_met) -> None:
+        """Without an activity target, the on-chain KPI is the staking side."""
+        event = _end_block_with(kpi, None, goal_met)
+        if kpi is True and goal_met is True:
+            assert event == Event.STANDBY
+        else:
+            assert event == _KPI_EVENT[kpi]
+
+    @pytest.mark.parametrize("goal_met", [True, False])
+    @pytest.mark.parametrize("target_met", [True, False])
+    @pytest.mark.parametrize("kpi", [True, False, None])
+    def test_new_regime_uses_the_activity_target(
+        self, kpi, target_met, goal_met
+    ) -> None:
+        """On the new regime the activity target, not the KPI, is the staking side."""
+        event = _end_block_with(kpi, target_met, goal_met)
+        if kpi is not None and target_met and goal_met:
+            assert event == Event.STANDBY
+        else:
+            assert event == _KPI_EVENT[kpi]
+
+    def test_settle_keeps_priority(self) -> None:
+        """A vanity tx to settle is never skipped for standby."""
+        assert _end_block_with(True, None, True, tx_hash="0xhash") == Event.SETTLE
+
+    def test_withdrawal_keeps_priority(self) -> None:
+        """A withdrawal request wins over standby."""
+        values = _payload_values_with_event(Event.WITHDRAWAL_INITIATED.value)
+        assert (
+            _end_block_with(True, True, True, payload_values=values)
+            == Event.WITHDRAWAL_INITIATED
+        )

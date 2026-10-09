@@ -44,3 +44,7 @@ class FinishedEvaluateStrategyRound(DegenerateRound):
 
 class FinishedTxPreparationRound(DegenerateRound):
     """FinishedTxPreparationRound"""
+
+
+class FinishedStandbyRound(DegenerateRound):
+    """FinishedStandbyRound"""

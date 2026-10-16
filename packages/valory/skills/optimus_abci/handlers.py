@@ -3095,9 +3095,12 @@ class HttpHandler(BaseHttpHandler):
                 # The value came from the LLM, so it is not echoed into the HTML.
                 reasoning += f"<br><br><strong>Note:</strong> I could not change your daily goal: it must be a whole number of rounds, 0 or more. It stays at {current_goal} rounds."
             elif requested_goal != current_goal:
-                # A goal equal to the one in effect is a restatement, not a change.
                 activity_goal = requested_goal
                 reasoning += f"<br><br><strong>Note:</strong> Your daily goal is now {activity_goal} rounds ({goal_progress} done this epoch)."
+            elif intent == Intent.UPDATE.value:
+                # The current goal is read from a mirror that can lag the KV
+                # store, so an explicit update is still written.
+                activity_goal = requested_goal
 
         # Convert validated protocol names to strategies for storage
         selected_protocols = [

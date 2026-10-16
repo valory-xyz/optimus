@@ -61,7 +61,7 @@ fingerprint:
   composition.py: bafybeieedszzuwkpdi6decpafois7xkmaxzpf6skbkyiodkmnudxsvgri4
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeidmrmoofuxjiem5brvtwa5apemhh3c4qom4cy3ixr6lofdxtr62ya
-  handlers.py: bafybeie4ppgzccbkzi65ofgljogfnwhpgr7db46hgsw5wskgx74hleger4
+  handlers.py: bafybeicyvipngsprauttc2ivcryagkozhw6m5u35kyvzjp7gb2eix3kvam
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -153,15 +153,15 @@ fingerprint:
   optimus-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   optimus-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  prompts.py: bafybeia2uxrinkuy6f34y744hml5fk4bwu3n5peon6wiqgyjhkl46oek4y
+  prompts.py: bafybeiaxirrddhvmabmliow3nnos2dg35yrcq6iacrf2go573ymtiviudm
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeigkjb6dag67bqgtrczcdwqtus6aoy4hefgyuaqwerw7h3ldxgdzsu
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeifeoghxgd3ka36544qpv6nz5e65er6nrldjs34p5p7nrqjlmjidfi
+  tests/test_handlers.py: bafybeiac62omn4dacidaxh2zqtbpoindyjnx4yx464lk6ske6xxhlzvnme
   tests/test_models.py: bafybeiashcolhjijpi7deibstjm35dgv3cajqwet577yl2vovvvgfzja7y
-  tests/test_prompts.py: bafybeia3vzcvqhweavq3dlac2vvz2kl4jgtzq6vulz74e2ya6h5bid2wta
+  tests/test_prompts.py: bafybeifmcxnaoxjz62yqdie45xmqtjlysufglyucpmdvluwayppsyo27ay
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle

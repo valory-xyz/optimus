@@ -7022,18 +7022,31 @@ class TestActivityGoalChat:
         assert ctx.state.activity_goal_target is None
         handler._submit_background.assert_not_called()
 
-    @pytest.mark.parametrize("intent", ["query", "update"])
-    def test_restating_the_stored_goal_changes_nothing(
-        self, tmp_path: Path, intent: str
+    def test_a_query_restating_the_stored_goal_changes_nothing(
+        self, tmp_path: Path
     ) -> None:
-        """Echoing the goal in effect is not reported or written as a change."""
+        """Echoing the stored goal on a question is not reported or written."""
         handler, ctx = _chat_handler()
-        self._with_block(ctx, tmp_path, _goal_block(target=10, progress=6))
-        body = _reply(handler, _llm_reply(intent=intent, activity_goal=10))
+        self._with_block(ctx, tmp_path, _goal_block(target=12, progress=6))
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=12))
         assert body["activity_goal"] is None
         assert body["reasoning"] == "ok"
         assert ctx.state.activity_goal_target is None
         handler._submit_background.assert_not_called()
+
+    def test_an_update_restating_the_stored_goal_is_written_silently(
+        self, tmp_path: Path
+    ) -> None:
+        """An explicit update is written even if it matches the stored mirror."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block(target=12, progress=6))
+        body = _reply(handler, _llm_reply(intent="update", activity_goal=12))
+        assert body["activity_goal"] == 12
+        assert body["reasoning"] == "ok"
+        assert ctx.state.activity_goal_target == 12
+        handler._submit_background.assert_called_once_with(
+            handler._delayed_write_activity_goal, 12, "req1"
+        )
 
     def test_restating_a_pending_goal_changes_nothing(self) -> None:
         """A goal not yet written counts as the one in effect."""

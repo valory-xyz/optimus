@@ -193,3 +193,4 @@ class TestStrategyPrompt:
         """The reasoning field is shown in the chat, so it must answer the user."""
         assert "reasoning: your reply shown to the user" in STRATEGY_PROMPT
         assert "answer what they asked" in STRATEGY_PROMPT
+        assert "or say what you changed" in STRATEGY_PROMPT

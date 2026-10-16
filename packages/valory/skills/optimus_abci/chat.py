@@ -79,6 +79,8 @@ class ChatSession:
     def __init__(self) -> None:
         """Initialize the session."""
         self._answering_since: Dict[str, float] = {}
+        # The change each message being answered decides, kept for its resend.
+        self._deciding: Dict[str, ConfigProposal] = {}
         self.proposal: Optional[ConfigProposal] = None
 
     def is_answering(self, client_id: str) -> bool:
@@ -103,14 +105,30 @@ class ChatSession:
         :param client_id: Pearl's id of the message.
         """
         self._answering_since.pop(client_id, None)
+        self._deciding.pop(client_id, None)
 
-    def take_proposal(self) -> Optional[ConfigProposal]:
-        """Return the change waiting for confirmation and forget it: it gets one reply.
+    def take_proposal(self, client_id: str) -> Optional[ConfigProposal]:
+        """Return the change this message decides; it gets one reply.
 
+        The change stays with the message until it is answered, so the resend
+        of a message whose answer never came back decides it again.
+
+        :param client_id: Pearl's id of the message.
         :return: the change, if any.
         """
-        proposal, self.proposal = self.proposal, None
+        proposal = self._deciding.get(client_id)
+        if proposal is None:
+            proposal, self.proposal = self.proposal, None
+        if proposal is not None:
+            self._deciding[client_id] = proposal
         return proposal
+
+    def drop_proposal(self, client_id: str) -> None:
+        """Forget the change this message decided against.
+
+        :param client_id: Pearl's id of the message.
+        """
+        self._deciding.pop(client_id, None)
 
 
 def changes_text(changes: List[ConfigChange]) -> str:

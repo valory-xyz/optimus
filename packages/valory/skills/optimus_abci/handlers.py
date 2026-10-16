@@ -2877,7 +2877,7 @@ class HttpHandler(BaseHttpHandler):
 
         turn = ChatTurn(client_id, message)
         self.chat_session.start_answering(client_id)
-        proposal = self.chat_session.take_proposal()
+        proposal = self.chat_session.take_proposal(client_id)
         if proposal is not None:
             self._answer_safely(
                 partial(
@@ -3352,6 +3352,7 @@ class HttpHandler(BaseHttpHandler):
                 proposal,
             )
             return
+        self.chat_session.drop_proposal(turn.client_id)
         self._answer_safely(
             partial(self._ask_chat, text, turn, http_msg, http_dialogue),
             turn,

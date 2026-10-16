@@ -58,11 +58,11 @@ fingerprint:
   basius-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   basius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   behaviours.py: bafybeib3kst4zp2btwplfwps3rptdknh7zjx2dndjcejzov4ldqmwcnzxu
-  chat.py: bafybeibq7i3f6c7mcav26sk74cnmgkf3mnn6avg7zywsii5tzg4iecxley
+  chat.py: bafybeicaj3txugjkgakcsuzrkkdyvuf5dxoq7qdkfrubexxzuhtvwh3f7e
   composition.py: bafybeieedszzuwkpdi6decpafois7xkmaxzpf6skbkyiodkmnudxsvgri4
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeidmrmoofuxjiem5brvtwa5apemhh3c4qom4cy3ixr6lofdxtr62ya
-  handlers.py: bafybeid2yp6hjbyikcbsau7sb2ftycf6ood4ypyrnt44my5dpetllwrzmu
+  handlers.py: bafybeih57q3wudolgagy3itx7wd3dnu5pjrwpb5ptdng6ts7c3esajucri
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -157,11 +157,11 @@ fingerprint:
   prompts.py: bafybeigls6nlwruypjxspv3boymwqjd5wr6gjfoevgjj5ygcizpgrpxdja
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
-  tests/test_chat.py: bafybeid6eew5iefor7whnn7g5q3pcognfuqo2qs6d3ehrlz66pqsr3o6xu
+  tests/test_chat.py: bafybeifvei2dymolfereob6tginoq4w4yg7jyiy6sozjagjokeh5orxj3i
   tests/test_composition.py: bafybeigkjb6dag67bqgtrczcdwqtus6aoy4hefgyuaqwerw7h3ldxgdzsu
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeigjfuouq5nodlgdcuvng36mbkpugnpmpimaw2sbpgbf2uoltulpo4
+  tests/test_handlers.py: bafybeid4tusd2fwxqqfsemh2wtnddft2s5nutn646gmkgccs5oqorhfd3y
   tests/test_models.py: bafybeiashcolhjijpi7deibstjm35dgv3cajqwet577yl2vovvvgfzja7y
   tests/test_prompts.py: bafybeigh656ax7acodbqbcamg4h32rslqk6e63qszqbsa5iwchr6rtawde
 fingerprint_ignore_patterns: []

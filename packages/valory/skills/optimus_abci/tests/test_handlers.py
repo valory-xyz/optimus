@@ -7270,6 +7270,7 @@ from packages.valory.skills.optimus_abci.handlers import (  # noqa: E402
     CHAT_MAX_TOKENS,
     CHAT_REPLY_FAILED,
     CHAT_SAVE_FAILED,
+    INVALID_CHAT_REQUEST,
     STILL_ANSWERING,
 )
 
@@ -7521,7 +7522,7 @@ class TestChatMessages:
         dialogue = chat.post(body=body)
         status, payload = chat.response(dialogue)
         assert status == 400
-        assert "error" in payload
+        assert payload == {"error": INVALID_CHAT_REQUEST}
         assert _feed(chat.store) == []
 
     def test_message_that_cannot_be_saved(self, chat: _Chat) -> None:

@@ -3434,21 +3434,30 @@ class HttpHandler(BaseHttpHandler):
         except OSError as e:
             self.context.logger.error(f"Could not read the chat feed: {e}")
             message, reply = None, None
-        if message is not None and reply is not None:
-            # A slow write and its resend's both came back; the first answered.
+        stored = (
+            kv_store_response_message.performative
+            == KvStoreMessage.Performative.SUCCESS
+        )
+        if (
+            message is not None
+            and reply is not None
+            and (not stored or reply.get("text") != CHANGE_NOT_APPLIED)
+        ):
+            # A slow write and its resend's both came back. The first answer
+            # stands unless it said nothing was applied and this write applied it.
             self._send_ok_response(
                 http_msg, http_dialogue, {"message": message, "reply": reply}
             )
             return
-        if (
-            kv_store_response_message.performative
-            != KvStoreMessage.Performative.SUCCESS
-        ):
+        if not stored:
             self.context.logger.error("Could not store the confirmed chat change.")
             # Nothing was applied, so the next confirm decides it.
             self.chat_session.proposal = proposal
             self._send_chat_reply(CHANGE_NOT_APPLIED, turn, http_msg, http_dialogue)
             return
+        if self.chat_session.proposal is proposal:
+            # An earlier failed write of this confirm put it back for deciding.
+            self.chat_session.proposal = None
         # The KV store calls back without a guard, and an unanswered request
         # would block its resend with 409s.
         self._answer_safely(

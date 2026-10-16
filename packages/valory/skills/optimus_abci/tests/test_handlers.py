@@ -7830,6 +7830,53 @@ class TestChatConfigChange:
         assert chat.response(resend) == chat.response(confirm)
         assert chat.handler.chat_session.proposal is None
 
+    def test_a_resend_whose_write_succeeds_after_the_first_failed_applies(
+        self, chat: _Chat
+    ) -> None:
+        """A change the resend stored applies though the first write failed."""
+        self._propose(chat, trading_type="risky")
+        with patch.object(chat_mod.time, "time", return_value=1000.0):
+            confirm = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        with patch.object(
+            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+        ):
+            resend = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        chat.kv_reply(success=False, index=0)
+        chat.kv_reply(success=True, index=1)
+        feed = _feed(chat.store)
+        assert [e["type"] for e in feed if e["kind"] == "event"] == ["config_changed"]
+        replies = [e["text"] for e in feed if e.get("client_id") == "c2"][1:]
+        assert replies[0] == CHANGE_NOT_APPLIED
+        assert replies[1].startswith("Done.")
+        assert len(replies) == 2
+        assert chat.response(confirm)[1]["reply"]["text"] == CHANGE_NOT_APPLIED
+        assert chat.response(resend)[1]["reply"]["text"].startswith("Done.")
+        assert chat.ctx.state.trading_type == "risky"
+        assert chat.handler.chat_session.proposal is None
+
+    def test_a_confirm_whose_writes_both_fail_answers_once(self, chat: _Chat) -> None:
+        """Two failed writes of one confirm give one reply and keep the change."""
+        self._propose(chat, trading_type="risky")
+        proposal = chat.handler.chat_session.proposal
+        with patch.object(chat_mod.time, "time", return_value=1000.0):
+            confirm = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        with patch.object(
+            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+        ):
+            resend = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        chat.kv_reply(success=False, index=0)
+        chat.kv_reply(success=False, index=1)
+        feed = _feed(chat.store)
+        assert [e for e in feed if e["kind"] == "event"] == []
+        replies = [e["text"] for e in feed if e.get("client_id") == "c2"][1:]
+        assert replies == [CHANGE_NOT_APPLIED]
+        assert chat.response(resend) == chat.response(confirm)
+        assert chat.handler.chat_session.proposal is proposal
+
     def test_a_stored_change_applies_when_the_feed_cannot_be_read(
         self, chat: _Chat
     ) -> None:

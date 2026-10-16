@@ -845,15 +845,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         if not received or not any(received.values()):
             return None
-        exit_usd = yield from self._convert_amounts_to_usd(
-            received.get(token0.lower(), 0),
-            received.get(token1.lower(), 0) if token1 else 0,
-            token0,
-            token1,
-            chain,
-        )
-        # Zero means no price was found, not that the exit returned nothing.
-        return exit_usd if exit_usd > 0 else None
+        exit_usd = 0.0
+        for token in (token0, token1):
+            amount = received.get(token.lower(), 0) if token else 0
+            if not amount:
+                continue
+            value = yield from self._convert_amounts_to_usd(
+                amount, 0, token, None, chain
+            )
+            # Zero means this token's price or decimals were not found; valuing
+            # the exit without it would show a false loss.
+            if value <= 0:
+                return None
+            exit_usd += value
+        return exit_usd
 
     def _tokens_received(
         self, tx_hash: str, chain: str, recipient: str, tokens: List[Optional[str]]

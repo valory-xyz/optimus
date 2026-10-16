@@ -25,7 +25,7 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Any, List
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
 
@@ -7313,13 +7313,17 @@ class TestPoolExitedEvent:
             ]
         }
         b = self._behaviour(tmp_path, [self._position()], receipt)
+        prices = {TOKEN0: 60.0, TOKEN1: 42.0}
         b._convert_amounts_to_usd = MagicMock(
-            side_effect=lambda *a: _make_gen_method(102.0)()
+            side_effect=lambda amount, _, token, *rest: _make_gen_method(
+                prices[token]
+            )()
         )
         events = self._exit(b)
-        b._convert_amounts_to_usd.assert_called_once_with(
-            3 * 10**18, 5, TOKEN0, TOKEN1, "optimism"
-        )
+        assert b._convert_amounts_to_usd.call_args_list == [
+            call(3 * 10**18, 0, TOKEN0, None, "optimism"),
+            call(5, 0, TOKEN1, None, "optimism"),
+        ]
         assert len(events) == 1
         assert events[0]["type"] == "pool_exited"
         assert events[0]["title"] == "Exited a pool"
@@ -7382,6 +7386,22 @@ class TestPoolExitedEvent:
         """A result that cannot be told is shown as not available."""
         b = self._behaviour(tmp_path, [self._position()], receipt)
         b._convert_amounts_to_usd = _make_gen_method(value)
+        assert _fields(self._exit(b)[0])["Result"] == "Not available"
+
+    def test_one_unpriced_token_makes_the_result_not_available(
+        self, tmp_path: Path
+    ) -> None:
+        """An exit valued without one of its tokens does not show a false loss."""
+        receipt = {
+            "logs": [_transfer_log(TOKEN0, SAFE, 1), _transfer_log(TOKEN1, SAFE, 1)]
+        }
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        prices = {TOKEN0: 50.0, TOKEN1: 0.0}
+        b._convert_amounts_to_usd = MagicMock(
+            side_effect=lambda amount, _, token, *rest: _make_gen_method(
+                prices[token]
+            )()
+        )
         assert _fields(self._exit(b)[0])["Result"] == "Not available"
 
     def test_without_principal_or_entry_date(self, tmp_path: Path) -> None:

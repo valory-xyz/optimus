@@ -200,6 +200,25 @@ class TestRead:
         append_event(tmp_path, EventType.CONFIG_CHANGED, [field("Setting", '"c1"')])
         assert find_exchange(tmp_path, "c1") == (None, None)
 
+    def test_only_message_lines_with_the_client_id_match(self, tmp_path: Path) -> None:
+        """A line that carries the id elsewhere, or an event with it, is not a match."""
+        with open(tmp_path / FEED_FILE, "ab") as f:
+            f.write(b'{"id": 1, "kind": "event", "client_id": "c1"}\n')
+            f.write(b'{"id": 2, "kind": "message", "note": "c1", "client_id": "c2"}\n')
+        assert find_exchange(tmp_path, "c1") == (None, None)
+
+    def test_the_latest_reply_is_kept(self, tmp_path: Path) -> None:
+        """Of two replies to one message, the latest is returned."""
+        message = append_message(tmp_path, "user", "q", "c1")
+        append_message(tmp_path, "agent", "first", "c1")
+        latest = append_message(tmp_path, "agent", "second", "c1")
+        assert find_exchange(tmp_path, "c1") == (message, latest)
+
+    def test_file_starting_with_a_blank_line(self, tmp_path: Path) -> None:
+        """Blank lines, even the first, are skipped."""
+        (tmp_path / FEED_FILE).write_bytes(b'\n{"id": 1, "kind": "message"}\n')
+        assert [e["id"] for e in read_recent(tmp_path, 5)] == [1]
+
 
 class TestFormatting:
     """Display-ready values."""

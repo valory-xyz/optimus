@@ -161,7 +161,7 @@ fingerprint:
   tests/test_composition.py: bafybeigkjb6dag67bqgtrczcdwqtus6aoy4hefgyuaqwerw7h3ldxgdzsu
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeidv56lwpoxwx3h7p3n3jxd3sw7dtuy66dm47flw2ej5wsvbzk6zn4
+  tests/test_handlers.py: bafybeidnibxsw6i3532v5cukgzw2jf3w4dt4xg2x3xmur6ap62j6ivfr3a
   tests/test_models.py: bafybeiashcolhjijpi7deibstjm35dgv3cajqwet577yl2vovvvgfzja7y
   tests/test_prompts.py: bafybeigh656ax7acodbqbcamg4h32rslqk6e63qszqbsa5iwchr6rtawde
 fingerprint_ignore_patterns: []

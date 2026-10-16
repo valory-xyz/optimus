@@ -7841,6 +7841,7 @@ class TestChatConfigChange:
             side_effect=OSError("disk"),
         ):
             chat.kv_reply(success=True)
+        chat.ctx.logger.error.assert_any_call("Could not read the chat feed: disk")
         assert chat.ctx.state.trading_type == "risky"
 
     def test_a_failure_after_the_write_still_answers(self, chat: _Chat) -> None:

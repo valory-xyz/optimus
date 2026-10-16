@@ -66,6 +66,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
+    TRANSFER_EVENT_SIGNATURE,
+)
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
 from packages.valory.skills.liquidity_trader_abci.rounds import Event
@@ -74,6 +77,20 @@ from packages.valory.skills.liquidity_trader_abci.states.decision_making import 
 )
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
+)
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    parse_stored_int,
+)
+from packages.valory.skills.liquidity_trader_abci.utils.feed import (
+    EventType,
+    NONE_TEXT,
+    NOT_AVAILABLE,
+    field,
+    format_date,
+    format_result,
+    format_usd,
+    pool_name,
+    record_event,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -285,6 +302,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # Use the existing _write_kv method to update KV store
             yield from self._write_kv(update_data)
             self.context.logger.info("Withdrawal marked as completed and flags reset")
+            yield from self._record_positions_exited()
 
             # Update portfolio data file after withdrawal completion
             self.context.logger.info(
@@ -295,6 +313,76 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Portfolio data will be updated in the next round")
         except Exception as e:
             self.context.logger.error(f"Error updating withdrawal completion: {str(e)}")
+
+    def _record_positions_exited(self) -> Generator[None, None, None]:
+        """Write the ``Exited all positions`` card of a finished withdrawal to the feed.
+
+        :yield: the KV, receipt and decimals requests.
+        """
+        withdrawal = yield from self._read_kv(
+            ("withdrawal_requested_at", "withdrawal_target_address")
+        )
+        withdrawal = withdrawal or {}
+        requested_at = parse_stored_int(withdrawal.get("withdrawal_requested_at"))
+        exited = [
+            position
+            for position in self.current_positions
+            if requested_at is not None
+            and position.get("status") == PositionStatus.CLOSED.value
+            and (position.get("exit_timestamp") or 0) >= requested_at
+        ]
+        # A withdrawal exits everything, so whatever is still open was not exited.
+        not_exited = [
+            position
+            for position in self.current_positions
+            if position.get("status") == PositionStatus.OPEN.value
+        ]
+        amount = yield from self._withdrawal_amount_received(
+            withdrawal.get("withdrawal_target_address")
+        )
+        record_event(
+            self.params.store_path,
+            EventType.POSITIONS_EXITED,
+            [
+                field(
+                    "Positions exited",
+                    ", ".join(pool_name(p) for p in exited) or NONE_TEXT,
+                ),
+                field("Amount received", amount),
+                field(
+                    "Positions that couldn't be exited",
+                    ", ".join(pool_name(p) for p in not_exited) or NONE_TEXT,
+                ),
+            ],
+            self.context.logger,
+        )
+
+    def _withdrawal_amount_received(
+        self, target_address: Optional[str]
+    ) -> Generator[None, None, str]:
+        """Read the USDC the settled withdrawal transfer sent to the user.
+
+        :param target_address: the user's withdrawal address.
+        :yield: the receipt and decimals requests.
+        :return: the display text.
+        """
+        chain = self.params.target_investment_chains[0]
+        usdc_address = self._get_usdc_address(chain)
+        if not target_address or not usdc_address:
+            return NOT_AVAILABLE
+        received = yield from self._tokens_received(
+            self.synchronized_data.final_tx_hash,
+            chain,
+            target_address,
+            [usdc_address],
+        )
+        if received is None:
+            return NOT_AVAILABLE
+        decimals = yield from self._get_token_decimals(chain, usdc_address)
+        if decimals is None:
+            return NOT_AVAILABLE
+        amount = received[usdc_address.lower()] / 10**decimals
+        return f"{amount:,.2f} USDC"
 
     def _update_withdrawal_status(
         self, status: str, message: str
@@ -573,8 +661,27 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         yield from self._calculate_and_store_tip_data(current_position, action)
 
         self.store_current_positions()
+        self._record_pool_entered(current_position)
         self.context.logger.info(
             f"Enter pool was successful! Updated current positions for pool {current_position['pool_address']}"
+        )
+
+    def _record_pool_entered(self, position: Dict[str, Any]) -> None:
+        """Write an ``Entered a pool`` card to the feed.
+
+        :param position: the position just opened.
+        """
+        principal = float(position.get("principal_usd") or 0)
+        record_event(
+            self.params.store_path,
+            EventType.POOL_ENTERED,
+            [
+                field("Pool", pool_name(position)),
+                field(
+                    "Amount", format_usd(principal) if principal > 0 else NOT_AVAILABLE
+                ),
+            ],
+            self.context.logger,
         )
 
     def _post_execute_exit_pool(
@@ -585,6 +692,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         is_cl_pool = action.get("is_cl_pool", False)
         dex_type = action.get("dex_type")
+        exited = [
+            position
+            for position in self.current_positions
+            if position.get("pool_address") == pool_address
+            and position.get("status") == PositionStatus.OPEN.value
+        ]
 
         # Find all positions with the matching pool address and update their status
         for position in self.current_positions:
@@ -614,6 +727,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
+        if exited:
+            yield from self._record_pool_exited(exited)
 
         # When we exit the pool, it may take time to reflect the balance of our assets in the safe
         yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
@@ -621,6 +736,111 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # Check if this was a withdrawal exit and log accordingly
         if action.get("description", "").startswith("Withdrawal"):
             self.context.logger.info("Withdrawal pool exit completed successfully.")
+
+    def _record_pool_exited(
+        self, exited: List[Dict[str, Any]]
+    ) -> Generator[None, None, None]:
+        """Write an ``Exited a pool`` card to the feed.
+
+        :param exited: the positions in the pool that were open until this exit.
+        :yield: the receipt and price requests behind the result.
+        """
+        principal = sum(
+            float(position.get("principal_usd") or 0) for position in exited
+        )
+        result = NOT_AVAILABLE
+        if principal > 0:
+            exit_usd = yield from self._exit_value_usd(exited[0])
+            if exit_usd is not None:
+                result = format_result(exit_usd, principal)
+        entered_at = min(
+            (p["enter_timestamp"] for p in exited if p.get("enter_timestamp")),
+            default=None,
+        )
+        record_event(
+            self.params.store_path,
+            EventType.POOL_EXITED,
+            [
+                field("Pool", pool_name(exited[0])),
+                field("Result", result),
+                field(
+                    "Amount entered",
+                    format_usd(principal) if principal > 0 else NOT_AVAILABLE,
+                ),
+                field(
+                    "Entry date",
+                    format_date(entered_at) if entered_at else NOT_AVAILABLE,
+                ),
+            ],
+            self.context.logger,
+        )
+
+    def _exit_value_usd(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Value what the settled exit transaction returned to the Safe, in USD.
+
+        :param position: a position in the exited pool.
+        :yield: the receipt and price requests.
+        :return: the value, or ``None`` when it cannot be told.
+        """
+        chain = position.get("chain")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        token0, token1 = position.get("token0"), position.get("token1")
+        if not chain or not safe_address or not token0:
+            return None
+        received = yield from self._tokens_received(
+            self.synchronized_data.final_tx_hash,
+            chain,
+            safe_address,
+            [token0, token1],
+        )
+        if not received or not any(received.values()):
+            return None
+        exit_usd = yield from self._convert_amounts_to_usd(
+            received.get(token0.lower(), 0),
+            received.get(token1.lower(), 0) if token1 else 0,
+            token0,
+            token1,
+            chain,
+        )
+        # Zero means no price was found, not that the exit returned nothing.
+        return exit_usd if exit_usd > 0 else None
+
+    def _tokens_received(
+        self, tx_hash: str, chain: str, recipient: str, tokens: List[Optional[str]]
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Sum the ERC20 transfers of the given tokens to a recipient in a transaction.
+
+        :param tx_hash: the settled transaction.
+        :param chain: the chain it settled on.
+        :param recipient: the address the tokens went to.
+        :param tokens: the token addresses to count.
+        :yield: the receipt request.
+        :return: the amount of each token, by lowercase address, or ``None``
+            when the receipt cannot be read.
+        """
+        receipt = yield from self.get_transaction_receipt(
+            tx_digest=tx_hash, chain_id=chain
+        )
+        if not receipt:
+            self.context.logger.error(f"Could not read the receipt of {tx_hash}")
+            return None
+        received = {token.lower(): 0 for token in tokens if token}
+        recipient_topic = "0x" + recipient.lower()[2:].rjust(64, "0")
+        for log in receipt.get("logs", []):
+            topics = [str(topic).lower() for topic in log.get("topics", [])]
+            token = str(log.get("address", "")).lower()
+            if (
+                len(topics) < 3
+                or topics[0] != TRANSFER_EVENT_SIGNATURE
+                or topics[2] != recipient_topic
+                or token not in received
+            ):
+                continue
+            data = str(log.get("data") or "0x")
+            received[token] += int(data, 16) if data != "0x" else 0
+        return received
 
     def _post_execute_transfer(self, actions, last_executed_action_index):
         """Handle USDC transfer completion."""

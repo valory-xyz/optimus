@@ -7357,6 +7357,22 @@ class TestPoolExitedEvent:
         assert fields["Amount entered"] == "$100.00"
         assert fields["Entry date"] == "12 Oct 2025"
 
+    def test_several_open_positions_in_the_pool_are_one_card(
+        self, tmp_path: Path
+    ) -> None:
+        """Positions open in the exited pool are summed, from the earliest entry."""
+        receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}
+        later = self._position(principal_usd=100.0, enter_timestamp=1760313600)
+        earlier = self._position(principal_usd=60.0, enter_timestamp=1760227200)
+        b = self._behaviour(tmp_path, [later, earlier], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(176.0)
+        events = self._exit(b)
+        assert len(events) == 1
+        fields = _fields(events[0])
+        assert fields["Amount entered"] == "$160.00"
+        assert fields["Entry date"] == "12 Oct 2025"
+        assert fields["Result"] == "+$16.00 (+10.00%)"
+
     def test_a_rerun_after_the_exit_writes_nothing(self, tmp_path: Path) -> None:
         """Once the positions are closed, handling the exit again adds no card."""
         receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}

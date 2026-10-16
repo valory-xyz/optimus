@@ -7249,3 +7249,564 @@ class TestActivityGoalChat:
             handler._delayed_write_activity_goal(4, "older")
         handler._write_kv.assert_not_called()
         assert json.loads(path.read_text())["activity_goal"] == _goal_block()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/chat
+# ---------------------------------------------------------------------------
+
+from packages.valory.skills.liquidity_trader_abci.utils.feed import (  # noqa: E402
+    EventType,
+    append_event,
+    field,
+)
+from packages.valory.skills.optimus_abci.chat import ChatSession  # noqa: E402
+from packages.valory.skills.optimus_abci.handlers import (  # noqa: E402
+    CHANGE_NOT_APPLIED,
+    CHAT_MAX_TOKENS,
+    CHAT_REPLY_FAILED,
+    CHAT_SAVE_FAILED,
+    STILL_ANSWERING,
+)
+
+
+def _feed(store: Path) -> list:
+    path = store / "feed.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
+class _Chat:
+    """A handler wired for the chat route, with the LLM and the KV store captured."""
+
+    def __init__(self, store: Path) -> None:
+        self.handler, self.ctx = _make_http_handler()
+        self.store = store
+        ctx = self.ctx
+        ctx.params.store_path = store
+        ctx.params.use_x402 = False
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.params.available_strategies = {
+            "optimism": ["balancer_pools_search", "velodrome_pools_search"]
+        }
+        ctx.state.trading_type = "balanced"
+        ctx.state.selected_protocols = json.dumps(["balancer_pools_search"])
+        ctx.state.max_loss_percentage = None
+        ctx.state.composite_score = None
+        ctx.state.latest_chat_write_request_id = None
+        ctx.state.latest_goal_write_request_id = None
+        self.handler.available_strategies = [
+            "balancer_pools_search",
+            "velodrome_pools_search",
+        ]
+        self.handler.chat_session = ChatSession()
+        self.handler._send_llm_request = MagicMock()
+        self.handler._write_kv = MagicMock()
+        self.handler._update_agent_performance_chat = MagicMock()
+        self.dialogues: list = []
+
+    def post(self, text: Any = "hi", client_id: Any = "c1", body: Any = None):
+        """Send a chat message; return the HTTP dialogue."""
+        msg = MagicMock()
+        msg.headers = ""
+        msg.version = "1.1"
+        msg.body = (
+            body
+            if body is not None
+            else json.dumps({"text": text, "client_id": client_id}).encode()
+        )
+        dialogue = MagicMock()
+        dialogue.dialogue_label.dialogue_reference = (f"req{len(self.dialogues)}", "")
+        self.dialogues.append((msg, dialogue))
+        self.handler._handle_chat(msg, dialogue)
+        return dialogue
+
+    def llm_call(self, index: int = -1):
+        """The prompt, schema, max tokens, callback and kwargs of an LLM call."""
+        return self.handler._send_llm_request.call_args_list[index][0]
+
+    def answer(self, payload: Any, index: int = -1) -> None:
+        """Answer an LLM call with a payload."""
+        _, _, _, callback, kwargs = self.llm_call(index)
+        msg = MagicMock()
+        msg.payload = payload if isinstance(payload, str) else json.dumps(payload)
+        callback(msg, MagicMock(), **kwargs)
+
+    def answer_strategy(self, **fields: Any) -> None:
+        """Answer the chat LLM call with a strategy reply."""
+        data = {
+            "intent": "query",
+            "selected_protocols": ["balancerPool"],
+            "trading_type": "balanced",
+            "max_loss_percentage": 10.0,
+            "activity_goal": None,
+            "reasoning": "Here is my answer.",
+        }
+        data.update(fields)
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.validate_and_fix_protocols",
+            side_effect=lambda names, *a, **k: [
+                n for n in names if n in ("balancerPool", "velodrome")
+            ],
+        ):
+            self.answer({"response": json.dumps(data)})
+
+    def answer_confirmation(self, confirmed: bool) -> None:
+        """Answer the confirmation LLM call."""
+        self.answer({"response": json.dumps({"confirmed": confirmed})})
+
+    def kv_reply(self, success: bool = True) -> None:
+        """Answer the last KV write."""
+        args, kwargs = self.handler._write_kv.call_args
+        callback, callback_kwargs = args[1], args[2]
+        msg = MagicMock()
+        msg.performative = (
+            KvStoreMessage.Performative.SUCCESS
+            if success
+            else KvStoreMessage.Performative.ERROR
+        )
+        callback(msg, MagicMock(), **callback_kwargs)
+
+    @staticmethod
+    def response(dialogue: Any):
+        """The status and JSON body of a dialogue's response."""
+        kwargs = dialogue.reply.call_args.kwargs
+        return kwargs["status_code"], json.loads(kwargs["body"])
+
+
+@pytest.fixture
+def chat(tmp_path: Path) -> _Chat:
+    """A chat-ready handler writing its feed under a temp dir."""
+    return _Chat(tmp_path)
+
+
+class TestChatRoute:
+    """The chat route is matched before anything else takes the request."""
+
+    def test_chat_route_is_matched(self) -> None:
+        """POST /api/v1/chat reaches the chat; other paths and methods do not."""
+        handler, ctx = _make_http_handler()
+        ctx.params.use_x402 = False
+        ctx.params.service_endpoint_base = "http://localhost:8000"
+        ctx.params.target_investment_chains = ["optimism"]
+        ctx.params.available_strategies = {"optimism": ["balancer_pools_search"]}
+        handler.setup()
+        url = "http://localhost:8716/api/v1/chat"
+        assert handler._get_handler(url, "post")[0] == handler._handle_chat
+        assert handler._get_handler(url, "get")[0] == handler._handle_get_static_file
+        assert handler._get_handler(url + "x", "post")[0] == handler._handle_bad_request
+        assert (
+            handler._get_handler("http://localhost:8716/configure_strategies", "post")[
+                0
+            ]
+            == handler._handle_post_process_prompt
+        )
+        assert isinstance(handler.chat_session, ChatSession)
+
+
+class TestChatMessages:
+    """Messages and replies are written once, and resends are answered as written."""
+
+    def test_answers_and_writes_both_lines(self, chat: _Chat) -> None:
+        """The user line is written on arrival, the reply with its client id."""
+        dialogue = chat.post("What can you do?", "c1")
+        assert [e["role"] for e in _feed(chat.store)] == ["user"]
+        prompt, _, max_tokens, _, _ = chat.llm_call()
+        assert max_tokens == CHAT_MAX_TOKENS
+        assert 'User message: "What can you do?"' in prompt
+        chat.answer_strategy(reasoning="I invest in pools.")
+        status, body = chat.response(dialogue)
+        assert status == 200
+        message, reply = _feed(chat.store)
+        assert body == {"message": message, "reply": reply}
+        assert message["text"] == "What can you do?"
+        assert message["client_id"] == "c1"
+        assert reply == {**reply, "role": "agent", "text": "I invest in pools."}
+        assert reply["client_id"] == "c1"
+
+    def test_prompt_has_recent_activity(self, chat: _Chat) -> None:
+        """Recent events are in the prompt, so the agent can explain its pool."""
+        append_event(
+            chat.store,
+            EventType.POOL_ENTERED,
+            [field("Pool", "WETH/USDC on Velodrome"), field("Amount", "$10.00")],
+        )
+        chat.post("Why did you choose your current pool?")
+        prompt = chat.llm_call()[0]
+        assert "Entered a pool: Pool: WETH/USDC on Velodrome; Amount: $10.00" in prompt
+        # The message being answered is the user message, not an activity line.
+        assert "User: Why did you choose" not in prompt
+
+    def test_prompt_without_activity(self, chat: _Chat) -> None:
+        """An empty feed says so."""
+        chat.post("hi")
+        assert "(no activity yet)" in chat.llm_call()[0]
+
+    def test_prompt_when_the_feed_cannot_be_read(self, chat: _Chat) -> None:
+        """A feed read failure does not stop the answer."""
+        chat.post("hi")
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.read_recent",
+            side_effect=OSError("disk"),
+        ):
+            chat.handler._ask_chat("hi", MagicMock(), MagicMock(), MagicMock())
+        assert "(not available)" in chat.llm_call()[0]
+
+    def test_resend_of_an_answered_message_is_replayed(self, chat: _Chat) -> None:
+        """No new LLM call, no new line: the lines as written."""
+        first = chat.post("hi", "c1")
+        chat.answer_strategy()
+        _, written = chat.response(first)
+        again = chat.post("hi", "c1")
+        assert chat.response(again) == (200, written)
+        assert chat.handler._send_llm_request.call_count == 1
+        assert len(_feed(chat.store)) == 2
+
+    def test_resend_while_answering_is_a_conflict(self, chat: _Chat) -> None:
+        """A message still being answered gets a 409."""
+        chat.post("hi", "c1")
+        again = chat.post("hi", "c1")
+        assert chat.response(again) == (409, {"error": STILL_ANSWERING})
+        assert chat.handler._send_llm_request.call_count == 1
+        assert len(_feed(chat.store)) == 1
+
+    def test_a_failed_answer_is_not_written_and_can_be_retried(
+        self, chat: _Chat
+    ) -> None:
+        """A failure writes no reply; the retry reuses the user line."""
+        first = chat.post("hi", "c1")
+        chat.answer({"error": "rate limited"})
+        assert chat.response(first) == (500, {"error": "rate limited"})
+        assert [e["role"] for e in _feed(chat.store)] == ["user"]
+        retry = chat.post("hi", "c1")
+        chat.answer_strategy(reasoning="ok")
+        assert chat.response(retry)[0] == 200
+        assert [e["role"] for e in _feed(chat.store)] == ["user", "agent"]
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "not json",
+            json.dumps({"response": "not json"}),
+            json.dumps({"response": json.dumps([1])}),
+            json.dumps([1]),
+        ],
+    )
+    def test_unreadable_llm_answer(self, chat: _Chat, payload: str) -> None:
+        """An unreadable answer is a 500 and frees the message for a retry."""
+        dialogue = chat.post("hi", "c1")
+        chat.answer(payload)
+        assert chat.response(dialogue) == (500, {"error": CHAT_REPLY_FAILED})
+        assert not chat.handler.chat_session.is_answering("c1")
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            b"not json",
+            b"\xff",
+            json.dumps([1]).encode(),
+            json.dumps({"text": "hi"}).encode(),
+            json.dumps({"text": "  ", "client_id": "c1"}).encode(),
+            json.dumps({"text": "hi", "client_id": ""}).encode(),
+            json.dumps({"text": 1, "client_id": "c1"}).encode(),
+        ],
+    )
+    def test_invalid_request(self, chat: _Chat, body: bytes) -> None:
+        """A body without text and client id is a 400 and writes nothing."""
+        dialogue = chat.post(body=body)
+        status, payload = chat.response(dialogue)
+        assert status == 400
+        assert "error" in payload
+        assert _feed(chat.store) == []
+
+    def test_message_that_cannot_be_saved(self, chat: _Chat) -> None:
+        """A feed that cannot be written is a 500 without an LLM call."""
+        chat.ctx.params.store_path = chat.store / "missing"
+        dialogue = chat.post()
+        assert chat.response(dialogue) == (500, {"error": CHAT_SAVE_FAILED})
+        chat.handler._send_llm_request.assert_not_called()
+
+    def test_reply_that_cannot_be_saved(self, chat: _Chat) -> None:
+        """A reply that cannot be written is a 500, not a 200 without a line."""
+        dialogue = chat.post("hi", "c1")
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.append_message",
+            side_effect=OSError("disk full"),
+        ):
+            chat.answer_strategy()
+        assert chat.response(dialogue) == (500, {"error": CHAT_SAVE_FAILED})
+        assert not chat.handler.chat_session.is_answering("c1")
+
+    def test_a_failure_while_asking_still_answers(self, chat: _Chat) -> None:
+        """An unexpected error is a 500 and does not leave the message answering."""
+        chat.handler._send_llm_request.side_effect = RuntimeError("boom")
+        dialogue = chat.post("hi", "c1")
+        assert chat.response(dialogue) == (500, {"error": CHAT_REPLY_FAILED})
+        assert not chat.handler.chat_session.is_answering("c1")
+
+
+class TestChatPaidCallStatus:
+    """402 only when the user must add funds; 503 while it clears on its own."""
+
+    @pytest.mark.parametrize(
+        "checked, deficit, status, prefix",
+        [
+            (False, 0, 503, "System initializing"),
+            (False, 10, 503, "System initializing"),
+            (True, 10, 402, "Chat needs a small prepaid balance"),
+            (True, 0, 503, "Chat is temporarily unavailable"),
+        ],
+    )
+    def test_status(
+        self, chat: _Chat, checked: bool, deficit: int, status: int, prefix: str
+    ) -> None:
+        """The status follows why the call cannot be paid for."""
+        chat.ctx.params.use_x402 = True
+        chat.ctx.state.sufficient_funds_for_x402_payments = False
+        chat.ctx.state.x402_funding_checked = checked
+        chat.ctx.state.x402_eth_deficit = deficit
+        dialogue = chat.post("hi", "c1")
+        code, body = chat.response(dialogue)
+        assert code == status
+        assert body["error"].startswith(prefix)
+        chat.handler._send_llm_request.assert_not_called()
+        # The message stays in the feed, and a resend does not repeat it.
+        chat.post("hi", "c1")
+        assert len(_feed(chat.store)) == 1
+
+    def test_funded_x402_answers(self, chat: _Chat) -> None:
+        """With the calls paid for, the chat goes to the LLM."""
+        chat.ctx.params.use_x402 = True
+        chat.ctx.state.sufficient_funds_for_x402_payments = True
+        chat.post()
+        chat.handler._send_llm_request.assert_called_once()
+
+
+class TestChatConfigChange:
+    """A change is proposed, applied only after a typed confirm, then recorded."""
+
+    def _propose(self, chat: _Chat, **fields: Any) -> Any:
+        dialogue = chat.post("go risky", "c1")
+        chat.answer_strategy(**{"intent": "update", **fields})
+        return dialogue
+
+    def test_a_change_is_only_proposed(self, chat: _Chat) -> None:
+        """The reply asks for a confirm; nothing is written or recorded."""
+        dialogue = self._propose(
+            chat, trading_type="risky", max_loss_percentage=20, reasoning="Riskier."
+        )
+        status, body = chat.response(dialogue)
+        assert status == 200
+        text = body["reply"]["text"]
+        assert text.startswith("Riskier.<br><br><b>To confirm:</b> change ")
+        assert "Trading type from Balanced to Risky" in text
+        assert "Max loss from 10% to 20%" in text
+        chat.handler._write_kv.assert_not_called()
+        assert chat.ctx.state.trading_type == "balanced"
+        assert [e["kind"] for e in _feed(chat.store)] == ["message", "message"]
+        assert chat.handler.chat_session.proposal is not None
+
+    def test_proposal_without_reasoning(self, chat: _Chat) -> None:
+        """Without the model's text the reply is the question alone."""
+        dialogue = self._propose(chat, trading_type="risky", reasoning="")
+        assert chat.response(dialogue)[1]["reply"]["text"].startswith(
+            "<b>To confirm:</b>"
+        )
+
+    def test_yes_applies_records_and_acknowledges(self, chat: _Chat) -> None:
+        """A confirm writes the KV store; the card and the ack follow the write."""
+        self._propose(
+            chat,
+            trading_type="risky",
+            max_loss_percentage=20,
+            selected_protocols=["balancerPool", "velodrome"],
+        )
+        confirm = chat.post("yes", "c2")
+        prompt, _, _, _, _ = chat.llm_call()
+        assert 'The user replied: "yes"' in prompt
+        assert "Trading type from Balanced to Risky" in prompt
+        chat.answer_confirmation(True)
+        data = chat.handler._write_kv.call_args[0][0]
+        assert data["trading_type"] == "risky"
+        assert data["max_loss_percentage"] == "20.0"
+        assert json.loads(data["selected_protocols"]) == [
+            "balancer_pools_search",
+            "velodrome_pools_search",
+        ]
+        assert "activity_goal_target" not in data
+        # Nothing is recorded or answered before the store takes it.
+        assert not any(e["kind"] == "event" for e in _feed(chat.store))
+        confirm.reply.assert_not_called()
+
+        chat.kv_reply(success=True)
+        events = [e for e in _feed(chat.store) if e["kind"] == "event"]
+        assert [e["type"] for e in events] == ["config_changed"] * 3
+        assert [e["fields"] for e in events] == [
+            [
+                {"label": "Setting", "value": "Protocols"},
+                {"label": "Before", "value": "Balancer"},
+                {"label": "After", "value": "Balancer, Velodrome"},
+            ],
+            [
+                {"label": "Setting", "value": "Trading type"},
+                {"label": "Before", "value": "Balanced"},
+                {"label": "After", "value": "Risky"},
+            ],
+            [
+                {"label": "Setting", "value": "Max loss"},
+                {"label": "Before", "value": "10%"},
+                {"label": "After", "value": "20%"},
+            ],
+        ]
+        status, body = chat.response(confirm)
+        assert status == 200
+        assert body["reply"]["text"].startswith("Done. I changed Protocols from ")
+        assert body["reply"]["client_id"] == "c2"
+        assert chat.ctx.state.trading_type == "risky"
+        assert chat.ctx.state.max_loss_percentage == 20.0
+        assert chat.ctx.state.latest_chat_write_request_id == "req1"
+        assert chat.handler.chat_session.proposal is None
+        # The confirm message is written before the card, the ack after it.
+        assert [e["kind"] for e in _feed(chat.store)][-5:] == [
+            "message",
+            "event",
+            "event",
+            "event",
+            "message",
+        ]
+
+    def test_goal_change_is_stored_and_published(self, chat: _Chat) -> None:
+        """A goal change writes the goal key and updates what Pearl shows."""
+        self._propose(chat, activity_goal=4)
+        chat.post("yes please", "c2")
+        chat.answer_confirmation(True)
+        data = chat.handler._write_kv.call_args[0][0]
+        assert data == {"activity_goal_target": "4"}
+        with patch.object(
+            chat.handler, "_publish_activity_goal", return_value=None
+        ) as publish:
+            chat.kv_reply(success=True)
+        publish.assert_called_once_with(4)
+        assert chat.ctx.state.activity_goal_target == 4
+        assert chat.ctx.state.latest_goal_write_request_id == "req1"
+        event = [e for e in _feed(chat.store) if e["kind"] == "event"][0]
+        assert event["fields"] == [
+            {"label": "Setting", "value": "Daily activity target"},
+            {"label": "Before", "value": "10 rounds"},
+            {"label": "After", "value": "4 rounds"},
+        ]
+        chat.handler._update_agent_performance_chat.assert_not_called()
+
+    def test_published_goal_is_not_kept_pending(self, chat: _Chat) -> None:
+        """Once the block on disk shows the goal, memory does not hold it."""
+        self._propose(chat, activity_goal=4)
+        chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        with patch.object(chat.handler, "_publish_activity_goal", return_value={}):
+            chat.kv_reply(success=True)
+        assert chat.ctx.state.activity_goal_target is None
+
+    def test_a_failed_write_is_explained_not_recorded(self, chat: _Chat) -> None:
+        """A change the store refused gets an explanation and no card."""
+        self._propose(chat, trading_type="risky")
+        confirm = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        chat.kv_reply(success=False)
+        assert chat.response(confirm)[1]["reply"]["text"] == CHANGE_NOT_APPLIED
+        assert not any(e["kind"] == "event" for e in _feed(chat.store))
+        assert chat.ctx.state.trading_type == "balanced"
+
+    @pytest.mark.parametrize("message", ["no", "what is my max loss?"])
+    def test_anything_else_drops_the_proposal(self, chat: _Chat, message: str) -> None:
+        """No confirm: nothing is applied and the message gets a normal reply."""
+        self._propose(chat, trading_type="risky")
+        reply = chat.post(message, "c2")
+        chat.answer_confirmation(False)
+        prompt = chat.llm_call()[0]
+        assert f'User message: "{message}"' in prompt
+        chat.answer_strategy(reasoning="Kept as is.")
+        assert chat.response(reply)[1]["reply"]["text"] == "Kept as is."
+        chat.handler._write_kv.assert_not_called()
+        assert chat.handler.chat_session.proposal is None
+        # The next message is not read as a confirm.
+        chat.post("yes", "c3")
+        assert "User message" in chat.llm_call()[0]
+
+    def test_a_failed_confirm_check_keeps_the_proposal(self, chat: _Chat) -> None:
+        """If the confirm cannot be read, the resend decides it."""
+        self._propose(chat, trading_type="risky")
+        confirm = chat.post("yes", "c2")
+        chat.answer({"error": "rate limited"})
+        assert chat.response(confirm)[0] == 500
+        assert chat.handler.chat_session.proposal is not None
+        chat.handler._write_kv.assert_not_called()
+
+    def test_a_failure_while_applying_still_answers(self, chat: _Chat) -> None:
+        """An error while writing is a 500, not a hung request."""
+        self._propose(chat, trading_type="risky")
+        confirm = chat.post("yes", "c2")
+        chat.handler._write_kv.side_effect = RuntimeError("boom")
+        chat.answer_confirmation(True)
+        assert chat.response(confirm) == (500, {"error": CHAT_REPLY_FAILED})
+
+    @pytest.mark.parametrize(
+        "fields, refusal",
+        [
+            ({"max_loss_percentage": 45}, "I can't set the max loss percentage to 45%"),
+            (
+                {"max_loss_percentage": 0.5},
+                "I can't set the max loss percentage to 0.5%",
+            ),
+            ({"activity_goal": -1}, "I can't set the daily activity target"),
+            ({"activity_goal": 2.5}, "I can't set the daily activity target"),
+            ({"trading_type": "yolo"}, "I can't set the trading type to yolo"),
+        ],
+    )
+    def test_out_of_range_is_refused_when_proposed(
+        self, chat: _Chat, fields: dict, refusal: str
+    ) -> None:
+        """A value the agent would not accept is refused before any confirm."""
+        dialogue = self._propose(chat, **fields)
+        assert chat.response(dialogue)[1]["reply"]["text"].startswith(refusal)
+        assert chat.handler.chat_session.proposal is None
+        chat.handler._write_kv.assert_not_called()
+
+    def test_unreadable_change(self, chat: _Chat) -> None:
+        """A change the model set in a shape that cannot be read is not proposed."""
+        dialogue = self._propose(chat, max_loss_percentage="lots")
+        assert chat.response(dialogue)[1]["reply"]["text"] == CHANGE_NOT_APPLIED
+        assert chat.handler.chat_session.proposal is None
+
+    def test_unchanged_settings_are_not_proposed(self, chat: _Chat) -> None:
+        """An update to the values in force is answered without a confirm."""
+        dialogue = self._propose(chat, activity_goal=10, reasoning="Already so.")
+        assert chat.response(dialogue)[1]["reply"]["text"] == "Already so."
+        assert chat.handler.chat_session.proposal is None
+
+    def test_reply_without_full_config_is_a_query(self, chat: _Chat) -> None:
+        """An update without the trading type is not read as a change."""
+        dialogue = chat.post("hi", "c1")
+        chat.answer(
+            {"response": json.dumps({"intent": "update", "reasoning": "Hello."})}
+        )
+        assert chat.response(dialogue)[1]["reply"]["text"] == "Hello."
+
+    def test_unavailable_protocol_is_left_out(self, chat: _Chat) -> None:
+        """A protocol not on the chain is noted and left out of the change."""
+        dialogue = self._propose(
+            chat, selected_protocols=["balancerPool", "velodrome", "sturdy"]
+        )
+        text = chat.response(dialogue)[1]["reply"]["text"]
+        assert "sturdy is not available on optimism" in text
+        assert "Protocols from Balancer to Balancer, Velodrome" in text
+        assert chat.handler.chat_session.proposal.selected_protocols == [
+            "balancer_pools_search",
+            "velodrome_pools_search",
+        ]
+
+    def test_no_protocols_left(self, chat: _Chat) -> None:
+        """A change to no protocols reads as None."""
+        self._propose(chat, selected_protocols=[])
+        change = chat.handler.chat_session.proposal.changes[0]
+        assert (change.setting, change.after) == ("Protocols", "None")

@@ -83,11 +83,30 @@ class TestChatSession:
     def test_a_proposal_is_taken_once(self) -> None:
         """The pending change gets one reply, then is gone."""
         session = ChatSession()
-        assert session.take_proposal() is None
+        assert session.take_proposal("c1") is None
         proposal = _proposal()
         session.proposal = proposal
-        assert session.take_proposal() is proposal
-        assert session.take_proposal() is None
+        assert session.take_proposal("c1") is proposal
+        session.finish_answering("c1")
+        assert session.take_proposal("c1") is None
+        assert session.take_proposal("c2") is None
+
+    def test_an_unanswered_message_keeps_its_proposal(self) -> None:
+        """The resend of a message never answered decides its change again."""
+        session = ChatSession()
+        proposal = _proposal()
+        session.proposal = proposal
+        assert session.take_proposal("c1") is proposal
+        assert session.take_proposal("c2") is None
+        assert session.take_proposal("c1") is proposal
+
+    def test_a_dropped_proposal_is_not_kept(self) -> None:
+        """A change the message decided against is not decided again."""
+        session = ChatSession()
+        session.proposal = _proposal()
+        session.take_proposal("c1")
+        session.drop_proposal("c1")
+        assert session.take_proposal("c1") is None
 
 
 def test_changes_text() -> None:

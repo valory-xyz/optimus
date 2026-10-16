@@ -7255,12 +7255,16 @@ class TestActivityGoalChat:
 # POST /api/v1/chat
 # ---------------------------------------------------------------------------
 
+import packages.valory.skills.optimus_abci.chat as chat_mod  # noqa: E402
 from packages.valory.skills.liquidity_trader_abci.utils.feed import (  # noqa: E402
     EventType,
     append_event,
     field,
 )
-from packages.valory.skills.optimus_abci.chat import ChatSession  # noqa: E402
+from packages.valory.skills.optimus_abci.chat import (  # noqa: E402
+    ANSWERING_TIMEOUT_SECONDS,
+    ChatSession,
+)
 from packages.valory.skills.optimus_abci.handlers import (  # noqa: E402
     CHANGE_NOT_APPLIED,
     CHAT_MAX_TOKENS,
@@ -7763,6 +7767,33 @@ class TestChatConfigChange:
         assert chat.response(confirm) == (500, {"error": CHAT_REPLY_FAILED})
         assert chat.handler.chat_session.proposal is proposal
         assert not chat.handler.chat_session.is_answering("c2")
+
+    def test_a_confirm_without_a_kv_reply_is_decided_by_the_resend(
+        self, chat: _Chat
+    ) -> None:
+        """A store that never answers the write leaves the change for the resend."""
+        self._propose(chat, trading_type="risky")
+        proposal = chat.handler.chat_session.proposal
+        with patch.object(chat_mod.time, "time", return_value=1000.0):
+            chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        assert chat.handler._write_kv.call_count == 1
+        # The store never calls back; the resend comes after the timeout.
+        with patch.object(
+            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+        ):
+            resend = chat.post("yes", "c2")
+        prompt = chat.llm_call()[0]
+        assert 'The user replied: "yes"' in prompt
+        assert "Trading type from Balanced to Risky" in prompt
+        _, _, _, _, kwargs = chat.llm_call()
+        assert kwargs["proposal"] is proposal
+        chat.answer_confirmation(True)
+        assert chat.handler._write_kv.call_count == 2
+        chat.kv_reply(success=True)
+        assert chat.response(resend)[0] == 200
+        assert chat.ctx.state.trading_type == "risky"
+        assert chat.handler.chat_session.take_proposal("c2") is None
 
     def test_a_failure_after_the_write_still_answers(self, chat: _Chat) -> None:
         """An error putting a stored change in force is a 500, not a hung request."""

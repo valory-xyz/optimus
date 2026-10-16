@@ -7829,6 +7829,20 @@ class TestChatConfigChange:
         assert chat.response(resend) == chat.response(confirm)
         assert chat.handler.chat_session.proposal is None
 
+    def test_a_stored_change_applies_when_the_feed_cannot_be_read(
+        self, chat: _Chat
+    ) -> None:
+        """An unreadable feed does not stop a stored change from applying."""
+        self._propose(chat, trading_type="risky")
+        chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.find_exchange",
+            side_effect=OSError("disk"),
+        ):
+            chat.kv_reply(success=True)
+        assert chat.ctx.state.trading_type == "risky"
+
     def test_a_failure_after_the_write_still_answers(self, chat: _Chat) -> None:
         """An error putting a stored change in force is a 500, not a hung request."""
         self._propose(chat, activity_goal=4)

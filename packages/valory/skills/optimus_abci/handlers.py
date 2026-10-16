@@ -3427,6 +3427,19 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the HttpMessage instance
         :param http_dialogue: the HttpDialogue instance
         """
+        try:
+            message, reply = find_exchange(
+                self.context.params.store_path, turn.client_id
+            )
+        except OSError as e:
+            self.context.logger.error(f"Could not read the chat feed: {e}")
+            message, reply = None, None
+        if message is not None and reply is not None:
+            # A slow write and its resend's both came back; the first answered.
+            self._send_ok_response(
+                http_msg, http_dialogue, {"message": message, "reply": reply}
+            )
+            return
         if (
             kv_store_response_message.performative
             != KvStoreMessage.Performative.SUCCESS

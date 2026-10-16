@@ -7360,9 +7360,9 @@ class _Chat:
         """Answer the confirmation LLM call."""
         self.answer({"response": json.dumps({"confirmed": confirmed})})
 
-    def kv_reply(self, success: bool = True) -> None:
-        """Answer the last KV write."""
-        args, kwargs = self.handler._write_kv.call_args
+    def kv_reply(self, success: bool = True, index: int = -1) -> None:
+        """Answer a KV write, the last one by default."""
+        args, _ = self.handler._write_kv.call_args_list[index]
         callback, callback_kwargs = args[1], args[2]
         msg = MagicMock()
         msg.performative = (
@@ -7803,6 +7803,31 @@ class TestChatConfigChange:
         assert chat.response(resend)[0] == 200
         assert chat.ctx.state.trading_type == "risky"
         assert chat.handler.chat_session.take_proposal("c2") is None
+
+    @pytest.mark.parametrize("second_success", [True, False])
+    def test_a_slow_write_and_its_resend_answer_once(
+        self, chat: _Chat, second_success: bool
+    ) -> None:
+        """When both writes of one confirm come back, only the first applies it."""
+        self._propose(chat, trading_type="risky")
+        with patch.object(chat_mod.time, "time", return_value=1000.0):
+            confirm = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        with patch.object(
+            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+        ):
+            resend = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        assert chat.handler._write_kv.call_count == 2
+        chat.kv_reply(success=True, index=0)
+        chat.kv_reply(success=second_success, index=1)
+        feed = _feed(chat.store)
+        assert [e["type"] for e in feed if e["kind"] == "event"] == ["config_changed"]
+        replies = [e for e in feed if e.get("role") == "agent"]
+        assert [e["client_id"] for e in replies] == ["c1", "c2"]
+        assert replies[-1]["text"].startswith("Done.")
+        assert chat.response(resend) == chat.response(confirm)
+        assert chat.handler.chat_session.proposal is None
 
     def test_a_failure_after_the_write_still_answers(self, chat: _Chat) -> None:
         """An error putting a stored change in force is a 500, not a hung request."""

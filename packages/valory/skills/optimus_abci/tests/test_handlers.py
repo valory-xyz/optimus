@@ -7022,6 +7022,39 @@ class TestActivityGoalChat:
         assert ctx.state.activity_goal_target is None
         handler._submit_background.assert_not_called()
 
+    @pytest.mark.parametrize("intent", ["query", "update"])
+    def test_restating_the_stored_goal_changes_nothing(
+        self, tmp_path: Path, intent: str
+    ) -> None:
+        """Echoing the goal in effect is not reported or written as a change."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block(target=10, progress=6))
+        body = _reply(handler, _llm_reply(intent=intent, activity_goal=10))
+        assert body["activity_goal"] is None
+        assert body["reasoning"] == "ok"
+        assert ctx.state.activity_goal_target is None
+        handler._submit_background.assert_not_called()
+
+    def test_restating_a_pending_goal_changes_nothing(self) -> None:
+        """A goal not yet written counts as the one in effect."""
+        handler, ctx = _chat_handler()
+        ctx.state.activity_goal_target = 7
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=7))
+        assert body["activity_goal"] is None
+        assert body["reasoning"] == "ok"
+        assert ctx.state.activity_goal_target == 7
+        handler._submit_background.assert_not_called()
+
+    def test_a_goal_one_off_the_current_is_a_change(self) -> None:
+        """Only an exact match with the goal in effect is skipped."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=11))
+        assert body["activity_goal"] == 11
+        assert "Your daily goal is now 11 rounds" in body["reasoning"]
+        handler._submit_background.assert_called_once_with(
+            handler._delayed_write_activity_goal, 11, "req1"
+        )
+
     @pytest.mark.parametrize("value", [-1, 2.5, "five", True])
     def test_an_invalid_goal_is_declined_and_the_old_one_kept(self, value) -> None:
         """Only whole numbers of rounds, 0 or more, are accepted."""

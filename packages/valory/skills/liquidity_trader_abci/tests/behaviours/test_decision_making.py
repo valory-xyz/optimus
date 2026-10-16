@@ -7560,3 +7560,92 @@ class TestPositionsExitedEvent:
         b.params.target_investment_chains = ["unknown"]
         _exhaust(b._update_withdrawal_completion())
         assert _fields(_feed_events(tmp_path)[0])["Amount received"] == "Not available"
+
+
+class TestFeedFailuresDoNotStopTheAgent:
+    """A card that cannot be built is lost; the pool or withdrawal step goes on."""
+
+    def test_pool_entered(self, tmp_path: Path) -> None:
+        """An error building the card is logged and the entry still completes."""
+        b = _make_behaviour()
+        b.params.store_path = tmp_path
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.behaviours.decision_making.pool_name",
+            side_effect=RuntimeError("boom"),
+        ):
+            b._record_pool_entered({"principal_usd": 1.0})
+        assert _feed_events(tmp_path) == []
+        assert "pool_entered" in str(b.context.logger.error.call_args)
+
+    def test_pool_exited(self, tmp_path: Path) -> None:
+        """A malformed receipt is logged and the exit is still stored."""
+        b = TestPoolExitedEvent()._behaviour(
+            tmp_path,
+            [TestPoolExitedEvent._position()],
+            {"logs": [{**_transfer_log(TOKEN0, SAFE, 1), "data": "0xzz"}]},
+        )
+        b._convert_amounts_to_usd = _make_gen_method(1.0)
+        action = {"pool_address": "0xPOOL", "dex_type": DexType.VELODROME.value}
+        _exhaust(b._post_execute_exit_pool([action], 0))
+        assert _feed_events(tmp_path) == []
+        assert b.current_positions[0]["status"] == PositionStatus.CLOSED.value
+        b.store_current_positions.assert_called_once()
+        assert "pool_exited" in str(b.context.logger.error.call_args)
+
+    def test_positions_exited(self, tmp_path: Path) -> None:
+        """A card that fails still lets the withdrawal be marked complete."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, None, None)
+
+        def broken_read(*args, **kwargs):
+            raise RuntimeError("boom")
+            yield  # noqa
+
+        b._read_kv = broken_read
+        written = []
+
+        def write(data):
+            written.append(data)
+            yield
+            return True
+
+        b._write_kv = write
+        _exhaust(b._update_withdrawal_completion())
+        assert written[0]["withdrawal_status"] == "COMPLETED"
+        assert _feed_events(tmp_path) == []
+
+
+class TestPositionsExitedOnce:
+    """The withdrawal card is written before the status flip, and only once."""
+
+    KV = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
+
+    def test_written_before_the_status_flip(self, tmp_path: Path) -> None:
+        """A restart after the flip cannot lose the card: it is already written."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, self.KV, {"logs": []})
+        cards_at_write = []
+
+        def write(data):
+            cards_at_write.append(len(_feed_events(tmp_path)))
+            yield
+            return True
+
+        b._write_kv = write
+        _exhaust(b._update_withdrawal_completion())
+        assert cards_at_write == [1]
+
+    def test_a_retried_completion_writes_no_second_card(self, tmp_path: Path) -> None:
+        """A completion run again for the same withdrawal adds nothing."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, self.KV, {"logs": []})
+        b._write_kv = _make_gen_method(False)
+        _exhaust(b._update_withdrawal_completion())
+        _exhaust(b._update_withdrawal_completion())
+        assert len(_feed_events(tmp_path)) == 1
+
+    def test_a_later_withdrawal_gets_its_own_card(self, tmp_path: Path) -> None:
+        """A card from an earlier withdrawal does not stop the next one's."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, self.KV, {"logs": []})
+        _exhaust(b._update_withdrawal_completion())
+        later = {**self.KV, "withdrawal_requested_at": "9999999999"}
+        b._read_kv = _make_gen_method(later)
+        _exhaust(b._update_withdrawal_completion())
+        assert len(_feed_events(tmp_path)) == 2

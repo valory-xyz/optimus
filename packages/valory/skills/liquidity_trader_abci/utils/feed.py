@@ -301,6 +301,24 @@ def read_recent(store_path: Path, limit: int) -> List[FeedEntry]:
     return entries[::-1]
 
 
+def has_event_since(store_path: Path, event_type: EventType, since: int) -> bool:
+    """Return whether an event of this type was written at or after a time.
+
+    :param store_path: the directory holding the feed.
+    :param event_type: the event.
+    :param since: unix seconds.
+    :return: whether such an event is in the feed.
+    """
+    for entry in _entries_newest_first(Path(store_path) / FEED_FILE):
+        ts = entry.get("ts")
+        if isinstance(ts, int) and ts < since:
+            # Lines are appended in time order, so nothing older can match.
+            return False
+        if entry.get("kind") == KIND_EVENT and entry.get("type") == event_type.value:
+            return True
+    return False
+
+
 def find_exchange(
     store_path: Path, client_id: str
 ) -> Tuple[Optional[FeedEntry], Optional[FeedEntry]]:

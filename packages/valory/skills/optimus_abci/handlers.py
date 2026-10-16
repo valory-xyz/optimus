@@ -2891,6 +2891,7 @@ class HttpHandler(BaseHttpHandler):
                 turn,
                 http_msg,
                 http_dialogue,
+                proposal,
             )
             return
         self._answer_safely(
@@ -2906,6 +2907,7 @@ class HttpHandler(BaseHttpHandler):
         turn: ChatTurn,
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
+        proposal: Optional[ConfigProposal] = None,
     ) -> None:
         """Run a step of answering a chat message; a failure still answers it.
 
@@ -2916,11 +2918,15 @@ class HttpHandler(BaseHttpHandler):
         :param turn: the message being answered.
         :param http_msg: the HttpMessage instance
         :param http_dialogue: the HttpDialogue instance
+        :param proposal: the pending change this step was deciding, if any.
         """
         try:
             step()
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.exception(f"Could not answer the chat message: {e}")
+            if proposal is not None:
+                # Nothing was applied, so the resend of this message decides it.
+                self.chat_session.proposal = proposal
             self._send_chat_error(
                 http_msg,
                 http_dialogue,
@@ -3338,12 +3344,20 @@ class HttpHandler(BaseHttpHandler):
             self.chat_session.proposal = proposal
             return
         if answer.get("confirmed") is True:
-            step = partial(
-                self._apply_proposal, proposal, turn, http_msg, http_dialogue
+            self._answer_safely(
+                partial(self._apply_proposal, proposal, turn, http_msg, http_dialogue),
+                turn,
+                http_msg,
+                http_dialogue,
+                proposal,
             )
-        else:
-            step = partial(self._ask_chat, text, turn, http_msg, http_dialogue)
-        self._answer_safely(step, turn, http_msg, http_dialogue)
+            return
+        self._answer_safely(
+            partial(self._ask_chat, text, turn, http_msg, http_dialogue),
+            turn,
+            http_msg,
+            http_dialogue,
+        )
 
     def _apply_proposal(
         self,
@@ -3419,6 +3433,38 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error("Could not store the confirmed chat change.")
             self._send_chat_reply(CHANGE_NOT_APPLIED, turn, http_msg, http_dialogue)
             return
+        # The KV store calls back without a guard, and an unanswered request
+        # would block its resend with 409s.
+        self._answer_safely(
+            partial(
+                self._put_stored_change_in_force,
+                proposal,
+                data,
+                turn,
+                http_msg,
+                http_dialogue,
+            ),
+            turn,
+            http_msg,
+            http_dialogue,
+        )
+
+    def _put_stored_change_in_force(
+        self,
+        proposal: ConfigProposal,
+        data: Dict[str, str],
+        turn: ChatTurn,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+    ) -> None:
+        """Make a stored change the one in force, record it and acknowledge it.
+
+        :param proposal: the confirmed change.
+        :param data: the KV data written.
+        :param turn: the message being answered.
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        """
         if proposal.strategy_changed:
             self._update_agent_performance_chat(proposal.reasoning)
             self._apply_strategy_state(data)

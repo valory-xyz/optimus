@@ -7743,12 +7743,40 @@ class TestChatConfigChange:
         chat.handler._write_kv.assert_not_called()
 
     def test_a_failure_while_applying_still_answers(self, chat: _Chat) -> None:
-        """An error while writing is a 500, not a hung request."""
+        """An error while writing is a 500, and the resend decides the change."""
         self._propose(chat, trading_type="risky")
+        proposal = chat.handler.chat_session.proposal
         confirm = chat.post("yes", "c2")
         chat.handler._write_kv.side_effect = RuntimeError("boom")
         chat.answer_confirmation(True)
         assert chat.response(confirm) == (500, {"error": CHAT_REPLY_FAILED})
+        assert chat.handler.chat_session.proposal is proposal
+
+    def test_a_failure_asking_for_the_confirm_keeps_the_proposal(
+        self, chat: _Chat
+    ) -> None:
+        """If the confirm check cannot be sent, the proposal waits for the resend."""
+        self._propose(chat, trading_type="risky")
+        proposal = chat.handler.chat_session.proposal
+        chat.handler._send_llm_request.side_effect = RuntimeError("srr down")
+        confirm = chat.post("yes", "c2")
+        assert chat.response(confirm) == (500, {"error": CHAT_REPLY_FAILED})
+        assert chat.handler.chat_session.proposal is proposal
+        assert not chat.handler.chat_session.is_answering("c2")
+
+    def test_a_failure_after_the_write_still_answers(self, chat: _Chat) -> None:
+        """An error putting a stored change in force is a 500, not a hung request."""
+        self._propose(chat, activity_goal=4)
+        confirm = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        with patch.object(
+            chat.handler, "_publish_activity_goal", side_effect=RuntimeError("boom")
+        ):
+            chat.kv_reply(success=True)
+        assert chat.response(confirm) == (500, {"error": CHAT_REPLY_FAILED})
+        assert not chat.handler.chat_session.is_answering("c2")
+        # The change is stored, so it is not proposed again.
+        assert chat.handler.chat_session.proposal is None
 
     @pytest.mark.parametrize(
         "fields, refusal",

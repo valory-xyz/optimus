@@ -89,6 +89,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.feed import (
     format_date,
     format_result,
     format_usd,
+    has_event_since,
     pool_name,
     record_event,
 )
@@ -299,10 +300,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     tx_hashes, ensure_ascii=True
                 )
 
+            # Recorded before the status flip: once COMPLETED, nothing calls this again.
+            yield from self._record_positions_exited()
+
             # Use the existing _write_kv method to update KV store
             yield from self._write_kv(update_data)
             self.context.logger.info("Withdrawal marked as completed and flags reset")
-            yield from self._record_positions_exited()
 
             # Update portfolio data file after withdrawal completion
             self.context.logger.info(
@@ -315,6 +318,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error updating withdrawal completion: {str(e)}")
 
     def _record_positions_exited(self) -> Generator[None, None, None]:
+        """Write the ``Exited all positions`` card; a failure loses the card, not the withdrawal.
+
+        :yield: the KV, receipt and decimals requests.
+        """
+        try:
+            yield from self._write_positions_exited()
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                f"Could not write the positions_exited event to the feed: {e}"
+            )
+
+    def _write_positions_exited(self) -> Generator[None, None, None]:
         """Write the ``Exited all positions`` card of a finished withdrawal to the feed.
 
         :yield: the KV, receipt and decimals requests.
@@ -324,6 +339,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         withdrawal = withdrawal or {}
         requested_at = parse_stored_int(withdrawal.get("withdrawal_requested_at"))
+        if requested_at is not None and has_event_since(
+            self.params.store_path, EventType.POSITIONS_EXITED, requested_at
+        ):
+            # A completion retried after its KV write failed, or after a restart.
+            self.context.logger.info("This withdrawal's card is already in the feed")
+            return
         exited = [
             position
             for position in self.current_positions
@@ -667,6 +688,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
     def _record_pool_entered(self, position: Dict[str, Any]) -> None:
+        """Write an ``Entered a pool`` card; a failure loses the card, not the entry.
+
+        :param position: the position just opened.
+        """
+        try:
+            self._write_pool_entered(position)
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                f"Could not write the pool_entered event to the feed: {e}"
+            )
+
+    def _write_pool_entered(self, position: Dict[str, Any]) -> None:
         """Write an ``Entered a pool`` card to the feed.
 
         :param position: the position just opened.
@@ -738,6 +771,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Withdrawal pool exit completed successfully.")
 
     def _record_pool_exited(
+        self, exited: List[Dict[str, Any]]
+    ) -> Generator[None, None, None]:
+        """Write an ``Exited a pool`` card; a failure loses the card, not the exit.
+
+        :param exited: the positions in the pool that were open until this exit.
+        :yield: the receipt and price requests behind the result.
+        """
+        try:
+            yield from self._write_pool_exited(exited)
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                f"Could not write the pool_exited event to the feed: {e}"
+            )
+
+    def _write_pool_exited(
         self, exited: List[Dict[str, Any]]
     ) -> Generator[None, None, None]:
         """Write an ``Exited a pool`` card to the feed.

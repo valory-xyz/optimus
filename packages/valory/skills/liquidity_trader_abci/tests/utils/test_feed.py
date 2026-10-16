@@ -39,6 +39,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.feed import (
     format_date,
     format_result,
     format_usd,
+    has_event_since,
     pool_name,
     read_recent,
     record_event,
@@ -218,6 +219,32 @@ class TestRead:
         """Blank lines, even the first, are skipped."""
         (tmp_path / FEED_FILE).write_bytes(b'\n{"id": 1, "kind": "message"}\n')
         assert [e["id"] for e in read_recent(tmp_path, 5)] == [1]
+
+
+class TestHasEventSince:
+    """Telling whether an event was already written for a period."""
+
+    def _write(self, store: Path, ts: int, event_type=EventType.POSITIONS_EXITED):
+        with patch.object(feed.time, "time", return_value=ts):
+            append_event(store, event_type, [])
+
+    def test_missing_feed(self, tmp_path: Path) -> None:
+        """No feed, no event."""
+        assert not has_event_since(tmp_path, EventType.POSITIONS_EXITED, 100)
+
+    def test_event_at_or_after_the_time(self, tmp_path: Path) -> None:
+        """An event of the type at the time or later is found past other lines."""
+        self._write(tmp_path, 100)
+        with patch.object(feed.time, "time", return_value=200):
+            append_message(tmp_path, "user", "hi")
+        self._write(tmp_path, 300, EventType.POOL_EXITED)
+        assert has_event_since(tmp_path, EventType.POSITIONS_EXITED, 100)
+
+    def test_only_older_events(self, tmp_path: Path) -> None:
+        """An event before the time does not count."""
+        self._write(tmp_path, 99)
+        self._write(tmp_path, 150, EventType.POOL_EXITED)
+        assert not has_event_since(tmp_path, EventType.POSITIONS_EXITED, 100)
 
 
 class TestFormatting:

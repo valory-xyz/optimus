@@ -3432,6 +3432,8 @@ class HttpHandler(BaseHttpHandler):
             != KvStoreMessage.Performative.SUCCESS
         ):
             self.context.logger.error("Could not store the confirmed chat change.")
+            # Nothing was applied, so the next confirm decides it.
+            self.chat_session.proposal = proposal
             self._send_chat_reply(CHANGE_NOT_APPLIED, turn, http_msg, http_dialogue)
             return
         # The KV store calls back without a guard, and an unanswered request

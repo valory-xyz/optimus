@@ -7714,12 +7714,21 @@ class TestChatConfigChange:
     def test_a_failed_write_is_explained_not_recorded(self, chat: _Chat) -> None:
         """A change the store refused gets an explanation and no card."""
         self._propose(chat, trading_type="risky")
+        proposal = chat.handler.chat_session.proposal
         confirm = chat.post("yes", "c2")
         chat.answer_confirmation(True)
         chat.kv_reply(success=False)
         assert chat.response(confirm)[1]["reply"]["text"] == CHANGE_NOT_APPLIED
         assert not any(e["kind"] == "event" for e in _feed(chat.store))
         assert chat.ctx.state.trading_type == "balanced"
+        # The reply says to try again, so the next confirm applies it.
+        assert chat.handler.chat_session.proposal is proposal
+        retry = chat.post("yes", "c3")
+        assert chat.llm_call()[4]["proposal"] is proposal
+        chat.answer_confirmation(True)
+        chat.kv_reply(success=True)
+        assert chat.response(retry)[0] == 200
+        assert chat.ctx.state.trading_type == "risky"
 
     @pytest.mark.parametrize("message", ["no", "what is my max loss?"])
     def test_anything_else_drops_the_proposal(self, chat: _Chat, message: str) -> None:

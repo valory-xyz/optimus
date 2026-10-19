@@ -215,6 +215,24 @@ class TestRead:
         latest = append_message(tmp_path, "agent", "second", "c1")
         assert find_exchange(tmp_path, "c1") == (message, latest)
 
+    def test_a_message_older_than_the_scan_window_reads_as_new(
+        self, tmp_path: Path
+    ) -> None:
+        """The search stops at the window, so an older message is not found."""
+        now = 10 * feed.SCAN_WINDOW_SECONDS
+        with patch.object(
+            feed.time, "time", return_value=now - 1 - feed.SCAN_WINDOW_SECONDS
+        ):
+            append_message(tmp_path, "user", "q", "c1")
+            append_message(tmp_path, "agent", "a", "c1")
+        with patch.object(
+            feed.time, "time", return_value=now - feed.SCAN_WINDOW_SECONDS
+        ):
+            message = append_message(tmp_path, "user", "q", "c2")
+        with patch.object(feed.time, "time", return_value=now):
+            assert find_exchange(tmp_path, "c1") == (None, None)
+            assert find_exchange(tmp_path, "c2") == (message, None)
+
     def test_file_starting_with_a_blank_line(self, tmp_path: Path) -> None:
         """Blank lines, even the first, are skipped."""
         (tmp_path / FEED_FILE).write_bytes(b'\n{"id": 1, "kind": "message"}\n')
@@ -223,6 +241,12 @@ class TestRead:
 
 class TestHasEventSince:
     """Telling whether an event was already written for a period."""
+
+    @pytest.fixture(autouse=True)
+    def _now(self):
+        """Search from a time whose window holds every line these tests write."""
+        with patch.object(feed.time, "time", return_value=1000):
+            yield
 
     def _write(self, store: Path, ts: int, event_type=EventType.POSITIONS_EXITED):
         with patch.object(feed.time, "time", return_value=ts):
@@ -259,6 +283,21 @@ class TestHasEventSince:
             append_message(tmp_path, "user", "hi")
         self._write(tmp_path, 50)
         assert not has_event_since(tmp_path, EventType.POSITIONS_EXITED, 100)
+
+    def test_event_older_than_the_scan_window(self, tmp_path: Path) -> None:
+        """The search stops at the window, so an older event is not found."""
+        now = 10 * feed.SCAN_WINDOW_SECONDS
+        self._write(tmp_path, now - 1 - feed.SCAN_WINDOW_SECONDS)
+        self._write(tmp_path, now, EventType.POOL_EXITED)
+        with patch.object(feed.time, "time", return_value=now):
+            assert not has_event_since(tmp_path, EventType.POSITIONS_EXITED, 0)
+
+    def test_event_at_the_edge_of_the_scan_window(self, tmp_path: Path) -> None:
+        """An event exactly one window old is still found."""
+        now = 10 * feed.SCAN_WINDOW_SECONDS
+        self._write(tmp_path, now - feed.SCAN_WINDOW_SECONDS)
+        with patch.object(feed.time, "time", return_value=now):
+            assert has_event_since(tmp_path, EventType.POSITIONS_EXITED, 0)
 
     @pytest.mark.parametrize("ts", [None, "300", 300.5, True])
     def test_event_without_a_readable_time(self, tmp_path: Path, ts) -> None:

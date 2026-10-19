@@ -45,6 +45,8 @@ NOT_AVAILABLE = "Not available"
 NONE_TEXT = "None"
 
 _READ_BLOCK_SIZE = 64 * 1024
+# Searches read back this far, so their cost does not grow with the feed's age.
+SCAN_WINDOW_SECONDS = 30 * 24 * 60 * 60
 _NEWLINE = b"\n"
 # The FSM and the HTTP handler both append; the lock keeps ids unique and lines whole.
 _APPEND_LOCK = threading.Lock()
@@ -201,6 +203,32 @@ def _entries_newest_first(path: Path) -> Iterator[FeedEntry]:
             yield entry
 
 
+def _timestamp(entry: FeedEntry) -> Optional[int]:
+    """Return the entry's unix time, or ``None`` if it has none.
+
+    :param entry: the entry.
+    :return: the time.
+    """
+    ts = entry.get("ts")
+    if isinstance(ts, bool) or not isinstance(ts, int):
+        return None
+    return ts
+
+
+def _scan_window(path: Path) -> Iterator[FeedEntry]:
+    """Yield the entries newest first, stopping at the first older than the window.
+
+    :param path: the feed file.
+    :yield: each entry.
+    """
+    cutoff = int(time.time()) - SCAN_WINDOW_SECONDS
+    for entry in _entries_newest_first(path):
+        ts = _timestamp(entry)
+        if ts is not None and ts < cutoff:
+            return
+        yield entry
+
+
 def _append(store_path: Path, body: Dict[str, Any]) -> FeedEntry:
     """Append one entry with the next id and return it as written.
 
@@ -304,19 +332,20 @@ def read_recent(store_path: Path, limit: int) -> List[FeedEntry]:
 def has_event_since(store_path: Path, event_type: EventType, since: int) -> bool:
     """Return whether an event of this type was written at or after a time.
 
+    Only the scan window is read; a clock set back within it writes newer
+    lines with older times, so the search does not stop at ``since``.
+
     :param store_path: the directory holding the feed.
     :param event_type: the event.
     :param since: unix seconds.
     :return: whether such an event is in the feed.
     """
-    # The whole feed is read: a clock set back writes newer lines with older times.
-    for entry in _entries_newest_first(Path(store_path) / FEED_FILE):
-        ts = entry.get("ts")
+    for entry in _scan_window(Path(store_path) / FEED_FILE):
+        ts = _timestamp(entry)
         if (
             entry.get("kind") == KIND_EVENT
             and entry.get("type") == event_type.value
-            and isinstance(ts, int)
-            and not isinstance(ts, bool)
+            and ts is not None
             and ts >= since
         ):
             return True
@@ -328,23 +357,16 @@ def find_exchange(
 ) -> Tuple[Optional[FeedEntry], Optional[FeedEntry]]:
     """Return the user line with this ``client_id`` and the agent line answering it.
 
+    Only the scan window is read, so a message older than it reads as new.
+
     :param store_path: the directory holding the feed.
     :param client_id: Pearl's id of the user message.
     :return: the user line and the reply, each ``None`` when not written.
     """
-    needle = json.dumps(client_id).encode("utf-8")
     message: Optional[FeedEntry] = None
     reply: Optional[FeedEntry] = None
-    for line in _lines_newest_first(Path(store_path) / FEED_FILE):
-        # Most lines are not about this message, and parsing them all is the cost.
-        if needle not in line:
-            continue
-        entry = _parse(line)
-        if (
-            entry is None
-            or entry.get("kind") != KIND_MESSAGE
-            or entry.get("client_id") != client_id
-        ):
+    for entry in _scan_window(Path(store_path) / FEED_FILE):
+        if entry.get("kind") != KIND_MESSAGE or entry.get("client_id") != client_id:
             continue
         if entry.get("role") == ROLE_AGENT and reply is None:
             reply = entry

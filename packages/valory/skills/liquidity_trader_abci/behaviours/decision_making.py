@@ -323,60 +323,63 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         :yield: the KV, receipt and decimals requests.
         """
         try:
-            yield from self._write_positions_exited()
+            withdrawal = (
+                yield from self._read_kv(
+                    ("withdrawal_requested_at", "withdrawal_target_address")
+                )
+            ) or {}
+            requested_at = parse_stored_int(withdrawal.get("withdrawal_requested_at"))
+            if requested_at is None:
+                # Without it, neither what this withdrawal exited nor a card
+                # already written for it can be told.
+                self.context.logger.error(
+                    "Could not read when the withdrawal was requested; "
+                    "its positions_exited event is not written to the feed"
+                )
+                return
+            if has_event_since(
+                self.params.store_path, EventType.POSITIONS_EXITED, requested_at
+            ):
+                # A completion retried after its KV write failed, or after a restart.
+                self.context.logger.info(
+                    "This withdrawal's card is already in the feed"
+                )
+                return
+            exited = [
+                position
+                for position in self.current_positions
+                if position.get("status") == PositionStatus.CLOSED.value
+                and (position.get("exit_timestamp") or 0) >= requested_at
+            ]
+            # A withdrawal exits everything, so whatever is still open was not exited.
+            not_exited = [
+                position
+                for position in self.current_positions
+                if position.get("status") == PositionStatus.OPEN.value
+            ]
+            amount = yield from self._withdrawal_amount_received(
+                withdrawal.get("withdrawal_target_address")
+            )
+            record_event(
+                self.params.store_path,
+                EventType.POSITIONS_EXITED,
+                [
+                    field(
+                        "Positions exited",
+                        ", ".join(pool_name(p) for p in exited) or NONE_TEXT,
+                    ),
+                    field("Amount received", amount),
+                    field(
+                        "Positions that couldn't be exited",
+                        ", ".join(pool_name(p) for p in not_exited) or NONE_TEXT,
+                    ),
+                ],
+                self.context.logger,
+            )
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(
                 f"Could not write the positions_exited event to the feed: {e}"
             )
-
-    def _write_positions_exited(self) -> Generator[None, None, None]:
-        """Write the ``Exited all positions`` card of a finished withdrawal to the feed.
-
-        :yield: the KV, receipt and decimals requests.
-        """
-        withdrawal = yield from self._read_kv(
-            ("withdrawal_requested_at", "withdrawal_target_address")
-        )
-        withdrawal = withdrawal or {}
-        requested_at = parse_stored_int(withdrawal.get("withdrawal_requested_at"))
-        if requested_at is not None and has_event_since(
-            self.params.store_path, EventType.POSITIONS_EXITED, requested_at
-        ):
-            # A completion retried after its KV write failed, or after a restart.
-            self.context.logger.info("This withdrawal's card is already in the feed")
-            return
-        exited = [
-            position
-            for position in self.current_positions
-            if requested_at is not None
-            and position.get("status") == PositionStatus.CLOSED.value
-            and (position.get("exit_timestamp") or 0) >= requested_at
-        ]
-        # A withdrawal exits everything, so whatever is still open was not exited.
-        not_exited = [
-            position
-            for position in self.current_positions
-            if position.get("status") == PositionStatus.OPEN.value
-        ]
-        amount = yield from self._withdrawal_amount_received(
-            withdrawal.get("withdrawal_target_address")
-        )
-        record_event(
-            self.params.store_path,
-            EventType.POSITIONS_EXITED,
-            [
-                field(
-                    "Positions exited",
-                    ", ".join(pool_name(p) for p in exited) or NONE_TEXT,
-                ),
-                field("Amount received", amount),
-                field(
-                    "Positions that couldn't be exited",
-                    ", ".join(pool_name(p) for p in not_exited) or NONE_TEXT,
-                ),
-            ],
-            self.context.logger,
-        )
 
     def _withdrawal_amount_received(
         self, target_address: Optional[str]
@@ -693,29 +696,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         :param position: the position just opened.
         """
         try:
-            self._write_pool_entered(position)
+            principal = float(position.get("principal_usd") or 0)
+            record_event(
+                self.params.store_path,
+                EventType.POOL_ENTERED,
+                [
+                    field("Pool", pool_name(position)),
+                    field(
+                        "Amount",
+                        format_usd(principal) if principal > 0 else NOT_AVAILABLE,
+                    ),
+                ],
+                self.context.logger,
+            )
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(
                 f"Could not write the pool_entered event to the feed: {e}"
             )
-
-    def _write_pool_entered(self, position: Dict[str, Any]) -> None:
-        """Write an ``Entered a pool`` card to the feed.
-
-        :param position: the position just opened.
-        """
-        principal = float(position.get("principal_usd") or 0)
-        record_event(
-            self.params.store_path,
-            EventType.POOL_ENTERED,
-            [
-                field("Pool", pool_name(position)),
-                field(
-                    "Amount", format_usd(principal) if principal > 0 else NOT_AVAILABLE
-                ),
-            ],
-            self.context.logger,
-        )
 
     def _post_execute_exit_pool(
         self, actions, last_executed_action_index
@@ -779,49 +776,39 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         :yield: the receipt and price requests behind the result.
         """
         try:
-            yield from self._write_pool_exited(exited)
+            principal = sum(
+                float(position.get("principal_usd") or 0) for position in exited
+            )
+            result = NOT_AVAILABLE
+            if principal > 0:
+                exit_usd = yield from self._exit_value_usd(exited[0])
+                if exit_usd is not None:
+                    result = format_result(exit_usd, principal)
+            entered_at = min(
+                (p["enter_timestamp"] for p in exited if p.get("enter_timestamp")),
+                default=None,
+            )
+            record_event(
+                self.params.store_path,
+                EventType.POOL_EXITED,
+                [
+                    field("Pool", pool_name(exited[0])),
+                    field("Result", result),
+                    field(
+                        "Amount entered",
+                        format_usd(principal) if principal > 0 else NOT_AVAILABLE,
+                    ),
+                    field(
+                        "Entry date",
+                        format_date(entered_at) if entered_at else NOT_AVAILABLE,
+                    ),
+                ],
+                self.context.logger,
+            )
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(
                 f"Could not write the pool_exited event to the feed: {e}"
             )
-
-    def _write_pool_exited(
-        self, exited: List[Dict[str, Any]]
-    ) -> Generator[None, None, None]:
-        """Write an ``Exited a pool`` card to the feed.
-
-        :param exited: the positions in the pool that were open until this exit.
-        :yield: the receipt and price requests behind the result.
-        """
-        principal = sum(
-            float(position.get("principal_usd") or 0) for position in exited
-        )
-        result = NOT_AVAILABLE
-        if principal > 0:
-            exit_usd = yield from self._exit_value_usd(exited[0])
-            if exit_usd is not None:
-                result = format_result(exit_usd, principal)
-        entered_at = min(
-            (p["enter_timestamp"] for p in exited if p.get("enter_timestamp")),
-            default=None,
-        )
-        record_event(
-            self.params.store_path,
-            EventType.POOL_EXITED,
-            [
-                field("Pool", pool_name(exited[0])),
-                field("Result", result),
-                field(
-                    "Amount entered",
-                    format_usd(principal) if principal > 0 else NOT_AVAILABLE,
-                ),
-                field(
-                    "Entry date",
-                    format_date(entered_at) if entered_at else NOT_AVAILABLE,
-                ),
-            ],
-            self.context.logger,
-        )
 
     def _exit_value_usd(
         self, position: Dict[str, Any]

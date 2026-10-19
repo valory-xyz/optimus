@@ -7553,7 +7553,6 @@ class TestPositionsExitedEvent:
     @pytest.mark.parametrize(
         "kv, receipt, decimals",
         [
-            pytest.param(None, {"logs": []}, 6, id="KV unreadable"),
             pytest.param(
                 {"withdrawal_requested_at": "1000"}, {"logs": []}, 6, id="no target"
             ),
@@ -7581,13 +7580,35 @@ class TestPositionsExitedEvent:
         assert len(events) == 1
         assert _fields(events[0])["Amount received"] == "Not available"
 
-    def test_without_request_time_no_position_counts_as_exited(
-        self, tmp_path: Path
+    @pytest.mark.parametrize(
+        "kv",
+        [
+            pytest.param(None, id="KV unreadable"),
+            pytest.param({"withdrawal_target_address": USER}, id="no request time"),
+            pytest.param(
+                {"withdrawal_requested_at": "soon", "withdrawal_target_address": USER},
+                id="unreadable request time",
+            ),
+        ],
+    )
+    def test_without_request_time_no_card_is_written(
+        self, tmp_path: Path, kv: Any
     ) -> None:
-        """Without the request time, older closed positions are not claimed."""
-        b = self._behaviour(tmp_path, {"withdrawal_target_address": USER}, None)
+        """Without the request time the card is skipped and the withdrawal completes."""
+        b = self._behaviour(tmp_path, kv, {"logs": []})
+        written = []
+
+        def write(data):
+            written.append(data)
+            yield
+            return True
+
+        b._write_kv = write
         _exhaust(b._update_withdrawal_completion())
-        assert _fields(_feed_events(tmp_path)[0])["Positions exited"] == "None"
+        _exhaust(b._update_withdrawal_completion())
+        assert _feed_events(tmp_path) == []
+        assert "positions_exited" in str(b.context.logger.error.call_args)
+        assert written[0]["withdrawal_status"] == "COMPLETED"
 
     def test_chain_without_usdc(self, tmp_path: Path) -> None:
         """A chain with no known USDC has no amount."""

@@ -2930,7 +2930,6 @@ class HttpHandler(BaseHttpHandler):
             return None
         return text, client_id
 
-
     def _send_chat_error(
         self,
         http_msg: HttpMessage,
@@ -3056,7 +3055,6 @@ class HttpHandler(BaseHttpHandler):
             if entry.get("id") != turn.message.get("id")
         ][-RECENT_FEED_ENTRIES:]
         return "\n".join(lines) if lines else "(no activity yet)"
-
 
     def _read_llm_answer(
         self, llm_response_message: SrrMessage, turn: ChatTurn
@@ -3241,7 +3239,6 @@ class HttpHandler(BaseHttpHandler):
             None,
         )
 
-
     @staticmethod
     def _protocols_text(names: List[str]) -> str:
         """Name protocols for the user.
@@ -3250,7 +3247,6 @@ class HttpHandler(BaseHttpHandler):
         :return: the display text.
         """
         return ", ".join(PROTOCOL_NAMES.get(name, name) for name in names) or "None"
-
 
     def _ask_whether_confirmed(
         self, proposal: ConfigProposal, text: str, turn: ChatTurn

@@ -323,11 +323,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         :yield: the KV, receipt and decimals requests.
         """
         try:
-            withdrawal = (
-                yield from self._read_kv(
-                    ("withdrawal_requested_at", "withdrawal_target_address")
+            keys = ("withdrawal_requested_at", "withdrawal_target_address")
+            withdrawal = yield from self._read_kv(keys)
+            if withdrawal is None:
+                # A store that did not answer is not a missing key; this is
+                # the withdrawal's only chance at its card, so ask once more.
+                withdrawal = yield from self._read_kv(keys)
+            if withdrawal is None:
+                self.context.logger.error(
+                    "Could not read the withdrawal from the KV store; "
+                    "its positions_exited event is not written to the feed"
                 )
-            ) or {}
+                return
             requested_at = parse_stored_int(withdrawal.get("withdrawal_requested_at"))
             if requested_at is None:
                 # Without it, neither what this withdrawal exited nor a card
@@ -832,10 +839,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         if not received or not any(received.values()):
             return None
+        # An out-of-range concentrated position exits in one token; any other
+        # pool returns both, so a missing one was not counted (e.g. native ETH).
+        one_token_exit = bool(position.get("is_cl_pool")) or (
+            position.get("dex_type") == DexType.UNISWAP_V3.value
+        )
         exit_usd = 0.0
         for token in (token0, token1):
             amount = received.get(token.lower(), 0) if token else 0
             if not amount:
+                if token and not one_token_exit:
+                    return None
                 continue
             value = yield from self._convert_amounts_to_usd(
                 amount, 0, token, None, chain

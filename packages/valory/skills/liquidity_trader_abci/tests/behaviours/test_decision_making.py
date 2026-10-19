@@ -7336,9 +7336,11 @@ class TestPoolExitedEvent:
 
     def test_a_loss_is_negative(self, tmp_path: Path) -> None:
         """An exit worth less than the principal shows the loss."""
-        receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}
+        receipt = {
+            "logs": [_transfer_log(TOKEN0, SAFE, 1), _transfer_log(TOKEN1, SAFE, 1)]
+        }
         b = self._behaviour(tmp_path, [self._position()], receipt)
-        b._convert_amounts_to_usd = _make_gen_method(97.5)
+        b._convert_amounts_to_usd = _make_gen_method(48.75)
         assert _fields(self._exit(b)[0])["Result"] == "-$2.50 (-2.50%)"
 
     def test_only_positions_open_until_this_exit_count(self, tmp_path: Path) -> None:
@@ -7361,11 +7363,13 @@ class TestPoolExitedEvent:
         self, tmp_path: Path
     ) -> None:
         """Positions open in the exited pool are summed, from the earliest entry."""
-        receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}
+        receipt = {
+            "logs": [_transfer_log(TOKEN0, SAFE, 1), _transfer_log(TOKEN1, SAFE, 1)]
+        }
         later = self._position(principal_usd=100.0, enter_timestamp=1760313600)
         earlier = self._position(principal_usd=60.0, enter_timestamp=1760227200)
         b = self._behaviour(tmp_path, [later, earlier], receipt)
-        b._convert_amounts_to_usd = _make_gen_method(176.0)
+        b._convert_amounts_to_usd = _make_gen_method(88.0)
         events = self._exit(b)
         assert len(events) == 1
         fields = _fields(events[0])
@@ -7419,6 +7423,31 @@ class TestPoolExitedEvent:
             )()
         )
         assert _fields(self._exit(b)[0])["Result"] == "Not available"
+
+    def test_a_token_not_received_makes_the_result_not_available(
+        self, tmp_path: Path
+    ) -> None:
+        """A pool that returns both tokens, exited with one seen, shows no false loss."""
+        receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(50.0)
+        assert _fields(self._exit(b)[0])["Result"] == "Not available"
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            pytest.param({"is_cl_pool": True}, id="velodrome CL"),
+            pytest.param({"dex_type": DexType.UNISWAP_V3.value}, id="uniswap v3"),
+        ],
+    )
+    def test_a_concentrated_position_can_exit_in_one_token(
+        self, tmp_path: Path, extra: dict
+    ) -> None:
+        """An out-of-range concentrated position returns one token, valued alone."""
+        receipt = {"logs": [_transfer_log(TOKEN1, SAFE, 1)]}
+        b = self._behaviour(tmp_path, [self._position(**extra)], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(97.5)
+        assert _fields(self._exit(b)[0])["Result"] == "-$2.50 (-2.50%)"
 
     def test_without_principal_or_entry_date(self, tmp_path: Path) -> None:
         """A legacy position without TiP data has no result, amount or date."""
@@ -7610,6 +7639,22 @@ class TestPositionsExitedEvent:
         assert "positions_exited" in str(b.context.logger.error.call_args)
         assert written[0]["withdrawal_status"] == "COMPLETED"
 
+    def test_a_kv_store_that_did_not_answer_is_asked_again(
+        self, tmp_path: Path
+    ) -> None:
+        """A failed read is not a missing key: the second read writes the card."""
+        kv = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
+        b = self._behaviour(tmp_path, kv, {"logs": []})
+        reads = iter([None, kv])
+
+        def read(keys):
+            yield
+            return next(reads)
+
+        b._read_kv = read
+        _exhaust(b._update_withdrawal_completion())
+        assert [e["type"] for e in _feed_events(tmp_path)] == ["positions_exited"]
+
     def test_chain_without_usdc(self, tmp_path: Path) -> None:
         """A chain with no known USDC has no amount."""
         kv = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
@@ -7691,12 +7736,20 @@ class TestPositionsExitedOnce:
         assert cards_at_write == [1]
 
     def test_a_retried_completion_writes_no_second_card(self, tmp_path: Path) -> None:
-        """A completion run again for the same withdrawal adds nothing."""
+        """A completion run again for the same withdrawal adds nothing, and completes."""
         b = TestPositionsExitedEvent()._behaviour(tmp_path, self.KV, {"logs": []})
-        b._write_kv = _make_gen_method(False)
+        written = []
+
+        def write(data):
+            written.append(data["withdrawal_status"])
+            yield
+            return False
+
+        b._write_kv = write
         _exhaust(b._update_withdrawal_completion())
         _exhaust(b._update_withdrawal_completion())
         assert len(_feed_events(tmp_path)) == 1
+        assert written == ["COMPLETED", "COMPLETED"]
 
     def test_a_later_withdrawal_gets_its_own_card(self, tmp_path: Path) -> None:
         """A card from an earlier withdrawal does not stop the next one's."""

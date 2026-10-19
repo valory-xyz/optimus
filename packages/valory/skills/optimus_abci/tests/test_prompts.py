@@ -188,3 +188,9 @@ class TestStrategyPrompt:
         assert "A round is one cycle of my main loop" in STRATEGY_PROMPT
         assert "activity_goal: the new number of rounds" in STRATEGY_PROMPT
         assert "activity_goal, reasoning" in STRATEGY_PROMPT
+
+    def test_prompt_makes_reasoning_the_reply_to_the_user(self) -> None:
+        """The reasoning field is shown in the chat, so it must answer the user."""
+        assert "reasoning: your reply shown to the user" in STRATEGY_PROMPT
+        assert "answer what they asked" in STRATEGY_PROMPT
+        assert "or say what you changed" in STRATEGY_PROMPT

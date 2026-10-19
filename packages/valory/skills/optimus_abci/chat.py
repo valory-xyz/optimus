@@ -19,16 +19,22 @@
 
 """The chat on the agent's main page: the messages being answered and the pending change."""
 
+import json
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+from packages.valory.protocols.http.message import HttpMessage
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    KV_ACTIVITY_GOAL_TARGET,
+)
 from packages.valory.skills.liquidity_trader_abci.utils.feed import (
     FeedEntry,
     KIND_EVENT,
     ROLE_USER,
 )
+from packages.valory.skills.optimus_abci.dialogues import HttpDialogue
 
 # A message whose answer never came back stops blocking its resend after this.
 ANSWERING_TIMEOUT_SECONDS = 300
@@ -39,10 +45,12 @@ FEED_TIME_FORMAT = "%Y-%m-%d %H:%M UTC"
 
 @dataclass(frozen=True)
 class ChatTurn:
-    """A chat message being answered: Pearl's id for it and its line as written."""
+    """A chat message being answered: Pearl's id for it, its line as written and its request."""
 
     client_id: str
     message: FeedEntry
+    http_msg: HttpMessage
+    http_dialogue: HttpDialogue
 
 
 @dataclass(frozen=True)
@@ -71,6 +79,28 @@ class ConfigProposal:  # pylint: disable=too-many-instance-attributes
     composite_score: float
     activity_goal: Optional[int]
     reasoning: str
+
+    def kv_data(self) -> Dict[str, str]:
+        """Return the KV store entries that put this change in force.
+
+        :return: the entries.
+        """
+        data: Dict[str, str] = {}
+        if self.strategy_changed:
+            data.update(
+                {
+                    "selected_protocols": json.dumps(
+                        self.selected_protocols, ensure_ascii=True
+                    ),
+                    "trading_type": self.trading_type,
+                    "composite_score": str(self.composite_score),
+                    "max_loss_percentage": str(self.max_loss_percentage),
+                    "reasoning": self.reasoning,
+                }
+            )
+        if self.activity_goal is not None:
+            data[KV_ACTIVITY_GOAL_TARGET] = str(self.activity_goal)
+        return data
 
 
 class ChatSession:
@@ -122,6 +152,16 @@ class ChatSession:
         if proposal is not None:
             self._deciding[client_id] = proposal
         return proposal
+
+    def restore_proposal(self, proposal: ConfigProposal) -> None:
+        """Put back a change nothing applied, so the resend of its message decides it.
+
+        A change another message proposed since is newer and stays.
+
+        :param proposal: the change.
+        """
+        if self.proposal is None:
+            self.proposal = proposal
 
     def drop_proposal(self, client_id: str) -> None:
         """Forget the change this message decided against.

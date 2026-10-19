@@ -7251,10 +7251,6 @@ class TestActivityGoalChat:
         assert json.loads(path.read_text())["activity_goal"] == _goal_block()
 
 
-# ---------------------------------------------------------------------------
-# POST /api/v1/chat
-# ---------------------------------------------------------------------------
-
 import packages.valory.skills.optimus_abci.chat as chat_mod  # noqa: E402
 from packages.valory.skills.liquidity_trader_abci.utils.feed import (  # noqa: E402
     EventType,
@@ -7266,6 +7262,7 @@ from packages.valory.skills.optimus_abci.chat import (  # noqa: E402
     ChatSession,
 )
 from packages.valory.skills.optimus_abci.handlers import (  # noqa: E402
+    CHANGE_APPLIED_REPLY_NOT_SAVED,
     CHANGE_NOT_APPLIED,
     CHAT_MAX_TOKENS,
     CHAT_REPLY_FAILED,
@@ -7455,7 +7452,7 @@ class TestChatMessages:
             "packages.valory.skills.optimus_abci.handlers.read_recent",
             side_effect=OSError("disk"),
         ):
-            chat.handler._ask_chat("hi", MagicMock(), MagicMock(), MagicMock())
+            chat.handler._ask_chat("hi", MagicMock())
         assert "(not available)" in chat.llm_call()[0]
 
     def test_resend_of_an_answered_message_is_replayed(self, chat: _Chat) -> None:
@@ -7542,6 +7539,55 @@ class TestChatMessages:
             chat.answer_strategy()
         assert chat.response(dialogue) == (500, {"error": CHAT_SAVE_FAILED})
         assert not chat.handler.chat_session.is_answering("c1")
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"response": json.dumps({"intent": "query", "reasoning": ""})},
+            {"response": json.dumps({"intent": "query", "reasoning": "  "})},
+            {},
+        ],
+    )
+    def test_an_empty_answer_is_not_written_and_can_be_retried(
+        self, chat: _Chat, payload: dict
+    ) -> None:
+        """An answer with no text is a failed answer, not an empty reply."""
+        first = chat.post("hi", "c1")
+        chat.answer(payload)
+        assert chat.response(first) == (500, {"error": CHAT_REPLY_FAILED})
+        assert [e["role"] for e in _feed(chat.store)] == ["user"]
+        retry = chat.post("hi", "c1")
+        chat.answer_strategy(reasoning="ok")
+        assert chat.response(retry)[1]["reply"]["text"] == "ok"
+
+    def test_a_message_and_its_resend_both_answered_reply_once(
+        self, chat: _Chat
+    ) -> None:
+        """When both answers of a timed-out message come back, the first stands."""
+        with patch.object(chat_mod.time, "time", return_value=1000.0):
+            first = chat.post("hi", "c1")
+        with patch.object(
+            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+        ):
+            resend = chat.post("hi", "c1")
+        assert chat.handler._send_llm_request.call_count == 2
+        chat.answer({"response": json.dumps({"reasoning": "First."})}, index=0)
+        chat.answer({"response": json.dumps({"reasoning": "Second."})}, index=1)
+        replies = [e for e in _feed(chat.store) if e["role"] == "agent"]
+        assert [e["text"] for e in replies] == ["First."]
+        assert chat.response(resend) == chat.response(first)
+        assert not chat.handler.chat_session.is_answering("c1")
+
+    def test_an_answer_when_the_feed_cannot_be_read(self, chat: _Chat) -> None:
+        """An unreadable feed does not stop the reply from being written."""
+        dialogue = chat.post("hi", "c1")
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.find_exchange",
+            side_effect=OSError("disk"),
+        ):
+            chat.answer_strategy(reasoning="ok")
+        chat.ctx.logger.error.assert_any_call("Could not read the chat feed: disk")
+        assert chat.response(dialogue)[1]["reply"]["text"] == "ok"
 
     def test_a_failure_while_asking_still_answers(self, chat: _Chat) -> None:
         """An unexpected error is a 500 and does not leave the message answering."""
@@ -7892,19 +7938,70 @@ class TestChatConfigChange:
         chat.ctx.logger.error.assert_any_call("Could not read the chat feed: disk")
         assert chat.ctx.state.trading_type == "risky"
 
-    def test_a_failure_after_the_write_still_answers(self, chat: _Chat) -> None:
-        """An error putting a stored change in force is a 500, not a hung request."""
-        self._propose(chat, activity_goal=4)
+    @pytest.mark.parametrize(
+        "fields, failing",
+        [
+            ({"activity_goal": 4}, "_publish_activity_goal"),
+            ({"trading_type": "risky"}, "_apply_strategy_state"),
+        ],
+    )
+    def test_a_failure_after_the_write_still_says_it_was_applied(
+        self, chat: _Chat, fields: dict, failing: str
+    ) -> None:
+        """A stored change is acknowledged and recorded though a later step failed."""
+        self._propose(chat, **fields)
         confirm = chat.post("yes", "c2")
         chat.answer_confirmation(True)
-        with patch.object(
-            chat.handler, "_publish_activity_goal", side_effect=RuntimeError("boom")
-        ):
+        with patch.object(chat.handler, failing, side_effect=RuntimeError("boom")):
             chat.kv_reply(success=True)
-        assert chat.response(confirm) == (500, {"error": CHAT_REPLY_FAILED})
+        status, body = chat.response(confirm)
+        assert status == 200
+        assert body["reply"]["text"].startswith("Done. I changed ")
+        assert [e["type"] for e in _feed(chat.store) if e["kind"] == "event"] == [
+            "config_changed"
+        ]
         assert not chat.handler.chat_session.is_answering("c2")
         # The change is stored, so it is not proposed again.
         assert chat.handler.chat_session.proposal is None
+
+    def test_an_applied_change_whose_reply_cannot_be_saved(self, chat: _Chat) -> None:
+        """A reply that cannot be written still says the change was applied."""
+        self._propose(chat, trading_type="risky")
+        confirm = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        with patch(
+            "packages.valory.skills.optimus_abci.handlers.append_message",
+            side_effect=OSError("disk full"),
+        ):
+            chat.kv_reply(success=True)
+        assert chat.response(confirm) == (
+            500,
+            {"error": CHANGE_APPLIED_REPLY_NOT_SAVED},
+        )
+        assert chat.ctx.state.trading_type == "risky"
+        assert chat.handler.chat_session.proposal is None
+
+    @pytest.mark.parametrize("failure", ["confirm_check", "write_call", "kv_write"])
+    def test_a_failed_confirm_keeps_a_newer_proposal(
+        self, chat: _Chat, failure: str
+    ) -> None:
+        """A confirm that fails after another message proposed a change keeps that one."""
+        self._propose(chat, trading_type="risky")
+        confirm = chat.post("yes", "c2")
+        chat.post("go higher", "c3")
+        chat.answer_strategy(intent="update", max_loss_percentage=25)
+        newer = chat.handler.chat_session.proposal
+        assert newer is not None
+        if failure == "confirm_check":
+            chat.answer({"error": "rate limited"}, index=1)
+        else:
+            if failure == "write_call":
+                chat.handler._write_kv.side_effect = RuntimeError("boom")
+            chat.answer({"response": json.dumps({"confirmed": True})}, index=1)
+            if failure == "kv_write":
+                chat.kv_reply(success=False)
+        assert chat.response(confirm)[0] in (200, 500)
+        assert chat.handler.chat_session.proposal is newer
 
     @pytest.mark.parametrize(
         "fields, refusal",

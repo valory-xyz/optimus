@@ -262,6 +262,9 @@ CHAT_REPLY_FAILED = "Your agent could not answer. Please try again."
 CHANGE_NOT_APPLIED = (
     "I couldn't apply that change, so your settings are unchanged. Please try again."
 )
+CHANGE_APPLIED_REPLY_NOT_SAVED = (
+    "Your change was applied, but the reply could not be saved."
+)
 PROTOCOL_NAMES = {
     "balancerPool": "Balancer",
     "sturdy": "Sturdy",
@@ -2821,10 +2824,6 @@ class HttpHandler(BaseHttpHandler):
         )
         self._send_message(request_srr_message, srr_dialogue, callback, callback_kwargs)
 
-    # ------------------------------------------------------------------ #
-    # POST /api/v1/chat                                                  #
-    # ------------------------------------------------------------------ #
-
     def _handle_chat(self, http_msg: HttpMessage, http_dialogue: HttpDialogue) -> None:
         """Answer a chat message, writing it and its reply to the feed.
 
@@ -2875,38 +2874,22 @@ class HttpHandler(BaseHttpHandler):
             self._send_chat_error(http_msg, http_dialogue, status, error)
             return
 
-        turn = ChatTurn(client_id, message)
+        turn = ChatTurn(client_id, message, http_msg, http_dialogue)
         self.chat_session.start_answering(client_id)
         proposal = self.chat_session.take_proposal(client_id)
         if proposal is not None:
             self._answer_safely(
-                partial(
-                    self._ask_whether_confirmed,
-                    proposal,
-                    text,
-                    turn,
-                    http_msg,
-                    http_dialogue,
-                ),
+                partial(self._ask_whether_confirmed, proposal, text, turn),
                 turn,
-                http_msg,
-                http_dialogue,
                 proposal,
             )
             return
-        self._answer_safely(
-            partial(self._ask_chat, text, turn, http_msg, http_dialogue),
-            turn,
-            http_msg,
-            http_dialogue,
-        )
+        self._answer_safely(partial(self._ask_chat, text, turn), turn)
 
     def _answer_safely(
         self,
         step: Callable[[], None],
         turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
         proposal: Optional[ConfigProposal] = None,
     ) -> None:
         """Run a step of answering a chat message; a failure still answers it.
@@ -2916,8 +2899,6 @@ class HttpHandler(BaseHttpHandler):
 
         :param step: the step.
         :param turn: the message being answered.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         :param proposal: the pending change this step was deciding, if any.
         """
         try:
@@ -2925,15 +2906,8 @@ class HttpHandler(BaseHttpHandler):
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.exception(f"Could not answer the chat message: {e}")
             if proposal is not None:
-                # Nothing was applied, so the resend of this message decides it.
-                self.chat_session.proposal = proposal
-            self._send_chat_error(
-                http_msg,
-                http_dialogue,
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                CHAT_REPLY_FAILED,
-                turn,
-            )
+                self.chat_session.restore_proposal(proposal)
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, CHAT_REPLY_FAILED)
 
     @staticmethod
     def _read_chat_request(http_msg: HttpMessage) -> Optional[Tuple[str, str]]:
@@ -2956,13 +2930,13 @@ class HttpHandler(BaseHttpHandler):
             return None
         return text, client_id
 
+
     def _send_chat_error(
         self,
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
         status: HTTPStatus,
         error: str,
-        turn: Optional[ChatTurn] = None,
     ) -> None:
         """Answer a chat request with an error; nothing is written to the feed.
 
@@ -2970,10 +2944,7 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the HttpDialogue instance
         :param status: the HTTP status.
         :param error: the error text.
-        :param turn: the message being answered, if it got that far.
         """
-        if turn is not None:
-            self.chat_session.finish_answering(turn.client_id)
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
@@ -2986,52 +2957,71 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info(f"Responding with {status.value}")
         self.context.outbox.put_message(message=http_response)
 
+    def _fail_chat(self, turn: ChatTurn, status: HTTPStatus, error: str) -> None:
+        """Answer a chat message with an error, freeing it for its resend.
+
+        :param turn: the message being answered.
+        :param status: the HTTP status.
+        :param error: the error text.
+        """
+        self.chat_session.finish_answering(turn.client_id)
+        self._send_chat_error(turn.http_msg, turn.http_dialogue, status, error)
+
     def _send_chat_reply(
-        self,
-        text: str,
-        turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
+        self, text: str, turn: ChatTurn, save_failed_error: str = CHAT_SAVE_FAILED
     ) -> None:
         """Write the agent's reply to the feed and answer with both lines.
 
+        An empty reply is a failed answer, so the resend asks again.
+
         :param text: the reply.
         :param turn: the message it answers.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
+        :param save_failed_error: the error to answer with if the reply cannot be written.
         """
+        if not text.strip():
+            self.context.logger.error("The chat LLM answered with an empty reply.")
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, CHAT_REPLY_FAILED)
+            return
         try:
             reply = append_message(
                 self.context.params.store_path, ROLE_AGENT, text, turn.client_id
             )
         except OSError as e:
             self.context.logger.error(f"Could not write the chat reply: {e}")
-            self._send_chat_error(
-                http_msg,
-                http_dialogue,
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                CHAT_SAVE_FAILED,
-                turn,
-            )
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, save_failed_error)
             return
         self.chat_session.finish_answering(turn.client_id)
         self._send_ok_response(
-            http_msg, http_dialogue, {"message": turn.message, "reply": reply}
+            turn.http_msg, turn.http_dialogue, {"message": turn.message, "reply": reply}
         )
 
-    def _ask_chat(
-        self,
-        text: str,
-        turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
-    ) -> None:
+    def _send_written_reply(self, turn: ChatTurn) -> bool:
+        """Answer with the reply already written for this message, if there is one.
+
+        A message and its resend after the answering timeout can both get an
+        answer; the first one written stands.
+
+        :param turn: the message being answered.
+        :return: whether a written reply was sent.
+        """
+        try:
+            _, reply = find_exchange(self.context.params.store_path, turn.client_id)
+        except OSError as e:
+            self.context.logger.error(f"Could not read the chat feed: {e}")
+            return False
+        if reply is None:
+            return False
+        self.chat_session.finish_answering(turn.client_id)
+        self._send_ok_response(
+            turn.http_msg, turn.http_dialogue, {"message": turn.message, "reply": reply}
+        )
+        return True
+
+    def _ask_chat(self, text: str, turn: ChatTurn) -> None:
         """Ask the LLM to answer a chat message.
 
         :param text: the user's message.
         :param turn: the message being answered.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         """
         prompt = CHAT_PROMPT.format(
             user_prompt=text,
@@ -3044,7 +3034,7 @@ class HttpHandler(BaseHttpHandler):
             build_strategy_config_schema(),
             CHAT_MAX_TOKENS,
             self._handle_chat_llm_response,
-            {"http_msg": http_msg, "http_dialogue": http_dialogue, "turn": turn},
+            {"turn": turn},
         )
 
     def _recent_activity(self, turn: ChatTurn) -> str:
@@ -3067,19 +3057,14 @@ class HttpHandler(BaseHttpHandler):
         ][-RECENT_FEED_ENTRIES:]
         return "\n".join(lines) if lines else "(no activity yet)"
 
+
     def _read_llm_answer(
-        self,
-        llm_response_message: SrrMessage,
-        turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
+        self, llm_response_message: SrrMessage, turn: ChatTurn
     ) -> Optional[Dict[str, Any]]:
         """Return the LLM's answer object, or answer the chat with an error.
 
         :param llm_response_message: the SrrMessage with the LLM output
         :param turn: the message being answered.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         :return: the answer, or ``None`` once the error is sent.
         """
         try:
@@ -3087,13 +3072,7 @@ class HttpHandler(BaseHttpHandler):
             if isinstance(genai_response, dict) and "error" in genai_response:
                 error = str(genai_response["error"])
                 self.context.logger.error(f"GenAI error: {error}")
-                self._send_chat_error(
-                    http_msg,
-                    http_dialogue,
-                    HTTPStatus.INTERNAL_SERVER_ERROR,
-                    error,
-                    turn,
-                )
+                self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, error)
                 return None
             answer = json.loads(genai_response.get("response", "{}"))
             if not isinstance(answer, dict):
@@ -3101,34 +3080,24 @@ class HttpHandler(BaseHttpHandler):
             return answer
         except (ValueError, TypeError, AttributeError, RecursionError) as e:
             self.context.logger.error(f"Unreadable chat LLM response: {e}")
-            self._send_chat_error(
-                http_msg,
-                http_dialogue,
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                CHAT_REPLY_FAILED,
-                turn,
-            )
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, CHAT_REPLY_FAILED)
             return None
 
     def _handle_chat_llm_response(
         self,
         llm_response_message: SrrMessage,
         dialogue: Dialogue,  # pylint: disable=unused-argument
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
         turn: ChatTurn,
     ) -> None:
         """Answer a chat message; a config change is only proposed.
 
         :param llm_response_message: the SrrMessage with the LLM output
         :param dialogue: the Dialogue
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         :param turn: the message being answered.
         """
-        answer = self._read_llm_answer(
-            llm_response_message, turn, http_msg, http_dialogue
-        )
+        if self._send_written_reply(turn):
+            return
+        answer = self._read_llm_answer(llm_response_message, turn)
         if answer is None:
             return
         reasoning = str(answer.get("reasoning") or "")
@@ -3138,20 +3107,20 @@ class HttpHandler(BaseHttpHandler):
             and "max_loss_percentage" in answer
         )
         if not is_update:
-            self._send_chat_reply(reasoning, turn, http_msg, http_dialogue)
+            self._send_chat_reply(reasoning, turn)
             return
         try:
             proposal, refusal = self._plan_chat_change(answer, reasoning)
         except Exception as e:  # pylint: disable=broad-except
             # The model decides the shape, so any field can fail to read.
             self.context.logger.error(f"Chat change not usable: {e}")
-            self._send_chat_reply(CHANGE_NOT_APPLIED, turn, http_msg, http_dialogue)
+            self._send_chat_reply(CHANGE_NOT_APPLIED, turn)
             return
         if refusal is not None:
-            self._send_chat_reply(refusal, turn, http_msg, http_dialogue)
+            self._send_chat_reply(refusal, turn)
             return
         if proposal is None:
-            self._send_chat_reply(reasoning, turn, http_msg, http_dialogue)
+            self._send_chat_reply(reasoning, turn)
             return
         self.chat_session.proposal = proposal
         question = (
@@ -3165,8 +3134,6 @@ class HttpHandler(BaseHttpHandler):
                 else question
             ),
             turn,
-            http_msg,
-            http_dialogue,
         )
 
     def _plan_chat_change(
@@ -3274,6 +3241,7 @@ class HttpHandler(BaseHttpHandler):
             None,
         )
 
+
     @staticmethod
     def _protocols_text(names: List[str]) -> str:
         """Name protocols for the user.
@@ -3283,21 +3251,15 @@ class HttpHandler(BaseHttpHandler):
         """
         return ", ".join(PROTOCOL_NAMES.get(name, name) for name in names) or "None"
 
+
     def _ask_whether_confirmed(
-        self,
-        proposal: ConfigProposal,
-        text: str,
-        turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
+        self, proposal: ConfigProposal, text: str, turn: ChatTurn
     ) -> None:
         """Ask the LLM whether the user's message confirms the pending change.
 
         :param proposal: the change waiting for confirmation.
         :param text: the user's message.
         :param turn: the message being answered.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         """
         prompt = CONFIRM_PROMPT.format(
             proposal=f"Change {changes_text(proposal.changes)}.", user_reply=text
@@ -3307,21 +3269,13 @@ class HttpHandler(BaseHttpHandler):
             build_confirmation_schema(),
             CONFIRM_MAX_TOKENS,
             self._handle_confirmation_response,
-            {
-                "http_msg": http_msg,
-                "http_dialogue": http_dialogue,
-                "turn": turn,
-                "proposal": proposal,
-                "text": text,
-            },
+            {"turn": turn, "proposal": proposal, "text": text},
         )
 
-    def _handle_confirmation_response(  # pylint: disable=too-many-arguments
+    def _handle_confirmation_response(
         self,
         llm_response_message: SrrMessage,
         dialogue: Dialogue,  # pylint: disable=unused-argument
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
         turn: ChatTurn,
         proposal: ConfigProposal,
         text: str,
@@ -3330,102 +3284,55 @@ class HttpHandler(BaseHttpHandler):
 
         :param llm_response_message: the SrrMessage with the LLM output
         :param dialogue: the Dialogue
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         :param turn: the message being answered.
         :param proposal: the change waiting for confirmation.
         :param text: the user's message.
         """
-        answer = self._read_llm_answer(
-            llm_response_message, turn, http_msg, http_dialogue
-        )
+        answer = self._read_llm_answer(llm_response_message, turn)
         if answer is None:
-            # Nothing was answered, so the resend of this message decides it.
-            self.chat_session.proposal = proposal
+            self.chat_session.restore_proposal(proposal)
             return
         if answer.get("confirmed") is True:
             self._answer_safely(
-                partial(self._apply_proposal, proposal, turn, http_msg, http_dialogue),
-                turn,
-                http_msg,
-                http_dialogue,
-                proposal,
+                partial(self._apply_proposal, proposal, turn), turn, proposal
             )
             return
         self.chat_session.drop_proposal(turn.client_id)
-        self._answer_safely(
-            partial(self._ask_chat, text, turn, http_msg, http_dialogue),
-            turn,
-            http_msg,
-            http_dialogue,
-        )
+        self._answer_safely(partial(self._ask_chat, text, turn), turn)
 
-    def _apply_proposal(
-        self,
-        proposal: ConfigProposal,
-        turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
-    ) -> None:
+    def _apply_proposal(self, proposal: ConfigProposal, turn: ChatTurn) -> None:
         """Write a confirmed change to the KV store; the reply waits for the write.
 
         :param proposal: the confirmed change.
         :param turn: the message being answered.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         """
-        request_id = http_dialogue.dialogue_label.dialogue_reference[0]
-        data: Dict[str, str] = {}
+        request_id = turn.http_dialogue.dialogue_label.dialogue_reference[0]
         state = self.context.state
+        # A delayed write still pending from before must not undo this one.
         if proposal.strategy_changed:
-            data.update(
-                {
-                    "selected_protocols": json.dumps(
-                        proposal.selected_protocols, ensure_ascii=True
-                    ),
-                    "trading_type": proposal.trading_type,
-                    "composite_score": str(proposal.composite_score),
-                    "max_loss_percentage": str(proposal.max_loss_percentage),
-                    "reasoning": proposal.reasoning,
-                }
-            )
-            # A delayed write still pending from before must not undo this one.
             state.latest_chat_write_request_id = request_id
         if proposal.activity_goal is not None:
-            data[KV_ACTIVITY_GOAL_TARGET] = str(proposal.activity_goal)
             state.latest_goal_write_request_id = request_id
         with _KV_WRITE_LOCK:
             self._write_kv(
-                data,
+                proposal.kv_data(),
                 self._handle_confirmed_write_response,
-                {
-                    "proposal": proposal,
-                    "data": data,
-                    "turn": turn,
-                    "http_msg": http_msg,
-                    "http_dialogue": http_dialogue,
-                },
+                {"proposal": proposal, "turn": turn},
             )
 
-    def _handle_confirmed_write_response(  # pylint: disable=too-many-arguments
+    def _handle_confirmed_write_response(
         self,
         kv_store_response_message: KvStoreMessage,
         dialogue: Dialogue,  # pylint: disable=unused-argument
         proposal: ConfigProposal,
-        data: Dict[str, str],
         turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
     ) -> None:
         """Put a stored change in force, record it in the feed and acknowledge it.
 
         :param kv_store_response_message: the KvStoreMessage response
         :param dialogue: the KvStoreDialogue
         :param proposal: the confirmed change.
-        :param data: the KV data written.
         :param turn: the message being answered.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         """
         try:
             message, reply = find_exchange(
@@ -3446,60 +3353,49 @@ class HttpHandler(BaseHttpHandler):
             # A slow write and its resend's both came back. The first answer
             # stands unless it said nothing was applied and this write applied it.
             self._send_ok_response(
-                http_msg, http_dialogue, {"message": message, "reply": reply}
+                turn.http_msg,
+                turn.http_dialogue,
+                {"message": message, "reply": reply},
             )
             return
         if not stored:
             self.context.logger.error("Could not store the confirmed chat change.")
-            # Nothing was applied, so the next confirm decides it.
-            self.chat_session.proposal = proposal
-            self._send_chat_reply(CHANGE_NOT_APPLIED, turn, http_msg, http_dialogue)
+            self.chat_session.restore_proposal(proposal)
+            self._send_chat_reply(CHANGE_NOT_APPLIED, turn)
             return
         if self.chat_session.proposal is proposal:
             # An earlier failed write of this confirm put it back for deciding.
             self.chat_session.proposal = None
-        # The KV store calls back without a guard, and an unanswered request
-        # would block its resend with 409s.
-        self._answer_safely(
-            partial(
-                self._put_stored_change_in_force,
-                proposal,
-                data,
-                turn,
-                http_msg,
-                http_dialogue,
-            ),
+        self._put_stored_change_in_force(proposal)
+        self._send_chat_reply(
+            f"Done. I changed {changes_text(proposal.changes)}.",
             turn,
-            http_msg,
-            http_dialogue,
+            CHANGE_APPLIED_REPLY_NOT_SAVED,
         )
 
-    def _put_stored_change_in_force(
-        self,
-        proposal: ConfigProposal,
-        data: Dict[str, str],
-        turn: ChatTurn,
-        http_msg: HttpMessage,
-        http_dialogue: HttpDialogue,
-    ) -> None:
-        """Make a stored change the one in force, record it and acknowledge it.
+    def _put_stored_change_in_force(self, proposal: ConfigProposal) -> None:
+        """Make a stored change the one in force and record it in the feed.
+
+        The change is stored, so a failure here is logged and the reply
+        still says it was made.
 
         :param proposal: the confirmed change.
-        :param data: the KV data written.
-        :param turn: the message being answered.
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
         """
-        if proposal.strategy_changed:
-            self._update_agent_performance_chat(proposal.reasoning)
-            self._apply_strategy_state(data)
-        if proposal.activity_goal is not None:
-            block = self._publish_activity_goal(proposal.activity_goal)
-            # Without a block on disk, the stored goal is shown from memory.
-            self.context.state.activity_goal_target = (
-                None if block is not None else proposal.activity_goal
+        try:
+            if proposal.strategy_changed:
+                self._update_agent_performance_chat(proposal.reasoning)
+                self._apply_strategy_state(proposal.kv_data())
+            if proposal.activity_goal is not None:
+                block = self._publish_activity_goal(proposal.activity_goal)
+                # Without a block on disk, the stored goal is shown from memory.
+                self.context.state.activity_goal_target = (
+                    None if block is not None else proposal.activity_goal
+                )
+                self.context.state.failed_activity_goal_target = None
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.exception(
+                f"Could not put the stored chat change in force: {e}"
             )
-            self.context.state.failed_activity_goal_target = None
         for change in proposal.changes:
             record_event(
                 self.context.params.store_path,
@@ -3511,12 +3407,6 @@ class HttpHandler(BaseHttpHandler):
                 ],
                 self.context.logger,
             )
-        self._send_chat_reply(
-            f"Done. I changed {changes_text(proposal.changes)}.",
-            turn,
-            http_msg,
-            http_dialogue,
-        )
 
     @property
     def _agent_performance_filepath(self) -> Path:

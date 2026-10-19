@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
@@ -100,6 +101,21 @@ class TestChatSession:
         assert session.take_proposal("c2") is None
         assert session.take_proposal("c1") is proposal
 
+    def test_a_restored_proposal_is_decided_again(self) -> None:
+        """A change nothing applied waits for the next message."""
+        session = ChatSession()
+        proposal = _proposal()
+        session.restore_proposal(proposal)
+        assert session.proposal is proposal
+
+    def test_a_restore_keeps_a_newer_proposal(self) -> None:
+        """A change proposed since is not overwritten by an older one."""
+        session = ChatSession()
+        newer = _proposal()
+        session.proposal = newer
+        session.restore_proposal(_proposal())
+        assert session.proposal is newer
+
     def test_a_dropped_proposal_is_not_kept(self) -> None:
         """A change the message decided against is not decided again."""
         session = ChatSession()
@@ -107,6 +123,25 @@ class TestChatSession:
         session.take_proposal("c1")
         session.drop_proposal("c1")
         assert session.take_proposal("c1") is None
+
+
+class TestConfigProposalKvData:
+    """The KV entries a confirmed change writes."""
+
+    def test_strategy_change(self) -> None:
+        """A strategy change writes the strategy keys and not the goal."""
+        assert _proposal().kv_data() == {
+            "selected_protocols": '["balancer_pools_search"]',
+            "trading_type": "risky",
+            "composite_score": "0.3",
+            "max_loss_percentage": "20.0",
+            "reasoning": "ok",
+        }
+
+    def test_goal_change(self) -> None:
+        """A goal change alone writes only the goal."""
+        proposal = replace(_proposal(), strategy_changed=False, activity_goal=4)
+        assert proposal.kv_data() == {"activity_goal_target": "4"}
 
 
 def test_changes_text() -> None:

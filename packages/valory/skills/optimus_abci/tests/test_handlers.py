@@ -7022,6 +7022,52 @@ class TestActivityGoalChat:
         assert ctx.state.activity_goal_target is None
         handler._submit_background.assert_not_called()
 
+    def test_a_query_restating_the_stored_goal_changes_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        """Echoing the stored goal on a question is not reported or written."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block(target=12, progress=6))
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=12))
+        assert body["activity_goal"] is None
+        assert body["reasoning"] == "ok"
+        assert ctx.state.activity_goal_target is None
+        handler._submit_background.assert_not_called()
+
+    def test_an_update_restating_the_stored_goal_is_written_silently(
+        self, tmp_path: Path
+    ) -> None:
+        """An explicit update is written even if it matches the stored mirror."""
+        handler, ctx = _chat_handler()
+        self._with_block(ctx, tmp_path, _goal_block(target=12, progress=6))
+        body = _reply(handler, _llm_reply(intent="update", activity_goal=12))
+        assert body["activity_goal"] == 12
+        assert body["reasoning"] == "ok"
+        assert ctx.state.activity_goal_target == 12
+        handler._submit_background.assert_called_once_with(
+            handler._delayed_write_activity_goal, 12, "req1"
+        )
+
+    def test_restating_a_pending_goal_changes_nothing(self) -> None:
+        """A goal not yet written counts as the one in effect."""
+        handler, ctx = _chat_handler()
+        ctx.state.activity_goal_target = 7
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=7))
+        assert body["activity_goal"] is None
+        assert body["reasoning"] == "ok"
+        assert ctx.state.activity_goal_target == 7
+        handler._submit_background.assert_not_called()
+
+    def test_a_goal_one_off_the_current_is_a_change(self) -> None:
+        """Only an exact match with the goal in effect is skipped."""
+        handler, ctx = _chat_handler()
+        body = _reply(handler, _llm_reply(intent="query", activity_goal=11))
+        assert body["activity_goal"] == 11
+        assert "Your daily goal is now 11 rounds" in body["reasoning"]
+        handler._submit_background.assert_called_once_with(
+            handler._delayed_write_activity_goal, 11, "req1"
+        )
+
     @pytest.mark.parametrize("value", [-1, 2.5, "five", True])
     def test_an_invalid_goal_is_declined_and_the_old_one_kept(self, value) -> None:
         """Only whole numbers of rounds, 0 or more, are accepted."""

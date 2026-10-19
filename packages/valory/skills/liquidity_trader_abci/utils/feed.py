@@ -309,12 +309,16 @@ def has_event_since(store_path: Path, event_type: EventType, since: int) -> bool
     :param since: unix seconds.
     :return: whether such an event is in the feed.
     """
+    # The whole feed is read: a clock set back writes newer lines with older times.
     for entry in _entries_newest_first(Path(store_path) / FEED_FILE):
         ts = entry.get("ts")
-        if isinstance(ts, int) and ts < since:
-            # Lines are appended in time order, so nothing older can match.
-            return False
-        if entry.get("kind") == KIND_EVENT and entry.get("type") == event_type.value:
+        if (
+            entry.get("kind") == KIND_EVENT
+            and entry.get("type") == event_type.value
+            and isinstance(ts, int)
+            and not isinstance(ts, bool)
+            and ts >= since
+        ):
             return True
     return False
 

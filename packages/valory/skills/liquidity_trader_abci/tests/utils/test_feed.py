@@ -246,6 +246,29 @@ class TestHasEventSince:
         self._write(tmp_path, 150, EventType.POOL_EXITED)
         assert not has_event_since(tmp_path, EventType.POSITIONS_EXITED, 100)
 
+    def test_event_before_a_line_with_an_older_time(self, tmp_path: Path) -> None:
+        """A clock set back after the event does not hide it."""
+        self._write(tmp_path, 300)
+        with patch.object(feed.time, "time", return_value=50):
+            append_message(tmp_path, "user", "hi")
+        assert has_event_since(tmp_path, EventType.POSITIONS_EXITED, 100)
+
+    def test_older_event_after_a_line_with_a_newer_time(self, tmp_path: Path) -> None:
+        """An event written with an older time does not count, wherever it is."""
+        with patch.object(feed.time, "time", return_value=300):
+            append_message(tmp_path, "user", "hi")
+        self._write(tmp_path, 50)
+        assert not has_event_since(tmp_path, EventType.POSITIONS_EXITED, 100)
+
+    @pytest.mark.parametrize("ts", [None, "300", 300.5, True])
+    def test_event_without_a_readable_time(self, tmp_path: Path, ts) -> None:
+        """An event whose time cannot be read does not count."""
+        entry = {"id": 1, "kind": "event", "type": "positions_exited"}
+        if ts is not None:
+            entry["ts"] = ts
+        (tmp_path / FEED_FILE).write_text(json.dumps(entry) + "\n")
+        assert not has_event_since(tmp_path, EventType.POSITIONS_EXITED, 0)
+
 
 class TestFormatting:
     """Display-ready values."""

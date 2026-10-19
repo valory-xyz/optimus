@@ -22,7 +22,7 @@
 # pylint: skip-file
 
 from dataclasses import replace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -30,6 +30,7 @@ from packages.valory.skills.optimus_abci import chat
 from packages.valory.skills.optimus_abci.chat import (
     ANSWERING_TIMEOUT_SECONDS,
     ChatSession,
+    ChatTurn,
     ConfigChange,
     ConfigProposal,
     changes_text,
@@ -50,36 +51,53 @@ def _proposal() -> ConfigProposal:
     )
 
 
+def _turn(client_id: str = "c1") -> ChatTurn:
+    return ChatTurn(client_id, {"id": 1}, MagicMock(), MagicMock())
+
+
 class TestChatSession:
     """What the chat keeps in memory."""
 
     def test_answering_until_finished(self) -> None:
-        """A message is answering from start to finish."""
+        """A message is answering from start to finish, and blocks any other."""
         session = ChatSession()
-        assert not session.is_answering("c1")
-        session.start_answering("c1")
-        assert session.is_answering("c1")
-        assert not session.is_answering("c2")
-        session.finish_answering("c1")
-        assert not session.is_answering("c1")
+        turn = _turn()
+        assert not session.is_answering()
+        session.start_answering(turn)
+        assert session.is_answering()
+        assert session.is_current(turn)
+        session.finish_answering(turn)
+        assert not session.is_answering()
+        assert not session.is_current(turn)
 
     def test_finishing_an_unknown_message_is_harmless(self) -> None:
         """Finishing a message never started does nothing."""
-        ChatSession().finish_answering("c1")
+        ChatSession().finish_answering(_turn())
 
     def test_a_stale_answer_stops_blocking(self) -> None:
         """An answer that never came back stops blocking after the timeout."""
         session = ChatSession()
         with patch.object(chat.time, "time", return_value=1000.0):
-            session.start_answering("c1")
+            session.start_answering(_turn())
         with patch.object(
             chat.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS - 1
         ):
-            assert session.is_answering("c1")
+            assert session.is_answering()
         with patch.object(
             chat.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
         ):
-            assert not session.is_answering("c1")
+            assert not session.is_answering()
+
+    def test_a_late_finish_leaves_the_newer_message_answering(self) -> None:
+        """A message given up on, finishing late, does not free the one after it."""
+        session = ChatSession()
+        first, resend = _turn(), _turn()
+        session.start_answering(first)
+        session.start_answering(resend)
+        assert not session.is_current(first)
+        session.finish_answering(first)
+        assert session.is_answering()
+        assert session.is_current(resend)
 
     def test_a_proposal_is_taken_once(self) -> None:
         """The pending change gets one reply, then is gone."""
@@ -88,7 +106,7 @@ class TestChatSession:
         proposal = _proposal()
         session.proposal = proposal
         assert session.take_proposal("c1") is proposal
-        session.finish_answering("c1")
+        session.finish_answering(_turn("c1"))
         assert session.take_proposal("c1") is None
         assert session.take_proposal("c2") is None
 

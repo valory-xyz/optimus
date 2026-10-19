@@ -36,7 +36,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.feed import (
 )
 from packages.valory.skills.optimus_abci.dialogues import HttpDialogue
 
-# A message whose answer never came back stops blocking its resend after this.
+# A message whose answer never came back stops blocking the chat after this.
 ANSWERING_TIMEOUT_SECONDS = 300
 # Keeps a long earlier reply from crowding the prompt.
 RECENT_TEXT_LIMIT = 300
@@ -108,34 +108,47 @@ class ChatSession:
 
     def __init__(self) -> None:
         """Initialize the session."""
-        self._answering_since: Dict[str, float] = {}
+        # One message is answered at a time, so no answer can overtake another.
+        self._answering: Optional[ChatTurn] = None
+        self._answering_since = 0.0
         # The change each message being answered decides, kept for its resend.
         self._deciding: Dict[str, ConfigProposal] = {}
         self.proposal: Optional[ConfigProposal] = None
 
-    def is_answering(self, client_id: str) -> bool:
-        """Return whether the message with this client id is still being answered.
+    def is_answering(self) -> bool:
+        """Return whether a message is still being answered.
 
-        :param client_id: Pearl's id of the message.
         :return: whether an answer is in flight.
         """
-        since = self._answering_since.get(client_id)
-        return since is not None and time.time() - since < ANSWERING_TIMEOUT_SECONDS
+        return (
+            self._answering is not None
+            and time.time() - self._answering_since < ANSWERING_TIMEOUT_SECONDS
+        )
 
-    def start_answering(self, client_id: str) -> None:
-        """Mark the message with this client id as being answered.
+    def is_current(self, turn: ChatTurn) -> bool:
+        """Return whether this is the message being answered, not one given up on.
 
-        :param client_id: Pearl's id of the message.
+        :param turn: the message.
+        :return: whether its answer is still awaited.
         """
-        self._answering_since[client_id] = time.time()
+        return self._answering is turn
 
-    def finish_answering(self, client_id: str) -> None:
-        """Mark the message with this client id as no longer being answered.
+    def start_answering(self, turn: ChatTurn) -> None:
+        """Mark this message as the one being answered.
 
-        :param client_id: Pearl's id of the message.
+        :param turn: the message.
         """
-        self._answering_since.pop(client_id, None)
-        self._deciding.pop(client_id, None)
+        self._answering = turn
+        self._answering_since = time.time()
+
+    def finish_answering(self, turn: ChatTurn) -> None:
+        """Mark this message as answered; a newer message being answered stays so.
+
+        :param turn: the message.
+        """
+        if self._answering is turn:
+            self._answering = None
+        self._deciding.pop(turn.client_id, None)
 
     def take_proposal(self, client_id: str) -> Optional[ConfigProposal]:
         """Return the change this message decides; it gets one reply.

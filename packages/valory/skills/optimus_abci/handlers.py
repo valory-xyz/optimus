@@ -257,7 +257,7 @@ CHAT_TEXT_FIELD = "text"
 CHAT_CLIENT_ID_FIELD = "client_id"
 INVALID_CHAT_REQUEST = "A chat message needs a non-empty text and client_id."
 CHAT_SAVE_FAILED = "The message could not be saved. Please try again."
-STILL_ANSWERING = "Your agent is still answering this message."
+STILL_ANSWERING = "Your agent is still answering a message."
 CHAT_REPLY_FAILED = "Your agent could not answer. Please try again."
 CHANGE_NOT_APPLIED = (
     "I couldn't apply that change, so your settings are unchanged. Please try again."
@@ -2830,6 +2830,7 @@ class HttpHandler(BaseHttpHandler):
         The message is written when it arrives and the reply only when it
         succeeds. A resend with the same ``client_id`` is written once: one
         already answered gets the lines as written, without a new answer.
+        While another message is being answered, a new one gets a 409.
 
         :param http_msg: the HttpMessage instance
         :param http_dialogue: the HttpDialogue instance
@@ -2841,18 +2842,17 @@ class HttpHandler(BaseHttpHandler):
             )
             return
         text, client_id = request
-        if self.chat_session.is_answering(client_id):
-            self._send_chat_error(
-                http_msg, http_dialogue, HTTPStatus.CONFLICT, STILL_ANSWERING
-            )
-            return
-
         store_path = self.context.params.store_path
         try:
             message, reply = find_exchange(store_path, client_id)
             if message is not None and reply is not None:
                 self._send_ok_response(
                     http_msg, http_dialogue, {"message": message, "reply": reply}
+                )
+                return
+            if self.chat_session.is_answering():
+                self._send_chat_error(
+                    http_msg, http_dialogue, HTTPStatus.CONFLICT, STILL_ANSWERING
                 )
                 return
             if message is None:
@@ -2875,7 +2875,7 @@ class HttpHandler(BaseHttpHandler):
             return
 
         turn = ChatTurn(client_id, message, http_msg, http_dialogue)
-        self.chat_session.start_answering(client_id)
+        self.chat_session.start_answering(turn)
         proposal = self.chat_session.take_proposal(client_id)
         if proposal is not None:
             self._answer_safely(
@@ -2894,7 +2894,7 @@ class HttpHandler(BaseHttpHandler):
     ) -> None:
         """Run a step of answering a chat message; a failure still answers it.
 
-        Left to raise, the request would hang and its resend get a 409 until
+        Left to raise, the request would hang and the chat get a 409 until
         the answering timeout.
 
         :param step: the step.
@@ -2937,7 +2937,7 @@ class HttpHandler(BaseHttpHandler):
         status: HTTPStatus,
         error: str,
     ) -> None:
-        """Answer a chat request with an error; nothing is written to the feed.
+        """Answer a chat request with an error.
 
         :param http_msg: the HttpMessage instance
         :param http_dialogue: the HttpDialogue instance
@@ -2963,7 +2963,7 @@ class HttpHandler(BaseHttpHandler):
         :param status: the HTTP status.
         :param error: the error text.
         """
-        self.chat_session.finish_answering(turn.client_id)
+        self.chat_session.finish_answering(turn)
         self._send_chat_error(turn.http_msg, turn.http_dialogue, status, error)
 
     def _send_chat_reply(
@@ -2989,7 +2989,7 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(f"Could not write the chat reply: {e}")
             self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, save_failed_error)
             return
-        self.chat_session.finish_answering(turn.client_id)
+        self.chat_session.finish_answering(turn)
         self._send_ok_response(
             turn.http_msg, turn.http_dialogue, {"message": turn.message, "reply": reply}
         )
@@ -3010,9 +3010,25 @@ class HttpHandler(BaseHttpHandler):
             return False
         if reply is None:
             return False
-        self.chat_session.finish_answering(turn.client_id)
+        self.chat_session.finish_answering(turn)
         self._send_ok_response(
             turn.http_msg, turn.http_dialogue, {"message": turn.message, "reply": reply}
+        )
+        return True
+
+    def _is_given_up(self, turn: ChatTurn) -> bool:
+        """Return whether the chat stopped waiting for this message's LLM answer.
+
+        Past the answering timeout another message can be answered, which a
+        late answer must neither reply to nor finish.
+
+        :param turn: the message the answer is for.
+        :return: whether the answer is dropped.
+        """
+        if self.chat_session.is_current(turn):
+            return False
+        self.context.logger.warning(
+            f"Dropped a late LLM answer to chat message {turn.client_id}."
         )
         return True
 
@@ -3093,7 +3109,7 @@ class HttpHandler(BaseHttpHandler):
         :param dialogue: the Dialogue
         :param turn: the message being answered.
         """
-        if self._send_written_reply(turn):
+        if self._is_given_up(turn) or self._send_written_reply(turn):
             return
         answer = self._read_llm_answer(llm_response_message, turn)
         if answer is None:
@@ -3284,6 +3300,8 @@ class HttpHandler(BaseHttpHandler):
         :param proposal: the change waiting for confirmation.
         :param text: the user's message.
         """
+        if self._is_given_up(turn):
+            return
         answer = self._read_llm_answer(llm_response_message, turn)
         if answer is None:
             self.chat_session.restore_proposal(proposal)
@@ -3372,8 +3390,8 @@ class HttpHandler(BaseHttpHandler):
     def _put_stored_change_in_force(self, proposal: ConfigProposal) -> None:
         """Make a stored change the one in force and record it in the feed.
 
-        The change is stored, so a failure here is logged and the reply
-        still says it was made.
+        The change is stored, so the reply says it was made even if this
+        fails; the card is only written once the change is in force.
 
         :param proposal: the confirmed change.
         """
@@ -3392,6 +3410,7 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.exception(
                 f"Could not put the stored chat change in force: {e}"
             )
+            return
         for change in proposal.changes:
             record_event(
                 self.context.params.store_path,

@@ -7301,6 +7301,7 @@ import packages.valory.skills.optimus_abci.chat as chat_mod  # noqa: E402
 from packages.valory.skills.liquidity_trader_abci.utils.feed import (  # noqa: E402
     EventType,
     append_event,
+    append_message,
     field,
 )
 from packages.valory.skills.optimus_abci.chat import (  # noqa: E402
@@ -7316,6 +7317,9 @@ from packages.valory.skills.optimus_abci.handlers import (  # noqa: E402
     INVALID_CHAT_REQUEST,
     STILL_ANSWERING,
 )
+
+# A recent time, so the lines written at it are inside the feed's scan window.
+_START = float(int(chat_mod.time.time()))
 
 
 def _feed(store: Path) -> list:
@@ -7546,7 +7550,7 @@ class TestChatMessages:
         dialogue = chat.post("hi", "c1")
         chat.answer(payload)
         assert chat.response(dialogue) == (500, {"error": CHAT_REPLY_FAILED})
-        assert not chat.handler.chat_session.is_answering("c1")
+        assert not chat.handler.chat_session.is_answering()
 
     @pytest.mark.parametrize(
         "body",
@@ -7584,7 +7588,7 @@ class TestChatMessages:
         ):
             chat.answer_strategy()
         assert chat.response(dialogue) == (500, {"error": CHAT_SAVE_FAILED})
-        assert not chat.handler.chat_session.is_answering("c1")
+        assert not chat.handler.chat_session.is_answering()
 
     @pytest.mark.parametrize(
         "payload",
@@ -7606,23 +7610,61 @@ class TestChatMessages:
         chat.answer_strategy(reasoning="ok")
         assert chat.response(retry)[1]["reply"]["text"] == "ok"
 
-    def test_a_message_and_its_resend_both_answered_reply_once(
+    def test_a_late_answer_to_a_message_given_up_on_is_dropped(
         self, chat: _Chat
     ) -> None:
-        """When both answers of a timed-out message come back, the first stands."""
-        with patch.object(chat_mod.time, "time", return_value=1000.0):
+        """Past the timeout the resend is answered; the first answer neither replies nor frees it."""
+        with patch.object(chat_mod.time, "time", return_value=_START):
             first = chat.post("hi", "c1")
         with patch.object(
-            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+            chat_mod.time, "time", return_value=_START + ANSWERING_TIMEOUT_SECONDS
         ):
             resend = chat.post("hi", "c1")
         assert chat.handler._send_llm_request.call_count == 2
         chat.answer({"response": json.dumps({"reasoning": "First."})}, index=0)
+        assert [e for e in _feed(chat.store) if e["role"] == "agent"] == []
+        first.reply.assert_not_called()
+        other = chat.post("and now?", "c2")
+        assert chat.response(other) == (409, {"error": STILL_ANSWERING})
         chat.answer({"response": json.dumps({"reasoning": "Second."})}, index=1)
         replies = [e for e in _feed(chat.store) if e["role"] == "agent"]
-        assert [e["text"] for e in replies] == ["First."]
-        assert chat.response(resend) == chat.response(first)
-        assert not chat.handler.chat_session.is_answering("c1")
+        assert [e["text"] for e in replies] == ["Second."]
+        assert chat.response(resend)[1]["reply"] == replies[0]
+        assert not chat.handler.chat_session.is_answering()
+
+    def test_an_answer_to_a_message_already_replied_returns_that_reply(
+        self, chat: _Chat
+    ) -> None:
+        """A reply written meanwhile stands, and no second one is written."""
+        dialogue = chat.post("hi", "c1")
+        written = append_message(chat.store, "agent", "Written.", "c1")
+        chat.answer_strategy(reasoning="Another.")
+        assert chat.response(dialogue)[1]["reply"] == written
+        assert [e["text"] for e in _feed(chat.store) if e["role"] == "agent"] == [
+            "Written."
+        ]
+        assert not chat.handler.chat_session.is_answering()
+
+    def test_a_new_message_while_another_is_answered_is_a_conflict(
+        self, chat: _Chat
+    ) -> None:
+        """One message is answered at a time; a new one is not written."""
+        chat.post("hi", "c1")
+        other = chat.post("hello?", "c2")
+        assert chat.response(other) == (409, {"error": STILL_ANSWERING})
+        assert chat.handler._send_llm_request.call_count == 1
+        assert [e["client_id"] for e in _feed(chat.store)] == ["c1"]
+
+    def test_a_resend_of_an_answered_message_is_replayed_while_another_is_answered(
+        self, chat: _Chat
+    ) -> None:
+        """An answered message gets its lines though another is in flight."""
+        first = chat.post("hi", "c1")
+        chat.answer_strategy()
+        _, written = chat.response(first)
+        chat.post("next", "c2")
+        again = chat.post("hi", "c1")
+        assert chat.response(again) == (200, written)
 
     def test_an_answer_when_the_feed_cannot_be_read(self, chat: _Chat) -> None:
         """An unreadable feed does not stop the reply from being written."""
@@ -7640,7 +7682,7 @@ class TestChatMessages:
         chat.handler._send_llm_request.side_effect = RuntimeError("boom")
         dialogue = chat.post("hi", "c1")
         assert chat.response(dialogue) == (500, {"error": CHAT_REPLY_FAILED})
-        assert not chat.handler.chat_session.is_answering("c1")
+        assert not chat.handler.chat_session.is_answering()
 
 
 class TestChatPaidCallStatus:
@@ -7773,6 +7815,20 @@ class TestChatConfigChange:
             "message",
         ]
 
+    def test_a_resend_of_an_acknowledged_confirm_is_replayed(self, chat: _Chat) -> None:
+        """A resend of "yes" after "Done." asks nothing and writes nothing again."""
+        self._propose(chat, trading_type="risky")
+        confirm = chat.post("yes", "c2")
+        chat.answer_confirmation(True)
+        chat.kv_reply(success=True)
+        llm_calls = chat.handler._send_llm_request.call_count
+        lines = len(_feed(chat.store))
+        again = chat.post("yes", "c2")
+        assert chat.response(again) == chat.response(confirm)
+        assert chat.handler._send_llm_request.call_count == llm_calls
+        assert chat.handler._write_kv.call_count == 1
+        assert len(_feed(chat.store)) == lines
+
     def test_goal_change_is_stored_and_published(self, chat: _Chat) -> None:
         """A goal change writes the goal key and updates what Pearl shows."""
         self._propose(chat, activity_goal=4)
@@ -7868,7 +7924,7 @@ class TestChatConfigChange:
         confirm = chat.post("yes", "c2")
         assert chat.response(confirm) == (500, {"error": CHAT_REPLY_FAILED})
         assert chat.handler.chat_session.proposal is proposal
-        assert not chat.handler.chat_session.is_answering("c2")
+        assert not chat.handler.chat_session.is_answering()
 
     def test_a_confirm_without_a_kv_reply_is_decided_by_the_resend(
         self, chat: _Chat
@@ -7876,13 +7932,13 @@ class TestChatConfigChange:
         """A store that never answers the write leaves the change for the resend."""
         self._propose(chat, trading_type="risky")
         proposal = chat.handler.chat_session.proposal
-        with patch.object(chat_mod.time, "time", return_value=1000.0):
+        with patch.object(chat_mod.time, "time", return_value=_START):
             chat.post("yes", "c2")
         chat.answer_confirmation(True)
         assert chat.handler._write_kv.call_count == 1
         # The store never calls back; the resend comes after the timeout.
         with patch.object(
-            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+            chat_mod.time, "time", return_value=_START + ANSWERING_TIMEOUT_SECONDS
         ):
             resend = chat.post("yes", "c2")
         prompt = chat.llm_call()[0]
@@ -7903,11 +7959,11 @@ class TestChatConfigChange:
     ) -> None:
         """When both writes of one confirm come back, only the first applies it."""
         self._propose(chat, trading_type="risky")
-        with patch.object(chat_mod.time, "time", return_value=1000.0):
+        with patch.object(chat_mod.time, "time", return_value=_START):
             confirm = chat.post("yes", "c2")
         chat.answer_confirmation(True)
         with patch.object(
-            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+            chat_mod.time, "time", return_value=_START + ANSWERING_TIMEOUT_SECONDS
         ):
             resend = chat.post("yes", "c2")
         chat.answer_confirmation(True)
@@ -7927,11 +7983,11 @@ class TestChatConfigChange:
     ) -> None:
         """A change the resend stored applies though the first write failed."""
         self._propose(chat, trading_type="risky")
-        with patch.object(chat_mod.time, "time", return_value=1000.0):
+        with patch.object(chat_mod.time, "time", return_value=_START):
             confirm = chat.post("yes", "c2")
         chat.answer_confirmation(True)
         with patch.object(
-            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+            chat_mod.time, "time", return_value=_START + ANSWERING_TIMEOUT_SECONDS
         ):
             resend = chat.post("yes", "c2")
         chat.answer_confirmation(True)
@@ -7952,11 +8008,11 @@ class TestChatConfigChange:
         """Two failed writes of one confirm give one reply and keep the change."""
         self._propose(chat, trading_type="risky")
         proposal = chat.handler.chat_session.proposal
-        with patch.object(chat_mod.time, "time", return_value=1000.0):
+        with patch.object(chat_mod.time, "time", return_value=_START):
             confirm = chat.post("yes", "c2")
         chat.answer_confirmation(True)
         with patch.object(
-            chat_mod.time, "time", return_value=1000.0 + ANSWERING_TIMEOUT_SECONDS
+            chat_mod.time, "time", return_value=_START + ANSWERING_TIMEOUT_SECONDS
         ):
             resend = chat.post("yes", "c2")
         chat.answer_confirmation(True)
@@ -7994,7 +8050,7 @@ class TestChatConfigChange:
     def test_a_failure_after_the_write_still_says_it_was_applied(
         self, chat: _Chat, fields: dict, failing: str
     ) -> None:
-        """A stored change is acknowledged and recorded though a later step failed."""
+        """A stored change is acknowledged though a later step failed, without a card."""
         self._propose(chat, **fields)
         confirm = chat.post("yes", "c2")
         chat.answer_confirmation(True)
@@ -8003,10 +8059,9 @@ class TestChatConfigChange:
         status, body = chat.response(confirm)
         assert status == 200
         assert body["reply"]["text"].startswith("Done. I changed ")
-        assert [e["type"] for e in _feed(chat.store) if e["kind"] == "event"] == [
-            "config_changed"
-        ]
-        assert not chat.handler.chat_session.is_answering("c2")
+        # The card would say the change is in force, which it is not until a restart.
+        assert not any(e["kind"] == "event" for e in _feed(chat.store))
+        assert not chat.handler.chat_session.is_answering()
         # The change is stored, so it is not proposed again.
         assert chat.handler.chat_session.proposal is None
 
@@ -8027,26 +8082,29 @@ class TestChatConfigChange:
         assert chat.ctx.state.trading_type == "risky"
         assert chat.handler.chat_session.proposal is None
 
-    @pytest.mark.parametrize("failure", ["confirm_check", "write_call", "kv_write"])
+    @pytest.mark.parametrize("failure", ["confirm_check", "kv_write"])
     def test_a_failed_confirm_keeps_a_newer_proposal(
         self, chat: _Chat, failure: str
     ) -> None:
-        """A confirm that fails after another message proposed a change keeps that one."""
+        """A confirm given up on, failing after another message proposed a change, keeps that one."""
         self._propose(chat, trading_type="risky")
-        confirm = chat.post("yes", "c2")
-        chat.post("go higher", "c3")
+        with patch.object(chat_mod.time, "time", return_value=_START):
+            confirm = chat.post("yes", "c2")
+        if failure == "kv_write":
+            chat.answer_confirmation(True)
+        with patch.object(
+            chat_mod.time, "time", return_value=_START + ANSWERING_TIMEOUT_SECONDS
+        ):
+            chat.post("go higher", "c3")
         chat.answer_strategy(intent="update", max_loss_percentage=25)
         newer = chat.handler.chat_session.proposal
         assert newer is not None
         if failure == "confirm_check":
             chat.answer({"error": "rate limited"}, index=1)
+            confirm.reply.assert_not_called()
         else:
-            if failure == "write_call":
-                chat.handler._write_kv.side_effect = RuntimeError("boom")
-            chat.answer({"response": json.dumps({"confirmed": True})}, index=1)
-            if failure == "kv_write":
-                chat.kv_reply(success=False)
-        assert chat.response(confirm)[0] in (200, 500)
+            chat.kv_reply(success=False)
+            assert chat.response(confirm)[1]["reply"]["text"] == CHANGE_NOT_APPLIED
         assert chat.handler.chat_session.proposal is newer
 
     @pytest.mark.parametrize(

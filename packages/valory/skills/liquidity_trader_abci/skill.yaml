@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/agent_top_up.py: bafybeiar63b75bys4o34imjlznm3zjqtbkhpxb6xoiop3h54qlgdzsjtyi
+  behaviours/agent_top_up.py: bafybeifruex5joaxikuq2rmtlcgey6jzmg4dlim7h4axemq373l5dgkhu4
   behaviours/base.py: bafybeifcum7k2mxlusopkb5rceupulz4tkqavd3zt4jivchybwiqie7wqa
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeicjkta6tmi4zjexy6xekst7bhpbqnbh22gx34ugkylioj2isc3k6y
@@ -16,7 +16,7 @@ fingerprint:
   behaviours/evaluate_strategy.py: bafybeihphcu7roqiwfsnsr22rldfjjfi4j7awzjym2x55r6rnnkt2flbsa
   behaviours/fetch_strategies.py: bafybeieqos435cxah3u6joyhgodabac3vdlyqc5ynskkbs3o47f33fllpu
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
-  behaviours/post_tx_settlement.py: bafybeid47egowbua42ud3kgot6w2miiqgvyn2d5iudot3zw7zdprwzbkka
+  behaviours/post_tx_settlement.py: bafybeiep36wqzrsnkb7nve77yqiceu66dvuar3dh3hdf4zlakluj27cudu
   behaviours/round_behaviour.py: bafybeidyq2pvzsqzunra7tfsmtavapg2xvl4irx73y532zgnbq6rnacwka
   behaviours/withdraw_funds.py: bafybeiaekrve5ozaogcu6ufqcnkqgkapdtjrlknif3nswhu5xkl6r5eaxm
   dialogues.py: bafybeic5bdlovivzkv3jnj6khbs7tzukv64ucea7w7y3tn2tgsequb2u2i
@@ -48,7 +48,7 @@ fingerprint:
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
-  tests/behaviours/test_agent_top_up.py: bafybeiaxbbkvvmzexm4hep6w5z6p5ugrt2ji7bnl2c7ekiismlgairpjvm
+  tests/behaviours/test_agent_top_up.py: bafybeibkhtesnabpsbnjkictsheqsn4ipn6lzezjn6g6idfnh2yzuojswu
   tests/behaviours/test_base.py: bafybeic7nbv6djppkyf2wncxszg26twqr4mtm4ag7j6zwaxwyqlo2aeorm
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeiahasmgkystu47ghqbl3zzbegasrdsbjgniiouvm2y3twcxrczq2a

@@ -31,8 +31,8 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
     PostTxSettlementRound,
 )
 
-# Plain Safe transfers say nothing about what a real tx costs, which is what the
-# tracked gas is compared against.
+# Vanity txs and plain Safe top-up transfers say nothing about what a real tx
+# costs, which is what the tracked gas is compared against.
 UNTRACKED_GAS_SUBMITTERS = frozenset(
     {
         AgentTopUpRound.auto_round_id(),

@@ -135,11 +135,18 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
                 funds, agent_need_extra
             )
 
-        topups = get_agent_topup(
-            funds,
-            agent_need_extra=agent_need_extra,
-            agent_need_override=agent_need_override,
-        )
+        try:
+            topups = get_agent_topup(
+                funds,
+                agent_need_extra=agent_need_extra,
+                agent_need_override=agent_need_override,
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            self.context.logger.warning(
+                f"Agent top-up skipped: the top-up rule raised "
+                f"{type(exc).__name__}({exc})."
+            )
+            return None
         for chain, topup in topups.items():
             if topup.action == TopUpAction.MOVE:
                 self.context.logger.info(

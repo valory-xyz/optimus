@@ -237,6 +237,13 @@ class TestNoMove:
         harness.get_agent_topup.assert_not_called()
         assert "rpc down" in harness.ctx.logger.warning.call_args[0][0]
 
+    def test_rule_fails(self) -> None:
+        """A failing top-up rule moves nothing."""
+        harness = _Harness(topups={"optimism": _move(5)})
+        harness.get_agent_topup.side_effect = RuntimeError("bad status")
+        _assert_no_tx(harness.run())
+        assert "bad status" in harness.ctx.logger.warning.call_args[0][0]
+
     @pytest.mark.parametrize(
         "topup",
         [

@@ -36,11 +36,14 @@ from web3.exceptions import BadFunctionCallOutput, ContractLogicError
 
 import packages.valory.skills.optimus_abci.handlers as handlers_module
 from packages.valory.protocols.kv_store.message import KvStoreMessage
+from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
+from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
+    ESTIMATED_GAS_PER_TX,
+)
 from packages.valory.skills.optimus_abci.handlers import (
     BASIUS_AGENT_PROFILE_PATH,
     BaseHandler,
-    ESTIMATED_GAS_PER_TX,
     HttpCode,
     HttpHandler,
     KvStoreHandler,
@@ -7295,3 +7298,230 @@ class TestActivityGoalChat:
             handler._delayed_write_activity_goal(4, "older")
         handler._write_kv.assert_not_called()
         assert json.loads(path.read_text())["activity_goal"] == _goal_block()
+
+
+TOPUP_AGENT = "0x1111111111111111111111111111111111111111"
+TOPUP_SAFE = "0x2222222222222222222222222222222222222222"
+
+
+def _topup_funds(
+    signer_balance: Optional[int] = 50,
+    safe_balance: Optional[int] = 10**18,
+    min_tx_balance: Optional[int] = 10,
+) -> FundRequirements:
+    """Optimism status: Agent Signer threshold 200, topup 400; Agent Safe topup 1000."""
+    signer_deficit = None
+    if signer_balance is not None:
+        signer_deficit = 400 - signer_balance if signer_balance < 200 else 0
+    signer = {
+        "topup": 400,
+        "threshold": 200,
+        "is_native": True,
+        "min_tx_balance": min_tx_balance,
+        "balance": signer_balance,
+        "deficit": signer_deficit,
+    }
+    safe = {
+        "topup": 1000,
+        "threshold": 500,
+        "is_native": True,
+        "balance": safe_balance,
+        "deficit": 0,
+    }
+    return FundRequirements.model_validate(
+        {
+            "optimism": {
+                "accounts": {
+                    TOPUP_AGENT: {"tokens": {ZERO_ADDRESS: signer}},
+                    TOPUP_SAFE: {"tokens": {ZERO_ADDRESS: safe}},
+                }
+            }
+        }
+    )
+
+
+def _topup_rule() -> Any:
+    """The funds_manager get_agent_topup rule, bound to the test addresses."""
+    from packages.valory.skills.funds_manager.behaviours import (
+        FundsManagerBehaviour,
+    )
+
+    rule = object.__new__(FundsManagerBehaviour)
+    rule.__dict__["_account_name_to_actual_address"] = lambda name, chain: (
+        TOPUP_AGENT if name == "agent" else TOPUP_SAFE
+    )
+    return MagicMock(side_effect=rule.get_agent_topup)
+
+
+def _topup_handler(funds: FundRequirements, x402_eth_deficit: Any = 0) -> Any:
+    """An HttpHandler serving /funds-status from ``funds`` with the real rule."""
+    from packages.valory.skills.funds_manager.behaviours import (
+        GET_AGENT_TOPUP_METHOD_NAME,
+        GET_FUNDS_STATUS_METHOD_NAME,
+    )
+
+    handler, ctx = _make_http_handler()
+    handler._send_ok_response = MagicMock()
+    ctx.params.use_x402 = False
+    ctx.params.target_investment_chains = ["optimism"]
+    ctx.params.safe_contract_addresses = {"optimism": TOPUP_SAFE}
+    ctx.agent_address = TOPUP_AGENT
+    ctx.state.x402_eth_deficit = x402_eth_deficit
+    rule = _topup_rule()
+    ctx.shared_state = {
+        GET_FUNDS_STATUS_METHOD_NAME: MagicMock(return_value=funds),
+        GET_AGENT_TOPUP_METHOD_NAME: rule,
+    }
+    return handler, ctx, rule
+
+
+def _served(handler: Any) -> Dict:
+    """Serve /funds-status and return the body."""
+    handler._handle_get_funds_status(MagicMock(), MagicMock())
+    return handler._send_ok_response.call_args[0][2]
+
+
+class TestFundsStatusAfterAgentTopUp:
+    """/funds-status reports what is left once the Agent Safe tops up the Agent Signer."""
+
+    def test_normal_mode_safe_covers_the_signer(self) -> None:
+        """A move the Agent Safe can cover leaves no Agent Signer deficit."""
+        handler, _, rule = _topup_handler(_topup_funds())
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        body = _served(handler)
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "0"
+        assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "0"
+        assert rule.call_args.kwargs == {
+            "agent_need_extra": {},
+            "agent_need_override": None,
+        }
+
+    def test_normal_mode_safe_short_asks_for_the_rest(self) -> None:
+        """The Agent Safe asks for the shortfall plus its own topup."""
+        handler, _, _ = _topup_handler(_topup_funds(safe_balance=100))
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        body = _served(handler)
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "0"
+        # need 350 - safe 100 + safe topup 1000
+        assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "1250"
+
+    def test_normal_mode_signer_cannot_pay_keeps_its_deficit(self) -> None:
+        """Below min_tx_balance the Agent Signer deficit is reported as read."""
+        handler, _, _ = _topup_handler(_topup_funds(signer_balance=5))
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        body = _served(handler)
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "395"
+        assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "0"
+
+    def test_normal_mode_x402_need_is_part_of_the_signer_need(self) -> None:
+        """The x402 need beyond the deficit is what the Agent Safe must cover."""
+        handler, _, rule = _topup_handler(
+            _topup_funds(signer_balance=5, min_tx_balance=1, safe_balance=100),
+            x402_eth_deficit=1005,
+        )
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        body = _served(handler)
+        assert rule.call_args.kwargs["agent_need_extra"] == {"optimism": 605}
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "0"
+        # need max(395, 1005 - 5) = 1000 - safe 100 + safe topup 1000
+        assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "1900"
+
+    def test_normal_mode_unread_balance_is_left_as_read(self) -> None:
+        """No move and no rewrite when a balance could not be read."""
+        funds = _topup_funds(signer_balance=None)
+        handler, _, _ = _topup_handler(funds)
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        assert _served(handler) == funds.get_response_body()
+
+    def test_normal_mode_without_min_tx_balance_is_unchanged(self) -> None:
+        """No min_tx_balance means no move, so the report is today's."""
+        funds = _topup_funds(min_tx_balance=None)
+        handler, _, _ = _topup_handler(funds)
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        assert _served(handler) == funds.get_response_body()
+
+    def test_withdrawal_mode_reports_what_is_left_of_the_gas(self) -> None:
+        """The withdrawal gas is moved from the Agent Safe, so nothing is asked."""
+        handler, _, rule = _topup_handler(_topup_funds())
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
+        handler._read_withdrawal_data = MagicMock(
+            return_value={"withdrawal_transaction_hashes": "[]"}
+        )
+        body = _served(handler)
+        gas = int(ESTIMATED_GAS_PER_TX * 1.2) - 50
+        assert rule.call_args.kwargs["agent_need_override"] == {"optimism": gas}
+        assert body == {
+            "optimism": {TOPUP_AGENT: {ZERO_ADDRESS: {"balance": "50", "deficit": "0"}}}
+        }
+
+    def test_withdrawal_mode_safe_short_adds_its_entry(self) -> None:
+        """The custom withdrawal body gains an Agent Safe entry when it is short."""
+        handler, _, _ = _topup_handler(_topup_funds(safe_balance=0))
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
+        handler._read_withdrawal_data = MagicMock(
+            return_value={"withdrawal_transaction_hashes": "[]"}
+        )
+        body = _served(handler)
+        gas = int(ESTIMATED_GAS_PER_TX * 1.2) - 50
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "0"
+        assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS] == {
+            "balance": "0",
+            "deficit": str(gas + 1000),
+        }
+
+    def test_withdrawal_mode_without_actions_stays_empty(self) -> None:
+        """No withdrawal action prepared: nothing is moved or asked."""
+        handler, _, rule = _topup_handler(_topup_funds())
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[])
+        assert _served(handler) == {}
+        assert rule.call_args.kwargs["agent_need_override"] == {"optimism": 0}
+
+    def test_withdrawal_mode_without_signer_deficit_stays_empty(self) -> None:
+        """An Agent Signer above its threshold needs nothing in withdrawal mode."""
+        handler, _, rule = _topup_handler(_topup_funds(signer_balance=300))
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        assert _served(handler) == {}
+        assert rule.call_args.kwargs["agent_need_override"] == {"optimism": 0}
+
+    def test_without_the_rule_the_report_is_unchanged(self) -> None:
+        """An older funds_manager without the rule leaves the body as read."""
+        from packages.valory.skills.funds_manager.behaviours import (
+            GET_AGENT_TOPUP_METHOD_NAME,
+        )
+
+        funds = _topup_funds()
+        handler, ctx, _ = _topup_handler(funds)
+        del ctx.shared_state[GET_AGENT_TOPUP_METHOD_NAME]
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        assert _served(handler) == funds.get_response_body()
+
+    @pytest.mark.parametrize("x402_eth_deficit", [None, "1000", -1])
+    def test_unusable_x402_figure_adds_nothing(self, x402_eth_deficit: Any) -> None:
+        """A missing or malformed x402 figure is not part of the need."""
+        handler, _, rule = _topup_handler(_topup_funds())
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        handler._apply_agent_topup(
+            {}, _topup_funds(), x402_eth_deficit, agent_need_override=None
+        )
+        assert rule.call_args.kwargs["agent_need_extra"] == {}
+
+    def test_created_entry_keeps_an_unread_balance_as_none(self) -> None:
+        """A deficit written for an account the body lacks carries its balance.
+
+        Only accounts with a native entry in the status are written.
+        """
+        handler, ctx, _ = _topup_handler(_topup_funds())
+        topup = MagicMock(signer_deficit=7, safe_deficit=None)
+        off_status = MagicMock(signer_deficit=1, safe_deficit=1)
+        ctx.shared_state["get_agent_topup"] = MagicMock(
+            return_value={"optimism": topup, "base": off_status}
+        )
+        body = handler._apply_agent_topup(
+            {}, _topup_funds(signer_balance=None), 0, agent_need_override=None
+        )
+        assert body == {
+            "optimism": {TOPUP_AGENT: {ZERO_ADDRESS: {"balance": None, "deficit": "7"}}}
+        }

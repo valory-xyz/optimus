@@ -81,7 +81,10 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
-from packages.valory.skills.funds_manager.behaviours import GET_FUNDS_STATUS_METHOD_NAME
+from packages.valory.skills.funds_manager.behaviours import (
+    GET_AGENT_TOPUP_METHOD_NAME,
+    GET_FUNDS_STATUS_METHOD_NAME,
+)
 from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
@@ -103,6 +106,12 @@ from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
     merge_agent_performance,
     read_activity_goal_block,
     retarget_activity_goal,
+)
+from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
+    native_requirement,
+    paid_call_chain,
+    withdrawal_gas_deficit,
+    x402_agent_need_extra,
 )
 from packages.valory.skills.optimus_abci.dialogues import (
     HttpDialogue,
@@ -154,7 +163,6 @@ OK_CODE = 200
 NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
-ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
 WEB3_HTTP_TIMEOUT_SECONDS = 30
 WEB3_READ_RETRY_ATTEMPTS = 3
 WEB3_READ_RETRY_INITIAL_DELAY = 1.0
@@ -1682,9 +1690,11 @@ class HttpHandler(BaseHttpHandler):
         holds that balance. Both the swap and the deposit read this, so the two
         cannot be pointed at different chains by configuration.
         """
-        if self.coingecko.use_mech_facilitator:
-            return str(self.coingecko.mech_chain).lower()
-        return self.context.params.target_investment_chains[0]
+        return paid_call_chain(
+            self.coingecko.use_mech_facilitator,
+            str(self.coingecko.mech_chain),
+            self.context.params.target_investment_chains,
+        )
 
     def _maintain_paid_call_funding(self) -> None:
         """Keep whatever pays for paid API calls funded.
@@ -1979,7 +1989,8 @@ class HttpHandler(BaseHttpHandler):
             self._submit_background(self._maintain_paid_call_funding)
 
         # Get standard deficit from funds_manager
-        standard_deficit = self.funds_status.get_response_body()
+        funds = self.funds_status
+        standard_deficit = funds.get_response_body()
         self.context.logger.info(
             f"Standard deficit for agent from funds manager: {standard_deficit}"
         )
@@ -1996,6 +2007,7 @@ class HttpHandler(BaseHttpHandler):
 
         # Check if in withdrawal mode
         in_withdrawal = self._is_in_withdrawal_mode()
+        agent_need_override = None
 
         if not in_withdrawal:
             # Normal mode: return standard deficit
@@ -2006,6 +2018,8 @@ class HttpHandler(BaseHttpHandler):
         else:
             # Withdrawal mode: check if there's any deficit
             self.context.logger.info("Funds status: Withdrawal mode detected")
+            withdrawal_chain = self.context.params.target_investment_chains[0]
+            agent_need_override = {withdrawal_chain: 0}
             has_deficit = self._has_deficit(standard_deficit)
             self.context.logger.info(f"Funds status: Has deficit = {has_deficit}")
 
@@ -2027,7 +2041,7 @@ class HttpHandler(BaseHttpHandler):
                     # Read current balance for zero-address from funds manager response
                     try:
                         chain = self.context.params.target_investment_chains[0]
-                        funds_status = self.funds_status.get_response_body() or {}
+                        funds_status = funds.get_response_body() or {}
                         agent_map = funds_status.get(chain, {}).get(
                             self.context.agent_address, {}
                         )
@@ -2081,6 +2095,9 @@ class HttpHandler(BaseHttpHandler):
                         )
                         response = {}
                     else:
+                        agent_need_override[withdrawal_chain] = withdrawal_gas_deficit(
+                            len(remaining_actions), current_balance
+                        )
                         response = self._calculate_withdrawal_funding_deficit(
                             remaining_actions,
                             current_balance,
@@ -2095,7 +2112,71 @@ class HttpHandler(BaseHttpHandler):
                 )
                 response = {}
 
+        response = self._apply_agent_topup(
+            response, funds, x402_eth_deficit, agent_need_override
+        )
         self._send_ok_response(http_msg, http_dialogue, response)
+
+    def _apply_agent_topup(
+        self,
+        response: Dict,
+        funds: FundRequirements,
+        x402_eth_deficit: Any,
+        agent_need_override: Optional[Dict[str, int]],
+    ) -> Dict:
+        """Report what is left once the Agent Safe has topped up the Agent Signer.
+
+        Applies the funds_manager top-up rule to the same status and inputs
+        AgentTopUpRound uses, and writes its native deficits into the response.
+
+        :param response: the funds-status response, x402 deficit included.
+        :param funds: the status the response was built from.
+        :param x402_eth_deficit: the ETH the paid-call swaps need, in wei.
+        :param agent_need_override: the withdrawal-mode Agent Signer need.
+        :return: the response with the deficits left after the top-up.
+        """
+        get_agent_topup = self.context.shared_state.get(GET_AGENT_TOPUP_METHOD_NAME)
+        if get_agent_topup is None:
+            return response
+
+        x402_eth_deficit = (
+            int(x402_eth_deficit)
+            if isinstance(x402_eth_deficit, (int, float)) and x402_eth_deficit > 0
+            else 0
+        )
+        topups = get_agent_topup(
+            funds,
+            agent_need_extra=x402_agent_need_extra(
+                funds,
+                self._paid_call_chain(),
+                self.context.agent_address,
+                x402_eth_deficit,
+            ),
+            agent_need_override=agent_need_override,
+        )
+        for chain, topup in topups.items():
+            accounts = (
+                (self.context.agent_address, topup.signer_deficit),
+                (
+                    self.context.params.safe_contract_addresses.get(chain),
+                    topup.safe_deficit,
+                ),
+            )
+            for account, deficit in accounts:
+                native = native_requirement(funds, chain, account)
+                if deficit is None or native is None:
+                    continue
+                token_address, token = native
+                token_data = (
+                    response.setdefault(chain, {})
+                    .setdefault(account, {})
+                    .setdefault(token_address, {})
+                )
+                token_data.setdefault(
+                    "balance", None if token.balance is None else str(token.balance)
+                )
+                token_data["deficit"] = str(deficit)
+        return response
 
     def _is_in_withdrawal_mode(self) -> bool:
         """Check if agent is in withdrawal mode."""
@@ -2147,23 +2228,18 @@ class HttpHandler(BaseHttpHandler):
         num_actions = len(withdrawal_actions)
         chain = self.context.params.target_investment_chains[0]
 
-        # Estimate gas: gas per action * number of actions + 20% buffer
-        gas_per_action = ESTIMATED_GAS_PER_TX
-        total_gas_needed = int(gas_per_action * num_actions * 1.2)
-
-        # Calculate deficit
-        deficit = total_gas_needed - current_balance
+        deficit = withdrawal_gas_deficit(num_actions, current_balance)
 
         if deficit <= 0:
             self.context.logger.info(
                 f"Agent has sufficient balance ({current_balance} wei) for "
-                f"{num_actions} withdrawal actions (need {total_gas_needed} wei)"
+                f"{num_actions} withdrawal actions"
             )
             return {}
 
         self.context.logger.info(
             f"Withdrawal funding needed: {deficit} wei for {num_actions} actions "
-            f"(current: {current_balance}, needed: {total_gas_needed})"
+            f"(current: {current_balance})"
         )
 
         # Get agent address

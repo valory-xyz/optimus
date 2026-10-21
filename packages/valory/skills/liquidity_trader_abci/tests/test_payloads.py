@@ -22,6 +22,7 @@
 # pylint: skip-file
 
 from packages.valory.skills.liquidity_trader_abci.payloads import (
+    AgentTopUpPayload,
     CallCheckpointPayload,
     CheckStakingKPIMetPayload,
     DecisionMakingPayload,
@@ -70,6 +71,21 @@ class TestMultisigTxPayload:
         assert payload.tx_hash is None
         assert payload.safe_contract_address is None
         assert payload.chain_id is None
+
+
+class TestAgentTopUpPayload:
+    """Test AgentTopUpPayload."""
+
+    def test_values_follow_the_round_selection_key(self) -> None:
+        """The values line up with AgentTopUpRound.selection_key."""
+        payload = AgentTopUpPayload(
+            sender=SENDER,
+            tx_submitter="submitter",
+            tx_hash="0xhash",
+            safe_contract_address="0xsafe",
+            chain_id="optimism",
+        )
+        assert payload.values == ("submitter", "0xhash", "0xsafe", "optimism")
 
 
 class TestCallCheckpointPayload:

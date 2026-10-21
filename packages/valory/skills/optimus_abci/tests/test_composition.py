@@ -47,6 +47,7 @@ def test_abci_app_transition_mapping_keys() -> None:
     """Test that the transition mapping has the expected source rounds."""
     expected_keys = {
         RegistrationAbci.FinishedRegistrationRound,
+        LiquidityTraderAbci.FinishedAgentTopUpRound,
         LiquidityTraderAbci.FinishedCallCheckpointRound,
         LiquidityTraderAbci.FinishedCheckStakingKPIMetRound,
         LiquidityTraderAbci.FinishedDecisionMakingRound,
@@ -65,7 +66,7 @@ def test_abci_app_transition_mapping_keys() -> None:
 def test_abci_app_transition_mapping_values() -> None:
     """Test that the transition mapping has the expected destination rounds."""
     expected_values = {
-        LiquidityTraderAbci.FetchStrategiesRound,
+        LiquidityTraderAbci.AgentTopUpRound,
         TxSettlementAbci.RandomnessTransactionSubmissionRound,
         ResetAndPauseAbci.ResetAndPauseRound,
         LiquidityTraderAbci.PostTxSettlementRound,
@@ -78,7 +79,11 @@ def test_abci_app_transition_mapping_specific_transitions() -> None:
     """Test specific transitions in the mapping."""
     assert (
         abci_app_transition_mapping[RegistrationAbci.FinishedRegistrationRound]
-        == LiquidityTraderAbci.FetchStrategiesRound
+        == LiquidityTraderAbci.AgentTopUpRound
+    )
+    assert (
+        abci_app_transition_mapping[LiquidityTraderAbci.FinishedAgentTopUpRound]
+        == TxSettlementAbci.RandomnessTransactionSubmissionRound
     )
     assert (
         abci_app_transition_mapping[LiquidityTraderAbci.FinishedDecisionMakingRound]
@@ -98,7 +103,7 @@ def test_abci_app_transition_mapping_specific_transitions() -> None:
     )
     assert (
         abci_app_transition_mapping[ResetAndPauseAbci.FinishedResetAndPauseRound]
-        == LiquidityTraderAbci.FetchStrategiesRound
+        == LiquidityTraderAbci.AgentTopUpRound
     )
     assert (
         abci_app_transition_mapping[ResetAndPauseAbci.FinishedResetAndPauseErrorRound]

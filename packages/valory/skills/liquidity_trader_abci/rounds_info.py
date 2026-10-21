@@ -20,6 +20,11 @@
 """This module contains the information about the rounds that is used by the Http handler."""
 
 ROUNDS_INFO = {
+    "AgentTopUpRound": {
+        "name": "Checking the agent signer balance",
+        "description": "Moves native token from the agent safe to the agent signer when the signer runs low on gas.",
+        "transitions": {},
+    },
     "CallCheckpointRound": {
         "name": "Checking staking reward status",
         "description": "Determines whether the staking contract needs to update the agent’s reward status.",

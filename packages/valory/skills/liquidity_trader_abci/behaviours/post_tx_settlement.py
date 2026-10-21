@@ -25,9 +25,19 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
+    AgentTopUpRound,
     CheckStakingKPIMetRound,
     PostTxSettlementPayload,
     PostTxSettlementRound,
+)
+
+# Plain Safe transfers say nothing about what a real tx costs, which is what the
+# tracked gas is compared against.
+UNTRACKED_GAS_SUBMITTERS = frozenset(
+    {
+        AgentTopUpRound.auto_round_id(),
+        CheckStakingKPIMetRound.auto_round_id(),
+    }
 )
 
 
@@ -41,11 +51,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             msg = f"The transaction submitted by {self.synchronized_data.tx_submitter} was successfully settled."
             self.context.logger.info(msg)
-            # we do not want to track the gas costs for vanity tx
-            if (
-                not self.synchronized_data.tx_submitter
-                == CheckStakingKPIMetRound.auto_round_id()
-            ):
+            if self.synchronized_data.tx_submitter not in UNTRACKED_GAS_SUBMITTERS:
                 yield from self.fetch_and_log_gas_details()
 
             # ``chain_id`` is ``Optional[str]`` on the synced data; today

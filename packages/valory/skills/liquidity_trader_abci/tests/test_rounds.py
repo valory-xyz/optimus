@@ -22,12 +22,14 @@
 # pylint: skip-file
 
 from packages.valory.skills.liquidity_trader_abci.rounds import (
+    AgentTopUpRound,
     CallCheckpointRound,
     CheckStakingKPIMetRound,
     DecisionMakingRound,
     EvaluateStrategyRound,
     Event,
     FetchStrategiesRound,
+    FinishedAgentTopUpRound,
     FinishedStandbyRound,
     GetPositionsRound,
     LiquidityTraderAbciApp,
@@ -130,3 +132,39 @@ class TestStandbyTransitions:
         assert FinishedStandbyRound in LiquidityTraderAbciApp.final_states
         assert LiquidityTraderAbciApp.transition_function[FinishedStandbyRound] == {}
         assert LiquidityTraderAbciApp.db_post_conditions[FinishedStandbyRound] == set()
+
+
+class TestAgentTopUpTransitions:
+    """The Agent Signer top-up runs at period start, ahead of the strategies."""
+
+    def test_period_starts_with_the_top_up(self) -> None:
+        """The app starts in AgentTopUpRound."""
+        assert LiquidityTraderAbciApp.initial_round_cls is AgentTopUpRound
+        assert AgentTopUpRound in LiquidityTraderAbciApp.initial_states
+        assert LiquidityTraderAbciApp.db_pre_conditions[AgentTopUpRound] == set()
+
+    def test_nothing_to_move_continues_to_fetch_strategies(self) -> None:
+        """DONE without a tx goes straight to FetchStrategiesRound."""
+        transitions = LiquidityTraderAbciApp.transition_function[AgentTopUpRound]
+        assert transitions[Event.DONE] is FetchStrategiesRound
+
+    def test_a_move_leaves_through_its_own_final_round(self) -> None:
+        """SETTLE hands the tx to settlement through FinishedAgentTopUpRound."""
+        transitions = LiquidityTraderAbciApp.transition_function[AgentTopUpRound]
+        assert transitions[Event.SETTLE] is FinishedAgentTopUpRound
+        assert FinishedAgentTopUpRound in LiquidityTraderAbciApp.final_states
+        assert LiquidityTraderAbciApp.db_post_conditions[FinishedAgentTopUpRound] == {
+            "most_voted_tx_hash"
+        }
+
+    def test_a_settled_top_up_continues_to_fetch_strategies(self) -> None:
+        """TOPUP_DONE after settlement goes to FetchStrategiesRound."""
+        transitions = LiquidityTraderAbciApp.transition_function[PostTxSettlementRound]
+        assert transitions[Event.TOPUP_DONE] is FetchStrategiesRound
+
+    def test_withdrawal_is_left_to_fetch_strategies(self) -> None:
+        """The top-up runs in withdrawal mode too and does not route WITHDRAWAL_INITIATED."""
+        assert (
+            Event.WITHDRAWAL_INITIATED
+            not in LiquidityTraderAbciApp.transition_function[AgentTopUpRound]
+        )

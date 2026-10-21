@@ -93,6 +93,7 @@ class Event(Enum):
     STAKING_KPI_MET = "staking_kpi_met"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
     STANDBY = "standby"
+    TOPUP_DONE = "topup_done"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -206,6 +207,11 @@ class SynchronizedData(BaseSynchronizedData):
     def participant_to_checkpoint(self) -> DeserializedCollection:
         """Get the participants to the checkpoint round."""
         return self._get_deserialized("participant_to_checkpoint")
+
+    @property
+    def participant_to_agent_topup(self) -> DeserializedCollection:
+        """Get the participants to the AgentTopUp round."""
+        return self._get_deserialized("participant_to_agent_topup")
 
     @property
     def participant_to_staking_kpi(self) -> DeserializedCollection:

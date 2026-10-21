@@ -1,0 +1,226 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2026 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+"""This module contains the behaviour that tops up the Agent Signer from the Agent Safe."""
+
+import json
+from typing import Dict, Generator, Optional, Tuple
+
+from packages.valory.contracts.gnosis_safe.contract import (
+    GnosisSafeContract,
+    SafeOperation,
+)
+from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.skills.funds_manager.behaviours import (
+    GET_AGENT_TOPUP_METHOD_NAME,
+    GET_FUNDS_STATUS_METHOD_NAME,
+)
+from packages.valory.skills.funds_manager.models import FundRequirements, TopUpAction
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    LiquidityTraderBaseBehaviour,
+    SAFE_TX_GAS,
+)
+from packages.valory.skills.liquidity_trader_abci.payloads import AgentTopUpPayload
+from packages.valory.skills.liquidity_trader_abci.states.agent_top_up import (
+    AgentTopUpRound,
+)
+from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
+    native_requirement,
+    paid_call_chain,
+    withdrawal_gas_deficit,
+    x402_agent_need_extra,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
+)
+
+AGENT_TOPUP_CHECK_INTERVAL_SECONDS = 3600
+TOPUP_TX_DATA = b""
+
+
+class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that moves native token from the Agent Safe to the Agent Signer."""
+
+    matching_round = AgentTopUpRound
+
+    def async_act(self) -> Generator:  # type: ignore[override]
+        """Do the action."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            tx_hash, safe_address, chain = None, None, None
+            move = yield from self._get_topup_move()
+            if move is not None:
+                chain, amount = move
+                safe_address = self.params.safe_contract_addresses.get(chain)
+                tx_hash = yield from self._prepare_topup_tx(chain, amount)
+                if tx_hash is None:
+                    safe_address, chain = None, None
+
+            payload = AgentTopUpPayload(
+                sender=self.context.agent_address,
+                tx_submitter=self.matching_round.auto_round_id(),
+                tx_hash=tx_hash,
+                safe_contract_address=safe_address,
+                chain_id=chain,
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+            self.set_done()
+
+    def _is_topup_check_due(self) -> bool:
+        """Open the gate at start, then at most once per check interval."""
+        now = self._get_current_timestamp()
+        last_check = self.shared_state.last_topup_check
+        if (
+            last_check is not None
+            and now - last_check < AGENT_TOPUP_CHECK_INTERVAL_SECONDS
+        ):
+            return False
+        self.shared_state.last_topup_check = now
+        return True
+
+    def _get_topup_move(self) -> Generator[None, None, Optional[Tuple[str, int]]]:
+        """Return the chain and the wei to move, or None when nothing moves."""
+        if not self._is_topup_check_due():
+            return None
+
+        get_funds_status = self.context.shared_state.get(GET_FUNDS_STATUS_METHOD_NAME)
+        get_agent_topup = self.context.shared_state.get(GET_AGENT_TOPUP_METHOD_NAME)
+        if get_funds_status is None or get_agent_topup is None:
+            self.context.logger.warning(
+                "Agent top-up skipped: funds_manager hooks are not registered."
+            )
+            return None
+
+        try:
+            funds = get_funds_status()
+        except Exception as exc:  # pylint: disable=broad-except
+            self.context.logger.warning(
+                f"Agent top-up skipped: reading the funds status raised "
+                f"{type(exc).__name__}({exc})."
+            )
+            return None
+
+        agent_need_extra = x402_agent_need_extra(
+            funds,
+            paid_call_chain(
+                self.coingecko.use_mech_facilitator,
+                self.coingecko.mech_chain,
+                self.params.target_investment_chains,
+            ),
+            self.context.agent_address,
+            int(self.shared_state.x402_eth_deficit or 0),
+        )
+        agent_need_override = None
+        investing_paused = yield from self._read_investing_paused()
+        if investing_paused:
+            agent_need_override = yield from self._get_withdrawal_need(
+                funds, agent_need_extra
+            )
+
+        topups = get_agent_topup(
+            funds,
+            agent_need_extra=agent_need_extra,
+            agent_need_override=agent_need_override,
+        )
+        for chain, topup in topups.items():
+            if topup.action == TopUpAction.MOVE:
+                self.context.logger.info(
+                    f"Agent top-up: moving {topup.move} wei from the Agent Safe "
+                    f"to the Agent Signer on {chain}."
+                )
+                return chain, topup.move
+            if topup.action != TopUpAction.NONE:
+                self.context.logger.info(
+                    f"Agent top-up on {chain}: {topup.action.value}; left to "
+                    f"/funds-status."
+                )
+        return None
+
+    def _get_withdrawal_need(
+        self, funds: FundRequirements, agent_need_extra: Dict[str, int]
+    ) -> Generator[None, None, Dict[str, int]]:
+        """Return the Agent Signer need in withdrawal mode, as /funds-status reports it.
+
+        Nothing is due while the Agent Signer reports no deficit or no
+        withdrawal action is left; otherwise it is the gas those actions need.
+
+        :param funds: the status returned by ``get_funds_status()``.
+        :param agent_need_extra: the x402 extra added to the Agent Signer need.
+        :yield: the KV store request.
+        :return: ``{trading chain: need}``.
+        """
+        chain = self.params.target_investment_chains[0]
+        need = 0
+        native = native_requirement(funds, chain, self.context.agent_address)
+        actions = self.synchronized_data.withdrawal_actions or []
+        if native is not None and actions:
+            _, signer = native
+            deficit = (signer.deficit or 0) + agent_need_extra.get(chain, 0)
+            if signer.balance is not None and deficit > 0:
+                executed = yield from self._read_executed_withdrawal_count()
+                need = withdrawal_gas_deficit(
+                    max(0, len(actions) - executed), signer.balance
+                )
+        return {chain: need}
+
+    def _read_executed_withdrawal_count(self) -> Generator[None, None, int]:
+        """Return how many withdrawal transactions have already executed."""
+        result = yield from self._read_kv(("withdrawal_transaction_hashes",))
+        try:
+            return len(
+                json.loads((result or {}).get("withdrawal_transaction_hashes") or "[]")
+            )
+        except (TypeError, ValueError):
+            return 0
+
+    def _prepare_topup_tx(
+        self, chain: str, amount: int
+    ) -> Generator[None, None, Optional[str]]:
+        """Build the Agent Safe -> Agent Signer transfer: one plain CALL, no data."""
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        agent_address = self.context.agent_address
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=agent_address,
+            value=amount,
+            data=TOPUP_TX_DATA,
+            operation=SafeOperation.CALL.value,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+        if safe_tx_hash is None:
+            self.context.logger.error(
+                f"Agent top-up: could not get the Safe tx hash on {chain}."
+            )
+            return None
+
+        return hash_payload_to_hex(
+            safe_tx_hash=safe_tx_hash[2:],
+            ether_value=amount,
+            safe_tx_gas=SAFE_TX_GAS,
+            to_address=agent_address,
+            data=TOPUP_TX_DATA,
+            operation=SafeOperation.CALL.value,
+        )

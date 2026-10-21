@@ -24,10 +24,13 @@
 from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
+
 from packages.valory.skills.liquidity_trader_abci.behaviours.post_tx_settlement import (
     PostTxSettlementBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
+    AgentTopUpRound,
     CheckStakingKPIMetRound,
 )
 
@@ -174,15 +177,19 @@ class TestPostTxSettlementBehaviour:
             for payload in writes:
                 assert not any(k.endswith("_None") for k in payload)
 
-    def test_async_act_checkpoint_submitter_skips_gas(self) -> None:
-        """Test async_act when tx_submitter IS the CheckStakingKPIMetRound (skips gas)."""
+    @pytest.mark.parametrize(
+        "submitter",
+        [CheckStakingKPIMetRound.auto_round_id(), AgentTopUpRound.auto_round_id()],
+    )
+    def test_async_act_plain_transfer_submitter_skips_gas(self, submitter: str) -> None:
+        """Vanity and top-up txs are not tracked as real-tx gas costs."""
         obj = _make_behaviour()
         benchmark_mock = MagicMock()
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
         synced = MagicMock()
-        synced.tx_submitter = CheckStakingKPIMetRound.auto_round_id()
+        synced.tx_submitter = submitter
 
         with patch.object(
             type(obj),

@@ -333,6 +333,12 @@ class TestSynchronizedData:
         result = data.participant_to_checkpoint
         assert isinstance(result, dict)
 
+    def test_participant_to_agent_topup(self) -> None:
+        """Test participant_to_agent_topup property."""
+        data = self._make_collection_data("participant_to_agent_topup")
+        result = data.participant_to_agent_topup
+        assert isinstance(result, dict)
+
     def test_participant_to_staking_kpi(self) -> None:
         """Test participant_to_staking_kpi property."""
         data = self._make_collection_data("participant_to_staking_kpi")

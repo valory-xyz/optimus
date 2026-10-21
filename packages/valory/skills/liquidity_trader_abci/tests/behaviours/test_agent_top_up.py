@@ -207,6 +207,20 @@ class TestGate:
         harness.get_funds_status.assert_not_called()
         assert harness.state.last_topup_check == last
 
+    def test_a_failed_check_leaves_the_gate_open(self) -> None:
+        """A check that fails before a decision is retried in the next period."""
+        last = NOW - AGENT_TOPUP_CHECK_INTERVAL_SECONDS
+        harness = _Harness(topups={"optimism": _move(5)}, last_topup_check=last)
+        harness.get_funds_status.side_effect = RuntimeError("rpc down")
+        _assert_no_tx(harness.run())
+        assert harness.state.last_topup_check == last
+
+        harness.get_funds_status.side_effect = None
+        harness.payloads.clear()
+        harness.obj.set_done.reset_mock()
+        assert harness.run().tx_hash is not None
+        assert harness.state.last_topup_check == NOW
+
     def test_reopens_after_the_interval(self) -> None:
         """A check an interval ago or more runs again."""
         last = NOW - AGENT_TOPUP_CHECK_INTERVAL_SECONDS
@@ -228,6 +242,7 @@ class TestNoMove:
         del harness.ctx.shared_state[missing]
         _assert_no_tx(harness.run())
         harness.ctx.logger.warning.assert_called_once()
+        assert harness.state.last_topup_check == NOW
 
     def test_status_read_fails(self) -> None:
         """A failing status read moves nothing."""
@@ -236,6 +251,7 @@ class TestNoMove:
         _assert_no_tx(harness.run())
         harness.get_agent_topup.assert_not_called()
         assert "rpc down" in harness.ctx.logger.warning.call_args[0][0]
+        assert harness.state.last_topup_check is None
 
     def test_rule_fails(self) -> None:
         """A failing top-up rule moves nothing."""
@@ -243,6 +259,7 @@ class TestNoMove:
         harness.get_agent_topup.side_effect = RuntimeError("bad status")
         _assert_no_tx(harness.run())
         assert "bad status" in harness.ctx.logger.warning.call_args[0][0]
+        assert harness.state.last_topup_check is None
 
     @pytest.mark.parametrize(
         "topup",
@@ -267,12 +284,14 @@ class TestNoMove:
         harness = _Harness(topups={"optimism": topup})
         _assert_no_tx(harness.run())
         harness.contract_interact.assert_not_called()
+        assert harness.state.last_topup_check == NOW
 
     def test_safe_tx_hash_unavailable(self) -> None:
         """A move whose Safe tx cannot be built sends no tx."""
         harness = _Harness(topups={"optimism": _move(5)}, safe_tx_hash=None)
         _assert_no_tx(harness.run())
         harness.ctx.logger.error.assert_called_once()
+        assert harness.state.last_topup_check is None
 
 
 class TestMove:
@@ -300,6 +319,7 @@ class TestMove:
         assert kwargs["data"] == b""
         assert kwargs["operation"] == SafeOperation.CALL.value
         assert kwargs["chain_id"] == "optimism"
+        assert harness.state.last_topup_check == NOW
 
     def test_first_move_chain_wins(self) -> None:
         """Only one chain is topped up per check."""

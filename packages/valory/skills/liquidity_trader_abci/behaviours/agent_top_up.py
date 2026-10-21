@@ -70,6 +70,8 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
                 tx_hash = yield from self._prepare_topup_tx(chain, amount)
                 if tx_hash is None:
                     safe_address, chain = None, None
+                else:
+                    self._close_topup_check()
 
             payload = AgentTopUpPayload(
                 sender=self.context.agent_address,
@@ -86,15 +88,20 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
 
     def _is_topup_check_due(self) -> bool:
         """Open the gate at start, then at most once per check interval."""
-        now = self._get_current_timestamp()
         last_check = self.shared_state.last_topup_check
-        if (
-            last_check is not None
-            and now - last_check < AGENT_TOPUP_CHECK_INTERVAL_SECONDS
-        ):
-            return False
-        self.shared_state.last_topup_check = now
-        return True
+        return (
+            last_check is None
+            or self._get_current_timestamp() - last_check
+            >= AGENT_TOPUP_CHECK_INTERVAL_SECONDS
+        )
+
+    def _close_topup_check(self) -> None:
+        """Close the gate once a check reaches a decision.
+
+        A check that fails before then leaves the gate open, so the next
+        period retries instead of waiting out the interval.
+        """
+        self.shared_state.last_topup_check = self._get_current_timestamp()
 
     def _get_topup_move(self) -> Generator[None, None, Optional[Tuple[str, int]]]:
         """Return the chain and the wei to move, or None when nothing moves."""
@@ -107,6 +114,7 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning(
                 "Agent top-up skipped: funds_manager hooks are not registered."
             )
+            self._close_topup_check()
             return None
 
         try:
@@ -159,6 +167,7 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
                     f"Agent top-up on {chain}: {topup.action.value}; left to "
                     f"/funds-status."
                 )
+        self._close_topup_check()
         return None
 
     def _get_withdrawal_need(

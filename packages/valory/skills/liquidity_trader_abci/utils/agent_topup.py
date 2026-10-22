@@ -85,12 +85,7 @@ def x402_agent_need_extra(
 ) -> Dict[str, int]:
     """Return the wei the x402 ETH need adds to the Agent Signer deficit.
 
-    ``x402_eth_deficit`` is the ETH the agent EOA must hold for its paid-call
-    swaps, not a shortfall, so ``/funds-status`` reports the Agent Signer
-    native deficit as ``max(deficit, x402_eth_deficit - balance)``. The extra
-    is what that adds on top of the deficit. It shrinks as the balance grows,
-    so a top-up is not repeated while the stored figure waits for the next
-    swap to clear it.
+    ``x402_eth_deficit`` is a level the agent EOA must hold, not a shortfall.
 
     :param funds: the status returned by ``get_funds_status()``.
     :param chain: the chain the paid calls are funded on.
@@ -106,6 +101,26 @@ def x402_agent_need_extra(
         return {}
     extra = x402_eth_deficit - token.balance - token.deficit
     return {chain: extra} if extra > 0 else {}
+
+
+def signer_pays_topup_gas(
+    funds: FundRequirements, chain: str, agent_address: str
+) -> bool:
+    """Return whether the Agent Signer holds the gas for one top-up ``execTransaction``.
+
+    Below it TxSettlement keeps retrying the top-up, and a single agent never
+    leaves that loop.
+
+    :param funds: the status returned by ``get_funds_status()``.
+    :param chain: the chain name.
+    :param agent_address: the agent EOA.
+    :return: whether the Agent Signer native balance reaches the floor.
+    """
+    native = native_requirement(funds, chain, agent_address)
+    if native is None:
+        return False
+    _, token = native
+    return token.balance is not None and token.balance >= ESTIMATED_GAS_PER_TX
 
 
 def withdrawal_gas_deficit(num_actions: int, balance: int) -> int:

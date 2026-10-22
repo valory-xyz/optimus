@@ -27,8 +27,10 @@ import pytest
 
 from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
+    ESTIMATED_GAS_PER_TX,
     native_requirement,
     paid_call_chain,
+    signer_pays_topup_gas,
     withdrawal_gas_deficit,
     x402_agent_need_extra,
 )
@@ -69,6 +71,26 @@ def _funds(
             }
         }
     )
+
+
+class TestSignerPaysTopupGas:
+    """Tests for signer_pays_topup_gas."""
+
+    @pytest.mark.parametrize(
+        "balance, pays",
+        [
+            (ESTIMATED_GAS_PER_TX, True),
+            (ESTIMATED_GAS_PER_TX - 1, False),
+            (None, False),
+        ],
+    )
+    def test_floor_is_one_tx_of_gas(self, balance: Optional[int], pays: bool) -> None:
+        """The Agent Signer pays once it holds the gas of one tx."""
+        assert signer_pays_topup_gas(_funds(balance=balance), "optimism", AGENT) is pays
+
+    def test_no_native_entry_cannot_pay(self) -> None:
+        """An Agent Signer without a native entry is not known to pay."""
+        assert not signer_pays_topup_gas(_funds(), "base", AGENT)
 
 
 class TestPaidCallChain:

@@ -40,6 +40,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.agent_top_up import
 from packages.valory.skills.liquidity_trader_abci.states.agent_top_up import (
     AgentTopUpRound,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
+    ESTIMATED_GAS_PER_TX,
+)
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     skill_input_hex_to_payload,
 )
@@ -69,6 +72,17 @@ def _funds(balance: Optional[int] = 100, deficit: Optional[int] = 300) -> Any:
             }
         }
     )
+
+
+def _safe_unread() -> Any:
+    """Optimism status whose Agent Safe native balance could not be read."""
+    funds = _funds()
+    funds.root["optimism"].accounts[SAFE].tokens[NATIVE].balance = None
+    return funds
+
+
+# The Agent Signer holds exactly the gas of one top-up.
+GAS_PAID = _funds(balance=ESTIMATED_GAS_PER_TX)
 
 
 def _move(amount: int) -> AgentTopUp:
@@ -204,7 +218,9 @@ class TestGate:
     def test_a_failed_check_leaves_the_gate_open(self) -> None:
         """A check that fails before a decision is retried in the next period."""
         last = NOW - AGENT_TOPUP_CHECK_INTERVAL_SECONDS
-        harness = _Harness(topups={"optimism": _move(5)}, last_topup_check=last)
+        harness = _Harness(
+            topups={"optimism": _move(5)}, funds=GAS_PAID, last_topup_check=last
+        )
         harness.get_funds_status.side_effect = RuntimeError("rpc down")
         _assert_no_tx(harness.run())
         assert harness.state.last_topup_check == last
@@ -269,9 +285,32 @@ class TestNoMove:
         harness.contract_interact.assert_not_called()
         assert harness.state.last_topup_check == NOW
 
+    @pytest.mark.parametrize("funds", [_funds(balance=None), _safe_unread()])
+    def test_unread_balance_leaves_the_gate_open(self, funds: Any) -> None:
+        """No move from a status missing a native balance is not a decision."""
+        harness = _Harness(topups={"optimism": NO_ACTION}, funds=funds)
+        _assert_no_tx(harness.run())
+        harness.ctx.logger.warning.assert_called_once()
+        assert harness.state.last_topup_check is None
+
+    def test_signer_cannot_pay_the_gas(self) -> None:
+        """A move the Agent Signer cannot pay for is skipped and stays reported."""
+        harness = _Harness(
+            topups={"optimism": _move(5)},
+            funds=_funds(balance=ESTIMATED_GAS_PER_TX - 1),
+            topped_up_chains={"optimism"},
+        )
+        _assert_no_tx(harness.run())
+        harness.contract_interact.assert_not_called()
+        harness.ctx.logger.warning.assert_called_once()
+        assert harness.state.last_topup_check is None
+        assert harness.state.topped_up_chains == set()
+
     def test_safe_tx_hash_unavailable(self) -> None:
         """A move whose Safe tx cannot be built sends no tx."""
-        harness = _Harness(topups={"optimism": _move(5)}, safe_tx_hash=None)
+        harness = _Harness(
+            topups={"optimism": _move(5)}, funds=GAS_PAID, safe_tx_hash=None
+        )
         _assert_no_tx(harness.run())
         harness.ctx.logger.error.assert_called_once()
         assert harness.state.last_topup_check is None
@@ -282,7 +321,7 @@ class TestMove:
 
     def test_builds_one_plain_call_to_the_agent_signer(self) -> None:
         """The Safe tx sends the amount to the agent EOA with no data."""
-        harness = _Harness(topups={"optimism": _move(300)})
+        harness = _Harness(topups={"optimism": _move(300)}, funds=GAS_PAID)
         payload = harness.run()
 
         assert payload.tx_submitter == AgentTopUpRound.auto_round_id()
@@ -328,7 +367,8 @@ class TestMove:
     def test_first_move_chain_wins(self) -> None:
         """Only one chain is topped up per check."""
         harness = _Harness(
-            topups={"base": NO_ACTION, "optimism": _move(1), "mode": _move(2)}
+            topups={"base": NO_ACTION, "optimism": _move(1), "mode": _move(2)},
+            funds=GAS_PAID,
         )
         assert harness.run().chain_id == "optimism"
         assert harness.contract_interact.call_count == 1
@@ -357,19 +397,34 @@ class TestRuleInputs:
         kwargs = harness.get_agent_topup.call_args.kwargs
         assert kwargs["agent_need_override"] == {"optimism": 2_400_000_000_000 - 100}
 
-    @pytest.mark.parametrize("kv", [None, {}, {"withdrawal_transaction_hashes": "x"}])
+    @pytest.mark.parametrize("kv", [None, {"withdrawal_transaction_hashes": "x"}])
     def test_withdrawal_mode_unreadable_executed_count(self, kv: Any) -> None:
-        """An unreadable executed count counts every action as left."""
+        """An unreadable executed count counts every action as left, and says so."""
         harness = _Harness(investing_paused=True, withdrawal_actions=[{"a": 1}], kv=kv)
         harness.run()
         kwargs = harness.get_agent_topup.call_args.kwargs
         assert kwargs["agent_need_override"] == {"optimism": 1_200_000_000_000 - 100}
+        harness.ctx.logger.warning.assert_called_once()
+
+    def test_withdrawal_mode_nothing_executed_yet(self) -> None:
+        """No executed hash stored yet counts every action as left, silently."""
+        harness = _Harness(investing_paused=True, withdrawal_actions=[{"a": 1}], kv={})
+        harness.run()
+        kwargs = harness.get_agent_topup.call_args.kwargs
+        assert kwargs["agent_need_override"] == {"optimism": 1_200_000_000_000 - 100}
+        harness.ctx.logger.warning.assert_not_called()
+
+    @pytest.mark.parametrize("actions", [[], None])
+    def test_withdrawal_mode_waits_for_the_actions(self, actions: Any) -> None:
+        """Before the withdrawal actions are prepared nothing is decided."""
+        harness = _Harness(investing_paused=True, withdrawal_actions=actions)
+        _assert_no_tx(harness.run())
+        harness.get_agent_topup.assert_not_called()
+        assert harness.state.last_topup_check is None
 
     @pytest.mark.parametrize(
         "funds, actions",
         [
-            (None, []),
-            (None, None),
             (_funds(balance=1000, deficit=0), [{"a": 1}]),
             (_funds(balance=None, deficit=None), [{"a": 1}]),
             (FundRequirements.model_validate({}), [{"a": 1}]),

@@ -43,6 +43,7 @@ from packages.valory.skills.liquidity_trader_abci.states.agent_top_up import (
 from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
     native_requirement,
     paid_call_chain,
+    signer_pays_topup_gas,
     withdrawal_gas_deficit,
     x402_agent_need_extra,
 )
@@ -66,7 +67,6 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             move = yield from self._get_topup_move()
             if move is not None:
                 chain, amount = move
-                self.shared_state.topped_up_chains.discard(chain)
                 safe_address = self.params.safe_contract_addresses.get(chain)
                 tx_hash = yield from self._prepare_topup_tx(chain, amount)
                 if tx_hash is None:
@@ -140,8 +140,15 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         agent_need_override = None
         investing_paused = yield from self._read_investing_paused()
         if investing_paused:
+            withdrawal_actions = self.synchronized_data.withdrawal_actions
+            if not withdrawal_actions:
+                self.context.logger.info(
+                    "Agent top-up deferred: the withdrawal actions are not "
+                    "prepared yet."
+                )
+                return None
             agent_need_override = yield from self._get_withdrawal_need(
-                funds, agent_need_extra
+                funds, agent_need_extra, len(withdrawal_actions)
             )
 
         try:
@@ -157,51 +164,89 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
         for chain, topup in topups.items():
-            if topup.move > 0:
-                self.context.logger.info(
-                    f"Agent top-up: moving {topup.move} wei from the Agent Safe "
-                    f"to the Agent Signer on {chain}."
+            if topup.move <= 0:
+                continue
+            self.shared_state.topped_up_chains.discard(chain)
+            if not signer_pays_topup_gas(funds, chain, self.context.agent_address):
+                self.context.logger.warning(
+                    f"Agent top-up skipped: the Agent Signer cannot pay the gas "
+                    f"of the top-up on {chain}."
                 )
-                return chain, topup.move
+                return None
+            self.context.logger.info(
+                f"Agent top-up: moving {topup.move} wei from the Agent Safe "
+                f"to the Agent Signer on {chain}."
+            )
+            return chain, topup.move
+        if not self._native_balances_read(funds):
+            self.context.logger.warning(
+                "Agent top-up skipped: a native balance could not be read."
+            )
+            return None
         self._close_topup_check()
         return None
 
+    def _native_balances_read(self, funds: FundRequirements) -> bool:
+        """Return whether every Agent Signer and Agent Safe native balance was read."""
+        for chain in funds:
+            accounts = (
+                self.context.agent_address,
+                self.params.safe_contract_addresses.get(chain, ""),
+            )
+            for account in accounts:
+                native = native_requirement(funds, chain, account)
+                if native is not None and native[1].balance is None:
+                    return False
+        return True
+
     def _get_withdrawal_need(
-        self, funds: FundRequirements, agent_need_extra: Dict[str, int]
+        self,
+        funds: FundRequirements,
+        agent_need_extra: Dict[str, int],
+        num_actions: int,
     ) -> Generator[None, None, Dict[str, int]]:
         """Return the Agent Signer need in withdrawal mode, as /funds-status reports it.
 
-        Nothing is due while the Agent Signer reports no deficit or no
-        withdrawal action is left; otherwise it is the gas those actions need.
+        Nothing is due while the Agent Signer reports no deficit; otherwise it
+        is the gas the withdrawal actions not executed yet need.
 
         :param funds: the status returned by ``get_funds_status()``.
         :param agent_need_extra: the x402 extra added to the Agent Signer need.
+        :param num_actions: the withdrawal actions prepared.
         :yield: the KV store request.
         :return: ``{trading chain: need}``.
         """
         chain = self.params.target_investment_chains[0]
         need = 0
         native = native_requirement(funds, chain, self.context.agent_address)
-        actions = self.synchronized_data.withdrawal_actions or []
-        if native is not None and actions:
+        if native is not None:
             _, signer = native
             deficit = (signer.deficit or 0) + agent_need_extra.get(chain, 0)
             if signer.balance is not None and deficit > 0:
                 executed = yield from self._read_executed_withdrawal_count()
                 need = withdrawal_gas_deficit(
-                    max(0, len(actions) - executed), signer.balance
+                    max(0, num_actions - executed), signer.balance
                 )
         return {chain: need}
 
     def _read_executed_withdrawal_count(self) -> Generator[None, None, int]:
-        """Return how many withdrawal transactions have already executed."""
+        """Return how many withdrawal transactions have already executed.
+
+        An unreadable count is 0, as /funds-status counts it.
+        """
         result = yield from self._read_kv(("withdrawal_transaction_hashes",))
-        try:
-            return len(
-                json.loads((result or {}).get("withdrawal_transaction_hashes") or "[]")
-            )
-        except (TypeError, ValueError):
-            return 0
+        if result is not None:
+            try:
+                return len(
+                    json.loads(result.get("withdrawal_transaction_hashes") or "[]")
+                )
+            except (TypeError, ValueError):
+                pass
+        self.context.logger.warning(
+            "Agent top-up: the executed withdrawal transactions could not be "
+            "read; counting every withdrawal action as left."
+        )
+        return 0
 
     def _prepare_topup_tx(
         self, chain: str, amount: int

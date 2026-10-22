@@ -16,7 +16,7 @@ Served by the Modius, Optimus and Basius agents, designed to be consumed by the 
     - `/build` is the output directory, and can be served statically
 
 ## 🧪 Mock Data
-To mock, set `IS_MOCK_ENABLED=true` in `.env` and the app will use mock data instead of the API. The chat mock is gated by `isChatEnabled` in `mockFeatures.ts`.
+To mock, set `IS_MOCK_ENABLED=true` in `.env` and the app will use mock data instead of the API.
 
 ## 📦 Release process
 

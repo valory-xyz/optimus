@@ -22,8 +22,10 @@
 # pylint: skip-file
 
 import json
+import tempfile
+from pathlib import Path
 from typing import Any, List
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
 
@@ -45,6 +47,9 @@ from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     VelodromePoolBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import Event
+
+# A real directory, since the hooks append to the feed under it.
+_STORE_PATH = Path(tempfile.mkdtemp(prefix="decision-making-tests-"))
 
 
 def _make_behaviour(**overrides: Any) -> DecisionMakingBehaviour:
@@ -72,6 +77,7 @@ def _make_behaviour(**overrides: Any) -> DecisionMakingBehaviour:
     params.max_gas_percentage = 0.25  # 25%
     params.max_slippage_percentage = 0.1
     params.slippage_for_swap = 0.03
+    params.store_path = _STORE_PATH
 
     synced = MagicMock()
     synced.actions = []
@@ -7177,3 +7183,579 @@ class TestWaitForSwapConfirmationRetryExhaustion:
         assert str(MAX_SWAP_CONFIRMATION_RETRIES) in str(
             b.context.logger.error.call_args
         )
+
+
+SAFE = "0x" + "aa" * 20
+USER = "0x" + "99" * 20
+TOKEN0 = "0x" + "01" * 20
+TOKEN1 = "0x" + "02" * 20
+OTHER_TOKEN = "0x" + "03" * 20
+OPTIMISM_USDC = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+
+def _topic(address: str) -> str:
+    return "0x" + address.lower()[2:].rjust(64, "0")
+
+
+def _transfer_log(token: str, to: str, amount: int, sender: str = "0x" + "77" * 20):
+    return {
+        "address": token,
+        "topics": [TRANSFER, _topic(sender), _topic(to)],
+        "data": hex(amount),
+    }
+
+
+def _feed_events(store: Path) -> List[dict]:
+    path = store / "feed.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
+def _fields(event: dict) -> dict:
+    return {f["label"]: f["value"] for f in event["fields"]}
+
+
+class TestPoolEnteredEvent:
+    """An entered pool is written to the feed once, after settlement."""
+
+    def _enter(self, tmp_path: Path, principal_usd: Any) -> List[dict]:
+        b = _make_behaviour()
+        b.params.store_path = tmp_path
+        b.synchronized_data.final_tx_hash = "0xhash"
+        b._get_data_from_mint_tx_receipt = _make_gen_method((1, 1000, 500, 600, 1))
+        b._accumulate_transaction_costs = _make_gen_method(None)
+        b._rename_entry_costs_key = _make_gen_method(None)
+
+        def tip(position, action):
+            position["principal_usd"] = principal_usd
+            yield
+
+        b._calculate_and_store_tip_data = tip
+        b.store_current_positions = MagicMock()
+        action = {
+            "chain": "optimism",
+            "pool_address": "0xPOOL",
+            "dex_type": DexType.UNISWAP_V3.value,
+            "token0": TOKEN0,
+            "token1": TOKEN1,
+            "token0_symbol": "WETH",
+            "token1_symbol": "USDC",
+        }
+        _exhaust(b._post_execute_enter_pool([action], 0))
+        return _feed_events(tmp_path)
+
+    def test_writes_one_card_with_pool_and_amount(self, tmp_path: Path) -> None:
+        """The card names the pool and the USD amount put in."""
+        events = self._enter(tmp_path, 1234.5)
+        assert len(events) == 1
+        assert events[0]["type"] == "pool_entered"
+        assert events[0]["title"] == "Entered a pool"
+        assert events[0]["fields"] == [
+            {"label": "Pool", "value": "WETH/USDC on Uniswap V3"},
+            {"label": "Amount", "value": "$1,234.50"},
+        ]
+
+    def test_unpriced_amount_is_not_available(self, tmp_path: Path) -> None:
+        """A principal that could not be priced is not shown as $0."""
+        events = self._enter(tmp_path, 0.0)
+        assert _fields(events[0])["Amount"] == "Not available"
+
+
+class TestPoolExitedEvent:
+    """An exited pool is written once, with its result against the principal."""
+
+    def _behaviour(self, tmp_path: Path, positions: List[dict], receipt: Any):
+        b = _make_behaviour()
+        b.params.store_path = tmp_path
+        b.synchronized_data.final_tx_hash = "0xexit"
+        b.current_positions = positions
+        b.store_current_positions = MagicMock()
+        b._get_current_timestamp = MagicMock(return_value=1760400000)
+        b.sleep = _make_gen_method(None)
+        b.get_transaction_receipt = MagicMock(
+            side_effect=lambda **kw: _make_gen_method(receipt)()
+        )
+        b._get_token_decimals = _make_gen_method(18)
+        return b
+
+    @staticmethod
+    def _position(**extra: Any) -> dict:
+        return {
+            "chain": "optimism",
+            "pool_address": "0xPOOL",
+            "dex_type": DexType.VELODROME.value,
+            "token0": TOKEN0,
+            "token1": TOKEN1,
+            "token0_symbol": "WETH",
+            "token1_symbol": "USDC",
+            "status": PositionStatus.OPEN.value,
+            "enter_timestamp": 1760227200,
+            "principal_usd": 100.0,
+            **extra,
+        }
+
+    def _exit(self, b) -> List[dict]:
+        action = {"pool_address": "0xPOOL", "dex_type": DexType.VELODROME.value}
+        _exhaust(b._post_execute_exit_pool([action], 0))
+        return _feed_events(b.params.store_path)
+
+    def test_result_is_computed_from_the_exit_amounts(self, tmp_path: Path) -> None:
+        """The tokens the exit returned to the Safe are valued against the principal."""
+        receipt = {
+            "logs": [
+                _transfer_log(TOKEN0, SAFE, 3 * 10**18),
+                _transfer_log(TOKEN1, SAFE, 5),
+                # Not to the Safe, not a pool token: left out.
+                _transfer_log(TOKEN0, USER, 7 * 10**18),
+                _transfer_log(OTHER_TOKEN, SAFE, 11),
+            ]
+        }
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        prices = {TOKEN0: 60.0, TOKEN1: 42.0}
+        b._convert_amounts_to_usd = MagicMock(
+            side_effect=lambda amount, _, token, *rest: _make_gen_method(
+                prices[token]
+            )()
+        )
+        events = self._exit(b)
+        assert b._convert_amounts_to_usd.call_args_list == [
+            call(3 * 10**18, 0, TOKEN0, None, "optimism"),
+            call(5, 0, TOKEN1, None, "optimism"),
+        ]
+        assert len(events) == 1
+        assert events[0]["type"] == "pool_exited"
+        assert events[0]["title"] == "Exited a pool"
+        assert events[0]["fields"] == [
+            {"label": "Pool", "value": "WETH/USDC on Velodrome"},
+            {"label": "Result", "value": "+$2.00 (+2.00%)"},
+            {"label": "Amount entered", "value": "$100.00"},
+            {"label": "Entry date", "value": "12 Oct 2025"},
+        ]
+
+    def test_a_loss_is_negative(self, tmp_path: Path) -> None:
+        """An exit worth less than the principal shows the loss."""
+        receipt = {
+            "logs": [_transfer_log(TOKEN0, SAFE, 1), _transfer_log(TOKEN1, SAFE, 1)]
+        }
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(48.75)
+        assert _fields(self._exit(b)[0])["Result"] == "-$2.50 (-2.50%)"
+
+    def test_only_positions_open_until_this_exit_count(self, tmp_path: Path) -> None:
+        """An earlier, already closed position in the same pool is not reported again."""
+        receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}
+        closed = self._position(
+            status=PositionStatus.CLOSED.value,
+            principal_usd=500.0,
+            enter_timestamp=1700000000,
+        )
+        b = self._behaviour(tmp_path, [closed, self._position()], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(110.0)
+        events = self._exit(b)
+        assert len(events) == 1
+        fields = _fields(events[0])
+        assert fields["Amount entered"] == "$100.00"
+        assert fields["Entry date"] == "12 Oct 2025"
+
+    def test_several_open_positions_in_the_pool_are_one_card(
+        self, tmp_path: Path
+    ) -> None:
+        """Positions open in the exited pool are summed, from the earliest entry."""
+        receipt = {
+            "logs": [_transfer_log(TOKEN0, SAFE, 1), _transfer_log(TOKEN1, SAFE, 1)]
+        }
+        later = self._position(principal_usd=100.0, enter_timestamp=1760313600)
+        earlier = self._position(principal_usd=60.0, enter_timestamp=1760227200)
+        b = self._behaviour(tmp_path, [later, earlier], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(88.0)
+        events = self._exit(b)
+        assert len(events) == 1
+        fields = _fields(events[0])
+        assert fields["Amount entered"] == "$160.00"
+        assert fields["Entry date"] == "12 Oct 2025"
+        assert fields["Result"] == "+$16.00 (+10.00%)"
+
+    def test_a_rerun_after_the_exit_writes_nothing(self, tmp_path: Path) -> None:
+        """Once the positions are closed, handling the exit again adds no card."""
+        receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(110.0)
+        self._exit(b)
+        assert len(self._exit(b)) == 1
+
+    def test_unrelated_exit_writes_nothing(self, tmp_path: Path) -> None:
+        """An exit that closes no open position (e.g. the USDC transfer) adds no card."""
+        b = self._behaviour(tmp_path, [self._position(pool_address="0xOTHER")], {})
+        assert self._exit(b) == []
+
+    @pytest.mark.parametrize(
+        "receipt, value",
+        [
+            pytest.param(None, 120.0, id="receipt unreadable"),
+            pytest.param({"logs": []}, 120.0, id="nothing returned"),
+            pytest.param(
+                {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}, 0.0, id="no price"
+            ),
+        ],
+    )
+    def test_result_not_available(
+        self, tmp_path: Path, receipt: Any, value: float
+    ) -> None:
+        """A result that cannot be told is shown as not available."""
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(value)
+        assert _fields(self._exit(b)[0])["Result"] == "Not available"
+
+    def test_one_unpriced_token_makes_the_result_not_available(
+        self, tmp_path: Path
+    ) -> None:
+        """An exit valued without one of its tokens does not show a false loss."""
+        receipt = {
+            "logs": [_transfer_log(TOKEN0, SAFE, 1), _transfer_log(TOKEN1, SAFE, 1)]
+        }
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        prices = {TOKEN0: 50.0, TOKEN1: 0.0}
+        b._convert_amounts_to_usd = MagicMock(
+            side_effect=lambda amount, _, token, *rest: _make_gen_method(
+                prices[token]
+            )()
+        )
+        assert _fields(self._exit(b)[0])["Result"] == "Not available"
+
+    def test_a_token_not_received_makes_the_result_not_available(
+        self, tmp_path: Path
+    ) -> None:
+        """A pool that returns both tokens, exited with one seen, shows no false loss."""
+        receipt = {"logs": [_transfer_log(TOKEN0, SAFE, 1)]}
+        b = self._behaviour(tmp_path, [self._position()], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(50.0)
+        assert _fields(self._exit(b)[0])["Result"] == "Not available"
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            pytest.param({"is_cl_pool": True}, id="velodrome CL"),
+            pytest.param({"dex_type": DexType.UNISWAP_V3.value}, id="uniswap v3"),
+        ],
+    )
+    def test_a_concentrated_position_can_exit_in_one_token(
+        self, tmp_path: Path, extra: dict
+    ) -> None:
+        """An out-of-range concentrated position returns one token, valued alone."""
+        receipt = {"logs": [_transfer_log(TOKEN1, SAFE, 1)]}
+        b = self._behaviour(tmp_path, [self._position(**extra)], receipt)
+        b._convert_amounts_to_usd = _make_gen_method(97.5)
+        assert _fields(self._exit(b)[0])["Result"] == "-$2.50 (-2.50%)"
+
+    def test_without_principal_or_entry_date(self, tmp_path: Path) -> None:
+        """A legacy position without TiP data has no result, amount or date."""
+        position = self._position(principal_usd=None, enter_timestamp=None)
+        b = self._behaviour(tmp_path, [position], {"logs": []})
+        fields = _fields(self._exit(b)[0])
+        assert fields["Result"] == "Not available"
+        assert fields["Amount entered"] == "Not available"
+        assert fields["Entry date"] == "Not available"
+        b.get_transaction_receipt.assert_not_called()
+
+    def test_without_safe_address(self, tmp_path: Path) -> None:
+        """A chain with no Safe gives no result."""
+        b = self._behaviour(tmp_path, [self._position(chain="base")], {"logs": []})
+        assert _fields(self._exit(b)[0])["Result"] == "Not available"
+        b.get_transaction_receipt.assert_not_called()
+
+
+class TestTokensReceived:
+    """Reading what a settled transaction transferred to an address."""
+
+    def test_sums_matching_transfers_only(self) -> None:
+        """Only Transfer logs of the tokens to the recipient count."""
+        b = _make_behaviour()
+        receipt = {
+            "logs": [
+                _transfer_log(TOKEN0.upper().replace("0X", "0x"), SAFE, 2),
+                _transfer_log(TOKEN0, SAFE, 3),
+                {**_transfer_log(TOKEN0, SAFE, 100), "topics": ["0x" + "12" * 32]},
+                {**_transfer_log(TOKEN0, SAFE, 100), "data": "0x"},
+                {"address": TOKEN0, "topics": [], "data": "0x5"},
+                {
+                    **_transfer_log(TOKEN0, SAFE, 100),
+                    "topics": ["0x" + "12" * 32, _topic(SAFE), _topic(SAFE)],
+                },
+            ]
+        }
+        b.get_transaction_receipt = _make_gen_method(receipt)
+        result = _exhaust(b._tokens_received("0xtx", "optimism", SAFE, [TOKEN0, None]))
+        assert result == {TOKEN0.lower(): 5}
+
+    def test_unreadable_receipt(self) -> None:
+        """No receipt, no amounts."""
+        b = _make_behaviour()
+        b.get_transaction_receipt = _make_gen_method(None)
+        assert _exhaust(b._tokens_received("0xtx", "optimism", SAFE, [TOKEN0])) is None
+
+
+class TestPositionsExitedEvent:
+    """A finished withdrawal writes one card with what it exited and sent."""
+
+    def _behaviour(
+        self, tmp_path: Path, kv: Any, receipt: Any, decimals: Any = 6
+    ) -> DecisionMakingBehaviour:
+        b = _make_behaviour()
+        b.params.store_path = tmp_path
+        b.params.target_investment_chains = ["optimism"]
+        b.synchronized_data.final_tx_hash = "0xtransfer"
+        b._write_kv = _make_gen_method(True)
+        b._read_kv = _make_gen_method(kv)
+        b.get_transaction_receipt = _make_gen_method(receipt)
+        b._get_token_decimals = _make_gen_method(decimals)
+        b.current_positions = [
+            {
+                "token0_symbol": "WETH",
+                "token1_symbol": "USDC",
+                "dex_type": "velodrome",
+                "status": PositionStatus.CLOSED.value,
+                "exit_timestamp": 2000,
+            },
+            {
+                "token0_symbol": "OP",
+                "token1_symbol": "USDC",
+                "dex_type": "balancerPool",
+                "status": PositionStatus.CLOSED.value,
+                "exit_timestamp": 2500,
+            },
+            {
+                "token0_symbol": "DAI",
+                "token1_symbol": "USDC",
+                "dex_type": "velodrome",
+                "status": PositionStatus.CLOSED.value,
+                "exit_timestamp": 500,
+            },
+            {
+                "token0_symbol": "WETH",
+                "token1_symbol": "OP",
+                "dex_type": "UniswapV3",
+                "status": PositionStatus.OPEN.value,
+            },
+        ]
+        return b
+
+    def test_writes_one_card_on_completion(self, tmp_path: Path) -> None:
+        """The card lists the exited positions, the USDC sent and what stayed open."""
+        kv = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
+        receipt = {
+            "logs": [
+                _transfer_log(OPTIMISM_USDC, USER, 1_234_560_000, sender=SAFE),
+                _transfer_log(OPTIMISM_USDC, SAFE, 5_000_000),
+            ]
+        }
+        b = self._behaviour(tmp_path, kv, receipt)
+        _exhaust(b._update_withdrawal_completion())
+        events = _feed_events(tmp_path)
+        assert len(events) == 1
+        assert events[0]["type"] == "positions_exited"
+        assert events[0]["title"] == "Exited all positions"
+        assert events[0]["fields"] == [
+            {
+                "label": "Positions exited",
+                "value": "WETH/USDC on Velodrome, OP/USDC on Balancer",
+            },
+            {"label": "Amount received", "value": "1,234.56 USDC"},
+            {
+                "label": "Positions that couldn't be exited",
+                "value": "WETH/OP on Uniswap V3",
+            },
+        ]
+
+    def test_nothing_exited_and_nothing_left(self, tmp_path: Path) -> None:
+        """A withdrawal with no positions says so."""
+        kv = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
+        b = self._behaviour(tmp_path, kv, {"logs": []})
+        b.current_positions = []
+        _exhaust(b._update_withdrawal_completion())
+        fields = _fields(_feed_events(tmp_path)[0])
+        assert fields["Positions exited"] == "None"
+        assert fields["Amount received"] == "0.00 USDC"
+        assert fields["Positions that couldn't be exited"] == "None"
+
+    @pytest.mark.parametrize(
+        "kv, receipt, decimals",
+        [
+            pytest.param(
+                {"withdrawal_requested_at": "1000"}, {"logs": []}, 6, id="no target"
+            ),
+            pytest.param(
+                {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER},
+                None,
+                6,
+                id="receipt unreadable",
+            ),
+            pytest.param(
+                {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER},
+                {"logs": []},
+                None,
+                id="decimals unreadable",
+            ),
+        ],
+    )
+    def test_amount_not_available(
+        self, tmp_path: Path, kv: Any, receipt: Any, decimals: Any
+    ) -> None:
+        """An amount that cannot be read is shown as not available."""
+        b = self._behaviour(tmp_path, kv, receipt, decimals)
+        _exhaust(b._update_withdrawal_completion())
+        events = _feed_events(tmp_path)
+        assert len(events) == 1
+        assert _fields(events[0])["Amount received"] == "Not available"
+
+    @pytest.mark.parametrize(
+        "kv",
+        [
+            pytest.param(None, id="KV unreadable"),
+            pytest.param({"withdrawal_target_address": USER}, id="no request time"),
+            pytest.param(
+                {"withdrawal_requested_at": "soon", "withdrawal_target_address": USER},
+                id="unreadable request time",
+            ),
+        ],
+    )
+    def test_without_request_time_no_card_is_written(
+        self, tmp_path: Path, kv: Any
+    ) -> None:
+        """Without the request time the card is skipped and the withdrawal completes."""
+        b = self._behaviour(tmp_path, kv, {"logs": []})
+        written = []
+
+        def write(data):
+            written.append(data)
+            yield
+            return True
+
+        b._write_kv = write
+        _exhaust(b._update_withdrawal_completion())
+        _exhaust(b._update_withdrawal_completion())
+        assert _feed_events(tmp_path) == []
+        assert "positions_exited" in str(b.context.logger.error.call_args)
+        assert written[0]["withdrawal_status"] == "COMPLETED"
+
+    def test_a_kv_store_that_did_not_answer_is_asked_again(
+        self, tmp_path: Path
+    ) -> None:
+        """A failed read is not a missing key: the second read writes the card."""
+        kv = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
+        b = self._behaviour(tmp_path, kv, {"logs": []})
+        reads = iter([None, kv])
+
+        def read(keys):
+            yield
+            return next(reads)
+
+        b._read_kv = read
+        _exhaust(b._update_withdrawal_completion())
+        assert [e["type"] for e in _feed_events(tmp_path)] == ["positions_exited"]
+
+    def test_chain_without_usdc(self, tmp_path: Path) -> None:
+        """A chain with no known USDC has no amount."""
+        kv = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
+        b = self._behaviour(tmp_path, kv, {"logs": []})
+        b.params.target_investment_chains = ["unknown"]
+        _exhaust(b._update_withdrawal_completion())
+        assert _fields(_feed_events(tmp_path)[0])["Amount received"] == "Not available"
+
+
+class TestFeedFailuresDoNotStopTheAgent:
+    """A card that cannot be built is lost; the pool or withdrawal step goes on."""
+
+    def test_pool_entered(self, tmp_path: Path) -> None:
+        """An error building the card is logged and the entry still completes."""
+        b = _make_behaviour()
+        b.params.store_path = tmp_path
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.behaviours.decision_making.pool_name",
+            side_effect=RuntimeError("boom"),
+        ):
+            b._record_pool_entered({"principal_usd": 1.0})
+        assert _feed_events(tmp_path) == []
+        assert "pool_entered" in str(b.context.logger.error.call_args)
+
+    def test_pool_exited(self, tmp_path: Path) -> None:
+        """A malformed receipt is logged and the exit is still stored."""
+        b = TestPoolExitedEvent()._behaviour(
+            tmp_path,
+            [TestPoolExitedEvent._position()],
+            {"logs": [{**_transfer_log(TOKEN0, SAFE, 1), "data": "0xzz"}]},
+        )
+        b._convert_amounts_to_usd = _make_gen_method(1.0)
+        action = {"pool_address": "0xPOOL", "dex_type": DexType.VELODROME.value}
+        _exhaust(b._post_execute_exit_pool([action], 0))
+        assert _feed_events(tmp_path) == []
+        assert b.current_positions[0]["status"] == PositionStatus.CLOSED.value
+        b.store_current_positions.assert_called_once()
+        assert "pool_exited" in str(b.context.logger.error.call_args)
+
+    def test_positions_exited(self, tmp_path: Path) -> None:
+        """A card that fails still lets the withdrawal be marked complete."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, None, None)
+
+        def broken_read(*args, **kwargs):
+            raise RuntimeError("boom")
+            yield  # noqa
+
+        b._read_kv = broken_read
+        written = []
+
+        def write(data):
+            written.append(data)
+            yield
+            return True
+
+        b._write_kv = write
+        _exhaust(b._update_withdrawal_completion())
+        assert written[0]["withdrawal_status"] == "COMPLETED"
+        assert _feed_events(tmp_path) == []
+
+
+class TestPositionsExitedOnce:
+    """The withdrawal card is written before the status flip, and only once."""
+
+    KV = {"withdrawal_requested_at": "1000", "withdrawal_target_address": USER}
+
+    def test_written_before_the_status_flip(self, tmp_path: Path) -> None:
+        """A restart after the flip cannot lose the card: it is already written."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, self.KV, {"logs": []})
+        cards_at_write = []
+
+        def write(data):
+            cards_at_write.append(len(_feed_events(tmp_path)))
+            yield
+            return True
+
+        b._write_kv = write
+        _exhaust(b._update_withdrawal_completion())
+        assert cards_at_write == [1]
+
+    def test_a_retried_completion_writes_no_second_card(self, tmp_path: Path) -> None:
+        """A completion run again for the same withdrawal adds nothing, and completes."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, self.KV, {"logs": []})
+        written = []
+
+        def write(data):
+            written.append(data["withdrawal_status"])
+            yield
+            return False
+
+        b._write_kv = write
+        _exhaust(b._update_withdrawal_completion())
+        _exhaust(b._update_withdrawal_completion())
+        assert len(_feed_events(tmp_path)) == 1
+        assert written == ["COMPLETED", "COMPLETED"]
+
+    def test_a_later_withdrawal_gets_its_own_card(self, tmp_path: Path) -> None:
+        """A card from an earlier withdrawal does not stop the next one's."""
+        b = TestPositionsExitedEvent()._behaviour(tmp_path, self.KV, {"logs": []})
+        _exhaust(b._update_withdrawal_completion())
+        later = {**self.KV, "withdrawal_requested_at": "9999999999"}
+        b._read_kv = _make_gen_method(later)
+        _exhaust(b._update_withdrawal_completion())
+        assert len(_feed_events(tmp_path)) == 2

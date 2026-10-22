@@ -29,6 +29,8 @@ import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
+from functools import partial
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
@@ -104,6 +106,24 @@ from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
     read_activity_goal_block,
     retarget_activity_goal,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.feed import (
+    EventType,
+    ROLE_AGENT,
+    ROLE_USER,
+    append_message,
+    field,
+    find_exchange,
+    read_recent,
+    record_event,
+)
+from packages.valory.skills.optimus_abci.chat import (
+    ChatSession,
+    ChatTurn,
+    ConfigChange,
+    ConfigProposal,
+    changes_text,
+    describe_feed_entry,
+)
 from packages.valory.skills.optimus_abci.dialogues import (
     HttpDialogue,
     HttpDialogues,
@@ -111,10 +131,13 @@ from packages.valory.skills.optimus_abci.dialogues import (
 )
 from packages.valory.skills.optimus_abci.models import Params, SharedState
 from packages.valory.skills.optimus_abci.prompts import (
+    CHAT_PROMPT,
+    CONFIRM_PROMPT,
     DEFAULT_MAX_LOSS_PERCENTAGE,
     Intent,
     MAX_LOSS_PERCENTAGE_RANGE,
     STRATEGY_PROMPT,
+    build_confirmation_schema,
     build_strategy_config_schema,
 )
 
@@ -222,6 +245,32 @@ MECH_DEPOSIT_RECEIPT_TIMEOUT = 180
 # and its pending value must stop showing in the chat.
 GOAL_WRITE_ACK_TIMEOUT = 30
 MECH_DEPOSIT_READBACK_RETRY_SECS = 2
+
+STRATEGY_MAX_TOKENS = 150
+# A chat reply explains choices such as the current pool, so it runs longer.
+CHAT_MAX_TOKENS = 800
+CONFIRM_MAX_TOKENS = 20
+RECENT_FEED_ENTRIES = 20
+
+# The chat on the agent's main page
+CHAT_TEXT_FIELD = "text"
+CHAT_CLIENT_ID_FIELD = "client_id"
+INVALID_CHAT_REQUEST = "A chat message needs a non-empty text and client_id."
+CHAT_SAVE_FAILED = "The message could not be saved. Please try again."
+STILL_ANSWERING = "Your agent is still answering a message."
+CHAT_REPLY_FAILED = "Your agent could not answer. Please try again."
+CHANGE_NOT_APPLIED = (
+    "I couldn't apply that change, so your settings are unchanged. Please try again."
+)
+CHANGE_APPLIED_REPLY_NOT_SAVED = (
+    "Your change was applied, but the reply could not be saved."
+)
+PROTOCOL_NAMES = {
+    "balancerPool": "Balancer",
+    "sturdy": "Sturdy",
+    "uniswapV3": "Uniswap V3",
+    "velodrome": "Velodrome",
+}
 
 
 class MechDepositOutcome(Enum):
@@ -507,6 +556,7 @@ class HttpHandler(BaseHttpHandler):
             rf"{hostname_regex}\/(.*)"  # New regex for serving static files
         )
         process_prompt_regex = rf"{hostname_regex}\/configure_strategies"
+        chat_regex = rf"{hostname_regex}\/api\/v1\/chat$"
         features_url_regex = (
             rf"{hostname_regex}\/features"  # New regex for /features endpoint
         )
@@ -521,6 +571,7 @@ class HttpHandler(BaseHttpHandler):
         # Define routes
         self.routes = {
             (HttpMethod.POST.value,): [
+                (chat_regex, self._handle_chat),
                 (process_prompt_regex, self._handle_post_process_prompt),
                 (withdrawal_initiate_regex, self._handle_post_withdrawal_initiate),
             ],
@@ -564,6 +615,7 @@ class HttpHandler(BaseHttpHandler):
             self.context.params.target_investment_chains[0],
             MODIUS_AGENT_PROFILE_PATH,
         )
+        self.chat_session = ChatSession()
 
     def teardown(self) -> None:
         """Tear down the handler and release the background executor."""
@@ -1659,16 +1711,30 @@ class HttpHandler(BaseHttpHandler):
 
         :return: the message for the chat response.
         """
+        return self._paid_call_unavailable()[1]
+
+    def _paid_call_unavailable(self) -> Tuple[HTTPStatus, str]:
+        """Say why a prompt cannot be paid for, with the status the chat answers.
+
+        Only a shortfall the user must fund is a 402; the rest clear on their own.
+
+        :return: the status and the message.
+        """
         if not self.shared_state.x402_funding_checked:
-            return "System initializing. Please wait for some time."
+            return (
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "System initializing. Please wait for some time.",
+            )
         if int(self.shared_state.x402_eth_deficit or 0) > 0:
             return (
+                HTTPStatus.PAYMENT_REQUIRED,
                 "Chat needs a small prepaid balance that your agent couldn't fund. "
-                "Add ETH to your agent in Pearl, then try again in a few minutes."
+                "Add ETH to your agent in Pearl, then try again in a few minutes.",
             )
         return (
+            HTTPStatus.SERVICE_UNAVAILABLE,
             "Chat is temporarily unavailable while the agent tops up its prepaid "
-            "balance. Please try again in a few minutes."
+            "balance. Please try again in a few minutes.",
         )
 
     def _paid_call_chain(self) -> str:
@@ -2679,64 +2745,683 @@ class HttpHandler(BaseHttpHandler):
             if not user_prompt:
                 raise ValueError("Prompt is required.")
 
-            previous_trading_type = self.context.state.trading_type
-            if not previous_trading_type:
-                previous_trading_type = TradingType.BALANCED.value
-
-            previous_selected_protocols = (
-                json.loads(self.context.state.selected_protocols)
-                if isinstance(self.context.state.selected_protocols, str)
-                else self.context.state.selected_protocols or self.available_strategies
-            )
-
-            last_selected_threshold = self._current_max_loss_percentage(
-                previous_trading_type
-            )
-            activity_goal, activity_goal_progress = self._current_activity_goal()
-
-            # Convert previous selected protocols to their protocol names
-            previous_protocols_for_llm = [
-                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
-                for strategy in previous_selected_protocols
-            ]
-
             # Format the optimized prompt
             prompt_template = STRATEGY_PROMPT.format(
-                user_prompt=user_prompt,
-                previous_protocols=previous_protocols_for_llm,
-                previous_type=previous_trading_type,
-                previous_threshold=last_selected_threshold,
-                activity_goal=activity_goal,
-                activity_goal_progress=activity_goal_progress,
+                user_prompt=user_prompt, **self._strategy_prompt_values()
             )
-
-            # Prepare payload data with schema and speed optimizations
-            payload_data = {
-                "prompt": prompt_template,
-                "schema": build_strategy_config_schema(),
-                "temperature": 0.01,
-                "max_tokens": 150,
-            }
-
-            # Create LLM request
-            srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
-            request_srr_message, srr_dialogue = srr_dialogues.create(
-                counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
-                performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps(payload_data),
-            )
-            # Prepare callback args
-            callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
-            self._send_message(
-                request_srr_message,
-                srr_dialogue,
+            self._send_llm_request(
+                prompt_template,
+                build_strategy_config_schema(),
+                STRATEGY_MAX_TOKENS,
                 self._handle_llm_response,
-                callback_kwargs,
+                {"http_msg": http_msg, "http_dialogue": http_dialogue},
             )
 
         except (json.JSONDecodeError, ValueError) as e:
             self.context.logger.error(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
+
+    def _previous_selected_protocols(self) -> List[str]:
+        """The strategies in force: the stored ones, else every available one.
+
+        :return: the strategy names.
+        """
+        return (
+            json.loads(self.context.state.selected_protocols)
+            if isinstance(self.context.state.selected_protocols, str)
+            else self.context.state.selected_protocols or self.available_strategies
+        )
+
+    def _strategy_prompt_values(self) -> Dict[str, Any]:
+        """The configuration in force, as the strategy prompts show it.
+
+        :return: the prompt's configuration fields.
+        """
+        previous_trading_type = (
+            self.context.state.trading_type or TradingType.BALANCED.value
+        )
+        activity_goal, activity_goal_progress = self._current_activity_goal()
+        return {
+            "previous_protocols": [
+                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+                for strategy in self._previous_selected_protocols()
+            ],
+            "previous_type": previous_trading_type,
+            "previous_threshold": self._current_max_loss_percentage(
+                previous_trading_type
+            ),
+            "activity_goal": activity_goal,
+            "activity_goal_progress": activity_goal_progress,
+        }
+
+    def _send_llm_request(
+        self,
+        prompt: str,
+        schema: Dict,
+        max_tokens: int,
+        callback: Callable,
+        callback_kwargs: Dict[str, Any],
+    ) -> None:
+        """Send a prompt to the LLM; ``callback`` gets its answer.
+
+        :param prompt: the prompt.
+        :param schema: the schema the answer must follow.
+        :param max_tokens: the longest answer allowed.
+        :param callback: handles the answer.
+        :param callback_kwargs: the callback's keyword arguments.
+        """
+        payload_data = {
+            "prompt": prompt,
+            "schema": schema,
+            "temperature": 0.01,
+            "max_tokens": max_tokens,
+        }
+        srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
+        request_srr_message, srr_dialogue = srr_dialogues.create(
+            counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
+            performative=SrrMessage.Performative.REQUEST,
+            payload=json.dumps(payload_data),
+        )
+        self._send_message(request_srr_message, srr_dialogue, callback, callback_kwargs)
+
+    def _handle_chat(self, http_msg: HttpMessage, http_dialogue: HttpDialogue) -> None:
+        """Answer a chat message, writing it and its reply to the feed.
+
+        The message is written when it arrives and the reply only when it
+        succeeds. A resend with the same ``client_id`` is written once: one
+        already answered gets the lines as written, without a new answer.
+        While another message is being answered, a new one gets a 409.
+
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        """
+        request = self._read_chat_request(http_msg)
+        if request is None:
+            self._send_chat_error(
+                http_msg, http_dialogue, HTTPStatus.BAD_REQUEST, INVALID_CHAT_REQUEST
+            )
+            return
+        text, client_id = request
+        store_path = self.context.params.store_path
+        try:
+            message, reply = find_exchange(store_path, client_id)
+            if message is not None and reply is not None:
+                self._send_ok_response(
+                    http_msg, http_dialogue, {"message": message, "reply": reply}
+                )
+                return
+            if self.chat_session.is_answering():
+                self._send_chat_error(
+                    http_msg, http_dialogue, HTTPStatus.CONFLICT, STILL_ANSWERING
+                )
+                return
+            if message is None:
+                message = append_message(store_path, ROLE_USER, text, client_id)
+        except OSError as e:
+            self.context.logger.error(f"Could not write the chat message: {e}")
+            self._send_chat_error(
+                http_msg,
+                http_dialogue,
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                CHAT_SAVE_FAILED,
+            )
+            return
+
+        if self.context.params.use_x402 and not getattr(
+            self.shared_state, "sufficient_funds_for_x402_payments", False
+        ):
+            status, error = self._paid_call_unavailable()
+            self._send_chat_error(http_msg, http_dialogue, status, error)
+            return
+
+        turn = ChatTurn(client_id, message, http_msg, http_dialogue)
+        self.chat_session.start_answering(turn)
+        proposal = self.chat_session.take_proposal(client_id)
+        if proposal is not None:
+            self._answer_safely(
+                partial(self._ask_whether_confirmed, proposal, text, turn),
+                turn,
+                proposal,
+            )
+            return
+        self._answer_safely(partial(self._ask_chat, text, turn), turn)
+
+    def _answer_safely(
+        self,
+        step: Callable[[], None],
+        turn: ChatTurn,
+        proposal: Optional[ConfigProposal] = None,
+    ) -> None:
+        """Run a step of answering a chat message; a failure still answers it.
+
+        Left to raise, the request would hang and the chat get a 409 until
+        the answering timeout.
+
+        :param step: the step.
+        :param turn: the message being answered.
+        :param proposal: the pending change this step was deciding, if any.
+        """
+        try:
+            step()
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.exception(f"Could not answer the chat message: {e}")
+            if proposal is not None:
+                self.chat_session.restore_proposal(proposal)
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, CHAT_REPLY_FAILED)
+
+    @staticmethod
+    def _read_chat_request(http_msg: HttpMessage) -> Optional[Tuple[str, str]]:
+        """Return the message's text and client id, or ``None`` if the body lacks either.
+
+        :param http_msg: the HttpMessage instance
+        :return: the text and the client id.
+        """
+        try:
+            data = json.loads(http_msg.body.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        text = data.get(CHAT_TEXT_FIELD)
+        client_id = data.get(CHAT_CLIENT_ID_FIELD)
+        if not isinstance(text, str) or not text.strip():
+            return None
+        if not isinstance(client_id, str) or not client_id:
+            return None
+        return text, client_id
+
+    def _send_chat_error(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        status: HTTPStatus,
+        error: str,
+    ) -> None:
+        """Answer a chat request with an error.
+
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        :param status: the HTTP status.
+        :param error: the error text.
+        """
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=status.value,
+            status_text=status.phrase,
+            headers=f"{self.json_content_header}{http_msg.headers}",
+            body=json.dumps({"error": error}, ensure_ascii=True).encode("utf-8"),
+        )
+        self.context.logger.info(f"Responding with {status.value}")
+        self.context.outbox.put_message(message=http_response)
+
+    def _fail_chat(self, turn: ChatTurn, status: HTTPStatus, error: str) -> None:
+        """Answer a chat message with an error, freeing it for its resend.
+
+        :param turn: the message being answered.
+        :param status: the HTTP status.
+        :param error: the error text.
+        """
+        self.chat_session.finish_answering(turn)
+        self._send_chat_error(turn.http_msg, turn.http_dialogue, status, error)
+
+    def _send_chat_reply(
+        self, text: str, turn: ChatTurn, save_failed_error: str = CHAT_SAVE_FAILED
+    ) -> None:
+        """Write the agent's reply to the feed and answer with both lines.
+
+        An empty reply is a failed answer, so the resend asks again.
+
+        :param text: the reply.
+        :param turn: the message it answers.
+        :param save_failed_error: the error to answer with if the reply cannot be written.
+        """
+        if not text.strip():
+            self.context.logger.error("The chat LLM answered with an empty reply.")
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, CHAT_REPLY_FAILED)
+            return
+        try:
+            reply = append_message(
+                self.context.params.store_path, ROLE_AGENT, text, turn.client_id
+            )
+        except OSError as e:
+            self.context.logger.error(f"Could not write the chat reply: {e}")
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, save_failed_error)
+            return
+        self.chat_session.finish_answering(turn)
+        self._send_ok_response(
+            turn.http_msg, turn.http_dialogue, {"message": turn.message, "reply": reply}
+        )
+
+    def _send_written_reply(self, turn: ChatTurn) -> bool:
+        """Answer with the reply already written for this message, if there is one.
+
+        A message and its resend after the answering timeout can both get an
+        answer; the first one written stands.
+
+        :param turn: the message being answered.
+        :return: whether a written reply was sent.
+        """
+        try:
+            _, reply = find_exchange(self.context.params.store_path, turn.client_id)
+        except OSError as e:
+            self.context.logger.error(f"Could not read the chat feed: {e}")
+            return False
+        if reply is None:
+            return False
+        self.chat_session.finish_answering(turn)
+        self._send_ok_response(
+            turn.http_msg, turn.http_dialogue, {"message": turn.message, "reply": reply}
+        )
+        return True
+
+    def _is_given_up(self, turn: ChatTurn) -> bool:
+        """Return whether the chat stopped waiting for this message's LLM answer.
+
+        Past the answering timeout another message can be answered, which a
+        late answer must neither reply to nor finish.
+
+        :param turn: the message the answer is for.
+        :return: whether the answer is dropped.
+        """
+        if self.chat_session.is_current(turn):
+            return False
+        self.context.logger.warning(
+            f"Dropped a late LLM answer to chat message {turn.client_id}."
+        )
+        return True
+
+    def _ask_chat(self, text: str, turn: ChatTurn) -> None:
+        """Ask the LLM to answer a chat message.
+
+        :param text: the user's message.
+        :param turn: the message being answered.
+        """
+        prompt = CHAT_PROMPT.format(
+            user_prompt=text,
+            chain=self.context.params.target_investment_chains[0].capitalize(),
+            recent_activity=self._recent_activity(turn),
+            **self._strategy_prompt_values(),
+        )
+        self._send_llm_request(
+            prompt,
+            build_strategy_config_schema(),
+            CHAT_MAX_TOKENS,
+            self._handle_chat_llm_response,
+            {"turn": turn},
+        )
+
+    def _recent_activity(self, turn: ChatTurn) -> str:
+        """Describe the latest feed entries for the chat prompt, oldest first.
+
+        :param turn: the message being answered, which the prompt has already.
+        :return: one line per entry.
+        """
+        try:
+            entries = read_recent(
+                self.context.params.store_path, RECENT_FEED_ENTRIES + 1
+            )
+        except OSError as e:
+            self.context.logger.error(f"Could not read the feed for the chat: {e}")
+            return "(not available)"
+        lines = [
+            describe_feed_entry(entry)
+            for entry in entries
+            if entry.get("id") != turn.message.get("id")
+        ][-RECENT_FEED_ENTRIES:]
+        return "\n".join(lines) if lines else "(no activity yet)"
+
+    def _read_llm_answer(
+        self, llm_response_message: SrrMessage, turn: ChatTurn
+    ) -> Optional[Dict[str, Any]]:
+        """Return the LLM's answer object, or answer the chat with an error.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :param turn: the message being answered.
+        :return: the answer, or ``None`` once the error is sent.
+        """
+        try:
+            genai_response = json.loads(llm_response_message.payload)
+            if isinstance(genai_response, dict) and "error" in genai_response:
+                error = str(genai_response["error"])
+                self.context.logger.error(f"GenAI error: {error}")
+                self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, error)
+                return None
+            answer = json.loads(genai_response.get("response", "{}"))
+            if not isinstance(answer, dict):
+                raise ValueError(f"not a JSON object: {answer!r}")
+            return answer
+        except (ValueError, TypeError, AttributeError, RecursionError) as e:
+            self.context.logger.error(f"Unreadable chat LLM response: {e}")
+            self._fail_chat(turn, HTTPStatus.INTERNAL_SERVER_ERROR, CHAT_REPLY_FAILED)
+            return None
+
+    def _handle_chat_llm_response(
+        self,
+        llm_response_message: SrrMessage,
+        dialogue: Dialogue,  # pylint: disable=unused-argument
+        turn: ChatTurn,
+    ) -> None:
+        """Answer a chat message; a config change is only proposed.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :param dialogue: the Dialogue
+        :param turn: the message being answered.
+        """
+        if self._is_given_up(turn) or self._send_written_reply(turn):
+            return
+        answer = self._read_llm_answer(llm_response_message, turn)
+        if answer is None:
+            return
+        reasoning = str(answer.get("reasoning") or "")
+        is_update = (
+            answer.get("intent", Intent.UPDATE.value) == Intent.UPDATE.value
+            and "trading_type" in answer
+            and "max_loss_percentage" in answer
+        )
+        if not is_update:
+            self._send_chat_reply(reasoning, turn)
+            return
+        try:
+            proposal, refusal = self._plan_chat_change(answer, reasoning)
+        except Exception as e:  # pylint: disable=broad-except
+            # The model decides the shape, so any field can fail to read.
+            self.context.logger.error(f"Chat change not usable: {e}")
+            self._send_chat_reply(CHANGE_NOT_APPLIED, turn)
+            return
+        if refusal is not None:
+            self._send_chat_reply(refusal, turn)
+            return
+        if proposal is None:
+            self._send_chat_reply(reasoning, turn)
+            return
+        self.chat_session.proposal = proposal
+        question = (
+            f"<b>To confirm:</b> change {changes_text(proposal.changes)}. Reply yes "
+            "to apply it, or anything else to keep your settings."
+        )
+        self._send_chat_reply(
+            (
+                f"{proposal.reasoning}<br><br>{question}"
+                if proposal.reasoning
+                else question
+            ),
+            turn,
+        )
+
+    def _plan_chat_change(
+        self, answer: Dict[str, Any], reasoning: str
+    ) -> Tuple[Optional[ConfigProposal], Optional[str]]:
+        """Turn the settings the LLM set into a change to confirm, applying nothing.
+
+        :param answer: the LLM's answer.
+        :param reasoning: the LLM's message to the user.
+        :return: the proposal, or ``None`` when nothing changes; and the
+            refusal to send instead, for a value out of range.
+        """
+        low, high = MAX_LOSS_PERCENTAGE_RANGE
+        max_loss = float(answer["max_loss_percentage"])
+        if not low <= max_loss <= high:
+            return None, (
+                f"I can't set the max loss percentage to {max_loss:g}%: it must be "
+                f"between {low:g}% and {high:g}%. Your settings are unchanged."
+            )
+        goal = answer.get("activity_goal")
+        if goal is not None and not is_non_negative_int(goal):
+            return None, (
+                "I can't set the daily activity target to that: it must be a whole "
+                "number of rounds, 0 or more. Your settings are unchanged."
+            )
+        trading_type = str(answer["trading_type"])
+        if trading_type not in {t.value for t in TradingType}:
+            return None, (
+                f"I can't set the trading type to {trading_type}: it must be "
+                f"{TradingType.BALANCED.value} or {TradingType.RISKY.value}. "
+                "Your settings are unchanged."
+            )
+
+        previous_type = self.context.state.trading_type or TradingType.BALANCED.value
+        previous_strategies = self._previous_selected_protocols()
+        previous_names = [
+            STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+            for strategy in previous_strategies
+        ]
+        requested_names = list(answer.get("selected_protocols") or [])
+        names = validate_and_fix_protocols(
+            requested_names,
+            self.params.target_investment_chains,
+            self.params.available_strategies,
+            previous_protocols=previous_names,
+        )
+        dropped = [name for name in requested_names if name not in names]
+        if dropped:
+            chains = ", ".join(self.params.target_investment_chains)
+            reasoning += (
+                f"<br><br><strong>Note:</strong> {', '.join(dropped)} is not "
+                f"available on {chains}, so I left it out."
+            )
+        strategies = [PROTOCOL_TO_STRATEGY.get(name, name) for name in names]
+        previous_loss = self._current_max_loss_percentage(previous_type)
+        previous_goal, _ = self._current_activity_goal()
+
+        changes = []
+        if set(strategies) != set(previous_strategies):
+            changes.append(
+                ConfigChange(
+                    "Protocols",
+                    self._protocols_text(previous_names),
+                    self._protocols_text(names),
+                )
+            )
+        if trading_type != previous_type:
+            changes.append(
+                ConfigChange(
+                    "Trading type",
+                    previous_type.capitalize(),
+                    trading_type.capitalize(),
+                )
+            )
+        if max_loss != previous_loss:
+            changes.append(
+                ConfigChange("Max loss", f"{previous_loss:g}%", f"{max_loss:g}%")
+            )
+        strategy_changed = bool(changes)
+        if goal is not None and goal != previous_goal:
+            changes.append(
+                ConfigChange(
+                    "Daily activity target",
+                    f"{previous_goal} rounds",
+                    f"{goal} rounds",
+                )
+            )
+        else:
+            goal = None
+        if not changes:
+            return None, None
+        return (
+            ConfigProposal(
+                changes=changes,
+                strategy_changed=strategy_changed,
+                selected_protocols=strategies,
+                trading_type=trading_type,
+                max_loss_percentage=max_loss,
+                composite_score=self.calculate_composite_score_from_var(
+                    -max_loss / 100.0
+                ),
+                activity_goal=goal,
+                reasoning=reasoning,
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _protocols_text(names: List[str]) -> str:
+        """Name protocols for the user.
+
+        :param names: the protocol names.
+        :return: the display text.
+        """
+        return ", ".join(PROTOCOL_NAMES.get(name, name) for name in names) or "None"
+
+    def _ask_whether_confirmed(
+        self, proposal: ConfigProposal, text: str, turn: ChatTurn
+    ) -> None:
+        """Ask the LLM whether the user's message confirms the pending change.
+
+        :param proposal: the change waiting for confirmation.
+        :param text: the user's message.
+        :param turn: the message being answered.
+        """
+        prompt = CONFIRM_PROMPT.format(
+            proposal=f"Change {changes_text(proposal.changes)}.", user_reply=text
+        )
+        self._send_llm_request(
+            prompt,
+            build_confirmation_schema(),
+            CONFIRM_MAX_TOKENS,
+            self._handle_confirmation_response,
+            {"turn": turn, "proposal": proposal, "text": text},
+        )
+
+    def _handle_confirmation_response(
+        self,
+        llm_response_message: SrrMessage,
+        dialogue: Dialogue,  # pylint: disable=unused-argument
+        turn: ChatTurn,
+        proposal: ConfigProposal,
+        text: str,
+    ) -> None:
+        """Apply the pending change if the message confirms it; else answer it normally.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :param dialogue: the Dialogue
+        :param turn: the message being answered.
+        :param proposal: the change waiting for confirmation.
+        :param text: the user's message.
+        """
+        if self._is_given_up(turn):
+            return
+        answer = self._read_llm_answer(llm_response_message, turn)
+        if answer is None:
+            self.chat_session.restore_proposal(proposal)
+            return
+        if answer.get("confirmed") is True:
+            self._answer_safely(
+                partial(self._apply_proposal, proposal, turn), turn, proposal
+            )
+            return
+        self.chat_session.drop_proposal(turn.client_id)
+        self._answer_safely(partial(self._ask_chat, text, turn), turn)
+
+    def _apply_proposal(self, proposal: ConfigProposal, turn: ChatTurn) -> None:
+        """Write a confirmed change to the KV store; the reply waits for the write.
+
+        :param proposal: the confirmed change.
+        :param turn: the message being answered.
+        """
+        request_id = turn.http_dialogue.dialogue_label.dialogue_reference[0]
+        state = self.context.state
+        # A delayed write still pending from before must not undo this one.
+        if proposal.strategy_changed:
+            state.latest_chat_write_request_id = request_id
+        if proposal.activity_goal is not None:
+            state.latest_goal_write_request_id = request_id
+        with _KV_WRITE_LOCK:
+            self._write_kv(
+                proposal.kv_data(),
+                self._handle_confirmed_write_response,
+                {"proposal": proposal, "turn": turn},
+            )
+
+    def _handle_confirmed_write_response(
+        self,
+        kv_store_response_message: KvStoreMessage,
+        dialogue: Dialogue,  # pylint: disable=unused-argument
+        proposal: ConfigProposal,
+        turn: ChatTurn,
+    ) -> None:
+        """Put a stored change in force, record it in the feed and acknowledge it.
+
+        :param kv_store_response_message: the KvStoreMessage response
+        :param dialogue: the KvStoreDialogue
+        :param proposal: the confirmed change.
+        :param turn: the message being answered.
+        """
+        try:
+            message, reply = find_exchange(
+                self.context.params.store_path, turn.client_id
+            )
+        except OSError as e:
+            self.context.logger.error(f"Could not read the chat feed: {e}")
+            message, reply = None, None
+        stored = (
+            kv_store_response_message.performative
+            == KvStoreMessage.Performative.SUCCESS
+        )
+        if (
+            message is not None
+            and reply is not None
+            and (not stored or reply.get("text") != CHANGE_NOT_APPLIED)
+        ):
+            # A slow write and its resend's both came back. The first answer
+            # stands unless it said nothing was applied and this write applied it.
+            self._send_ok_response(
+                turn.http_msg,
+                turn.http_dialogue,
+                {"message": message, "reply": reply},
+            )
+            return
+        if not stored:
+            self.context.logger.error("Could not store the confirmed chat change.")
+            self.chat_session.restore_proposal(proposal)
+            self._send_chat_reply(CHANGE_NOT_APPLIED, turn)
+            return
+        if self.chat_session.proposal is proposal:
+            # An earlier failed write of this confirm put it back for deciding.
+            self.chat_session.proposal = None
+        self._put_stored_change_in_force(proposal)
+        self._send_chat_reply(
+            f"Done. I changed {changes_text(proposal.changes)}.",
+            turn,
+            CHANGE_APPLIED_REPLY_NOT_SAVED,
+        )
+
+    def _put_stored_change_in_force(self, proposal: ConfigProposal) -> None:
+        """Make a stored change the one in force and record it in the feed.
+
+        The change is stored, so the reply says it was made even if this
+        fails; the card is only written once the change is in force.
+
+        :param proposal: the confirmed change.
+        """
+        try:
+            if proposal.strategy_changed:
+                self._update_agent_performance_chat(proposal.reasoning)
+                self._apply_strategy_state(proposal.kv_data())
+            if proposal.activity_goal is not None:
+                block = self._publish_activity_goal(proposal.activity_goal)
+                # Without a block on disk, the stored goal is shown from memory.
+                self.context.state.activity_goal_target = (
+                    None if block is not None else proposal.activity_goal
+                )
+                self.context.state.failed_activity_goal_target = None
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.exception(
+                f"Could not put the stored chat change in force: {e}"
+            )
+            return
+        for change in proposal.changes:
+            record_event(
+                self.context.params.store_path,
+                EventType.CONFIG_CHANGED,
+                [
+                    field("Setting", change.setting),
+                    field("Before", change.before),
+                    field("After", change.after),
+                ],
+                self.context.logger,
+            )
 
     @property
     def _agent_performance_filepath(self) -> Path:
@@ -3236,24 +3921,25 @@ class HttpHandler(BaseHttpHandler):
             self._write_kv(data)
 
             self._update_agent_performance_chat(data.get("reasoning"))
+            self._apply_strategy_state(data)
 
-            # Also update the state values
-            if "selected_protocols" in data:
-                self.context.state.selected_protocols = json.loads(
-                    data["selected_protocols"]
-                )
-            if "trading_type" in data:
-                self.context.state.trading_type = data["trading_type"]
-            if "composite_score" in data:
-                # Update the appropriate threshold based on trading type
-                self.context.logger.info(
-                    f"KV composite_score {(data['composite_score'])}"
-                )
-                self.context.state.composite_score = float(data["composite_score"])
-            if "max_loss_percentage" in data:
-                self.context.state.max_loss_percentage = float(
-                    data["max_loss_percentage"]
-                )
+    def _apply_strategy_state(self, data: Dict[str, str]) -> None:
+        """Make the strategy just written to the KV store the one in force.
+
+        :param data: the KV data written.
+        """
+        if "selected_protocols" in data:
+            self.context.state.selected_protocols = json.loads(
+                data["selected_protocols"]
+            )
+        if "trading_type" in data:
+            self.context.state.trading_type = data["trading_type"]
+        if "composite_score" in data:
+            # Update the appropriate threshold based on trading type
+            self.context.logger.info(f"KV composite_score {(data['composite_score'])}")
+            self.context.state.composite_score = float(data["composite_score"])
+        if "max_loss_percentage" in data:
+            self.context.state.max_loss_percentage = float(data["max_loss_percentage"])
 
     def _delayed_write_activity_goal(self, target: int, request_id: str) -> None:
         """Persist a goal set from the chat after a delay, unless superseded.
@@ -3327,18 +4013,26 @@ class HttpHandler(BaseHttpHandler):
             self._drop_failed_goal(target, request_id)
             return
 
+        block = self._publish_activity_goal(target)
+        # Without a block on disk, the pending goal is all the chat can show.
+        if is_latest and block is not None:
+            state.activity_goal_target = None
+
+    def _publish_activity_goal(self, target: int) -> Optional[Dict[str, Any]]:
+        """Show a stored goal to Pearl at once.
+
+        :param target: the goal stored.
+        :return: the block written, or ``None`` when there is none to update.
+        """
         try:
-            block = retarget_activity_goal(
+            return retarget_activity_goal(
                 self._agent_performance_filepath,
                 target,
                 int(datetime.now(timezone.utc).timestamp()),
             )
         except OSError as e:
             self.context.logger.error(f"Failed to publish the activity goal: {e}")
-            block = None
-        # Without a block on disk, the pending goal is all the chat can show.
-        if is_latest and block is not None:
-            state.activity_goal_target = None
+            return None
 
     def _write_kv(
         self,

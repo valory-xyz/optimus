@@ -1,0 +1,220 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2026 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+"""The chat on the agent's main page: the messages being answered and the pending change."""
+
+import json
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
+
+from packages.valory.protocols.http.message import HttpMessage
+from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
+    KV_ACTIVITY_GOAL_TARGET,
+)
+from packages.valory.skills.liquidity_trader_abci.utils.feed import (
+    FeedEntry,
+    KIND_EVENT,
+    ROLE_USER,
+)
+from packages.valory.skills.optimus_abci.dialogues import HttpDialogue
+
+# A message whose answer never came back stops blocking the chat after this.
+ANSWERING_TIMEOUT_SECONDS = 300
+# Keeps a long earlier reply from crowding the prompt.
+RECENT_TEXT_LIMIT = 300
+FEED_TIME_FORMAT = "%Y-%m-%d %H:%M UTC"
+
+
+@dataclass(frozen=True)
+class ChatTurn:
+    """A chat message being answered: Pearl's id for it, its line as written and its request."""
+
+    client_id: str
+    message: FeedEntry
+    http_msg: HttpMessage
+    http_dialogue: HttpDialogue
+
+
+@dataclass(frozen=True)
+class ConfigChange:
+    """One setting a chat change sets, as the user reads it."""
+
+    setting: str
+    before: str
+    after: str
+
+
+@dataclass(frozen=True)
+class ConfigProposal:  # pylint: disable=too-many-instance-attributes
+    """A config change from the chat, kept unapplied until the user confirms it.
+
+    ``strategy_changed`` says whether the protocols, the trading type or the
+    max loss change, which are stored together; ``activity_goal`` is ``None``
+    when the goal does not change.
+    """
+
+    changes: List[ConfigChange]
+    strategy_changed: bool
+    selected_protocols: List[str]
+    trading_type: str
+    max_loss_percentage: float
+    composite_score: float
+    activity_goal: Optional[int]
+    reasoning: str
+
+    def kv_data(self) -> Dict[str, str]:
+        """Return the KV store entries that put this change in force.
+
+        :return: the entries.
+        """
+        data: Dict[str, str] = {}
+        if self.strategy_changed:
+            data.update(
+                {
+                    "selected_protocols": json.dumps(
+                        self.selected_protocols, ensure_ascii=True
+                    ),
+                    "trading_type": self.trading_type,
+                    "composite_score": str(self.composite_score),
+                    "max_loss_percentage": str(self.max_loss_percentage),
+                    "reasoning": self.reasoning,
+                }
+            )
+        if self.activity_goal is not None:
+            data[KV_ACTIVITY_GOAL_TARGET] = str(self.activity_goal)
+        return data
+
+
+class ChatSession:
+    """What the chat keeps in memory only, so a restart drops it."""
+
+    def __init__(self) -> None:
+        """Initialize the session."""
+        # One message is answered at a time, so no answer can overtake another.
+        self._answering: Optional[ChatTurn] = None
+        self._answering_since = 0.0
+        # The change each message being answered decides, kept for its resend.
+        self._deciding: Dict[str, ConfigProposal] = {}
+        self.proposal: Optional[ConfigProposal] = None
+
+    def is_answering(self) -> bool:
+        """Return whether a message is still being answered.
+
+        :return: whether an answer is in flight.
+        """
+        return (
+            self._answering is not None
+            and time.time() - self._answering_since < ANSWERING_TIMEOUT_SECONDS
+        )
+
+    def is_current(self, turn: ChatTurn) -> bool:
+        """Return whether this is the message being answered, not one given up on.
+
+        :param turn: the message.
+        :return: whether its answer is still awaited.
+        """
+        return self._answering is turn
+
+    def start_answering(self, turn: ChatTurn) -> None:
+        """Mark this message as the one being answered.
+
+        :param turn: the message.
+        """
+        self._answering = turn
+        self._answering_since = time.time()
+
+    def finish_answering(self, turn: ChatTurn) -> None:
+        """Mark this message as answered; a newer message being answered stays so.
+
+        :param turn: the message.
+        """
+        if self._answering is turn:
+            self._answering = None
+        self._deciding.pop(turn.client_id, None)
+
+    def take_proposal(self, client_id: str) -> Optional[ConfigProposal]:
+        """Return the change this message decides; it gets one reply.
+
+        The change stays with the message until it is answered, so the resend
+        of a message whose answer never came back decides it again.
+
+        :param client_id: Pearl's id of the message.
+        :return: the change, if any.
+        """
+        proposal = self._deciding.get(client_id)
+        if proposal is None:
+            proposal, self.proposal = self.proposal, None
+        if proposal is not None:
+            self._deciding[client_id] = proposal
+        return proposal
+
+    def restore_proposal(self, proposal: ConfigProposal) -> None:
+        """Put back a change nothing applied, so the resend of its message decides it.
+
+        A change another message proposed since is newer and stays.
+
+        :param proposal: the change.
+        """
+        if self.proposal is None:
+            self.proposal = proposal
+
+    def drop_proposal(self, client_id: str) -> None:
+        """Forget the change this message decided against.
+
+        :param client_id: Pearl's id of the message.
+        """
+        self._deciding.pop(client_id, None)
+
+
+def changes_text(changes: List[ConfigChange]) -> str:
+    """Describe the changes in one sentence fragment.
+
+    :param changes: the changes.
+    :return: the text.
+    """
+    return "; ".join(
+        f"{change.setting} from {change.before} to {change.after}" for change in changes
+    )
+
+
+def describe_feed_entry(entry: FeedEntry) -> str:
+    """Describe one feed entry on one line, for the chat prompt.
+
+    :param entry: the entry.
+    :return: the line.
+    """
+    try:
+        when = datetime.fromtimestamp(int(entry["ts"]), tz=timezone.utc).strftime(
+            FEED_TIME_FORMAT
+        )
+    except (KeyError, TypeError, ValueError, OverflowError, OSError):
+        when = "unknown time"
+    if entry.get("kind") == KIND_EVENT:
+        fields = entry.get("fields")
+        details = "; ".join(
+            f"{item.get('label')}: {item.get('value')}"
+            for item in (fields if isinstance(fields, list) else [])
+            if isinstance(item, dict)
+        )
+        return f"- {when} {entry.get('title')}: {details}"
+    speaker = "User" if entry.get("role") == ROLE_USER else "Agent"
+    text = str(entry.get("text", ""))[:RECENT_TEXT_LIMIT]
+    return f"- {when} {speaker}: {text}"

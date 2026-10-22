@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/agent_top_up.py: bafybeigzbwiekztqodiabpucc2gclomxmpvfafhfsiy7ekzahmlifst3xy
+  behaviours/agent_top_up.py: bafybeidl4nftber2rlwowykzm74vg762i3coqjb5v6u54bukzhjjysr4re
   behaviours/base.py: bafybeifcum7k2mxlusopkb5rceupulz4tkqavd3zt4jivchybwiqie7wqa
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeicjkta6tmi4zjexy6xekst7bhpbqnbh22gx34ugkylioj2isc3k6y
@@ -16,7 +16,7 @@ fingerprint:
   behaviours/evaluate_strategy.py: bafybeihphcu7roqiwfsnsr22rldfjjfi4j7awzjym2x55r6rnnkt2flbsa
   behaviours/fetch_strategies.py: bafybeieqos435cxah3u6joyhgodabac3vdlyqc5ynskkbs3o47f33fllpu
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
-  behaviours/post_tx_settlement.py: bafybeiep36wqzrsnkb7nve77yqiceu66dvuar3dh3hdf4zlakluj27cudu
+  behaviours/post_tx_settlement.py: bafybeib7kneuvctqnyswfdpxbceogwcqzmnlzz4hqija6hp236pvssnccu
   behaviours/round_behaviour.py: bafybeidyq2pvzsqzunra7tfsmtavapg2xvl4irx73y532zgnbq6rnacwka
   behaviours/withdraw_funds.py: bafybeiaekrve5ozaogcu6ufqcnkqgkapdtjrlknif3nswhu5xkl6r5eaxm
   dialogues.py: bafybeic5bdlovivzkv3jnj6khbs7tzukv64ucea7w7y3tn2tgsequb2u2i
@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiekyya45aj6hbtvzfxyr37o7hpq5whphtzfgzfta3vauxc4a7x224
+  models.py: bafybeieqm72vftuk74quzv3awayhfxjcnqhc627ayae5fnv4am7l7vd4sa
   payloads.py: bafybeiaeabfwogbgl4zgad27buiksygixttgzpai236aauctx6wlot7icy
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -48,7 +48,7 @@ fingerprint:
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
-  tests/behaviours/test_agent_top_up.py: bafybeibqsflfjcqdi7xj6ob5luz4nyzk3tg4mdvler3xnzcui7zoyfkbgu
+  tests/behaviours/test_agent_top_up.py: bafybeihdlbw2wp6jpvzoun37xrsns7tavx4ugpkkftwlyglscjfnxcleiu
   tests/behaviours/test_base.py: bafybeic7nbv6djppkyf2wncxszg26twqr4mtm4ag7j6zwaxwyqlo2aeorm
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeiahasmgkystu47ghqbl3zzbegasrdsbjgniiouvm2y3twcxrczq2a
@@ -56,7 +56,7 @@ fingerprint:
   tests/behaviours/test_evaluate_strategy.py: bafybeidp5fpribp6yo3wzslefubosp5udgk3ndxguskaoor6rxi6zv36lq
   tests/behaviours/test_fetch_strategies.py: bafybeigz4cy4ounfly7rbilnvani7iv7m4qe76ryw3by6i4353ob55cf5u
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
-  tests/behaviours/test_post_tx_settlement.py: bafybeiax2p3e7selesyiilw3kqy3lfjubecixhrjkg6i53bic2zzxhwhoe
+  tests/behaviours/test_post_tx_settlement.py: bafybeiguhja36n47nkhewy34blmzssdykxb5msawv5kt3b4zqceazzs37y
   tests/behaviours/test_round_behaviour.py: bafybeibktct2ifenyuxetu3nqhsrxg6rdj2enxxapu6x5m5mecpcwxn4je
   tests/behaviours/test_withdraw_funds.py: bafybeiffeqkzce72lwgfl2dwf56mbqwtu52qafa7sfuaozf3iwodcpnr5u
   tests/io_/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
@@ -80,7 +80,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeidm34a5hzmm3hoyplkwquzsliwfnwp7n3h3ax6pzzxqsmjmqhgqsq
+  tests/test_models.py: bafybeihuh2shbfbaem27rdzfobrpbktncsrvkbugrm5boukgohdpxr5r64
   tests/test_payloads.py: bafybeihcdudmgszyf45ufvo2wimggakqoxpopcaq3ymytp37mvrfdfp5hi
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
   tests/test_rounds.py: bafybeid3hzc43hn6o2f4fahri7vckofe3v3pudfs7d3ruucsxowvb46w4u

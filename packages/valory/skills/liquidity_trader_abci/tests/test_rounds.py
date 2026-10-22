@@ -23,6 +23,8 @@
 
 import json
 
+import pytest
+
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     AgentTopUpRound,
@@ -151,6 +153,12 @@ class TestAgentTopUpTransitions:
         """DONE without a tx goes straight to FetchStrategiesRound."""
         transitions = LiquidityTraderAbciApp.transition_function[AgentTopUpRound]
         assert transitions[Event.DONE] is FetchStrategiesRound
+
+    @pytest.mark.parametrize("event", [Event.NO_MAJORITY, Event.ROUND_TIMEOUT])
+    def test_no_agreement_retries_the_top_up(self, event: Event) -> None:
+        """Without agreement the round runs again."""
+        transitions = LiquidityTraderAbciApp.transition_function[AgentTopUpRound]
+        assert transitions[event] is AgentTopUpRound
 
     def test_a_move_leaves_through_its_own_final_round(self) -> None:
         """SETTLE hands the tx to settlement through FinishedAgentTopUpRound."""

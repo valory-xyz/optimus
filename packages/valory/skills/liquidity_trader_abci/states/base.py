@@ -317,7 +317,7 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_withdraw_funds")
 
     @property
-    def withdrawal_actions(self) -> Optional[List[Dict[str, Any]]]:
+    def withdrawal_actions(self) -> List[Dict[str, Any]]:
         """Get the withdrawal actions."""
         serialized = self.db.get("withdrawal_actions", None)
         # Cross-period setup seeds the key with this property's own empty list.

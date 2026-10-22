@@ -219,9 +219,7 @@ class SharedState(BaseSharedState):
         # memory, here for the same reason as ``staking_regime_is_new``, so a
         # restart always checks.
         self.last_topup_check: Optional[int] = None
-        # Chains whose latest top-up tx settled. /funds-status reports the
-        # top-up rule's deficits only there, so a top-up that keeps failing
-        # still shows the Agent Signer deficit.
+        # Chains whose latest top-up tx settled; see HttpHandler._apply_agent_topup.
         self.topped_up_chains: Set[str] = set()
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:

@@ -22,7 +22,7 @@
 # pylint: skip-file
 
 import json
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Set
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -32,11 +32,7 @@ from packages.valory.skills.funds_manager.behaviours import (
     GET_AGENT_TOPUP_METHOD_NAME,
     GET_FUNDS_STATUS_METHOD_NAME,
 )
-from packages.valory.skills.funds_manager.models import (
-    AgentTopUp,
-    FundRequirements,
-    TopUpAction,
-)
+from packages.valory.skills.funds_manager.models import AgentTopUp, FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.agent_top_up import (
     AGENT_TOPUP_CHECK_INTERVAL_SECONDS,
     AgentTopUpBehaviour,
@@ -53,9 +49,7 @@ SAFE = "0x2222222222222222222222222222222222222222"
 NATIVE = "0x0000000000000000000000000000000000000000"
 SAFE_TX_HASH = "0x" + "ab" * 32
 NOW = 1_700_000_000
-NO_ACTION = AgentTopUp(
-    action=TopUpAction.NONE, move=0, signer_deficit=None, safe_deficit=None
-)
+NO_ACTION = AgentTopUp(move=0, signer_deficit=None, safe_deficit=None)
 
 
 def _funds(balance: Optional[int] = 100, deficit: Optional[int] = 300) -> Any:
@@ -78,10 +72,8 @@ def _funds(balance: Optional[int] = 100, deficit: Optional[int] = 300) -> Any:
 
 
 def _move(amount: int) -> AgentTopUp:
-    """A MOVE decision."""
-    return AgentTopUp(
-        action=TopUpAction.MOVE, move=amount, signer_deficit=0, safe_deficit=None
-    )
+    """A decision to move ``amount`` wei."""
+    return AgentTopUp(move=amount, signer_deficit=0, safe_deficit=None)
 
 
 def _gen(value: Any) -> Any:
@@ -117,6 +109,7 @@ class _Harness:
         withdrawal_actions: Optional[List[Dict]] = None,
         kv: Optional[Dict] = None,
         safe_tx_hash: Optional[str] = SAFE_TX_HASH,
+        topped_up_chains: Optional[Set[str]] = None,
     ) -> None:
         self.obj = object.__new__(AgentTopUpBehaviour)
         self.ctx = MagicMock()
@@ -133,6 +126,7 @@ class _Harness:
         self.state = MagicMock()
         self.state.last_topup_check = last_topup_check
         self.state.x402_eth_deficit = x402_eth_deficit
+        self.state.topped_up_chains = set(topped_up_chains or ())
         self.params = MagicMock()
         self.params.target_investment_chains = ["optimism"]
         self.params.safe_contract_addresses = {"optimism": SAFE}
@@ -265,22 +259,11 @@ class TestNoMove:
         "topup",
         [
             NO_ACTION,
-            AgentTopUp(
-                action=TopUpAction.SIGNER_ALERT,
-                move=0,
-                signer_deficit=300,
-                safe_deficit=None,
-            ),
-            AgentTopUp(
-                action=TopUpAction.SAFE_ALERT,
-                move=0,
-                signer_deficit=0,
-                safe_deficit=700,
-            ),
+            AgentTopUp(move=0, signer_deficit=0, safe_deficit=700),
         ],
     )
     def test_no_move_decision(self, topup: AgentTopUp) -> None:
-        """Alerts and no-action decisions are left to /funds-status."""
+        """A decision to move nothing, an empty Agent Safe included, sends no tx."""
         harness = _Harness(topups={"optimism": topup})
         _assert_no_tx(harness.run())
         harness.contract_interact.assert_not_called()
@@ -320,6 +303,27 @@ class TestMove:
         assert kwargs["operation"] == SafeOperation.CALL.value
         assert kwargs["chain_id"] == "optimism"
         assert harness.state.last_topup_check == NOW
+
+    @pytest.mark.parametrize("safe_tx_hash", [SAFE_TX_HASH, None])
+    def test_a_new_move_is_not_a_settled_top_up(
+        self, safe_tx_hash: Optional[str]
+    ) -> None:
+        """The chain's earlier top-up stops counting once another one is due."""
+        harness = _Harness(
+            topups={"optimism": _move(5)},
+            safe_tx_hash=safe_tx_hash,
+            topped_up_chains={"optimism", "base"},
+        )
+        harness.run()
+        assert harness.state.topped_up_chains == {"base"}
+
+    def test_no_move_keeps_a_settled_top_up(self) -> None:
+        """A check with nothing to move leaves the settled top-up in place."""
+        harness = _Harness(
+            topups={"optimism": NO_ACTION}, topped_up_chains={"optimism"}
+        )
+        _assert_no_tx(harness.run())
+        assert harness.state.topped_up_chains == {"optimism"}
 
     def test_first_move_chain_wins(self) -> None:
         """Only one chain is topped up per check."""

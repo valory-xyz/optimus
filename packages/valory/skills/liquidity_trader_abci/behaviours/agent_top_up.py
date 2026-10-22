@@ -31,7 +31,7 @@ from packages.valory.skills.funds_manager.behaviours import (
     GET_AGENT_TOPUP_METHOD_NAME,
     GET_FUNDS_STATUS_METHOD_NAME,
 )
-from packages.valory.skills.funds_manager.models import FundRequirements, TopUpAction
+from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     SAFE_TX_GAS,
@@ -66,6 +66,7 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             move = yield from self._get_topup_move()
             if move is not None:
                 chain, amount = move
+                self.shared_state.topped_up_chains.discard(chain)
                 safe_address = self.params.safe_contract_addresses.get(chain)
                 tx_hash = yield from self._prepare_topup_tx(chain, amount)
                 if tx_hash is None:
@@ -156,17 +157,12 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
         for chain, topup in topups.items():
-            if topup.action == TopUpAction.MOVE:
+            if topup.move > 0:
                 self.context.logger.info(
                     f"Agent top-up: moving {topup.move} wei from the Agent Safe "
                     f"to the Agent Signer on {chain}."
                 )
                 return chain, topup.move
-            if topup.action != TopUpAction.NONE:
-                self.context.logger.info(
-                    f"Agent top-up on {chain}: {topup.action.value}; left to "
-                    f"/funds-status."
-                )
         self._close_topup_check()
         return None
 

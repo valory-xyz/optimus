@@ -185,15 +185,16 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             # work moves the counter, so the shortfall is a
                             # misconfiguration rather than a quiet day, and the
                             # service is heading for eviction either way.
-                            if not self.coingecko.use_mech_facilitator:
+                            if not self.coingecko.on_mech_path:
                                 self.context.logger.error(
                                     "Staking KPI is short by "
                                     f"{num_of_tx_left_to_meet_kpi} and cannot be "
                                     "met: this staking regime counts mech "
                                     "marketplace requests and the agent makes "
-                                    "none while use_mech_facilitator is off. "
-                                    "Enable it, or stake against an activity "
-                                    "checker that counts Safe nonces."
+                                    "none unless both use_x402 and "
+                                    "use_mech_facilitator are on. Enable them, "
+                                    "or stake against an activity checker that "
+                                    "counts Safe nonces."
                                 )
                             else:
                                 self.context.logger.warning(

@@ -230,10 +230,7 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         return {chain: need}
 
     def _read_executed_withdrawal_count(self) -> Generator[None, None, int]:
-        """Return how many withdrawal transactions have already executed.
-
-        An unreadable count is 0, as /funds-status counts it.
-        """
+        """Return how many withdrawal transactions have already executed."""
         result = yield from self._read_kv(("withdrawal_transaction_hashes",))
         if result is not None:
             try:

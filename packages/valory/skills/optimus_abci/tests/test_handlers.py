@@ -1521,6 +1521,13 @@ class TestHttpHandlerMethods:
         result = handler._read_withdrawal_data()
         assert result == {"withdrawal_id": "test"}
 
+    def test_read_withdrawal_data_requests_the_pause_flag(self) -> None:
+        """The read asks for investing_paused, which withdrawal mode is decided on."""
+        handler, ctx = _make_http_handler()
+        handler._read_kv = MagicMock(return_value={"investing_paused": "true"})
+        assert handler._is_in_withdrawal_mode()
+        assert "investing_paused" in handler._read_kv.call_args[0][0]
+
     def test_read_withdrawal_data_empty(self) -> None:
         """Test _read_withdrawal_data returns None when empty."""
         handler, ctx = _make_http_handler()
@@ -7511,6 +7518,14 @@ class TestFundsStatusAfterAgentTopUp:
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
         assert _served(handler) == {}
         assert rule.call_args.kwargs["agent_need_override"] == {"optimism": 0}
+
+    def test_a_failing_rule_leaves_the_report_as_read(self) -> None:
+        """A rule that raises still serves the deficits as read."""
+        funds = _topup_funds()
+        handler, _, rule = _topup_handler(funds)
+        rule.side_effect = RuntimeError("bad status")
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        assert _served(handler) == funds.get_response_body()
 
     def test_without_the_rule_the_report_is_unchanged(self) -> None:
         """An older funds_manager without the rule leaves the body as read."""

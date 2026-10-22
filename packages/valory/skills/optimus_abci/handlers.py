@@ -2178,9 +2178,15 @@ class HttpHandler(BaseHttpHandler):
                 )
                 response = {}
 
-        response = self._apply_agent_topup(
-            response, funds, x402_eth_deficit, agent_need_override
-        )
+        try:
+            response = self._apply_agent_topup(
+                response, funds, x402_eth_deficit, agent_need_override
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                f"Funds status: reporting the deficits as read, applying the "
+                f"agent top-up failed: {e}"
+            )
         self._send_ok_response(http_msg, http_dialogue, response)
 
     def _apply_agent_topup(
@@ -4455,6 +4461,7 @@ class HttpHandler(BaseHttpHandler):
                 "withdrawal_safe_address",
                 "withdrawal_transaction_hashes",
                 "withdrawal_current_step",
+                "investing_paused",
             )
 
             result = self._read_kv(keys)

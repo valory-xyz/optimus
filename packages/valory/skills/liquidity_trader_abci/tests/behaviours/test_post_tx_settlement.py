@@ -224,6 +224,46 @@ class TestPostTxSettlementBehaviour:
             obj.set_done.assert_called_once()
 
 
+    @pytest.mark.parametrize(
+        "submitter, chain_id, expected",
+        [
+            (AgentTopUpRound.auto_round_id(), "optimism", {"base", "optimism"}),
+            (AgentTopUpRound.auto_round_id(), None, {"base"}),
+            ("some_other_round", "optimism", {"base"}),
+        ],
+    )
+    def test_async_act_records_a_settled_top_up(
+        self, submitter: str, chain_id: Any, expected: Any
+    ) -> None:
+        """Only a settled top-up tx marks its chain as topped up."""
+        obj = _make_behaviour()
+        obj.context.state.topped_up_chains = {"base"}
+
+        synced = MagicMock()
+        synced.tx_submitter = submitter
+        synced.chain_id = chain_id
+
+        def fake_gen(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Fake generator."""
+            yield
+
+        obj.fetch_and_log_gas_details = fake_gen
+        obj._invalidate_caches_after_tx = fake_gen
+        obj.send_a2a_transaction = fake_gen
+        obj.wait_until_round_end = fake_gen
+        obj.set_done = MagicMock()
+
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ):
+            _drive(obj.async_act())
+
+        assert obj.context.state.topped_up_chains == expected
+
+
 class TestFetchAndLogGasDetails:
     """Tests for fetch_and_log_gas_details."""
 

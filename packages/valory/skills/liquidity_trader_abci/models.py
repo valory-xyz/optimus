@@ -26,7 +26,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from time import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import requests
 from aea.skills.base import Model, SkillContext
@@ -219,6 +219,10 @@ class SharedState(BaseSharedState):
         # memory, here for the same reason as ``staking_regime_is_new``, so a
         # restart always checks.
         self.last_topup_check: Optional[int] = None
+        # Chains whose latest top-up tx settled. /funds-status reports the
+        # top-up rule's deficits only there, so a top-up that keeps failing
+        # still shows the Agent Signer deficit.
+        self.topped_up_chains: Set[str] = set()
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""

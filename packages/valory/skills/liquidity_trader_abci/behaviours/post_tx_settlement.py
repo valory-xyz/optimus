@@ -59,6 +59,11 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             # caller from silently writing ``…_None`` keys.
             chain_id = self.synchronized_data.chain_id
             if chain_id:
+                if (
+                    self.synchronized_data.tx_submitter
+                    == AgentTopUpRound.auto_round_id()
+                ):
+                    self.shared_state.topped_up_chains.add(chain_id)
                 yield from self._invalidate_caches_after_tx(chain_id)
             else:
                 self.context.logger.warning(

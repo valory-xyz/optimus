@@ -81,6 +81,11 @@ class TestSharedState:
         state = SharedState(name="state", skill_context=MagicMock())
         assert state.last_topup_check is None
 
+    def test_a_fresh_process_has_no_settled_top_up(self) -> None:
+        """A restart reports the deficits as read until a top-up settles."""
+        state = SharedState(name="state", skill_context=MagicMock())
+        assert state.topped_up_chains == set()
+
     def test_chat_state_defaults(self) -> None:
         """A fresh SharedState has no stored loss limit and no pending chat write."""
         mock_context = MagicMock()

@@ -462,6 +462,22 @@ class TestCoingecko:
         assert cg.mech_pre_deposit_target == 500000
         assert cg.mech_pre_deposit_cap == 500000
 
+    @pytest.mark.parametrize(
+        ("use_x402", "use_mech_facilitator", "expected"),
+        [(True, True, True), (True, False, False), (False, True, False)],
+    )
+    def test_on_mech_path_needs_both_flags(
+        self, use_x402: bool, use_mech_facilitator: bool, expected: bool
+    ) -> None:
+        """The facilitator flag does nothing while x402 is off."""
+        kwargs = {
+            **self._make_kwargs(),
+            "use_x402": use_x402,
+            "use_mech_facilitator": use_mech_facilitator,
+        }
+        cg = Coingecko(name="coingecko", skill_context=MagicMock(), **kwargs)
+        assert cg.on_mech_path is expected
+
     def test_the_marketplace_is_read_per_chain(self) -> None:
         """Every address the top-up sends funds to resolves from this one."""
         cg = Coingecko(

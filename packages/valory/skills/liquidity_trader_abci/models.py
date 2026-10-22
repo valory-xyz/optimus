@@ -421,6 +421,17 @@ class Coingecko(Model, TypeCheckMixin):
         self.rate_limiter._last_request_time = time()
 
     @property
+    def on_mech_path(self) -> bool:
+        """Whether paid calls go through the mech facilitator.
+
+        Both flags must be on: ``use_mech_facilitator`` alone does nothing
+        while ``use_x402`` is off, as calls then use the free API.
+
+        :return: True when paid calls are mech marketplace requests.
+        """
+        return self.use_x402 and self.use_mech_facilitator
+
+    @property
     def paid_proxy_base_url(self) -> str:
         """Base URL paid CoinGecko calls are built on (x402 proxy or facilitator origin)."""
         if self.use_mech_facilitator:
@@ -470,11 +481,10 @@ class Coingecko(Model, TypeCheckMixin):
             else:
                 session = requests.Session()
 
-            on_mech_path = self.use_x402 and self.use_mech_facilitator
             # The mech adapter clamps each POST's read at what is passed here.
             timeout = (
                 self.mech_request_timeout
-                if on_mech_path
+                if self.on_mech_path
                 else self.context.params.request_timeout
             )
             try:
@@ -483,7 +493,7 @@ class Coingecko(Model, TypeCheckMixin):
                 return success, response.json()
             finally:
                 # The mech session lives on across calls; the others are per call.
-                if not on_mech_path:
+                if not self.on_mech_path:
                     session.close()
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")

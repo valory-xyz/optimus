@@ -35,7 +35,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_AD
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.models import Params
+from packages.valory.skills.liquidity_trader_abci.models import Coingecko, Params
 
 _AGENT_EOA = "0xagent"
 _OPTIMISM_CHAIN_ID = 10
@@ -91,6 +91,9 @@ def _make_behaviour():
     """
     obj = object.__new__(CheckStakingKPIMetBehaviour)
     ctx = MagicMock()
+    # Specced so a read of a field ``Coingecko`` does not define fails here
+    # rather than in production; tests that need its flags set them.
+    ctx.coingecko = MagicMock(spec=Coingecko)
     obj.__dict__["_context"] = ctx
     obj._read_investing_paused = _gen_return_false
     obj.gas_cost_tracker = MagicMock()
@@ -99,6 +102,22 @@ def _make_behaviour():
     # staking-path tests, which do not stub its contract and KV reads.
     obj._track_activity_goal = _gen_value(None)
     return obj
+
+
+def _coingecko(*, use_x402: bool, use_mech_facilitator: bool) -> Coingecko:
+    """Build a ``Coingecko`` carrying only the payment-route flags.
+
+    A real instance rather than a mock, so ``on_mech_path`` is computed from
+    the flags and any other attribute read raises ``AttributeError``.
+
+    :param use_x402: whether paid calls go through x402.
+    :param use_mech_facilitator: whether x402 calls use the mech facilitator.
+    :return: the model.
+    """
+    coingecko = object.__new__(Coingecko)
+    coingecko.use_x402 = use_x402
+    coingecko.use_mech_facilitator = use_mech_facilitator
+    return coingecko
 
 
 def _drive(gen):
@@ -201,7 +220,7 @@ class TestCheckStakingKPIMetBehaviour:
     def test_async_act_kpi_undetermined(self) -> None:
         """An undetermined verdict (None, None) skips quietly at INFO, no tx."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         synced_mock = MagicMock()
@@ -219,7 +238,7 @@ class TestCheckStakingKPIMetBehaviour:
     def test_async_act_kpi_already_met(self) -> None:
         """Test async_act when KPI is already met (True)."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         synced_mock = MagicMock()
@@ -237,7 +256,7 @@ class TestCheckStakingKPIMetBehaviour:
     def test_async_act_kpi_not_met_threshold_not_exceeded(self) -> None:
         """Test async_act when KPI is not met and threshold not exceeded."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
@@ -259,10 +278,11 @@ class TestCheckStakingKPIMetBehaviour:
     def test_async_act_kpi_not_met_vanity_tx(self) -> None:
         """Test async_act when KPI not met, threshold exceeded, vanity tx needed."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
+        params_mock.chain_to_chain_id_mapping = {"optimism": _OPTIMISM_CHAIN_ID}
 
         synced_mock = MagicMock()
         synced_mock.period_count = 20
@@ -295,7 +315,7 @@ class TestCheckStakingKPIMetBehaviour:
         reward quietly, but it is not a misconfiguration.
         """
         obj = _make_behaviour()
-        obj.context.coingecko.use_mech_facilitator = True
+        obj.context.coingecko = _coingecko(use_x402=True, use_mech_facilitator=True)
         params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
@@ -327,16 +347,29 @@ class TestCheckStakingKPIMetBehaviour:
         assert "short by 3" in warned, warned
         obj.context.logger.error.assert_not_called()
 
-    def test_new_regime_without_the_facilitator_cannot_meet_the_kpi(self) -> None:
+    @pytest.mark.parametrize(
+        ("use_x402", "use_mech_facilitator"),
+        [(True, False), (False, True), (False, False)],
+    )
+    def test_new_regime_without_the_facilitator_cannot_meet_the_kpi(
+        self, use_x402: bool, use_mech_facilitator: bool
+    ) -> None:
         """This combination can never tick the counter, so it is an error.
 
         On this regime the counter is marketplace requests, and the agent only
-        makes those on the facilitator route. With the route off the shortfall
-        never recovers however well the agent runs, and the service is evicted
-        at the liveness window, so it has to be louder than a quiet day.
+        makes those on the facilitator route, which needs both ``use_x402`` and
+        ``use_mech_facilitator``. With the facilitator flag on but x402 off,
+        calls go to the free API. With the route off the shortfall never
+        recovers however well the agent runs, and the service is evicted at
+        the liveness window, so it has to be louder than a quiet day.
+
+        :param use_x402: whether paid calls go through x402.
+        :param use_mech_facilitator: whether x402 calls use the facilitator.
         """
         obj = _make_behaviour()
-        obj.context.coingecko.use_mech_facilitator = False
+        obj.context.coingecko = _coingecko(
+            use_x402=use_x402, use_mech_facilitator=use_mech_facilitator
+        )
         params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
@@ -364,12 +397,14 @@ class TestCheckStakingKPIMetBehaviour:
         obj.set_done.assert_called_once()
         logged = " ".join(str(call) for call in obj.context.logger.error.call_args_list)
         assert "short by 3" in logged, logged
+        assert "use_x402" in logged, logged
         assert "use_mech_facilitator" in logged, logged
+        obj.context.logger.warning.assert_not_called()
 
     def test_async_act_kpi_not_met_no_tx_needed(self) -> None:
         """Test async_act when tx left is 0."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
@@ -468,7 +503,7 @@ class TestCheckStakingKPIMetWithdrawalGate:
         obj.wait_until_round_end = fake_wait
         obj.set_done = MagicMock()
 
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         with patch.object(
@@ -487,7 +522,7 @@ class TestPrepareVanityTx:
     def test_success(self) -> None:
         """Test _prepare_vanity_tx success path."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
@@ -507,7 +542,7 @@ class TestPrepareVanityTx:
     def test_contract_interact_returns_none(self) -> None:
         """Test _prepare_vanity_tx when contract_interact returns None."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
@@ -527,7 +562,7 @@ class TestPrepareVanityTx:
     def test_contract_interact_exception(self) -> None:
         """Test _prepare_vanity_tx when contract_interact raises."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
@@ -547,7 +582,7 @@ class TestPrepareVanityTx:
     def test_hash_payload_exception(self) -> None:
         """Test _prepare_vanity_tx when hash_payload_to_hex raises."""
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
 
         def fake_contract_interact(**kwargs):
@@ -605,7 +640,7 @@ class TestVanityTxFundingGate:
 
     @staticmethod
     def _params_with_optimism_mapping():
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
@@ -783,7 +818,7 @@ class TestRealTxCostVsBalance:
 
     @staticmethod
     def _params(mapping=None):
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.chain_to_chain_id_mapping = (
             {"optimism": _OPTIMISM_CHAIN_ID} if mapping is None else mapping
         )
@@ -918,7 +953,7 @@ class TestTheNewRegimeSendsNoActivityTx:
 
     @staticmethod
     def _params():
-        params = MagicMock()
+        params = MagicMock(spec=Params)
         params.staking_chain = "optimism"
         params.safe_contract_addresses = {"optimism": "0xsafe"}
         params.staking_threshold_period = 10
@@ -992,7 +1027,7 @@ class _GoalRun:
             return write_ok
 
         self.obj._write_kv = fake_write_kv
-        self.params = MagicMock()
+        self.params = MagicMock(spec=Params)
         self.params.staking_chain = "optimism"
         self.params.activity_goal_target = 10
         self.synced = MagicMock()
@@ -1201,7 +1236,7 @@ class TestActivityGoalInThePayload:
             captured["payload"] = payload
             yield
 
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         with patch.object(
@@ -1228,7 +1263,7 @@ class TestActivityGoalInThePayload:
             captured["payload"] = payload
             yield
 
-        params_mock = MagicMock()
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         with patch.object(

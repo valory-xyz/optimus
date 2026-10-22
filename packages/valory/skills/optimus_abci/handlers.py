@@ -2127,7 +2127,9 @@ class HttpHandler(BaseHttpHandler):
         """Report what is left once the Agent Safe has topped up the Agent Signer.
 
         Applies the funds_manager top-up rule to the same status and inputs
-        AgentTopUpRound uses, and writes its native deficits into the response.
+        AgentTopUpRound uses, and writes its native deficits into the response
+        on the chains whose latest top-up settled. Elsewhere the deficits stay
+        as read, so a top-up that keeps failing is still reported.
 
         :param response: the funds-status response, x402 deficit included.
         :param funds: the status the response was built from.
@@ -2155,6 +2157,8 @@ class HttpHandler(BaseHttpHandler):
             agent_need_override=agent_need_override,
         )
         for chain, topup in topups.items():
+            if chain not in self.shared_state.topped_up_chains:
+                continue
             accounts = (
                 (self.context.agent_address, topup.signer_deficit),
                 (

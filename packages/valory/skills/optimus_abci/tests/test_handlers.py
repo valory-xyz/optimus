@@ -7307,7 +7307,6 @@ TOPUP_SAFE = "0x2222222222222222222222222222222222222222"
 def _topup_funds(
     signer_balance: Optional[int] = 50,
     safe_balance: Optional[int] = 10**18,
-    min_tx_balance: Optional[int] = 10,
 ) -> FundRequirements:
     """Optimism status: Agent Signer threshold 200, topup 400; Agent Safe topup 1000."""
     signer_deficit = None
@@ -7317,7 +7316,6 @@ def _topup_funds(
         "topup": 400,
         "threshold": 200,
         "is_native": True,
-        "min_tx_balance": min_tx_balance,
         "balance": signer_balance,
         "deficit": signer_deficit,
     }
@@ -7353,8 +7351,13 @@ def _topup_rule() -> Any:
     return MagicMock(side_effect=rule.get_agent_topup)
 
 
-def _topup_handler(funds: FundRequirements, x402_eth_deficit: Any = 0) -> Any:
-    """An HttpHandler serving /funds-status from ``funds`` with the real rule."""
+def _topup_handler(
+    funds: FundRequirements, x402_eth_deficit: Any = 0, topped_up: bool = True
+) -> Any:
+    """An HttpHandler serving /funds-status from ``funds`` with the real rule.
+
+    ``topped_up`` is whether a top-up has settled on Optimism.
+    """
     from packages.valory.skills.funds_manager.behaviours import (
         GET_AGENT_TOPUP_METHOD_NAME,
         GET_FUNDS_STATUS_METHOD_NAME,
@@ -7367,6 +7370,7 @@ def _topup_handler(funds: FundRequirements, x402_eth_deficit: Any = 0) -> Any:
     ctx.params.safe_contract_addresses = {"optimism": TOPUP_SAFE}
     ctx.agent_address = TOPUP_AGENT
     ctx.state.x402_eth_deficit = x402_eth_deficit
+    ctx.state.topped_up_chains = {"optimism"} if topped_up else set()
     rule = _topup_rule()
     ctx.shared_state = {
         GET_FUNDS_STATUS_METHOD_NAME: MagicMock(return_value=funds),
@@ -7382,7 +7386,7 @@ def _served(handler: Any) -> Dict:
 
 
 class TestFundsStatusAfterAgentTopUp:
-    """/funds-status reports what is left once the Agent Safe tops up the Agent Signer."""
+    """/funds-status reports what is left once a top-up from the Agent Safe settles."""
 
     def test_normal_mode_safe_covers_the_signer(self) -> None:
         """A move the Agent Safe can cover leaves no Agent Signer deficit."""
@@ -7405,18 +7409,31 @@ class TestFundsStatusAfterAgentTopUp:
         # need 350 - safe 100 + safe topup 1000
         assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "1250"
 
-    def test_normal_mode_signer_cannot_pay_keeps_its_deficit(self) -> None:
-        """Below min_tx_balance the Agent Signer deficit is reported as read."""
-        handler, _, _ = _topup_handler(_topup_funds(signer_balance=5))
+    @pytest.mark.parametrize("topped_up_chains", [set(), {"base"}])
+    def test_normal_mode_before_a_settled_top_up_is_left_as_read(
+        self, topped_up_chains: Any
+    ) -> None:
+        """Until a top-up settles on the chain, its deficits are reported as read."""
+        funds = _topup_funds(safe_balance=100)
+        handler, ctx, _ = _topup_handler(funds)
+        ctx.state.topped_up_chains = topped_up_chains
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        assert _served(handler) == funds.get_response_body()
+
+    def test_normal_mode_before_a_settled_top_up_keeps_the_x402_need(self) -> None:
+        """Without a settled top-up the Agent Signer is asked for the x402 need."""
+        handler, _, _ = _topup_handler(
+            _topup_funds(signer_balance=5), x402_eth_deficit=1005, topped_up=False
+        )
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
         body = _served(handler)
-        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "395"
-        assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "0"
+        # max(deficit 395, x402 1005 - balance 5)
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "1000"
 
     def test_normal_mode_x402_need_is_part_of_the_signer_need(self) -> None:
         """The x402 need beyond the deficit is what the Agent Safe must cover."""
         handler, _, rule = _topup_handler(
-            _topup_funds(signer_balance=5, min_tx_balance=1, safe_balance=100),
+            _topup_funds(signer_balance=5, safe_balance=100),
             x402_eth_deficit=1005,
         )
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
@@ -7433,13 +7450,6 @@ class TestFundsStatusAfterAgentTopUp:
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
         assert _served(handler) == funds.get_response_body()
 
-    def test_normal_mode_without_min_tx_balance_is_unchanged(self) -> None:
-        """No min_tx_balance means no move, so the report is today's."""
-        funds = _topup_funds(min_tx_balance=None)
-        handler, _, _ = _topup_handler(funds)
-        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
-        assert _served(handler) == funds.get_response_body()
-
     def test_withdrawal_mode_reports_what_is_left_of_the_gas(self) -> None:
         """The withdrawal gas is moved from the Agent Safe, so nothing is asked."""
         handler, _, rule = _topup_handler(_topup_funds())
@@ -7452,8 +7462,24 @@ class TestFundsStatusAfterAgentTopUp:
         gas = int(ESTIMATED_GAS_PER_TX * 1.2) - 50
         assert rule.call_args.kwargs["agent_need_override"] == {"optimism": gas}
         assert body == {
-            "optimism": {TOPUP_AGENT: {ZERO_ADDRESS: {"balance": "50", "deficit": "0"}}}
+            "optimism": {
+                TOPUP_AGENT: {ZERO_ADDRESS: {"balance": "50", "deficit": "0"}},
+                TOPUP_SAFE: {ZERO_ADDRESS: {"balance": str(10**18), "deficit": "0"}},
+            }
         }
+
+    def test_withdrawal_mode_before_a_settled_top_up_asks_for_the_gas(self) -> None:
+        """Without a settled top-up the Agent Signer is asked for the gas left."""
+        handler, _, _ = _topup_handler(_topup_funds(), topped_up=False)
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
+        handler._read_withdrawal_data = MagicMock(
+            return_value={"withdrawal_transaction_hashes": "[]"}
+        )
+        body = _served(handler)
+        gas = int(ESTIMATED_GAS_PER_TX * 1.2) - 50
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == str(gas)
+        assert TOPUP_SAFE not in body["optimism"]
 
     def test_withdrawal_mode_safe_short_adds_its_entry(self) -> None:
         """The custom withdrawal body gains an Agent Safe entry when it is short."""
@@ -7514,6 +7540,7 @@ class TestFundsStatusAfterAgentTopUp:
         Only accounts with a native entry in the status are written.
         """
         handler, ctx, _ = _topup_handler(_topup_funds())
+        ctx.state.topped_up_chains = {"optimism", "base"}
         topup = MagicMock(signer_deficit=7, safe_deficit=None)
         off_status = MagicMock(signer_deficit=1, safe_deficit=1)
         ctx.shared_state["get_agent_topup"] = MagicMock(

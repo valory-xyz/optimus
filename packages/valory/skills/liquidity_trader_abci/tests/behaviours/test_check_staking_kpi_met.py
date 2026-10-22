@@ -91,8 +91,8 @@ def _make_behaviour():
     """
     obj = object.__new__(CheckStakingKPIMetBehaviour)
     ctx = MagicMock()
-    # Specced so a read of a field ``Coingecko`` does not define fails here
-    # rather than in production; tests that need its flags set them.
+    # Specced so reading a field missing from ``Coingecko`` fails here rather
+    # than in production; tests that need its flags set them.
     ctx.coingecko = MagicMock(spec=Coingecko)
     obj.__dict__["_context"] = ctx
     obj._read_investing_paused = _gen_return_false

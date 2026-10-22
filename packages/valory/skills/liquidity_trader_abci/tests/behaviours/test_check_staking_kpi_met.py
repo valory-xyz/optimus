@@ -35,6 +35,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_AD
 from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import (
     CheckStakingKPIMetBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.models import Params
 
 _AGENT_EOA = "0xagent"
 _OPTIMISM_CHAIN_ID = 10
@@ -294,12 +295,12 @@ class TestCheckStakingKPIMetBehaviour:
         reward quietly, but it is not a misconfiguration.
         """
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        obj.context.coingecko.use_mech_facilitator = True
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
         params_mock.activity_target = 5
-        params_mock.use_mech_facilitator = True
 
         synced_mock = MagicMock()
         synced_mock.period_count = 20
@@ -335,12 +336,12 @@ class TestCheckStakingKPIMetBehaviour:
         at the liveness window, so it has to be louder than a quiet day.
         """
         obj = _make_behaviour()
-        params_mock = MagicMock()
+        obj.context.coingecko.use_mech_facilitator = False
+        params_mock = MagicMock(spec=Params)
         params_mock.staking_chain = "optimism"
         params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
         params_mock.staking_threshold_period = 10
         params_mock.activity_target = 5
-        params_mock.use_mech_facilitator = False
 
         synced_mock = MagicMock()
         synced_mock.period_count = 20

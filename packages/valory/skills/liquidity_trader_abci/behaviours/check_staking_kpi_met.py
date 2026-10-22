@@ -185,7 +185,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             # work moves the counter, so the shortfall is a
                             # misconfiguration rather than a quiet day, and the
                             # service is heading for eviction either way.
-                            if not self.params.use_mech_facilitator:
+                            if not self.coingecko.use_mech_facilitator:
                                 self.context.logger.error(
                                     "Staking KPI is short by "
                                     f"{num_of_tx_left_to_meet_kpi} and cannot be "

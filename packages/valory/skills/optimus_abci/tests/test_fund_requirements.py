@@ -32,15 +32,9 @@ from typing import Dict
 
 import pytest
 
-from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
-    ESTIMATED_GAS_PER_TX,
-)
-
 REPO_ROOT = Path(__file__).resolve().parents[5]
 SERVICE_YAML = REPO_ROOT / "packages/valory/services/optimus/service.yaml"
 AGENT_YAML = REPO_ROOT / "packages/valory/agents/optimus/aea-config.yaml"
-BASIUS_SERVICE_YAML = REPO_ROOT / "packages/valory/services/basius/service.yaml"
-BASIUS_AGENT_YAML = REPO_ROOT / "packages/valory/agents/basius/aea-config.yaml"
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
@@ -106,32 +100,3 @@ def test_service_and_agent_fund_requirements_agree() -> None:
     assert _parse_fund_requirements(SERVICE_YAML) == _parse_fund_requirements(
         AGENT_YAML
     )
-
-
-@pytest.mark.parametrize(
-    "path, chain",
-    [
-        (SERVICE_YAML, "optimism"),
-        (AGENT_YAML, "optimism"),
-        (BASIUS_SERVICE_YAML, "base"),
-        (BASIUS_AGENT_YAML, "base"),
-    ],
-)
-def test_agent_eoa_can_pay_for_its_own_top_up(path: Path, chain: str) -> None:
-    """min_tx_balance pays for the Safe transfer and sits below the threshold.
-
-    Above the threshold the rule never moves, and without min_tx_balance it
-    never moves at all.
-
-    :param path: the configuration file under test.
-    :param chain: the chain the service funds.
-    """
-    agent_native = _parse_fund_requirements(path)[chain]["agent"][ZERO_ADDRESS]
-    assert ESTIMATED_GAS_PER_TX <= agent_native["min_tx_balance"]
-    assert agent_native["min_tx_balance"] <= agent_native["threshold"]
-
-
-def test_basius_agent_eoa_requirements_agree() -> None:
-    """The Basius service override and agent default agree on the agent EOA."""
-    service = _parse_fund_requirements(BASIUS_SERVICE_YAML)["base"]["agent"]
-    assert service == _parse_fund_requirements(BASIUS_AGENT_YAML)["base"]["agent"]

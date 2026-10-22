@@ -223,7 +223,6 @@ class TestPostTxSettlementBehaviour:
             assert len(gas_called) == 0
             obj.set_done.assert_called_once()
 
-
     @pytest.mark.parametrize(
         "submitter, chain_id, expected",
         [

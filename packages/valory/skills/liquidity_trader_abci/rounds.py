@@ -284,6 +284,9 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             get_name(SynchronizedData.is_activity_target_met),
             get_name(SynchronizedData.activity_target),
             get_name(SynchronizedData.activity_completed),
+            # AgentTopUpRound runs at period start and sizes the withdrawal-mode
+            # top-up from the actions WithdrawFundsRound prepared earlier.
+            get_name(SynchronizedData.withdrawal_actions),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {

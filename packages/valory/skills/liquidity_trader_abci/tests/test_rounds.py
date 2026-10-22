@@ -21,6 +21,9 @@
 
 # pylint: skip-file
 
+import json
+
+from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     AgentTopUpRound,
     CallCheckpointRound,
@@ -36,6 +39,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PostTxSettlementRound,
     WithdrawFundsRound,
 )
+from packages.valory.skills.liquidity_trader_abci.states.base import SynchronizedData
 
 
 def test_import() -> None:
@@ -168,3 +172,15 @@ class TestAgentTopUpTransitions:
             Event.WITHDRAWAL_INITIATED
             not in LiquidityTraderAbciApp.transition_function[AgentTopUpRound]
         )
+
+    def test_withdrawal_actions_reach_the_next_period(self) -> None:
+        """The actions WithdrawFundsRound stored are still there when the top-up runs."""
+        persisted = LiquidityTraderAbciApp.cross_period_persisted_keys
+        db = AbciAppDB(setup_data={}, cross_period_persisted_keys=persisted)
+        db.update(**{key: None for key in db.cross_period_persisted_keys})
+        actions = [{"action": "exit_pool"}, {"action": "withdraw"}]
+        db.update(withdrawal_actions=json.dumps(actions))
+
+        db.create()
+
+        assert SynchronizedData(db=db).withdrawal_actions == actions

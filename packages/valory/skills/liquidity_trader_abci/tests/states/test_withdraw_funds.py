@@ -62,6 +62,9 @@ class TestWithdrawFundsRound:
         assert result is not None
         _, event = result
         assert event == Event.DONE
+        update_kwargs = mock_synced.update.call_args.kwargs
+        assert json.loads(update_kwargs["withdrawal_actions"]) == withdrawal_actions
+        assert json.loads(update_kwargs["actions"]) == withdrawal_actions
 
     def test_end_block_no_majority(self) -> None:
         """Test end_block returns NO_MAJORITY when majority not possible."""

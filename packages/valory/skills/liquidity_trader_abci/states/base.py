@@ -319,11 +319,11 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def withdrawal_actions(self) -> Optional[List[Dict[str, Any]]]:
         """Get the withdrawal actions."""
-        serialized = self.db.get("withdrawal_actions", "[]")
-        if serialized is None:
-            serialized = "[]"
-        withdrawal_actions = json.loads(serialized)
-        return withdrawal_actions
+        serialized = self.db.get("withdrawal_actions", None)
+        # Cross-period setup seeds the key with this property's own empty list.
+        if not serialized:
+            return []
+        return json.loads(serialized)
 
     @property
     def investing_paused(self) -> bool:

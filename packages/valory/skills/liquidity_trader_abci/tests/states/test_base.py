@@ -270,6 +270,12 @@ class TestSynchronizedData:
         data.db._data[0]["withdrawal_actions"] = [None]
         assert data.withdrawal_actions == []
 
+    def test_withdrawal_actions_cross_period_seed(self) -> None:
+        """The empty list AbciApp.setup seeds for a persisted key reads as no actions."""
+        data = _make_synced_data()
+        data.db._data[0]["withdrawal_actions"] = [[]]
+        assert data.withdrawal_actions == []
+
     def test_investing_paused_default(self) -> None:
         """Test investing_paused returns False by default."""
         data = _make_synced_data()

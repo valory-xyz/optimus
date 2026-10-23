@@ -7527,6 +7527,22 @@ class TestFundsStatusAfterAgentTopUp:
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
         assert _served(handler) == funds.get_response_body()
 
+    def test_a_rule_failing_midway_leaves_the_report_as_read(self) -> None:
+        """A failure after one chain is rewritten serves no rewritten deficit."""
+        funds = _topup_funds()
+        handler, ctx, rule = _topup_handler(funds)
+        ctx.state.topped_up_chains = {"optimism", "base"}
+        unreadable = MagicMock(signer_deficit=1)
+        type(unreadable).safe_deficit = PropertyMock(side_effect=RuntimeError("bad"))
+        real_rule = rule.side_effect
+        rule.side_effect = lambda *args, **kwargs: {
+            **real_rule(*args, **kwargs),
+            "base": unreadable,
+        }
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        assert _served(handler) == funds.get_response_body()
+        assert ctx.logger.error.call_args.kwargs == {"exc_info": True}
+
     def test_without_the_rule_the_report_is_unchanged(self) -> None:
         """An older funds_manager without the rule leaves the body as read."""
         from packages.valory.skills.funds_manager.behaviours import (

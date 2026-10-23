@@ -19,6 +19,7 @@
 
 """This module contains the handlers for the skill of OptimusAbciApp."""
 
+import copy
 import json
 import math
 import re
@@ -2185,7 +2186,8 @@ class HttpHandler(BaseHttpHandler):
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(
                 f"Funds status: reporting the deficits as read, applying the "
-                f"agent top-up failed: {e}"
+                f"agent top-up failed: {e}",
+                exc_info=True,
             )
         self._send_ok_response(http_msg, http_dialogue, response)
 
@@ -2207,12 +2209,13 @@ class HttpHandler(BaseHttpHandler):
         :param funds: the status the response was built from.
         :param x402_eth_deficit: the ETH the paid-call swaps need, in wei.
         :param agent_need_override: the withdrawal-mode Agent Signer need.
-        :return: the response with the deficits left after the top-up.
+        :return: a copy of the response with the deficits left after the top-up.
         """
         get_agent_topup = self.context.shared_state.get(GET_AGENT_TOPUP_METHOD_NAME)
         if get_agent_topup is None:
             return response
 
+        response = copy.deepcopy(response)
         x402_eth_deficit = (
             int(x402_eth_deficit)
             if isinstance(x402_eth_deficit, (int, float)) and x402_eth_deficit > 0

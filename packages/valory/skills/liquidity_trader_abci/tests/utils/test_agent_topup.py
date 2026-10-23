@@ -84,11 +84,15 @@ class TestSignerPaysTopupGas:
             (None, None),
         ],
     )
-    def test_floor_is_one_tx_of_gas(
+    def test_pays_from_the_floor(
         self, balance: Optional[int], pays: Optional[bool]
     ) -> None:
-        """The Agent Signer pays once it holds the gas of one tx."""
+        """The Agent Signer pays once it holds the floor."""
         assert signer_pays_topup_gas(_funds(balance=balance), "optimism", AGENT) is pays
+
+    def test_the_gas_of_one_tx_leaves_no_margin(self) -> None:
+        """A signer holding about one execTransaction of gas does not pay."""
+        assert signer_pays_topup_gas(_funds(balance=10**12), "optimism", AGENT) is False
 
     def test_no_native_entry_is_unknown(self) -> None:
         """An Agent Signer without a native entry is not known to pay or not."""

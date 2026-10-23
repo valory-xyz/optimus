@@ -32,8 +32,9 @@ from packages.valory.skills.funds_manager.models import (
 )
 
 ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
-# One Safe ``execTransaction`` on Optimism or Base, in wei.
-TOPUP_GAS_FLOOR = 1000000000000
+# Ten times one Safe ``execTransaction`` on Optimism or Base, so a fee spike
+# does not leave the top-up stuck in settlement.
+TOPUP_GAS_FLOOR = 10000000000000
 WITHDRAWAL_GAS_BUFFER = 1.2
 
 

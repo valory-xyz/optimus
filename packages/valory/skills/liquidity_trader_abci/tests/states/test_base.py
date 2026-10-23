@@ -270,6 +270,12 @@ class TestSynchronizedData:
         data.db._data[0]["withdrawal_actions"] = [None]
         assert data.withdrawal_actions == []
 
+    def test_withdrawal_actions_cross_period_seed(self) -> None:
+        """The empty list AbciApp.setup seeds for a persisted key reads as no actions."""
+        data = _make_synced_data()
+        data.db._data[0]["withdrawal_actions"] = [[]]
+        assert data.withdrawal_actions == []
+
     def test_investing_paused_default(self) -> None:
         """Test investing_paused returns False by default."""
         data = _make_synced_data()
@@ -331,6 +337,12 @@ class TestSynchronizedData:
         """Test participant_to_checkpoint property."""
         data = self._make_collection_data("participant_to_checkpoint")
         result = data.participant_to_checkpoint
+        assert isinstance(result, dict)
+
+    def test_participant_to_agent_topup(self) -> None:
+        """Test participant_to_agent_topup property."""
+        data = self._make_collection_data("participant_to_agent_topup")
+        result = data.participant_to_agent_topup
         assert isinstance(result, dict)
 
     def test_participant_to_staking_kpi(self) -> None:

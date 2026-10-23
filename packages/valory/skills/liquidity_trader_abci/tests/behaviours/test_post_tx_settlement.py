@@ -24,10 +24,13 @@
 from typing import Any, Generator
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
+
 from packages.valory.skills.liquidity_trader_abci.behaviours.post_tx_settlement import (
     PostTxSettlementBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
+    AgentTopUpRound,
     CheckStakingKPIMetRound,
 )
 
@@ -174,15 +177,19 @@ class TestPostTxSettlementBehaviour:
             for payload in writes:
                 assert not any(k.endswith("_None") for k in payload)
 
-    def test_async_act_checkpoint_submitter_skips_gas(self) -> None:
-        """Test async_act when tx_submitter IS the CheckStakingKPIMetRound (skips gas)."""
+    @pytest.mark.parametrize(
+        "submitter",
+        [CheckStakingKPIMetRound.auto_round_id(), AgentTopUpRound.auto_round_id()],
+    )
+    def test_async_act_plain_transfer_submitter_skips_gas(self, submitter: str) -> None:
+        """Vanity and top-up txs are not tracked as real-tx gas costs."""
         obj = _make_behaviour()
         benchmark_mock = MagicMock()
         obj.context.benchmark_tool.measure.return_value = benchmark_mock
         obj.context.agent_address = "0xagent"
 
         synced = MagicMock()
-        synced.tx_submitter = CheckStakingKPIMetRound.auto_round_id()
+        synced.tx_submitter = submitter
 
         with patch.object(
             type(obj),
@@ -215,6 +222,45 @@ class TestPostTxSettlementBehaviour:
 
             assert len(gas_called) == 0
             obj.set_done.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "submitter, chain_id, expected",
+        [
+            (AgentTopUpRound.auto_round_id(), "optimism", {"base", "optimism"}),
+            (AgentTopUpRound.auto_round_id(), None, {"base"}),
+            ("some_other_round", "optimism", {"base"}),
+        ],
+    )
+    def test_async_act_records_a_settled_top_up(
+        self, submitter: str, chain_id: Any, expected: Any
+    ) -> None:
+        """Only a settled top-up tx marks its chain as topped up."""
+        obj = _make_behaviour()
+        obj.context.state.topped_up_chains = {"base"}
+
+        synced = MagicMock()
+        synced.tx_submitter = submitter
+        synced.chain_id = chain_id
+
+        def fake_gen(*args: Any, **kwargs: Any) -> Generator[Any, Any, Any]:
+            """Fake generator."""
+            yield
+
+        obj.fetch_and_log_gas_details = fake_gen
+        obj._invalidate_caches_after_tx = fake_gen
+        obj.send_a2a_transaction = fake_gen
+        obj.wait_until_round_end = fake_gen
+        obj.set_done = MagicMock()
+
+        with patch.object(
+            type(obj),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ):
+            _drive(obj.async_act())
+
+        assert obj.context.state.topped_up_chains == expected
 
 
 class TestFetchAndLogGasDetails:

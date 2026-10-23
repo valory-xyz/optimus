@@ -23,6 +23,7 @@
 
 from packages.valory.skills.abstract_round_abci.base import DegenerateRound
 from packages.valory.skills.liquidity_trader_abci.states.final_rounds import (
+    FinishedAgentTopUpRound,
     FinishedStandbyRound,
 )
 
@@ -35,3 +36,8 @@ def test_import() -> None:
 def test_finished_standby_round_is_degenerate() -> None:
     """The standby exit is a degenerate round the composition can map onward."""
     assert issubclass(FinishedStandbyRound, DegenerateRound)
+
+
+def test_finished_agent_topup_round_is_degenerate() -> None:
+    """The top-up exit is a degenerate round the composition maps to settlement."""
+    assert issubclass(FinishedAgentTopUpRound, DegenerateRound)

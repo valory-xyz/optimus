@@ -27,6 +27,9 @@ from packages.valory.skills.abstract_round_abci.base import (
     AppState,
     get_name,
 )
+from packages.valory.skills.liquidity_trader_abci.states.agent_top_up import (
+    AgentTopUpRound,
+)
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
@@ -48,6 +51,7 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
 )
 from packages.valory.skills.liquidity_trader_abci.states.final_rounds import (
     FailedMultiplexerRound,
+    FinishedAgentTopUpRound,
     FinishedCallCheckpointRound,
     FinishedCheckStakingKPIMetRound,
     FinishedDecisionMakingRound,
@@ -69,89 +73,97 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
 class LiquidityTraderAbciApp(AbciApp[Event]):
     """LiquidityTraderAbciApp
 
-    Initial round: FetchStrategiesRound
+    Initial round: AgentTopUpRound
 
-    Initial states: {CallCheckpointRound, CheckStakingKPIMetRound, DecisionMakingRound, FetchStrategiesRound, GetPositionsRound, PostTxSettlementRound, WithdrawFundsRound}
+    Initial states: {AgentTopUpRound, CallCheckpointRound, CheckStakingKPIMetRound, DecisionMakingRound, FetchStrategiesRound, GetPositionsRound, PostTxSettlementRound, WithdrawFundsRound}
 
     Transition states:
-        0. CallCheckpointRound
-            - done: 1.
-            - next checkpoint not reached yet: 1.
-            - settle: 11.
-            - service not staked: 2.
-            - service evicted: 2.
-            - round timeout: 0.
+        0. AgentTopUpRound
+            - done: 7.
+            - settle: 9.
             - no majority: 0.
-            - none: 0.
-            - withdrawal initiated: 7.
-        1. CheckStakingKPIMetRound
+            - round timeout: 0.
+        1. CallCheckpointRound
             - done: 2.
-            - staking kpi met: 2.
-            - settle: 12.
+            - next checkpoint not reached yet: 2.
+            - settle: 13.
+            - service not staked: 3.
+            - service evicted: 3.
             - round timeout: 1.
             - no majority: 1.
-            - staking kpi not met: 2.
-            - error: 2.
             - none: 1.
-            - withdrawal initiated: 7.
-            - standby: 13.
-        2. GetPositionsRound
+            - withdrawal initiated: 8.
+        2. CheckStakingKPIMetRound
             - done: 3.
-            - no majority: 2.
+            - staking kpi met: 3.
+            - settle: 14.
             - round timeout: 2.
+            - no majority: 2.
+            - staking kpi not met: 3.
+            - error: 3.
             - none: 2.
-            - withdrawal initiated: 7.
-        3. EvaluateStrategyRound
+            - withdrawal initiated: 8.
+            - standby: 15.
+        3. GetPositionsRound
             - done: 4.
             - no majority: 3.
             - round timeout: 3.
-            - wait: 8.
             - none: 3.
-            - withdrawal initiated: 7.
-        4. DecisionMakingRound
-            - done: 10.
-            - error: 10.
+            - withdrawal initiated: 8.
+        4. EvaluateStrategyRound
+            - done: 5.
             - no majority: 4.
             - round timeout: 4.
-            - settle: 9.
-            - update: 4.
-            - withdrawal initiated: 7.
-        5. PostTxSettlementRound
-            - action executed: 4.
-            - checkpoint tx executed: 0.
-            - vanity tx executed: 1.
-            - transfer completed: 6.
-            - withdrawal completed: 6.
-            - round timeout: 5.
-            - unrecognized: 14.
+            - wait: 10.
+            - none: 4.
+            - withdrawal initiated: 8.
+        5. DecisionMakingRound
+            - done: 12.
+            - error: 12.
             - no majority: 5.
-        6. FetchStrategiesRound
-            - done: 0.
-            - wait: 6.
-            - no majority: 6.
+            - round timeout: 5.
+            - settle: 11.
+            - update: 5.
+            - withdrawal initiated: 8.
+        6. PostTxSettlementRound
+            - topup done: 7.
+            - action executed: 5.
+            - checkpoint tx executed: 1.
+            - vanity tx executed: 2.
+            - transfer completed: 7.
+            - withdrawal completed: 7.
             - round timeout: 6.
-            - settle: 9.
-            - withdrawal initiated: 7.
-        7. WithdrawFundsRound
-            - done: 4.
+            - unrecognized: 16.
+            - no majority: 6.
+        7. FetchStrategiesRound
+            - done: 1.
+            - wait: 7.
             - no majority: 7.
             - round timeout: 7.
-        8. FinishedEvaluateStrategyRound
-        9. FinishedTxPreparationRound
-        10. FinishedDecisionMakingRound
-        11. FinishedCallCheckpointRound
-        12. FinishedCheckStakingKPIMetRound
-        13. FinishedStandbyRound
-        14. FailedMultiplexerRound
+            - settle: 11.
+            - withdrawal initiated: 8.
+        8. WithdrawFundsRound
+            - done: 5.
+            - no majority: 8.
+            - round timeout: 8.
+        9. FinishedAgentTopUpRound
+        10. FinishedEvaluateStrategyRound
+        11. FinishedTxPreparationRound
+        12. FinishedDecisionMakingRound
+        13. FinishedCallCheckpointRound
+        14. FinishedCheckStakingKPIMetRound
+        15. FinishedStandbyRound
+        16. FailedMultiplexerRound
 
-    Final states: {FailedMultiplexerRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedStandbyRound, FinishedTxPreparationRound}
+    Final states: {FailedMultiplexerRound, FinishedAgentTopUpRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedStandbyRound, FinishedTxPreparationRound}
 
     Timeouts:
         round timeout: 30.0
     """
 
-    initial_round_cls: AppState = FetchStrategiesRound
+    initial_round_cls: AppState = AgentTopUpRound
     initial_states: Set[AppState] = {
+        AgentTopUpRound,
         FetchStrategiesRound,
         CallCheckpointRound,
         CheckStakingKPIMetRound,
@@ -161,6 +173,12 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         WithdrawFundsRound,
     }
     transition_function: AbciAppTransitionFunction = {
+        AgentTopUpRound: {
+            Event.DONE: FetchStrategiesRound,
+            Event.SETTLE: FinishedAgentTopUpRound,
+            Event.NO_MAJORITY: AgentTopUpRound,
+            Event.ROUND_TIMEOUT: AgentTopUpRound,
+        },
         CallCheckpointRound: {
             Event.DONE: CheckStakingKPIMetRound,
             Event.NEXT_CHECKPOINT_NOT_REACHED_YET: CheckStakingKPIMetRound,
@@ -209,6 +227,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         PostTxSettlementRound: {
+            Event.TOPUP_DONE: FetchStrategiesRound,
             Event.ACTION_EXECUTED: DecisionMakingRound,
             Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
@@ -231,6 +250,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: WithdrawFundsRound,
             Event.ROUND_TIMEOUT: WithdrawFundsRound,
         },
+        FinishedAgentTopUpRound: {},
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
@@ -240,6 +260,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FailedMultiplexerRound: {},
     }
     final_states: Set[AppState] = {
+        FinishedAgentTopUpRound,
         FinishedEvaluateStrategyRound,
         FinishedDecisionMakingRound,
         FinishedTxPreparationRound,
@@ -263,9 +284,13 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             get_name(SynchronizedData.is_activity_target_met),
             get_name(SynchronizedData.activity_target),
             get_name(SynchronizedData.activity_completed),
+            # AgentTopUpRound runs at period start and sizes the withdrawal-mode
+            # top-up from the actions WithdrawFundsRound prepared earlier.
+            get_name(SynchronizedData.withdrawal_actions),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
+        AgentTopUpRound: set(),
         FetchStrategiesRound: set(),
         CallCheckpointRound: set(),
         CheckStakingKPIMetRound: set(),
@@ -275,6 +300,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         WithdrawFundsRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
+        FinishedAgentTopUpRound: {get_name(SynchronizedData.most_voted_tx_hash)},
         FinishedCallCheckpointRound: {get_name(SynchronizedData.most_voted_tx_hash)},
         FinishedCheckStakingKPIMetRound: {
             get_name(SynchronizedData.most_voted_tx_hash)

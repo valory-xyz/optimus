@@ -13,6 +13,7 @@ alphabet_in:
 - STAKING_KPI_MET
 - STAKING_KPI_NOT_MET
 - STANDBY
+- TOPUP_DONE
 - TRANSFER_COMPLETED
 - UNRECOGNIZED
 - UPDATE
@@ -20,9 +21,10 @@ alphabet_in:
 - WAIT
 - WITHDRAWAL_COMPLETED
 - WITHDRAWAL_INITIATED
-default_start_state: FetchStrategiesRound
+default_start_state: AgentTopUpRound
 final_states:
 - FailedMultiplexerRound
+- FinishedAgentTopUpRound
 - FinishedCallCheckpointRound
 - FinishedCheckStakingKPIMetRound
 - FinishedDecisionMakingRound
@@ -31,6 +33,7 @@ final_states:
 - FinishedTxPreparationRound
 label: LiquidityTraderAbciApp
 start_states:
+- AgentTopUpRound
 - CallCheckpointRound
 - CheckStakingKPIMetRound
 - DecisionMakingRound
@@ -39,12 +42,14 @@ start_states:
 - PostTxSettlementRound
 - WithdrawFundsRound
 states:
+- AgentTopUpRound
 - CallCheckpointRound
 - CheckStakingKPIMetRound
 - DecisionMakingRound
 - EvaluateStrategyRound
 - FailedMultiplexerRound
 - FetchStrategiesRound
+- FinishedAgentTopUpRound
 - FinishedCallCheckpointRound
 - FinishedCheckStakingKPIMetRound
 - FinishedDecisionMakingRound
@@ -55,6 +60,10 @@ states:
 - PostTxSettlementRound
 - WithdrawFundsRound
 transition_func:
+    (AgentTopUpRound, DONE): FetchStrategiesRound
+    (AgentTopUpRound, NO_MAJORITY): AgentTopUpRound
+    (AgentTopUpRound, ROUND_TIMEOUT): AgentTopUpRound
+    (AgentTopUpRound, SETTLE): FinishedAgentTopUpRound
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NONE): CallCheckpointRound
@@ -102,6 +111,7 @@ transition_func:
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
+    (PostTxSettlementRound, TOPUP_DONE): FetchStrategiesRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound

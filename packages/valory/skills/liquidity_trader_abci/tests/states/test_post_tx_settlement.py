@@ -25,6 +25,9 @@ from types import SimpleNamespace
 from unittest.mock import PropertyMock
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
+from packages.valory.skills.liquidity_trader_abci.states.agent_top_up import (
+    AgentTopUpRound,
+)
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
@@ -75,6 +78,14 @@ class TestPostTxSettlementRound:
             )
         )
         return round_obj
+
+    def test_end_block_topup_done(self) -> None:
+        """Test end_block returns TOPUP_DONE for AgentTopUpRound."""
+        round_obj = self._make_round_with_submitter(AgentTopUpRound.auto_round_id())
+        result = round_obj.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.TOPUP_DONE
 
     def test_end_block_checkpoint_executed(self) -> None:
         """Test end_block returns CHECKPOINT_TX_EXECUTED for CallCheckpointRound."""

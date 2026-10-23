@@ -8,8 +8,8 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/agent_top_up.py: bafybeie3kqggpkagtriqkrykbn22r7gf6kfoxxtqeta3tksq7hvmxdlugm
-  behaviours/base.py: bafybeifcum7k2mxlusopkb5rceupulz4tkqavd3zt4jivchybwiqie7wqa
+  behaviours/agent_top_up.py: bafybeidkcvnspmay2rd2a6uvllep5eegebaanmtn7hfrxbaf6stfxmaehe
+  behaviours/base.py: bafybeibqm363wr2kv2zpnut45aqyytmwsxmwdqb25hwwmotog43utpdvpq
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeif5otdf6drh67omqypcypwm6nql34lu5wfclszmmm4x4pvpywp2ja
   behaviours/decision_making.py: bafybeiegxnisdjpvk5xiugiu5ud6v5qphussqxebdbwdjnel7srqqvyqni
@@ -48,7 +48,7 @@ fingerprint:
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
-  tests/behaviours/test_agent_top_up.py: bafybeibizybip4ezybmbxwcsdnsmtzqpfqttre4u6b36uyh5qhpwstvcv4
+  tests/behaviours/test_agent_top_up.py: bafybeihfofnl77w5tkh3hloparjp25o7bf7zevmazndprfcrxyfldihgoa
   tests/behaviours/test_base.py: bafybeic7nbv6djppkyf2wncxszg26twqr4mtm4ag7j6zwaxwyqlo2aeorm
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeihac3lv5pe7y4wafnnru64i7mxaenowdhjk4ibpvukeh4rdpfq75u
@@ -58,7 +58,7 @@ fingerprint:
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeiguhja36n47nkhewy34blmzssdykxb5msawv5kt3b4zqceazzs37y
   tests/behaviours/test_round_behaviour.py: bafybeibktct2ifenyuxetu3nqhsrxg6rdj2enxxapu6x5m5mecpcwxn4je
-  tests/behaviours/test_withdraw_funds.py: bafybeiffeqkzce72lwgfl2dwf56mbqwtu52qafa7sfuaozf3iwodcpnr5u
+  tests/behaviours/test_withdraw_funds.py: bafybeig555nx7iz6msd4upxysg5yd2sqrlywn2sfd22vys5l4drzutphny
   tests/io_/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/io_/test_loader.py: bafybeiclt5hynt4u2djnnjs6rzdns5jb7c4nkf7nywtyvniy5oagftyh3a
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
@@ -87,14 +87,14 @@ fingerprint:
   tests/test_rounds_info.py: bafybeicjjnlimixrbzyouasifrkcxycl4aitutlwm7ellq27xq55zog6ge
   tests/utils/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/utils/test_activity_goal.py: bafybeifwgetkgdeetnh6jt55smwjq73azjyb3vnuhflx6inojgm5x67vce
-  tests/utils/test_agent_topup.py: bafybeifqungl3ytvbm4cyzab6d5mhjfomi4jyhjuc6mtdp7wuzpdvllmfi
+  tests/utils/test_agent_topup.py: bafybeicsbbopncukhzlnqzf5zo6aa4vxsmwzebjzb3tltbibceupdj4pjy
   tests/utils/test_balancer_math.py: bafybeig4aixtnrm3oqewfba7m3v7boc6htpetkcdcpf35y35xzjpwh4drq
   tests/utils/test_feed.py: bafybeico2bijghqxglw4lt3cajtfejnzn24le6oddy4rrvx3l5xmlt6rki
   tests/utils/test_protocol_validation.py: bafybeibqqzpz3a63zklyxsusren2vgwnyu4jcb34wka24d2szctfciewuy
   tests/utils/test_tick_math.py: bafybeie6vfua3xi25qhgtwfvuayzbxe3dnwd72jmiyqzcgf2jlxafixj4m
   utils/__init__.py: bafybeiefovpcxnqaggn65tcrvbxguk763wo74y4mj2wevpcdv2hvkuskle
   utils/activity_goal.py: bafybeih6ljtcdoc3uec24jjelzqrmg5s4tdpywwjatkfxngdtncp3xqkha
-  utils/agent_topup.py: bafybeigfk454wdm22joxrl6kqeqv6p7fmp4updnrltpwgdqjwxkso5dnzy
+  utils/agent_topup.py: bafybeihrkssvmrdi4xxi6dapsmdxyzz3m26uicwhrjp3l2rl3vm66rfs4q
   utils/balancer_math.py: bafybeiftkdxicyxcwbkncwhmnoafjaalratvijqdcj2kvqygtto62dbfhi
   utils/feed.py: bafybeignad3ekorjckzv67w3o5hxm6tjufeppomqydgknq7nu7m43yptou
   utils/protocol_validation.py: bafybeihzmkyug6cnsjgarutukq5q3biyhtrz2tyb64jva7zvwmle7kyfhq

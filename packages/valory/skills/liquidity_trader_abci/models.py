@@ -215,11 +215,9 @@ class SharedState(BaseSharedState):
         # The swap's own verdict on the EOA, kept apart from the chat flag.
         self.x402_eoa_sufficient: bool = False
         self.x402_pot_checked: bool = False
-        # When AgentTopUpBehaviour last read the Agent Signer status. Kept in
-        # memory, here for the same reason as ``staking_regime_is_new``, so a
-        # restart always checks.
+        # In memory, so a restart always checks.
         self.last_topup_check: Optional[int] = None
-        # Chains whose latest top-up tx settled; see HttpHandler._apply_agent_topup.
+        # Chains whose latest top-up tx settled.
         self.topped_up_chains: Set[str] = set()
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:

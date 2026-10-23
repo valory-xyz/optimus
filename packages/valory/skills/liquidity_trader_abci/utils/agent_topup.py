@@ -24,7 +24,8 @@ must derive its inputs the same way or the handler reports a shortfall the
 round would never move.
 """
 
-from typing import Dict, List, Optional, Tuple
+import json
+from typing import Any, Dict, List, Optional, Tuple
 
 from packages.valory.skills.funds_manager.models import (
     FundRequirements,
@@ -42,10 +43,6 @@ def paid_call_chain(
     use_mech_facilitator: bool, mech_chain: str, target_investment_chains: List[str]
 ) -> str:
     """Return the chain the agent pays for API calls on.
-
-    On the facilitator route the marketplace debits a pre-deposit held on
-    ``mech_chain``; off it, the agent EOA pays each call on the first trading
-    chain.
 
     :param use_mech_facilitator: whether paid calls go through the facilitator.
     :param mech_chain: the chain the facilitator pre-deposit is held on.
@@ -111,9 +108,6 @@ def signer_pays_topup_gas(
 ) -> Optional[bool]:
     """Return whether the Agent Signer holds the gas for one top-up ``execTransaction``.
 
-    Below it TxSettlement keeps retrying the top-up, and a single agent never
-    leaves that loop.
-
     :param funds: the status returned by ``get_funds_status()``.
     :param chain: the chain name.
     :param agent_address: the agent EOA.
@@ -135,3 +129,55 @@ def withdrawal_gas_deficit(num_actions: int, balance: int) -> int:
     """
     total_gas_needed = int(ESTIMATED_GAS_PER_TX * num_actions * WITHDRAWAL_GAS_BUFFER)
     return max(0, total_gas_needed - balance)
+
+
+def executed_withdrawal_count(
+    withdrawal_data: Optional[Dict[str, Any]],
+) -> Optional[int]:
+    """Return how many withdrawal transactions have executed.
+
+    :param withdrawal_data: the KV store read of ``withdrawal_transaction_hashes``,
+        or ``None`` when the read failed.
+    :return: the count, or ``None`` when it cannot be known.
+    """
+    if withdrawal_data is None:
+        return None
+    try:
+        return len(
+            json.loads(withdrawal_data.get("withdrawal_transaction_hashes") or "[]")
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def withdrawal_agent_need(  # pylint: disable=too-many-arguments
+    funds: FundRequirements,
+    chain: str,
+    agent_address: str,
+    agent_need_extra: Dict[str, int],
+    num_actions: int,
+    executed_count: Optional[int],
+) -> Optional[int]:
+    """Return the gas the Agent Signer lacks for the withdrawal actions left.
+
+    :param funds: the status returned by ``get_funds_status()``.
+    :param chain: the chain the withdrawal runs on.
+    :param agent_address: the agent EOA.
+    :param agent_need_extra: the x402 extra added to the Agent Signer need.
+    :param num_actions: the withdrawal actions prepared.
+    :param executed_count: the withdrawal transactions executed, or ``None``.
+    :return: the need in wei, or ``None`` when the actions are not prepared yet
+        or the executed ones cannot be counted.
+    """
+    if num_actions == 0:
+        return None
+    native = native_requirement(funds, chain, agent_address)
+    if native is None:
+        return 0
+    _, signer = native
+    deficit = (signer.deficit or 0) + agent_need_extra.get(chain, 0)
+    if signer.balance is None or deficit <= 0:
+        return 0
+    if executed_count is None:
+        return None
+    return withdrawal_gas_deficit(max(0, num_actions - executed_count), signer.balance)

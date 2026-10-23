@@ -635,38 +635,20 @@ class TestHttpHandlerMethods:
 
         assert score == THRESHOLDS.get(TradingType.BALANCED.value, 0.3374)
 
-    def test_calculate_withdrawal_funding_deficit_sufficient_balance(self) -> None:
-        """Test _calculate_withdrawal_funding_deficit when balance is sufficient."""
+    def test_withdrawal_deficit_response_without_need_is_empty(self) -> None:
+        """Nothing needed reports nothing."""
         handler, ctx = _make_http_handler()
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        actions = [{"action": "exit"}, {"action": "swap"}]
-        # balance > total_gas_needed
-        result = handler._calculate_withdrawal_funding_deficit(actions, 10**15)
-        assert result == {}
+        ctx.agent_address = TOPUP_AGENT
+        assert handler._withdrawal_deficit_response(_topup_funds(), "optimism", 0) == {}
 
-    def test_calculate_withdrawal_funding_deficit_insufficient_balance(self) -> None:
-        """Test _calculate_withdrawal_funding_deficit when balance is insufficient."""
+    def test_withdrawal_deficit_response_reports_the_need(self) -> None:
+        """The need is reported as the Agent Signer native deficit."""
         handler, ctx = _make_http_handler()
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        actions = [{"action": "exit"}, {"action": "swap"}]
-        result = handler._calculate_withdrawal_funding_deficit(actions, 0)
-        assert result != {}
-        assert "optimism" in result
-        assert "0xagent" in result["optimism"]
-
-    def test_calculate_withdrawal_funding_deficit_exact_balance(self) -> None:
-        """Test _calculate_withdrawal_funding_deficit when balance equals needed."""
-        handler, ctx = _make_http_handler()
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        actions = [{"action": "exit"}]
-        total_gas_needed = int(ESTIMATED_GAS_PER_TX * 1 * 1.2)
-        result = handler._calculate_withdrawal_funding_deficit(
-            actions, total_gas_needed
-        )
-        assert result == {}
+        ctx.agent_address = TOPUP_AGENT
+        result = handler._withdrawal_deficit_response(_topup_funds(), "optimism", 7)
+        assert result == {
+            "optimism": {TOPUP_AGENT: {ZERO_ADDRESS: {"balance": "50", "deficit": "7"}}}
+        }
 
     def test_get_handler_no_match(self) -> None:
         """Test _get_handler when URL doesn't match base pattern."""
@@ -715,57 +697,6 @@ class TestHttpHandlerMethods:
         # Method 'post' doesn't match 'get' routes; falls through to bad_request
         assert result is not None
 
-    def test_has_deficit_true(self) -> None:
-        """Test _has_deficit returns True when deficit > 0."""
-        handler, ctx = _make_http_handler()
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        deficit = {
-            "optimism": {
-                "0xagent": {
-                    "0x0000000000000000000000000000000000000000": {"deficit": 100}
-                }
-            }
-        }
-        assert handler._has_deficit(deficit) is True
-
-    def test_has_deficit_false(self) -> None:
-        """Test _has_deficit returns False when deficit is 0."""
-        handler, ctx = _make_http_handler()
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        deficit = {
-            "optimism": {
-                "0xagent": {
-                    "0x0000000000000000000000000000000000000000": {"deficit": 0}
-                }
-            }
-        }
-        assert handler._has_deficit(deficit) is False
-
-    def test_has_deficit_missing_chain(self) -> None:
-        """Test _has_deficit returns False when chain is missing."""
-        handler, ctx = _make_http_handler()
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        assert handler._has_deficit({}) is False
-
-    def test_has_deficit_invalid_value(self) -> None:
-        """Test _has_deficit returns False when deficit value is invalid."""
-        handler, ctx = _make_http_handler()
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        deficit = {
-            "optimism": {
-                "0xagent": {
-                    "0x0000000000000000000000000000000000000000": {
-                        "deficit": "not_a_number"
-                    }
-                }
-            }
-        }
-        assert handler._has_deficit(deficit) is False
-
     def test_is_in_withdrawal_mode_true(self) -> None:
         """Test _is_in_withdrawal_mode returns True when investing is paused."""
         handler, _ = _make_http_handler()
@@ -799,7 +730,7 @@ class TestHttpHandlerMethods:
         handler, ctx = _make_http_handler()
         actions = [{"action": "exit"}, {"action": "swap"}]
         mock_synced = MagicMock()
-        mock_synced.db.get.return_value = json.dumps(actions)
+        mock_synced.withdrawal_actions = actions
         with patch.object(
             type(handler),
             "synchronized_data",
@@ -809,39 +740,13 @@ class TestHttpHandlerMethods:
             result = handler._get_withdrawal_actions()
         assert result == actions
 
-    def test_get_withdrawal_actions_empty(self) -> None:
-        """Test _get_withdrawal_actions returns empty list when no actions."""
-        handler, ctx = _make_http_handler()
-        mock_synced = MagicMock()
-        mock_synced.db.get.return_value = "[]"
-        with patch.object(
-            type(handler),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=mock_synced,
-        ):
-            result = handler._get_withdrawal_actions()
-        assert result == []
-
     def test_get_withdrawal_actions_exception(self) -> None:
         """Test _get_withdrawal_actions returns empty list on exception."""
         handler, ctx = _make_http_handler()
         mock_synced = MagicMock()
-        mock_synced.db.get.side_effect = Exception("DB error")
-        with patch.object(
-            type(handler),
-            "synchronized_data",
-            new_callable=PropertyMock,
-            return_value=mock_synced,
-        ):
-            result = handler._get_withdrawal_actions()
-        assert result == []
-
-    def test_get_withdrawal_actions_none(self) -> None:
-        """Test _get_withdrawal_actions returns empty list when db returns None."""
-        handler, ctx = _make_http_handler()
-        mock_synced = MagicMock()
-        mock_synced.db.get.return_value = None
+        type(mock_synced).withdrawal_actions = PropertyMock(
+            side_effect=json.JSONDecodeError("bad", "x", 0)
+        )
         with patch.object(
             type(handler),
             "synchronized_data",
@@ -3309,142 +3214,6 @@ class TestHttpHandlerMethods:
             handler._handle_get_funds_status(MagicMock(), MagicMock())
         handler._send_ok_response.assert_called_once()
 
-    def test_handle_get_funds_status_withdrawal_no_deficit(self) -> None:
-        """Test _handle_get_funds_status in withdrawal mode with no deficit."""
-        handler, ctx = _make_http_handler()
-        handler._send_ok_response = MagicMock()
-        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
-        handler._has_deficit = MagicMock(return_value=False)
-        ctx.params.use_x402 = False
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        mock_fund_req = MagicMock()
-        mock_fund_req.get_response_body.return_value = {}
-        with patch.object(
-            type(handler),
-            "funds_status",
-            new_callable=PropertyMock,
-            return_value=mock_fund_req,
-        ):
-            handler._handle_get_funds_status(MagicMock(), MagicMock())
-        call_data = handler._send_ok_response.call_args[0][2]
-        assert call_data == {}
-
-    def test_handle_get_funds_status_withdrawal_with_deficit_no_actions(self) -> None:
-        """Test _handle_get_funds_status in withdrawal mode with deficit but no actions."""
-        handler, ctx = _make_http_handler()
-        handler._send_ok_response = MagicMock()
-        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
-        handler._has_deficit = MagicMock(return_value=True)
-        handler._get_withdrawal_actions = MagicMock(return_value=[])
-        ctx.params.use_x402 = False
-        mock_fund_req = MagicMock()
-        mock_fund_req.get_response_body.return_value = {"optimism": {}}
-        with patch.object(
-            type(handler),
-            "funds_status",
-            new_callable=PropertyMock,
-            return_value=mock_fund_req,
-        ):
-            handler._handle_get_funds_status(MagicMock(), MagicMock())
-        call_data = handler._send_ok_response.call_args[0][2]
-        assert call_data == {}
-
-    def test_handle_get_funds_status_withdrawal_with_actions(self) -> None:
-        """Test _handle_get_funds_status in withdrawal mode with deficit and actions."""
-        handler, ctx = _make_http_handler()
-        handler._send_ok_response = MagicMock()
-        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
-        handler._has_deficit = MagicMock(return_value=True)
-        handler._get_withdrawal_actions = MagicMock(return_value=[{"action": "exit"}])
-        handler._read_withdrawal_data = MagicMock(
-            return_value={"withdrawal_transaction_hashes": "[]"}
-        )
-        handler._calculate_withdrawal_funding_deficit = MagicMock(
-            return_value={"deficit": 100}
-        )
-        ctx.params.use_x402 = False
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-            ZERO_ADDRESS,
-        )
-
-        mock_fund_req = MagicMock()
-        mock_fund_req.get_response_body.return_value = {
-            "optimism": {
-                "0xagent": {ZERO_ADDRESS: {"balance": "1000", "deficit": "500"}}
-            }
-        }
-        with patch.object(
-            type(handler),
-            "funds_status",
-            new_callable=PropertyMock,
-            return_value=mock_fund_req,
-        ):
-            handler._handle_get_funds_status(MagicMock(), MagicMock())
-
-    def test_handle_get_funds_status_withdrawal_all_executed(self) -> None:
-        """Test _handle_get_funds_status when all withdrawal actions executed."""
-        handler, ctx = _make_http_handler()
-        handler._send_ok_response = MagicMock()
-        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
-        handler._has_deficit = MagicMock(return_value=True)
-        handler._get_withdrawal_actions = MagicMock(return_value=[{"action": "exit"}])
-        handler._read_withdrawal_data = MagicMock(
-            return_value={"withdrawal_transaction_hashes": json.dumps(["0xhash1"])}
-        )
-        ctx.params.use_x402 = False
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-            ZERO_ADDRESS,
-        )
-
-        mock_fund_req = MagicMock()
-        mock_fund_req.get_response_body.return_value = {
-            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "1000"}}}
-        }
-        with patch.object(
-            type(handler),
-            "funds_status",
-            new_callable=PropertyMock,
-            return_value=mock_fund_req,
-        ):
-            handler._handle_get_funds_status(MagicMock(), MagicMock())
-        call_data = handler._send_ok_response.call_args[0][2]
-        assert call_data == {}
-
-    def test_handle_get_funds_status_withdrawal_error_reading(self) -> None:
-        """Test _handle_get_funds_status when error reading withdrawal data."""
-        handler, ctx = _make_http_handler()
-        handler._send_ok_response = MagicMock()
-        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
-        handler._has_deficit = MagicMock(return_value=True)
-        handler._get_withdrawal_actions = MagicMock(
-            return_value=[{"action": "exit"}, {"action": "swap"}]
-        )
-        handler._read_withdrawal_data = MagicMock(side_effect=Exception("Read error"))
-        handler._calculate_withdrawal_funding_deficit = MagicMock(return_value={})
-        ctx.params.use_x402 = False
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-            ZERO_ADDRESS,
-        )
-
-        mock_fund_req = MagicMock()
-        mock_fund_req.get_response_body.return_value = {
-            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "1000"}}}
-        }
-        with patch.object(
-            type(handler),
-            "funds_status",
-            new_callable=PropertyMock,
-            return_value=mock_fund_req,
-        ):
-            handler._handle_get_funds_status(MagicMock(), MagicMock())
-
     def test_handle_get_funds_status_x402(self) -> None:
         """Test _handle_get_funds_status with x402."""
         handler, ctx = _make_http_handler()
@@ -3462,36 +3231,6 @@ class TestHttpHandlerMethods:
                 return_value=mock_fund_req,
             ),
             patch("packages.valory.skills.optimus_abci.handlers.ThreadPoolExecutor"),
-        ):
-            handler._handle_get_funds_status(MagicMock(), MagicMock())
-
-    def test_handle_get_funds_status_balance_value_error(self) -> None:
-        """Test _handle_get_funds_status when balance value cannot be parsed."""
-        handler, ctx = _make_http_handler()
-        handler._send_ok_response = MagicMock()
-        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
-        handler._has_deficit = MagicMock(return_value=True)
-        handler._get_withdrawal_actions = MagicMock(return_value=[{"action": "exit"}])
-        handler._read_withdrawal_data = MagicMock(
-            return_value={"withdrawal_transaction_hashes": "[]"}
-        )
-        handler._calculate_withdrawal_funding_deficit = MagicMock(return_value={})
-        ctx.params.use_x402 = False
-        ctx.params.target_investment_chains = ["optimism"]
-        ctx.agent_address = "0xagent"
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-            ZERO_ADDRESS,
-        )
-
-        mock_fund_req = MagicMock()
-        mock_fund_req.get_response_body.return_value = {
-            "optimism": {"0xagent": {ZERO_ADDRESS: {"balance": "not_a_number"}}}
-        }
-        with patch.object(
-            type(handler),
-            "funds_status",
-            new_callable=PropertyMock,
-            return_value=mock_fund_req,
         ):
             handler._handle_get_funds_status(MagicMock(), MagicMock())
 
@@ -7315,7 +7054,7 @@ def _topup_funds(
     signer_balance: Optional[int] = 50,
     safe_balance: Optional[int] = 10**18,
 ) -> FundRequirements:
-    """Optimism status: Agent Signer threshold 200, topup 400; Agent Safe topup 1000."""
+    """An Optimism status with Agent Signer and Agent Safe native entries."""
     signer_deficit = None
     if signer_balance is not None:
         signer_deficit = 400 - signer_balance if signer_balance < 200 else 0
@@ -7394,6 +7133,16 @@ def _served(handler: Any) -> Dict:
 
 class TestFundsStatusAfterAgentTopUp:
     """/funds-status reports what is left once a top-up from the Agent Safe settles."""
+
+    @pytest.fixture(autouse=True)
+    def _gas_floor_below_the_status(self) -> Any:
+        """The status balances are far below the real gas floor."""
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.utils.agent_topup."
+            "TOPUP_GAS_FLOOR",
+            1,
+        ):
+            yield
 
     def test_normal_mode_safe_covers_the_signer(self) -> None:
         """A move the Agent Safe can cover leaves no Agent Signer deficit."""
@@ -7510,14 +7259,88 @@ class TestFundsStatusAfterAgentTopUp:
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
         handler._get_withdrawal_actions = MagicMock(return_value=[])
         assert _served(handler) == {}
+        rule.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "withdrawal_data", [None, {"withdrawal_transaction_hashes": "x"}]
+    )
+    def test_withdrawal_mode_unreadable_executed_count_stays_empty(
+        self, withdrawal_data: Any
+    ) -> None:
+        """An executed count AgentTopUpRound cannot read either asks for nothing."""
+        handler, _, rule = _topup_handler(_topup_funds())
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
+        handler._read_withdrawal_data = MagicMock(return_value=withdrawal_data)
+        assert _served(handler) == {}
+        rule.assert_not_called()
+
+    def test_withdrawal_mode_all_executed_needs_no_gas(self) -> None:
+        """Once every withdrawal action executed, no withdrawal gas is asked."""
+        handler, _, rule = _topup_handler(_topup_funds(), topped_up=False)
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
+        handler._read_withdrawal_data = MagicMock(
+            return_value={"withdrawal_transaction_hashes": json.dumps(["0xdone"])}
+        )
+        assert _served(handler) == {}
         assert rule.call_args.kwargs["agent_need_override"] == {"optimism": 0}
 
     def test_withdrawal_mode_without_signer_deficit_stays_empty(self) -> None:
         """An Agent Signer above its threshold needs nothing in withdrawal mode."""
-        handler, _, rule = _topup_handler(_topup_funds(signer_balance=300))
+        handler, _, rule = _topup_handler(
+            _topup_funds(signer_balance=300), topped_up=False
+        )
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
+        handler._read_withdrawal_data = MagicMock(return_value=None)
         assert _served(handler) == {}
         assert rule.call_args.kwargs["agent_need_override"] == {"optimism": 0}
+
+    def test_withdrawal_mode_x402_need_opens_the_gas(self) -> None:
+        """An x402 need alone sizes the withdrawal gas, as AgentTopUpRound does."""
+        handler, _, rule = _topup_handler(
+            _topup_funds(signer_balance=300), x402_eth_deficit=1000, topped_up=False
+        )
+        handler._is_in_withdrawal_mode = MagicMock(return_value=True)
+        handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
+        handler._read_withdrawal_data = MagicMock(return_value={})
+        body = _served(handler)
+        gas = 1_200_000_000_000 - 300
+        assert rule.call_args.kwargs == {
+            "agent_need_extra": {"optimism": 700},
+            "agent_need_override": {"optimism": gas},
+        }
+        assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == str(gas)
+
+    @pytest.mark.parametrize(
+        "mech_chain, extra", [("Base", {}), ("Optimism", {"optimism": 605})]
+    )
+    def test_facilitator_route_sizes_the_x402_need_on_the_mech_chain(
+        self, mech_chain: str, extra: Dict
+    ) -> None:
+        """On the facilitator route the x402 need is read on ``mech_chain``."""
+        handler, ctx, rule = _topup_handler(
+            _topup_funds(signer_balance=5), x402_eth_deficit=1005
+        )
+        ctx.coingecko.use_mech_facilitator = True
+        ctx.coingecko.mech_chain = mech_chain
+        ctx.params.target_investment_chains = ["base"]
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        _served(handler)
+        assert rule.call_args.kwargs["agent_need_extra"] == extra
+
+    def test_signer_below_the_gas_floor_is_left_as_read(self) -> None:
+        """A signer that cannot pay for its own top-up keeps its deficit."""
+        funds = _topup_funds()
+        handler, _, _ = _topup_handler(funds)
+        handler._is_in_withdrawal_mode = MagicMock(return_value=False)
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.utils.agent_topup."
+            "TOPUP_GAS_FLOOR",
+            51,
+        ):
+            assert _served(handler) == funds.get_response_body()
 
     def test_a_failing_rule_leaves_the_report_as_read(self) -> None:
         """A rule that raises still serves the deficits as read."""
@@ -7532,15 +7355,18 @@ class TestFundsStatusAfterAgentTopUp:
         funds = _topup_funds()
         handler, ctx, rule = _topup_handler(funds)
         ctx.state.topped_up_chains = {"optimism", "base"}
-        unreadable = MagicMock(signer_deficit=1)
-        type(unreadable).safe_deficit = PropertyMock(side_effect=RuntimeError("bad"))
         real_rule = rule.side_effect
         rule.side_effect = lambda *args, **kwargs: {
             **real_rule(*args, **kwargs),
-            "base": unreadable,
+            "base": MagicMock(),
         }
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
-        assert _served(handler) == funds.get_response_body()
+        with patch.object(
+            handlers_module,
+            "signer_pays_topup_gas",
+            side_effect=[True, RuntimeError("bad")],
+        ):
+            assert _served(handler) == funds.get_response_body()
         assert ctx.logger.error.call_args.kwargs == {"exc_info": True}
 
     def test_without_the_rule_the_report_is_unchanged(self) -> None:
@@ -7558,31 +7384,38 @@ class TestFundsStatusAfterAgentTopUp:
     @pytest.mark.parametrize("x402_eth_deficit", [None, "1000", -1])
     def test_unusable_x402_figure_adds_nothing(self, x402_eth_deficit: Any) -> None:
         """A missing or malformed x402 figure is not part of the need."""
-        handler, _, rule = _topup_handler(_topup_funds())
+        funds = _topup_funds()
+        handler, _, rule = _topup_handler(funds, x402_eth_deficit=x402_eth_deficit)
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
-        handler._apply_agent_topup(
-            {}, _topup_funds(), x402_eth_deficit, agent_need_override=None
-        )
+        _served(handler)
         assert rule.call_args.kwargs["agent_need_extra"] == {}
 
     def test_created_entry_keeps_an_unread_balance_as_none(self) -> None:
-        """A deficit written for an account the body lacks carries its balance.
-
-        Only accounts with a native entry in the status are written.
-        """
+        """A deficit written for an account the body lacks carries its balance."""
         handler, ctx, _ = _topup_handler(_topup_funds())
-        ctx.state.topped_up_chains = {"optimism", "base"}
-        topup = MagicMock(signer_deficit=7, safe_deficit=None)
-        off_status = MagicMock(signer_deficit=1, safe_deficit=1)
+        topup = MagicMock(signer_deficit=None, safe_deficit=7)
         ctx.shared_state["get_agent_topup"] = MagicMock(
-            return_value={"optimism": topup, "base": off_status}
+            return_value={"optimism": topup}
         )
         body = handler._apply_agent_topup(
-            {}, _topup_funds(signer_balance=None), 0, agent_need_override=None
+            {}, _topup_funds(safe_balance=None), {}, agent_need_override=None
         )
         assert body == {
-            "optimism": {TOPUP_AGENT: {ZERO_ADDRESS: {"balance": None, "deficit": "7"}}}
+            "optimism": {TOPUP_SAFE: {ZERO_ADDRESS: {"balance": None, "deficit": "7"}}}
         }
+
+    def test_a_chain_without_a_native_entry_is_not_written(self) -> None:
+        """Only accounts with a native entry in the status are written."""
+        handler, ctx, _ = _topup_handler(_topup_funds())
+        ctx.state.topped_up_chains = {"base"}
+        off_status = MagicMock(signer_deficit=1, safe_deficit=1)
+        ctx.shared_state["get_agent_topup"] = MagicMock(
+            return_value={"base": off_status}
+        )
+        body = handler._apply_agent_topup(
+            {}, _topup_funds(), {}, agent_need_override=None
+        )
+        assert body == {}
 
 
 import packages.valory.skills.optimus_abci.chat as chat_mod  # noqa: E402

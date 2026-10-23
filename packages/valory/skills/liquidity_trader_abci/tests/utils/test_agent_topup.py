@@ -28,9 +28,11 @@ import pytest
 from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
     TOPUP_GAS_FLOOR,
+    executed_withdrawal_count,
     native_requirement,
     paid_call_chain,
     signer_pays_topup_gas,
+    withdrawal_agent_need,
     withdrawal_gas_deficit,
     x402_agent_need_extra,
 )
@@ -174,3 +176,64 @@ class TestWithdrawalGasDeficit:
     def test_zero_without_actions(self) -> None:
         """No action left needs no gas."""
         assert withdrawal_gas_deficit(0, 0) == 0
+
+
+class TestExecutedWithdrawalCount:
+    """Tests for executed_withdrawal_count."""
+
+    @pytest.mark.parametrize(
+        "withdrawal_data, count",
+        [
+            ({"withdrawal_transaction_hashes": '["0x1", "0x2"]'}, 2),
+            ({"withdrawal_transaction_hashes": None}, 0),
+            ({}, 0),
+            (None, None),
+            ({"withdrawal_transaction_hashes": "x"}, None),
+            ({"withdrawal_transaction_hashes": "1"}, None),
+        ],
+    )
+    def test_counts_or_none(
+        self, withdrawal_data: Optional[Dict[str, Any]], count: Optional[int]
+    ) -> None:
+        """Nothing stored counts 0; a failed read or an unparsable value is None."""
+        assert executed_withdrawal_count(withdrawal_data) == count
+
+
+class TestWithdrawalAgentNeed:
+    """Tests for withdrawal_agent_need."""
+
+    def test_gas_for_the_actions_left(self) -> None:
+        """The need is the gas for the actions not executed yet, less the balance."""
+        need = withdrawal_agent_need(_funds(), "optimism", AGENT, {}, 3, 1)
+        assert need == 2_400_000_000_000 - 100
+
+    def test_nothing_left_needs_nothing(self) -> None:
+        """Once every action executed nothing is needed."""
+        assert withdrawal_agent_need(_funds(), "optimism", AGENT, {}, 2, 3) == 0
+
+    def test_unprepared_actions_are_unknown(self) -> None:
+        """Before the actions are prepared the need is unknown."""
+        assert withdrawal_agent_need(_funds(), "optimism", AGENT, {}, 0, 0) is None
+
+    def test_uncounted_executed_actions_are_unknown(self) -> None:
+        """With a deficit, an unknown executed count leaves the need unknown."""
+        assert withdrawal_agent_need(_funds(), "optimism", AGENT, {}, 1, None) is None
+
+    @pytest.mark.parametrize(
+        "funds, chain",
+        [
+            (_funds(deficit=0), "optimism"),
+            (_funds(balance=None, deficit=None), "optimism"),
+            (_funds(), "base"),
+        ],
+    )
+    def test_no_deficit_needs_nothing(self, funds: Any, chain: str) -> None:
+        """No deficit, no read balance or no native entry: nothing is needed."""
+        assert withdrawal_agent_need(funds, chain, AGENT, {}, 1, None) == 0
+
+    def test_the_x402_extra_counts_as_a_deficit(self) -> None:
+        """An x402 extra alone opens the withdrawal gas."""
+        need = withdrawal_agent_need(
+            _funds(deficit=0), "optimism", AGENT, {"optimism": 1}, 1, 0
+        )
+        assert need == 1_200_000_000_000 - 100

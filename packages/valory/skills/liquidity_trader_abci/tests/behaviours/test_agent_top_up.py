@@ -465,7 +465,7 @@ class TestRuleInputs:
         )
         _assert_no_tx(harness.run())
         harness.get_agent_topup.assert_not_called()
-        harness.ctx.logger.warning.assert_called_once()
+        assert "deferred" in harness.ctx.logger.info.call_args.args[0]
         assert harness.state.last_topup_check is None
 
     def test_withdrawal_mode_nothing_executed_yet(self) -> None:
@@ -476,10 +476,9 @@ class TestRuleInputs:
         assert kwargs["agent_need_override"] == {"optimism": 1_200_000_000_000 - 100}
         harness.ctx.logger.warning.assert_not_called()
 
-    @pytest.mark.parametrize("actions", [[], None])
-    def test_withdrawal_mode_waits_for_the_actions(self, actions: Any) -> None:
+    def test_withdrawal_mode_waits_for_the_actions(self) -> None:
         """Before the withdrawal actions are prepared nothing is decided."""
-        harness = _Harness(investing_paused=True, withdrawal_actions=actions)
+        harness = _Harness(investing_paused=True, withdrawal_actions=[])
         _assert_no_tx(harness.run())
         harness.get_agent_topup.assert_not_called()
         assert harness.state.last_topup_check is None
@@ -493,14 +492,13 @@ class TestRuleInputs:
         ],
     )
     def test_withdrawal_mode_nothing_due(self, funds: Any, actions: Any) -> None:
-        """No action left, no Agent Signer deficit or no status: nothing is due."""
+        """No Agent Signer deficit or no status: nothing is due, whatever was executed."""
         harness = _Harness(
             funds=funds, investing_paused=True, withdrawal_actions=actions
         )
         harness.run()
         kwargs = harness.get_agent_topup.call_args.kwargs
         assert kwargs["agent_need_override"] == {"optimism": 0}
-        harness.obj._read_kv.assert_not_called()
 
     def test_withdrawal_mode_counts_the_x402_need_as_a_deficit(self) -> None:
         """An x402 need alone opens the withdrawal gas, as /funds-status does."""

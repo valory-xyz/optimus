@@ -111,9 +111,11 @@ from packages.valory.skills.liquidity_trader_abci.utils.activity_goal import (
     retarget_activity_goal,
 )
 from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
+    executed_withdrawal_count,
     native_requirement,
     paid_call_chain,
-    withdrawal_gas_deficit,
+    signer_pays_topup_gas,
+    withdrawal_agent_need,
     x402_agent_need_extra,
 )
 from packages.valory.skills.liquidity_trader_abci.utils.feed import (
@@ -1750,12 +1752,6 @@ class HttpHandler(BaseHttpHandler):
         """Return the chain the agent pays for API calls on.
 
         :return: the chain name.
-
-        On the facilitator route the marketplace debits a pre-deposit held on
-        ``mech_chain``, so that is the chain whose token balance has to be kept
-        up. Off it, the EOA pays each call directly and the first trading chain
-        holds that balance. Both the swap and the deposit read this, so the two
-        cannot be pointed at different chains by configuration.
         """
         return paid_call_chain(
             self.coingecko.use_mech_facilitator,
@@ -2064,13 +2060,21 @@ class HttpHandler(BaseHttpHandler):
 
         # Inject x402 ETH deficit into the response if a prior swap failed
         x402_eth_deficit = getattr(self.shared_state, "x402_eth_deficit", None)
-        if isinstance(x402_eth_deficit, (int, float)) and x402_eth_deficit > 0:
+        x402_eth_deficit = (
+            int(x402_eth_deficit)
+            if isinstance(x402_eth_deficit, (int, float)) and x402_eth_deficit > 0
+            else 0
+        )
+        if x402_eth_deficit > 0:
             standard_deficit = self._inject_x402_eth_deficit(
-                standard_deficit or {}, x402_eth_deficit  # type: ignore[arg-type]
+                standard_deficit or {}, x402_eth_deficit
             )
             self.context.logger.info(
                 f"Injected x402 ETH deficit of {x402_eth_deficit} into funds-status response"
             )
+        agent_need_extra = x402_agent_need_extra(
+            funds, self._paid_call_chain(), self.context.agent_address, x402_eth_deficit
+        )
 
         # Check if in withdrawal mode
         in_withdrawal = self._is_in_withdrawal_mode()
@@ -2083,105 +2087,27 @@ class HttpHandler(BaseHttpHandler):
             )
             response = standard_deficit
         else:
-            # Withdrawal mode: check if there's any deficit
             self.context.logger.info("Funds status: Withdrawal mode detected")
-            withdrawal_chain = self.context.params.target_investment_chains[0]
-            agent_need_override = {withdrawal_chain: 0}
-            has_deficit = self._has_deficit(standard_deficit)
-            self.context.logger.info(f"Funds status: Has deficit = {has_deficit}")
-
-            if has_deficit:
-                # There is a deficit - check if actions are prepared
-                withdrawal_actions = self._get_withdrawal_actions()
-                self.context.logger.info(
-                    f"Funds status: Found {len(withdrawal_actions)} withdrawal actions"
-                )
-
-                if not withdrawal_actions or len(withdrawal_actions) == 0:
-                    # No actions prepared yet, don't request funding
-                    self.context.logger.info(
-                        "Funds status: No withdrawal actions prepared - returning empty response"
-                    )
-                    response = {}
-                else:
-                    # Actions exist - calculate minimal deficit needed
-                    # Read current balance for zero-address from funds manager response
-                    try:
-                        chain = self.context.params.target_investment_chains[0]
-                        funds_status = funds.get_response_body() or {}
-                        agent_map = funds_status.get(chain, {}).get(
-                            self.context.agent_address, {}
-                        )
-                        zero_addr_entry = agent_map.get(ZERO_ADDRESS, {})
-                        balance_value = zero_addr_entry.get("balance", 0)
-                        self.context.logger.info(
-                            f"Funds status: Current balance value = {balance_value}"
-                        )
-
-                        try:
-                            current_balance = (
-                                int(balance_value) if balance_value is not None else 0
-                            )
-                        except (ValueError, TypeError):
-                            current_balance = 0
-
-                        self.context.logger.info(
-                            f"Funds status: Parsed current balance = {current_balance}"
-                        )
-
-                        # Determine remaining actions based on executed tx hashes
-                        withdrawal_data = self._read_withdrawal_data() or {}
-                        tx_hashes_serialized = withdrawal_data.get(
-                            "withdrawal_transaction_hashes", "[]"
-                        )
-                        executed_hashes = (
-                            json.loads(tx_hashes_serialized)
-                            if tx_hashes_serialized
-                            else []
-                        )
-                        executed_count = len(executed_hashes)
-                        self.context.logger.info(
-                            f"Funds status: Executed transactions count = {executed_count}"
-                        )
-                    except Exception as e:
-                        self.context.logger.error(
-                            f"Funds status: Error reading withdrawal data: {e}"
-                        )
-                        executed_count = 0
-
-                    remaining_actions = (
-                        withdrawal_actions[executed_count:]
-                        if executed_count > 0
-                        else withdrawal_actions
-                    )
-
-                    if not remaining_actions:
-                        # All actions executed; nothing to fund
-                        self.context.logger.info(
-                            "Funds status: All actions executed - returning empty response"
-                        )
-                        response = {}
-                    else:
-                        agent_need_override[withdrawal_chain] = withdrawal_gas_deficit(
-                            len(remaining_actions), current_balance
-                        )
-                        response = self._calculate_withdrawal_funding_deficit(
-                            remaining_actions,
-                            current_balance,
-                        )
-                        self.context.logger.info(
-                            f"Funds status: Calculated deficit response = {response}"
-                        )
-            else:
-                # Withdrawal mode but no deficit - return empty response
-                self.context.logger.info(
-                    "Funds status: Withdrawal mode but no deficit - returning empty response"
-                )
-                response = {}
+            chain = self.context.params.target_investment_chains[0]
+            need = withdrawal_agent_need(
+                funds,
+                chain,
+                self.context.agent_address,
+                agent_need_extra,
+                len(self._get_withdrawal_actions()),
+                executed_withdrawal_count(self._read_withdrawal_data()),
+            )
+            self.context.logger.info(f"Funds status: Withdrawal gas need = {need}")
+            if need is None:
+                # AgentTopUpRound defers here too, so nothing moves to report.
+                self._send_ok_response(http_msg, http_dialogue, {})
+                return
+            response = self._withdrawal_deficit_response(funds, chain, need)
+            agent_need_override = {chain: need}
 
         try:
             response = self._apply_agent_topup(
-                response, funds, x402_eth_deficit, agent_need_override
+                response, funds, agent_need_extra, agent_need_override
             )
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(
@@ -2195,19 +2121,14 @@ class HttpHandler(BaseHttpHandler):
         self,
         response: Dict,
         funds: FundRequirements,
-        x402_eth_deficit: Any,
+        agent_need_extra: Dict[str, int],
         agent_need_override: Optional[Dict[str, int]],
     ) -> Dict:
         """Report what is left once the Agent Safe has topped up the Agent Signer.
 
-        Applies the funds_manager top-up rule to the same status and inputs
-        AgentTopUpRound uses, and writes its native deficits into the response
-        on the chains whose latest top-up settled. Elsewhere the deficits stay
-        as read, so a top-up that keeps failing is still reported.
-
         :param response: the funds-status response, x402 deficit included.
         :param funds: the status the response was built from.
-        :param x402_eth_deficit: the ETH the paid-call swaps need, in wei.
+        :param agent_need_extra: the x402 extra added to the Agent Signer need.
         :param agent_need_override: the withdrawal-mode Agent Signer need.
         :return: a copy of the response with the deficits left after the top-up.
         """
@@ -2216,23 +2137,15 @@ class HttpHandler(BaseHttpHandler):
             return response
 
         response = copy.deepcopy(response)
-        x402_eth_deficit = (
-            int(x402_eth_deficit)
-            if isinstance(x402_eth_deficit, (int, float)) and x402_eth_deficit > 0
-            else 0
-        )
         topups = get_agent_topup(
             funds,
-            agent_need_extra=x402_agent_need_extra(
-                funds,
-                self._paid_call_chain(),
-                self.context.agent_address,
-                x402_eth_deficit,
-            ),
+            agent_need_extra=agent_need_extra,
             agent_need_override=agent_need_override,
         )
         for chain, topup in topups.items():
-            if chain not in self.shared_state.topped_up_chains:
+            if chain not in self.shared_state.topped_up_chains or not (
+                signer_pays_topup_gas(funds, chain, self.context.agent_address)
+            ):
                 continue
             accounts = (
                 (self.context.agent_address, topup.signer_deficit),
@@ -2265,73 +2178,36 @@ class HttpHandler(BaseHttpHandler):
             and withdrawal_data.get("investing_paused", "").lower() == "true"
         )
 
-    def _has_deficit(self, deficit: Dict) -> bool:
-        """Check if there's any funding deficit."""
-        chain = self.context.params.target_investment_chains[0]
-        chain_data = deficit.get(chain, {})
-        agent_deficit = chain_data.get(self.context.agent_address, {})
-        zero_addr_deficit = agent_deficit.get(ZERO_ADDRESS, {})
-        deficit_value = zero_addr_deficit.get("deficit", 0)
-        try:
-            return float(deficit_value) > 0
-        except (ValueError, TypeError):
-            return False
-
     def _get_withdrawal_actions(self) -> List[Dict]:
         """Get prepared withdrawal actions from synchronized data."""
         try:
-            synced = self.synchronized_data
-        except (AttributeError, ValueError) as e:
-            self.context.logger.error(f"Cannot access synchronized_data: {e}")
-            return []
-        try:
-            actions_str = synced.db.get("withdrawal_actions", "[]")
-            actions = json.loads(actions_str) if actions_str else []
-            return actions
-        except Exception as e:
+            return self.synchronized_data.withdrawal_actions
+        except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(f"Error reading withdrawal actions: {e}")
             return []
 
-    def _calculate_withdrawal_funding_deficit(
-        self, withdrawal_actions: List[Dict], current_balance: int
+    def _withdrawal_deficit_response(
+        self, funds: FundRequirements, chain: str, need: int
     ) -> Dict:
         """
-        Calculate funding deficit for remaining withdrawal actions.
+        Report the withdrawal gas the Agent Signer lacks, in the funds_manager response format.
 
-        Estimates gas needed based on action count, checks agent balance,
-        and returns deficit if agent doesn't have enough.
-
-        Returns response in the same format as funds_manager.get_response_body():
-        flattened structure with stringified deficit values.
+        :param funds: the status returned by ``get_funds_status()``.
+        :param chain: the chain the withdrawal runs on.
+        :param need: the gas the Agent Signer lacks, in wei.
+        :return: the response, empty when nothing is needed.
         """
-        num_actions = len(withdrawal_actions)
-        chain = self.context.params.target_investment_chains[0]
-
-        deficit = withdrawal_gas_deficit(num_actions, current_balance)
-
-        if deficit <= 0:
-            self.context.logger.info(
-                f"Agent has sufficient balance ({current_balance} wei) for "
-                f"{num_actions} withdrawal actions"
-            )
+        if need <= 0:
             return {}
-
-        self.context.logger.info(
-            f"Withdrawal funding needed: {deficit} wei for {num_actions} actions "
-            f"(current: {current_balance})"
-        )
-
-        # Get agent address
         agent_address = self.context.agent_address
-        native_token = ZERO_ADDRESS
-
-        # Return in funds_manager response format: flattened with stringified values
+        native = native_requirement(funds, chain, agent_address)
+        balance = native[1].balance if native is not None else None
         return {
             chain: {
                 agent_address: {
-                    native_token: {
-                        "balance": str(current_balance),
-                        "deficit": str(deficit),
+                    ZERO_ADDRESS: {
+                        "balance": str(balance),
+                        "deficit": str(need),
                     }
                 }
             }

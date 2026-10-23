@@ -32,6 +32,8 @@ from packages.valory.skills.funds_manager.models import (
 )
 
 ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
+# One Safe ``execTransaction`` on Optimism or Base, in wei.
+TOPUP_GAS_FLOOR = 1000000000000
 WITHDRAWAL_GAS_BUFFER = 1.2
 
 
@@ -105,7 +107,7 @@ def x402_agent_need_extra(
 
 def signer_pays_topup_gas(
     funds: FundRequirements, chain: str, agent_address: str
-) -> bool:
+) -> Optional[bool]:
     """Return whether the Agent Signer holds the gas for one top-up ``execTransaction``.
 
     Below it TxSettlement keeps retrying the top-up, and a single agent never
@@ -114,13 +116,13 @@ def signer_pays_topup_gas(
     :param funds: the status returned by ``get_funds_status()``.
     :param chain: the chain name.
     :param agent_address: the agent EOA.
-    :return: whether the Agent Signer native balance reaches the floor.
+    :return: whether the Agent Signer native balance reaches the floor, or
+        ``None`` when that balance is unknown.
     """
     native = native_requirement(funds, chain, agent_address)
-    if native is None:
-        return False
-    _, token = native
-    return token.balance is not None and token.balance >= ESTIMATED_GAS_PER_TX
+    if native is None or native[1].balance is None:
+        return None
+    return native[1].balance >= TOPUP_GAS_FLOOR
 
 
 def withdrawal_gas_deficit(num_actions: int, balance: int) -> int:

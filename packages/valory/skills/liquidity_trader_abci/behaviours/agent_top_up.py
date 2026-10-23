@@ -20,7 +20,7 @@
 """This module contains the behaviour that tops up the Agent Signer from the Agent Safe."""
 
 import json
-from typing import Dict, Generator, Optional, Tuple
+from typing import Dict, Generator, NamedTuple, Optional
 
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -55,6 +55,13 @@ AGENT_TOPUP_CHECK_INTERVAL_SECONDS = 3600
 TOPUP_TX_DATA = b""
 
 
+class TopUpMove(NamedTuple):
+    """A native transfer from the Agent Safe to the Agent Signer."""
+
+    chain: str
+    wei: int
+
+
 class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that moves native token from the Agent Safe to the Agent Signer."""
 
@@ -66,12 +73,11 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             tx_hash, safe_address, chain = None, None, None
             move = yield from self._get_topup_move()
             if move is not None:
-                chain, amount = move
-                safe_address = self.params.safe_contract_addresses.get(chain)
-                tx_hash = yield from self._prepare_topup_tx(chain, amount)
-                if tx_hash is None:
-                    safe_address, chain = None, None
-                else:
+                tx_hash = yield from self._prepare_topup_tx(move.chain, move.wei)
+                if tx_hash is not None:
+                    chain = move.chain
+                    safe_address = self.params.safe_contract_addresses.get(chain)
+                    self.shared_state.topped_up_chains.discard(chain)
                     self._close_topup_check()
 
             payload = AgentTopUpPayload(
@@ -90,8 +96,11 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
     def _is_topup_check_due(self) -> bool:
         """Open the gate at start, then at most once per check interval."""
         last_check = self.shared_state.last_topup_check
+        # A retry of this round re-checks: the visit that closed the gate sent
+        # a payload that never reached consensus.
         return (
-            last_check is None
+            self.round_sequence.last_round_id == self.matching_round.auto_round_id()
+            or last_check is None
             or self._get_current_timestamp() - last_check
             >= AGENT_TOPUP_CHECK_INTERVAL_SECONDS
         )
@@ -104,8 +113,8 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         """
         self.shared_state.last_topup_check = self._get_current_timestamp()
 
-    def _get_topup_move(self) -> Generator[None, None, Optional[Tuple[str, int]]]:
-        """Return the chain and the wei to move, or None when nothing moves."""
+    def _get_topup_move(self) -> Generator[None, None, Optional[TopUpMove]]:
+        """Return the move to make, or None when nothing moves."""
         if not self._is_topup_check_due():
             return None
 
@@ -138,7 +147,13 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             int(self.shared_state.x402_eth_deficit or 0),
         )
         agent_need_override = None
-        investing_paused = yield from self._read_investing_paused()
+        investing_paused = yield from self._read_investing_paused_or_none()
+        if investing_paused is None:
+            self.context.logger.warning(
+                "Agent top-up deferred: whether investing is paused could not "
+                "be read."
+            )
+            return None
         if investing_paused:
             withdrawal_actions = self.synchronized_data.withdrawal_actions
             if not withdrawal_actions:
@@ -150,6 +165,8 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             agent_need_override = yield from self._get_withdrawal_need(
                 funds, agent_need_extra, len(withdrawal_actions)
             )
+            if agent_need_override is None:
+                return None
 
         try:
             topups = get_agent_topup(
@@ -163,21 +180,31 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
                 f"{type(exc).__name__}({exc})."
             )
             return None
+        undecided = False
         for chain, topup in topups.items():
             if topup.move <= 0:
+                self.shared_state.topped_up_chains.discard(chain)
                 continue
-            self.shared_state.topped_up_chains.discard(chain)
-            if not signer_pays_topup_gas(funds, chain, self.context.agent_address):
-                self.context.logger.warning(
-                    f"Agent top-up skipped: the Agent Signer cannot pay the gas "
-                    f"of the top-up on {chain}."
+            pays_gas = signer_pays_topup_gas(funds, chain, self.context.agent_address)
+            if not pays_gas:
+                reason = (
+                    "cannot pay the gas"
+                    if pays_gas is False
+                    else "native balance could not be read"
                 )
-                return None
+                self.context.logger.warning(
+                    f"Agent top-up skipped on {chain}: the Agent Signer {reason}."
+                )
+                self.shared_state.topped_up_chains.discard(chain)
+                undecided = True
+                continue
             self.context.logger.info(
                 f"Agent top-up: moving {topup.move} wei from the Agent Safe "
                 f"to the Agent Signer on {chain}."
             )
-            return chain, topup.move
+            return TopUpMove(chain, topup.move)
+        if undecided:
+            return None
         if not self._native_balances_read(funds):
             self.context.logger.warning(
                 "Agent top-up skipped: a native balance could not be read."
@@ -204,17 +231,18 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         funds: FundRequirements,
         agent_need_extra: Dict[str, int],
         num_actions: int,
-    ) -> Generator[None, None, Dict[str, int]]:
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
         """Return the Agent Signer need in withdrawal mode, as /funds-status reports it.
 
         Nothing is due while the Agent Signer reports no deficit; otherwise it
-        is the gas the withdrawal actions not executed yet need.
+        is the gas the withdrawal actions not executed yet need. None when the
+        executed actions cannot be counted.
 
         :param funds: the status returned by ``get_funds_status()``.
         :param agent_need_extra: the x402 extra added to the Agent Signer need.
         :param num_actions: the withdrawal actions prepared.
         :yield: the KV store request.
-        :return: ``{trading chain: need}``.
+        :return: ``{trading chain: need}``, or None.
         """
         chain = self.params.target_investment_chains[0]
         need = 0
@@ -224,26 +252,31 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             deficit = (signer.deficit or 0) + agent_need_extra.get(chain, 0)
             if signer.balance is not None and deficit > 0:
                 executed = yield from self._read_executed_withdrawal_count()
+                if executed is None:
+                    return None
                 need = withdrawal_gas_deficit(
                     max(0, num_actions - executed), signer.balance
                 )
         return {chain: need}
 
-    def _read_executed_withdrawal_count(self) -> Generator[None, None, int]:
-        """Return how many withdrawal transactions have already executed."""
+    def _read_executed_withdrawal_count(self) -> Generator[None, None, Optional[int]]:
+        """Return how many withdrawal transactions have already executed, or None."""
         result = yield from self._read_kv(("withdrawal_transaction_hashes",))
-        if result is not None:
-            try:
-                return len(
-                    json.loads(result.get("withdrawal_transaction_hashes") or "[]")
-                )
-            except (TypeError, ValueError):
-                pass
-        self.context.logger.warning(
-            "Agent top-up: the executed withdrawal transactions could not be "
-            "read; counting every withdrawal action as left."
-        )
-        return 0
+        if result is None:
+            self.context.logger.warning(
+                "Agent top-up deferred: the executed withdrawal transactions "
+                "could not be read."
+            )
+            return None
+        raw = result.get("withdrawal_transaction_hashes") or "[]"
+        try:
+            return len(json.loads(raw))
+        except (TypeError, ValueError) as exc:
+            self.context.logger.warning(
+                f"Agent top-up deferred: the executed withdrawal transactions "
+                f"{raw!r} could not be parsed: {type(exc).__name__}({exc})."
+            )
+            return None
 
     def _prepare_topup_tx(
         self, chain: str, amount: int

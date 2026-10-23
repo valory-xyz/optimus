@@ -22,7 +22,7 @@
 # pylint: skip-file
 
 import json
-from typing import Any, Dict, Generator, List, Optional, Set
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -41,7 +41,7 @@ from packages.valory.skills.liquidity_trader_abci.states.agent_top_up import (
     AgentTopUpRound,
 )
 from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
-    ESTIMATED_GAS_PER_TX,
+    TOPUP_GAS_FLOOR,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     skill_input_hex_to_payload,
@@ -55,12 +55,16 @@ NOW = 1_700_000_000
 NO_ACTION = AgentTopUp(move=0, signer_deficit=None, safe_deficit=None)
 
 
-def _funds(balance: Optional[int] = 100, deficit: Optional[int] = 300) -> Any:
-    """Optimism status with the Agent Signer below its threshold."""
+def _funds(
+    balance: Optional[int] = 100,
+    deficit: Optional[int] = 300,
+    chains: Tuple[str, ...] = ("optimism",),
+) -> Any:
+    """A status with the Agent Signer below its threshold on every chain."""
     native = {"topup": 400, "threshold": 200, "is_native": True}
     return FundRequirements.model_validate(
         {
-            "optimism": {
+            chain: {
                 "accounts": {
                     AGENT: {
                         "tokens": {
@@ -70,6 +74,7 @@ def _funds(balance: Optional[int] = 100, deficit: Optional[int] = 300) -> Any:
                     SAFE: {"tokens": {NATIVE: {**native, "balance": 10**18}}},
                 }
             }
+            for chain in chains
         }
     )
 
@@ -82,7 +87,7 @@ def _safe_unread() -> Any:
 
 
 # The Agent Signer holds exactly the gas of one top-up.
-GAS_PAID = _funds(balance=ESTIMATED_GAS_PER_TX)
+GAS_PAID = _funds(balance=TOPUP_GAS_FLOOR)
 
 
 def _move(amount: int) -> AgentTopUp:
@@ -117,13 +122,14 @@ class _Harness:
         self,
         topups: Optional[Dict[str, AgentTopUp]] = None,
         funds: Any = None,
-        investing_paused: bool = False,
+        investing_paused: Optional[bool] = False,
         last_topup_check: Optional[int] = None,
         x402_eth_deficit: int = 0,
         withdrawal_actions: Optional[List[Dict]] = None,
         kv: Optional[Dict] = None,
         safe_tx_hash: Optional[str] = SAFE_TX_HASH,
         topped_up_chains: Optional[Set[str]] = None,
+        last_round_id: Optional[str] = None,
     ) -> None:
         self.obj = object.__new__(AgentTopUpBehaviour)
         self.ctx = MagicMock()
@@ -141,15 +147,16 @@ class _Harness:
         self.state.last_topup_check = last_topup_check
         self.state.x402_eth_deficit = x402_eth_deficit
         self.state.topped_up_chains = set(topped_up_chains or ())
+        self.state.round_sequence.last_round_id = last_round_id
         self.params = MagicMock()
         self.params.target_investment_chains = ["optimism"]
-        self.params.safe_contract_addresses = {"optimism": SAFE}
+        self.params.safe_contract_addresses = {"optimism": SAFE, "base": SAFE}
         self.coingecko = MagicMock()
         self.coingecko.use_mech_facilitator = False
         self.synced = MagicMock()
         self.synced.withdrawal_actions = withdrawal_actions
         self.obj._get_current_timestamp = lambda: NOW
-        self.obj._read_investing_paused = _gen(investing_paused)
+        self.obj._read_investing_paused_or_none = _gen(investing_paused)
         self.obj._read_kv = MagicMock(side_effect=_gen(kv))
         self.contract_interact = MagicMock(side_effect=_gen(safe_tx_hash))
         self.obj.contract_interact = self.contract_interact
@@ -231,6 +238,18 @@ class TestGate:
         assert harness.run().tx_hash is not None
         assert harness.state.last_topup_check == NOW
 
+    def test_a_retry_of_the_round_checks_again(self) -> None:
+        """A visit whose payload missed consensus does not close the gate on its retry."""
+        harness = _Harness(topups={"optimism": _move(5)}, funds=GAS_PAID)
+        assert harness.run().tx_hash is not None
+        assert harness.state.last_topup_check == NOW
+
+        harness.state.round_sequence.last_round_id = AgentTopUpRound.auto_round_id()
+        harness.payloads.clear()
+        harness.obj.set_done.reset_mock()
+        assert harness.run().tx_hash is not None
+        assert harness.get_funds_status.call_count == 2
+
     def test_reopens_after_the_interval(self) -> None:
         """A check an interval ago or more runs again."""
         last = NOW - AGENT_TOPUP_CHECK_INTERVAL_SECONDS
@@ -293,26 +312,58 @@ class TestNoMove:
         harness.ctx.logger.warning.assert_called_once()
         assert harness.state.last_topup_check is None
 
-    def test_signer_cannot_pay_the_gas(self) -> None:
+    @pytest.mark.parametrize(
+        "funds, reason",
+        [
+            (_funds(balance=TOPUP_GAS_FLOOR - 1), "cannot pay the gas"),
+            (_funds(balance=None), "could not be read"),
+        ],
+    )
+    def test_signer_cannot_pay_the_gas(self, funds: Any, reason: str) -> None:
         """A move the Agent Signer cannot pay for is skipped and stays reported."""
         harness = _Harness(
-            topups={"optimism": _move(5)},
-            funds=_funds(balance=ESTIMATED_GAS_PER_TX - 1),
-            topped_up_chains={"optimism"},
+            topups={"optimism": _move(5)}, funds=funds, topped_up_chains={"optimism"}
         )
         _assert_no_tx(harness.run())
         harness.contract_interact.assert_not_called()
         harness.ctx.logger.warning.assert_called_once()
+        assert reason in harness.ctx.logger.warning.call_args[0][0]
         assert harness.state.last_topup_check is None
         assert harness.state.topped_up_chains == set()
 
-    def test_safe_tx_hash_unavailable(self) -> None:
-        """A move whose Safe tx cannot be built sends no tx."""
+    def test_a_starved_chain_does_not_block_the_next(self) -> None:
+        """A chain whose Agent Signer cannot pay the gas leaves the next one to move."""
+        funds = _funds(balance=TOPUP_GAS_FLOOR, chains=("optimism", "base"))
+        funds.root["optimism"].accounts[AGENT].tokens[NATIVE].balance = 0
         harness = _Harness(
-            topups={"optimism": _move(5)}, funds=GAS_PAID, safe_tx_hash=None
+            topups={"optimism": _move(5), "base": _move(7)},
+            funds=funds,
+            topped_up_chains={"optimism", "base"},
+        )
+        payload = harness.run()
+        assert payload.chain_id == "base"
+        assert harness.contract_interact.call_args.kwargs["value"] == 7
+        assert harness.state.topped_up_chains == set()
+
+    def test_safe_tx_hash_unavailable(self) -> None:
+        """A move whose Safe tx cannot be built sends no tx and keeps a settled one."""
+        harness = _Harness(
+            topups={"optimism": _move(5)},
+            funds=GAS_PAID,
+            safe_tx_hash=None,
+            topped_up_chains={"optimism"},
         )
         _assert_no_tx(harness.run())
         harness.ctx.logger.error.assert_called_once()
+        assert harness.state.last_topup_check is None
+        assert harness.state.topped_up_chains == {"optimism"}
+
+    def test_investing_paused_unreadable(self) -> None:
+        """Without knowing the mode, the need cannot be sized, so nothing is decided."""
+        harness = _Harness(topups={"optimism": _move(5)}, investing_paused=None)
+        _assert_no_tx(harness.run())
+        harness.get_agent_topup.assert_not_called()
+        harness.ctx.logger.warning.assert_called_once()
         assert harness.state.last_topup_check is None
 
 
@@ -343,26 +394,25 @@ class TestMove:
         assert kwargs["chain_id"] == "optimism"
         assert harness.state.last_topup_check == NOW
 
-    @pytest.mark.parametrize("safe_tx_hash", [SAFE_TX_HASH, None])
-    def test_a_new_move_is_not_a_settled_top_up(
-        self, safe_tx_hash: Optional[str]
-    ) -> None:
-        """The chain's earlier top-up stops counting once another one is due."""
+    def test_a_new_move_is_not_a_settled_top_up(self) -> None:
+        """The chain's earlier top-up stops counting once another one is sent."""
         harness = _Harness(
             topups={"optimism": _move(5)},
-            safe_tx_hash=safe_tx_hash,
+            funds=GAS_PAID,
             topped_up_chains={"optimism", "base"},
         )
         harness.run()
         assert harness.state.topped_up_chains == {"base"}
 
-    def test_no_move_keeps_a_settled_top_up(self) -> None:
-        """A check with nothing to move leaves the settled top-up in place."""
-        harness = _Harness(
-            topups={"optimism": NO_ACTION}, topped_up_chains={"optimism"}
-        )
+    @pytest.mark.parametrize(
+        "topup",
+        [NO_ACTION, AgentTopUp(move=0, signer_deficit=0, safe_deficit=700)],
+    )
+    def test_no_move_is_not_a_settled_top_up(self, topup: AgentTopUp) -> None:
+        """A check with nothing to move stops counting the earlier top-up."""
+        harness = _Harness(topups={"optimism": topup}, topped_up_chains={"optimism"})
         _assert_no_tx(harness.run())
-        assert harness.state.topped_up_chains == {"optimism"}
+        assert harness.state.topped_up_chains == set()
 
     def test_first_move_chain_wins(self) -> None:
         """Only one chain is topped up per check."""
@@ -397,14 +447,26 @@ class TestRuleInputs:
         kwargs = harness.get_agent_topup.call_args.kwargs
         assert kwargs["agent_need_override"] == {"optimism": 2_400_000_000_000 - 100}
 
-    @pytest.mark.parametrize("kv", [None, {"withdrawal_transaction_hashes": "x"}])
+    @pytest.mark.parametrize(
+        "kv",
+        [
+            None,
+            {"withdrawal_transaction_hashes": "x"},
+            {"withdrawal_transaction_hashes": "1"},
+        ],
+    )
     def test_withdrawal_mode_unreadable_executed_count(self, kv: Any) -> None:
-        """An unreadable executed count counts every action as left, and says so."""
-        harness = _Harness(investing_paused=True, withdrawal_actions=[{"a": 1}], kv=kv)
-        harness.run()
-        kwargs = harness.get_agent_topup.call_args.kwargs
-        assert kwargs["agent_need_override"] == {"optimism": 1_200_000_000_000 - 100}
+        """An unreadable executed count sizes no need, so nothing is decided."""
+        harness = _Harness(
+            topups={"optimism": _move(5)},
+            investing_paused=True,
+            withdrawal_actions=[{"a": 1}],
+            kv=kv,
+        )
+        _assert_no_tx(harness.run())
+        harness.get_agent_topup.assert_not_called()
         harness.ctx.logger.warning.assert_called_once()
+        assert harness.state.last_topup_check is None
 
     def test_withdrawal_mode_nothing_executed_yet(self) -> None:
         """No executed hash stored yet counts every action as left, silently."""

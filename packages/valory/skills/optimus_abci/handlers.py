@@ -2126,6 +2126,9 @@ class HttpHandler(BaseHttpHandler):
     ) -> Dict:
         """Report what is left once the Agent Safe has topped up the Agent Signer.
 
+        A pending top-up counts as done; only a chain whose last top-up failed
+        keeps its deficits as read.
+
         :param response: the funds-status response, x402 deficit included.
         :param funds: the status the response was built from.
         :param agent_need_extra: the x402 extra added to the Agent Signer need.
@@ -2143,7 +2146,7 @@ class HttpHandler(BaseHttpHandler):
             agent_need_override=agent_need_override,
         )
         for chain, topup in topups.items():
-            if chain not in self.shared_state.topped_up_chains or not (
+            if chain in self.shared_state.topup_failed_chains or not (
                 signer_pays_topup_gas(funds, chain, self.context.agent_address)
             ):
                 continue

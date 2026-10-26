@@ -71,13 +71,14 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             tx_hash, safe_address, chain = None, None, None
+            self._record_unsettled_topups()
             move = yield from self._get_topup_move()
             if move is not None:
                 tx_hash = yield from self._prepare_topup_tx(move.chain, move.wei)
                 if tx_hash is not None:
                     chain = move.chain
                     safe_address = self.params.safe_contract_addresses.get(chain)
-                    self.shared_state.topped_up_chains.discard(chain)
+                    self.shared_state.topup_in_flight_chains.add(chain)
                     self._close_topup_check()
 
             payload = AgentTopUpPayload(
@@ -92,6 +93,15 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
+
+    def _record_unsettled_topups(self) -> None:
+        """Count a top-up tx that never reached PostTxSettlement as failed."""
+        # A retry of this round never sent the tx its first visit prepared.
+        if self.round_sequence.last_round_id == self.matching_round.auto_round_id():
+            return
+        state = self.shared_state
+        state.topup_failed_chains |= state.topup_in_flight_chains
+        state.topup_in_flight_chains.clear()
 
     def _is_topup_check_due(self) -> bool:
         """Open the gate at start, then at most once per check interval."""
@@ -172,7 +182,7 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         undecided = False
         for chain, topup in topups.items():
             if topup.move <= 0:
-                self.shared_state.topped_up_chains.discard(chain)
+                self.shared_state.topup_failed_chains.discard(chain)
                 continue
             pays_gas = signer_pays_topup_gas(funds, chain, self.context.agent_address)
             if not pays_gas:
@@ -184,7 +194,6 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(
                     f"Agent top-up skipped on {chain}: the Agent Signer {reason}."
                 )
-                self.shared_state.topped_up_chains.discard(chain)
                 undecided = True
                 continue
             self.context.logger.info(

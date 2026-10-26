@@ -226,17 +226,18 @@ class TestPostTxSettlementBehaviour:
     @pytest.mark.parametrize(
         "submitter, chain_id, expected",
         [
-            (AgentTopUpRound.auto_round_id(), "optimism", {"base", "optimism"}),
-            (AgentTopUpRound.auto_round_id(), None, {"base"}),
-            ("some_other_round", "optimism", {"base"}),
+            (AgentTopUpRound.auto_round_id(), "optimism", {"base"}),
+            (AgentTopUpRound.auto_round_id(), None, {"base", "optimism"}),
+            ("some_other_round", "optimism", {"base", "optimism"}),
         ],
     )
     def test_async_act_records_a_settled_top_up(
         self, submitter: str, chain_id: Any, expected: Any
     ) -> None:
-        """Only a settled top-up tx marks its chain as topped up."""
+        """Only a settled top-up tx clears its chain from in flight and failed."""
         obj = _make_behaviour()
-        obj.context.state.topped_up_chains = {"base"}
+        obj.context.state.topup_in_flight_chains = {"base", "optimism"}
+        obj.context.state.topup_failed_chains = {"base", "optimism"}
 
         synced = MagicMock()
         synced.tx_submitter = submitter
@@ -260,7 +261,8 @@ class TestPostTxSettlementBehaviour:
         ):
             _drive(obj.async_act())
 
-        assert obj.context.state.topped_up_chains == expected
+        assert obj.context.state.topup_in_flight_chains == expected
+        assert obj.context.state.topup_failed_chains == expected
 
 
 class TestFetchAndLogGasDetails:

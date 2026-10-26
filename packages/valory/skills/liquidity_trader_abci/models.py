@@ -217,8 +217,10 @@ class SharedState(BaseSharedState):
         self.x402_pot_checked: bool = False
         # In memory, so a restart always checks.
         self.last_topup_check: Optional[int] = None
-        # Chains whose latest top-up tx settled.
-        self.topped_up_chains: Set[str] = set()
+        # Chains with a top-up tx sent that has not settled yet.
+        self.topup_in_flight_chains: Set[str] = set()
+        # Chains whose latest top-up tx did not settle: their deficits are reported as read.
+        self.topup_failed_chains: Set[str] = set()
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""

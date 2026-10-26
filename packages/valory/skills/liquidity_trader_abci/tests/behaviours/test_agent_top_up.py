@@ -128,7 +128,8 @@ class _Harness:
         withdrawal_actions: Optional[List[Dict]] = None,
         kv: Optional[Dict] = None,
         safe_tx_hash: Optional[str] = SAFE_TX_HASH,
-        topped_up_chains: Optional[Set[str]] = None,
+        failed_chains: Optional[Set[str]] = None,
+        in_flight_chains: Optional[Set[str]] = None,
         last_round_id: Optional[str] = None,
     ) -> None:
         self.obj = object.__new__(AgentTopUpBehaviour)
@@ -146,7 +147,8 @@ class _Harness:
         self.state = MagicMock()
         self.state.last_topup_check = last_topup_check
         self.state.x402_eth_deficit = x402_eth_deficit
-        self.state.topped_up_chains = set(topped_up_chains or ())
+        self.state.topup_failed_chains = set(failed_chains or ())
+        self.state.topup_in_flight_chains = set(in_flight_chains or ())
         self.state.round_sequence.last_round_id = last_round_id
         self.params = MagicMock()
         self.params.target_investment_chains = ["optimism"]
@@ -322,14 +324,15 @@ class TestNoMove:
     def test_signer_cannot_pay_the_gas(self, funds: Any, reason: str) -> None:
         """A move the Agent Signer cannot pay for is skipped and stays reported."""
         harness = _Harness(
-            topups={"optimism": _move(5)}, funds=funds, topped_up_chains={"optimism"}
+            topups={"optimism": _move(5)}, funds=funds, failed_chains={"optimism"}
         )
         _assert_no_tx(harness.run())
         harness.contract_interact.assert_not_called()
         harness.ctx.logger.warning.assert_called_once()
         assert reason in harness.ctx.logger.warning.call_args[0][0]
         assert harness.state.last_topup_check is None
-        assert harness.state.topped_up_chains == set()
+        assert harness.state.topup_failed_chains == {"optimism"}
+        assert harness.state.topup_in_flight_chains == set()
 
     def test_a_starved_chain_does_not_block_the_next(self) -> None:
         """A chain whose Agent Signer cannot pay the gas leaves the next one to move."""
@@ -338,25 +341,23 @@ class TestNoMove:
         harness = _Harness(
             topups={"optimism": _move(5), "base": _move(7)},
             funds=funds,
-            topped_up_chains={"optimism", "base"},
         )
         payload = harness.run()
         assert payload.chain_id == "base"
         assert harness.contract_interact.call_args.kwargs["value"] == 7
-        assert harness.state.topped_up_chains == set()
+        assert harness.state.topup_in_flight_chains == {"base"}
 
     def test_safe_tx_hash_unavailable(self) -> None:
-        """A move whose Safe tx cannot be built sends no tx and keeps a settled one."""
+        """A move whose Safe tx cannot be built sends no tx and marks nothing in flight."""
         harness = _Harness(
             topups={"optimism": _move(5)},
             funds=GAS_PAID,
             safe_tx_hash=None,
-            topped_up_chains={"optimism"},
         )
         _assert_no_tx(harness.run())
         harness.ctx.logger.error.assert_called_once()
         assert harness.state.last_topup_check is None
-        assert harness.state.topped_up_chains == {"optimism"}
+        assert harness.state.topup_in_flight_chains == set()
 
     def test_investing_paused_unreadable(self) -> None:
         """Without knowing the mode, the need cannot be sized, so nothing is decided."""
@@ -394,25 +395,43 @@ class TestMove:
         assert kwargs["chain_id"] == "optimism"
         assert harness.state.last_topup_check == NOW
 
-    def test_a_new_move_is_not_a_settled_top_up(self) -> None:
-        """The chain's earlier top-up stops counting once another one is sent."""
+    def test_a_new_move_is_in_flight(self) -> None:
+        """A sent top-up is in flight; an earlier failure stands until it settles."""
         harness = _Harness(
             topups={"optimism": _move(5)},
             funds=GAS_PAID,
-            topped_up_chains={"optimism", "base"},
+            failed_chains={"optimism"},
         )
         harness.run()
-        assert harness.state.topped_up_chains == {"base"}
+        assert harness.state.topup_in_flight_chains == {"optimism"}
+        assert harness.state.topup_failed_chains == {"optimism"}
+
+    def test_an_unsettled_top_up_counts_as_failed(self) -> None:
+        """Back in this round, a top-up that never reached PostTxSettlement failed."""
+        harness = _Harness(in_flight_chains={"optimism"}, last_round_id="reset")
+        _assert_no_tx(harness.run())
+        assert harness.state.topup_failed_chains == {"optimism"}
+        assert harness.state.topup_in_flight_chains == set()
+
+    def test_a_retry_keeps_the_top_up_in_flight(self) -> None:
+        """A retry of this round never sent the earlier tx, so it is not a failure."""
+        harness = _Harness(
+            in_flight_chains={"optimism"},
+            last_round_id=AgentTopUpRound.auto_round_id(),
+        )
+        harness.run()
+        assert harness.state.topup_failed_chains == set()
+        assert harness.state.topup_in_flight_chains == {"optimism"}
 
     @pytest.mark.parametrize(
         "topup",
         [NO_ACTION, AgentTopUp(move=0, signer_deficit=0, safe_deficit=700)],
     )
-    def test_no_move_is_not_a_settled_top_up(self, topup: AgentTopUp) -> None:
-        """A check with nothing to move stops counting the earlier top-up."""
-        harness = _Harness(topups={"optimism": topup}, topped_up_chains={"optimism"})
+    def test_no_move_clears_a_failed_top_up(self, topup: AgentTopUp) -> None:
+        """A check with nothing to move stops counting the earlier failure."""
+        harness = _Harness(topups={"optimism": topup}, failed_chains={"optimism"})
         _assert_no_tx(harness.run())
-        assert harness.state.topped_up_chains == set()
+        assert harness.state.topup_failed_chains == set()
 
     def test_first_move_chain_wins(self) -> None:
         """Only one chain is topped up per check."""

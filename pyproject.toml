@@ -10,12 +10,12 @@ requires-python = "<3.15,>=3.10"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    "open-autonomy[cli]==0.21.28",
-    "open-aea-test-autonomy==0.21.28",
-    "open-aea-helpers==0.21.28",
-    "open-aea==2.2.9",
-    "open-aea-ledger-ethereum==2.2.9",
-    "open-aea-ledger-cosmos==2.2.9",
+    "open-autonomy[cli]==0.21.30",
+    "open-aea-test-autonomy==0.21.30",
+    "open-aea-helpers==0.21.30",
+    "open-aea==2.2.10",
+    "open-aea-ledger-ethereum==2.2.10",
+    "open-aea-ledger-cosmos==2.2.10",
     "typing_extensions==4.15.0",
     "gql[requests]==3.5.0",
     "grpcio==1.78.0",
@@ -69,7 +69,7 @@ service_specific_packages_exclude = [
     "packages/valory/contracts/uniswap_v3_pool",
 ]
 upstream_pins = [
-    "valory-xyz/mech-interact@v0.33.0",
+    "valory-xyz/mech-interact@v0.33.9-rc1",
     "valory-xyz/mech@v0.34.2-rc2",
     "valory-xyz/genai@v7.2.5",
     "valory-xyz/kv-store@v0.7.1",

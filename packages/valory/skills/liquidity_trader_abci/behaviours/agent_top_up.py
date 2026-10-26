@@ -80,6 +80,8 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
                     safe_address = self.params.safe_contract_addresses.get(chain)
                     self.shared_state.topup_in_flight_chains.add(chain)
                     self._close_topup_check()
+                else:
+                    self.shared_state.topup_failed_chains.add(move.chain)
 
             payload = AgentTopUpPayload(
                 sender=self.context.agent_address,

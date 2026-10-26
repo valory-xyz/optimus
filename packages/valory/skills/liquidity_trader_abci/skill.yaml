@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/agent_top_up.py: bafybeiddsjyb7fxm4kklq652uddu5qkooluzygwci7sc22k5j4zlzq3x5a
+  behaviours/agent_top_up.py: bafybeiefx4u6uypsxg6mdohymvl2im27wwzzdpnfk2wymamcrc5xs2aili
   behaviours/base.py: bafybeibqm363wr2kv2zpnut45aqyytmwsxmwdqb25hwwmotog43utpdvpq
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeif5otdf6drh67omqypcypwm6nql34lu5wfclszmmm4x4pvpywp2ja
@@ -48,7 +48,7 @@ fingerprint:
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihhuzqn5hzh55thnd373puykfszzd6kxsugu5e4ra63l72edh55lu
-  tests/behaviours/test_agent_top_up.py: bafybeigveedb63cf7kjqxuywkkwzeoxgeg2uzo7xkpqvvj52wq2dm765lq
+  tests/behaviours/test_agent_top_up.py: bafybeib62kggybjtrdlqui4obhptmc6ambh66ur4irgenikjmaleqcys2u
   tests/behaviours/test_base.py: bafybeic7nbv6djppkyf2wncxszg26twqr4mtm4ag7j6zwaxwyqlo2aeorm
   tests/behaviours/test_call_checkpoint.py: bafybeidfehszet7imqglv6rmlzd3gbvitxatvnts6voavv672vjv66w6m4
   tests/behaviours/test_check_staking_kpi_met.py: bafybeihac3lv5pe7y4wafnnru64i7mxaenowdhjk4ibpvukeh4rdpfq75u

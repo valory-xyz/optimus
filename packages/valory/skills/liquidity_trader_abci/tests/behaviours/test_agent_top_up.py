@@ -348,7 +348,7 @@ class TestNoMove:
         assert harness.state.topup_in_flight_chains == {"base"}
 
     def test_safe_tx_hash_unavailable(self) -> None:
-        """A move whose Safe tx cannot be built sends no tx and marks nothing in flight."""
+        """A move whose Safe tx cannot be built sends no tx and counts as failed."""
         harness = _Harness(
             topups={"optimism": _move(5)},
             funds=GAS_PAID,
@@ -358,6 +358,7 @@ class TestNoMove:
         harness.ctx.logger.error.assert_called_once()
         assert harness.state.last_topup_check is None
         assert harness.state.topup_in_flight_chains == set()
+        assert harness.state.topup_failed_chains == {"optimism"}
 
     def test_investing_paused_unreadable(self) -> None:
         """Without knowing the mode, the need cannot be sized, so nothing is decided."""

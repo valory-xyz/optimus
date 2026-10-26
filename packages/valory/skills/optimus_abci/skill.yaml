@@ -168,13 +168,13 @@ protocols:
 - valory/srr:0.1.0:bafybeibfs6osw7guctdpollf4iwt4vhd6yk7ai34tqk5djuxtgowjwdjb4
 - valory/kv_store:0.1.0:bafybeidlfrgv5rc7m7kj3j6u6umogmpy5bgcdzqtnsy3v75wn3likvyt6m
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
-- valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
-- valory/liquidity_trader_abci:0.1.0:bafybeihfftgkbu7aufwadeani5i3l3qu7tqlfrletzan5cy3iheabhjxbq
-- valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
-- valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
+- valory/abstract_round_abci:0.1.0:bafybeiedcsiiv4s3iu4uilbbys3yemzs2vvkblbwtumnrcwqbnalgiv5pi
+- valory/registration_abci:0.1.0:bafybeiczrxjc4dvw35q6ve2sdozqsmamqrlrhaxj5fcvajd3cmgfzx34hm
+- valory/reset_pause_abci:0.1.0:bafybeig2zorapaqx6ubr3e63ujztidafzhstitgqdjocvec77ytr6jggzy
+- valory/termination_abci:0.1.0:bafybeifs63hjdekvstdanmiwyo3qzyn5qegkvmjemm4poago7x6lcly7ni
+- valory/liquidity_trader_abci:0.1.0:bafybeiaijhunbxtvh3lnzremu4lskwsmzeo3moo2vghzja5qapsaykde5a
+- valory/transaction_settlement_abci:0.1.0:bafybeidkkgo6tmpybsmzun3tnxrfzdkjvtvaxgqhx52yw3657tn25ybkri
+- valory/funds_manager:0.1.0:bafybeidjkkywg6khklyq3mtmr57gcduft3meib2trnlbfk64tw3lx4c25e
 behaviours:
   main:
     args: {}

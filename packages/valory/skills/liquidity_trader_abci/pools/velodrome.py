@@ -56,7 +56,6 @@ from packages.valory.contracts.velodrome_slipstream_helper.contract import (
 )
 from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
-from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
 
@@ -523,11 +522,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # Set deadline (20 minutes from now)
-        last_update_time = cast(
-            SharedState, self.context.state
-        ).round_sequence.last_round_transition_timestamp.timestamp()
-        deadline = int(last_update_time) + (20 * 60)
+        deadline = self._get_swap_deadline()
 
         # Call addLiquidity on the router contract
         tx_hash = yield from self.contract_interact(
@@ -605,11 +600,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None, None
 
-        # Set deadline (20 minutes from now)
-        last_update_time = cast(
-            SharedState, self.context.state
-        ).round_sequence.last_round_transition_timestamp.timestamp()
-        deadline = int(last_update_time) + (20 * 60)
+        deadline = self._get_swap_deadline()
 
         # Use multisend to batch approve and remove liquidity transactions
         multi_send_txs = []
@@ -1032,11 +1023,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             sqrt_price_x96 = 0  # Default value
 
-        # deadline is set to be 20 minutes from current time
-        last_update_time = cast(
-            SharedState, self.context.state
-        ).round_sequence.last_round_transition_timestamp.timestamp()
-        deadline = int(last_update_time) + (20 * 60)
+        deadline = self._get_swap_deadline()
 
         self.context.logger.info(
             f"Using max amounts: {max_amounts_in[0]} token0, {max_amounts_in[1]} token1"
@@ -1266,11 +1253,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # deadline is set to be 20 minutes from current time
-        last_update_time = cast(
-            SharedState, self.context.state
-        ).round_sequence.last_round_transition_timestamp.timestamp()
-        deadline = int(last_update_time) + (20 * 60)
+        deadline = self._get_swap_deadline()
 
         # Use a high max value similar to Uniswap's approach for collecting tokens
         amount_max = Web3.to_wei(2**100 - 1, "wei")
@@ -3267,28 +3250,21 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 "success": True,
             }
 
-        # Create claim rewards transaction: Aero gauges revert on getReward
-        if kwargs.get("protocol") == AERO_PROTOCOL:
-            claim_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=gauge_address,
-                contract_public_id=VelodromeGaugeContract.contract_id,
-                contract_callable="claim_emissions",
-                data_key="tx_hash",
-                account=safe_address,
-                recipient=safe_address,
-                chain_id=chain,
-            )
-        else:
-            claim_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=gauge_address,
-                contract_public_id=VelodromeGaugeContract.contract_id,
-                contract_callable="get_reward",
-                data_key="tx_hash",
-                account=safe_address,
-                chain_id=chain,
-            )
+        # Aero gauges revert on getReward
+        claim_kwargs: Dict[str, Any] = (
+            {"contract_callable": "claim_emissions", "recipient": safe_address}
+            if kwargs.get("protocol") == AERO_PROTOCOL
+            else {"contract_callable": "get_reward"}
+        )
+        claim_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            data_key="tx_hash",
+            account=safe_address,
+            chain_id=chain,
+            **claim_kwargs,
+        )
 
         if not claim_tx_hash:
             error_msg = "Failed to create claim rewards transaction"
@@ -3929,23 +3905,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             "is_multisend": False,
         }
 
-    def _get_latest_block_number(
-        self, chain: str
-    ) -> Generator[None, None, Optional[int]]:
-        """Return the latest block number on ``chain``, or None on failure."""
-        response = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
-            ledger_callable="get_block",
-            block_identifier="latest",
-            chain_id=chain,
-        )
-        if response.performative != LedgerApiMessage.Performative.STATE:
-            self.context.logger.warning(
-                f"Could not read the latest block on {chain}: {response}"
-            )
-            return None
-        return response.state.body.get("number")
-
     def _is_cl_unstake_penalty_active(
         self, gauge_address: str, token_id: int, chain: str
     ) -> Generator[None, None, bool]:
@@ -3979,7 +3938,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             gauge=gauge_address,
             chain_id=chain,
         )
-        current_block = yield from self._get_latest_block_number(chain)
+        latest_block = yield from self.get_block(chain_id=chain)
+        current_block = latest_block.get("number") if latest_block else None
         if not penalty_config or current_block is None:
             return False
 

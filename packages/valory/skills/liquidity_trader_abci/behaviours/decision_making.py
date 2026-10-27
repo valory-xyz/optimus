@@ -41,7 +41,6 @@ from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
-from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
@@ -3288,29 +3287,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error decoding data from mint event: {e}")
             return None, None, None, None, None
-
-    def get_block(
-        self,
-        block_number: Optional[str] = None,
-        **kwargs: Any,
-    ) -> Generator[None, None, Optional[Dict]]:
-        """Get block data from the ledger API."""
-        block_identifier = block_number if block_number is not None else "latest"
-
-        ledger_api_response = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
-            ledger_callable="get_block",
-            block_identifier=block_identifier,
-            **kwargs,
-        )
-        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
-            self.context.logger.error(
-                f"Failed to fetch block {block_identifier}: {ledger_api_response}"
-            )
-            return None
-
-        block = ledger_api_response.state.body
-        return block
 
     def _get_data_from_join_pool_tx_receipt(
         self, tx_hash: str, chain: str

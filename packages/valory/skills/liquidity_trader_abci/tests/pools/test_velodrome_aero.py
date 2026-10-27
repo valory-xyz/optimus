@@ -26,7 +26,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     AERO_PROTOCOL,
     VelodromePoolBehaviour,
@@ -467,7 +466,7 @@ class TestClUnstakePenaltyActive:
                 "effective_penalty_config": penalty_config,
             }
         )
-        b._get_latest_block_number = _mock_gen(block)
+        b.get_block = _mock_gen(None if block is None else {"number": block})
         return b
 
     @pytest.mark.parametrize(
@@ -500,29 +499,6 @@ class TestClUnstakePenaltyActive:
         b = _aero_behaviour({"deposit_block": None, "gauge_factory": "0xF"})
         result = exhaust_generator(b._is_cl_unstake_penalty_active(GAUGE, 5, CHAIN))
         assert result is False
-
-
-class TestLatestBlockNumber:
-    """Tests for _get_latest_block_number."""
-
-    def test_returns_block_number(self) -> None:
-        """The latest block's number is returned."""
-        b = _aero_behaviour({})
-        response = MagicMock()
-        response.performative = LedgerApiMessage.Performative.STATE
-        response.state.body = {"number": 42}
-        b.get_ledger_api_response = _mock_gen(response)
-        assert exhaust_generator(b._get_latest_block_number(CHAIN)) == 42
-
-    def test_failure_returns_none(self) -> None:
-        """A failed ledger call is logged and returns None."""
-        b = _aero_behaviour({})
-        response = MagicMock()
-        response.performative = LedgerApiMessage.Performative.ERROR
-        b.get_ledger_api_response = _mock_gen(response)
-        assert exhaust_generator(b._get_latest_block_number(CHAIN)) is None
-        b.context.logger.warning.assert_called_once()
-        assert CHAIN in b.context.logger.warning.call_args[0][0]
 
 
 class TestAeroClaims:

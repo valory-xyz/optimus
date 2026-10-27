@@ -7279,16 +7279,21 @@ class TestFundsStatusAfterAgentTopUp:
     @pytest.mark.parametrize(
         "withdrawal_data", [None, {"withdrawal_transaction_hashes": "x"}]
     )
-    def test_withdrawal_mode_unreadable_executed_count_stays_empty(
+    def test_withdrawal_mode_unreadable_executed_count_reports_the_deficit(
         self, withdrawal_data: Any
     ) -> None:
-        """An executed count AgentTopUpRound cannot read either asks for nothing."""
-        handler, _, rule = _topup_handler(_topup_funds())
+        """An executed count AgentTopUpRound cannot read reports the signer deficit as read."""
+        handler, ctx, rule = _topup_handler(_topup_funds())
         handler._is_in_withdrawal_mode = MagicMock(return_value=True)
         handler._get_withdrawal_actions = MagicMock(return_value=[{"a": 1}])
         handler._read_withdrawal_data = MagicMock(return_value=withdrawal_data)
-        assert _served(handler) == {}
+        assert _served(handler) == {
+            "optimism": {
+                TOPUP_AGENT: {ZERO_ADDRESS: {"balance": "50", "deficit": "350"}}
+            }
+        }
         rule.assert_not_called()
+        ctx.logger.warning.assert_called()
 
     def test_withdrawal_mode_all_executed_needs_no_gas(self) -> None:
         """Once every withdrawal action executed, no withdrawal gas is asked."""

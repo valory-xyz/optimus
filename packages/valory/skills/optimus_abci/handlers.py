@@ -2089,18 +2089,32 @@ class HttpHandler(BaseHttpHandler):
         else:
             self.context.logger.info("Funds status: Withdrawal mode detected")
             chain = self.context.params.target_investment_chains[0]
+            num_actions = len(self._get_withdrawal_actions())
             need = withdrawal_agent_need(
                 funds,
                 chain,
                 self.context.agent_address,
                 agent_need_extra,
-                len(self._get_withdrawal_actions()),
+                num_actions,
                 executed_withdrawal_count(self._read_withdrawal_data()),
             )
             self.context.logger.info(f"Funds status: Withdrawal gas need = {need}")
             if need is None:
-                # AgentTopUpRound defers here too, so nothing moves to report.
-                self._send_ok_response(http_msg, http_dialogue, {})
+                # AgentTopUpRound defers here too, so nothing moves.
+                response = {}
+                if num_actions > 0:
+                    self.context.logger.warning(
+                        "Funds status: the executed withdrawal count could not be "
+                        "read, reporting the Agent Signer deficit as read."
+                    )
+                    native = native_requirement(
+                        funds, chain, self.context.agent_address
+                    )
+                    deficit = native[1].deficit if native is not None else None
+                    response = self._withdrawal_deficit_response(
+                        funds, chain, deficit or 0
+                    )
+                self._send_ok_response(http_msg, http_dialogue, response)
                 return
             response = self._withdrawal_deficit_response(funds, chain, need)
             agent_need_override = {chain: need}

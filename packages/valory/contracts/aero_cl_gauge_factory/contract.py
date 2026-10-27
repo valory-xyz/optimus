@@ -44,4 +44,8 @@ class AeroCLGaugeFactoryContract(Contract):
         min_stake_blocks, penalty_rate = contract_instance.functions.effectivePenaltyConfig(
             ledger_api.api.to_checksum_address(gauge)
         ).call()
-        return dict(min_stake_blocks=min_stake_blocks, penalty_rate=penalty_rate)
+        return dict(
+            penalty_config=dict(
+                min_stake_blocks=min_stake_blocks, penalty_rate=penalty_rate
+            )
+        )

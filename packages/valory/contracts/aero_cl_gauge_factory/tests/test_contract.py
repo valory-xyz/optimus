@@ -49,5 +49,7 @@ class TestEffectivePenaltyConfig:
                 ledger_api, FACTORY, GAUGE.lower()
             )
 
-        assert result == {"min_stake_blocks": 7, "penalty_rate": 1_000_000}
+        assert result == {
+            "penalty_config": {"min_stake_blocks": 7, "penalty_rate": 1_000_000}
+        }
         instance.functions.effectivePenaltyConfig.assert_called_once_with(GAUGE)

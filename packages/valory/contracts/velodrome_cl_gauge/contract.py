@@ -19,6 +19,7 @@
 """This class contains a wrapper for Velodrome CL Gauge contract interface."""
 
 import logging
+from typing import List
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -132,6 +133,67 @@ class VelodromeCLGaugeContract(Contract):
             checksumed_account, token_id
         ).call()
         return dict(earned=earned_amount)
+
+    @classmethod
+    def earned_by_account(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+    ) -> JSONLike:
+        """Get the emissions earned by an account across its Aero CL gauge stakes."""
+        checksumed_account = ledger_api.api.to_checksum_address(account)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        earned_amount = contract_instance.get_function_by_signature(
+            "earned(address)"
+        )(checksumed_account).call()
+        return dict(earned=earned_amount)
+
+    @classmethod
+    def claim_cl_emissions(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+        recipient: str,
+        token_ids: List[int],
+    ) -> JSONLike:
+        """Prepare encoded tx for claiming emissions from an Aero CL gauge."""
+        _logger.debug(f"Preparing CL claimEmissions transaction for {token_ids}")
+
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "claimEmissions",
+            (
+                ledger_api.api.to_checksum_address(account),
+                ledger_api.api.to_checksum_address(recipient),
+                list(token_ids),
+            ),
+        )
+
+    @classmethod
+    def deposit_block(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Get the block at which ``token_id`` was staked in an Aero CL gauge."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        block = contract_instance.functions.depositBlock(token_id).call()
+        return dict(deposit_block=block)
+
+    @classmethod
+    def gauge_factory(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the factory that created the CL gauge."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        factory = contract_instance.functions.gaugeFactory().call()
+        return dict(gauge_factory=factory)
 
     @classmethod
     def balance_of(

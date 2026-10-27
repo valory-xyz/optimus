@@ -1,0 +1,20 @@
+name: aero_metarouter
+author: valory
+version: 0.1.0
+type: contract
+description: A wrapper for the Aero Metarouter's v2 liquidity commands.
+license: Apache-2.0
+aea_version: '>=2.0.0, <3.0.0'
+fingerprint: {}
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: AeroMetarouterContract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==2.2.9
+  web3:
+    version: <8,>=7.0.0
+  eth_abi:
+    version: ==5.2.0

@@ -468,14 +468,122 @@ class TestTotalSupply:
         assert result == {"total_supply": 1000000}
 
 
+class TestEarnedByAccount:
+    """Tests for the earned_by_account method."""
+
+    def test_earned_by_account_calls_single_argument_overload(self) -> None:
+        """Test that earned_by_account reads earned(address), not earned(address,uint256)."""
+        mock_ledger_api = MagicMock()
+        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.get_function_by_signature.return_value.return_value.call.return_value = (
+            77
+        )
+
+        with patch.object(
+            VelodromeCLGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeCLGaugeContract.earned_by_account(
+                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
+            )
+
+        assert result == {"earned": 77}
+        mock_contract_instance.get_function_by_signature.assert_called_once_with(
+            "earned(address)"
+        )
+        mock_contract_instance.get_function_by_signature.return_value.assert_called_once_with(
+            MOCK_CHECKSUMMED_ACCOUNT
+        )
+
+
+class TestClaimClEmissions:
+    """Tests for the claim_cl_emissions method."""
+
+    def test_claim_cl_emissions_encodes_token_ids(self) -> None:
+        """Test that claim_cl_emissions encodes claimEmissions(account, recipient, tokenIds)."""
+        mock_ledger_api = MagicMock()
+        mock_ledger_api.api.to_checksum_address.side_effect = lambda a: a.upper()
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.encode_abi.return_value = "0xc1a2"
+
+        with patch.object(
+            VelodromeCLGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeCLGaugeContract.claim_cl_emissions(
+                mock_ledger_api,
+                MOCK_ADDRESS,
+                MOCK_ACCOUNT,
+                MOCK_ADDRESS,
+                (MOCK_TOKEN_ID, 43),
+            )
+
+        assert result == {"tx_hash": bytes.fromhex("c1a2")}
+        mock_contract_instance.encode_abi.assert_called_once_with(
+            "claimEmissions",
+            args=(MOCK_ACCOUNT.upper(), MOCK_ADDRESS.upper(), [MOCK_TOKEN_ID, 43]),
+        )
+
+
+class TestDepositBlock:
+    """Tests for the deposit_block method."""
+
+    def test_deposit_block_returns_block(self) -> None:
+        """Test that deposit_block returns depositBlock(tokenId)."""
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.depositBlock.return_value.call.return_value = (
+            123
+        )
+
+        with patch.object(
+            VelodromeCLGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeCLGaugeContract.deposit_block(
+                MagicMock(), MOCK_ADDRESS, MOCK_TOKEN_ID
+            )
+
+        assert result == {"deposit_block": 123}
+        mock_contract_instance.functions.depositBlock.assert_called_once_with(
+            MOCK_TOKEN_ID
+        )
+
+
+class TestGaugeFactory:
+    """Tests for the gauge_factory method."""
+
+    def test_gauge_factory_returns_factory(self) -> None:
+        """Test that gauge_factory returns gaugeFactory()."""
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.gaugeFactory.return_value.call.return_value = (
+            MOCK_ADDRESS
+        )
+
+        with patch.object(
+            VelodromeCLGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeCLGaugeContract.gauge_factory(MagicMock(), MOCK_ADDRESS)
+
+        assert result == {"gauge_factory": MOCK_ADDRESS}
+
+
 class TestAbiIntegrity:
     """Verify that every function used in contract.py exists in the ABI."""
 
     ABI_FILE = "contract_interface.json"
     EXPECTED_FUNCTIONS = [
         "balanceOf",
+        "claimEmissions",
         "deposit",
+        "depositBlock",
         "earned",
+        "gaugeFactory",
         "getReward",
         "stakedContains",
         "totalSupply",

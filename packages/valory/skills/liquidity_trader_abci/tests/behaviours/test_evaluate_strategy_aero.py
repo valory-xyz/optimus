@@ -220,7 +220,6 @@ class TestAsyncActLegacyExit:
             == 0
         )
 
-
     def test_unprepared_legacy_exit_holds_the_cycle(self):
         """An open legacy position whose exit waits a cycle blocks every new entry."""
         b = _mk(current_positions=[_legacy_v2()], pools={"velodrome": _pool(None, 0)})

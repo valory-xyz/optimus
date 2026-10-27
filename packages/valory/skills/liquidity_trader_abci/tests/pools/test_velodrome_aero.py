@@ -29,8 +29,8 @@ import pytest
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     AERO_PROTOCOL,
-    ZERO_ADDRESS,
     VelodromePoolBehaviour,
+    ZERO_ADDRESS,
     is_aero_position,
 )
 from packages.valory.skills.liquidity_trader_abci.tests.pools.test_velodrome import (
@@ -603,7 +603,9 @@ class TestReadPendingRewards:
         """A failed voter lookup is unreadable, not nothing pending."""
         b = _aero_behaviour({"gauges": None})
         b.context.params.velodrome_voter_contract_addresses = {CHAIN: "0xVoter"}
-        assert exhaust_generator(b.read_pending_rewards(POOL, SAFE, chain=CHAIN)) is None
+        assert (
+            exhaust_generator(b.read_pending_rewards(POOL, SAFE, chain=CHAIN)) is None
+        )
         assert not b.contract_interact.called("earned")
 
 

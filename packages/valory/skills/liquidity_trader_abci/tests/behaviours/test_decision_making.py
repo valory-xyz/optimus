@@ -957,7 +957,11 @@ class TestPostExecuteExitPool:
         b._record_pool_exited = _make_gen_method(None)
         b.sleep = _make_gen_method(None)
 
-        action = {"pool_address": "0xPOOL", "chain": "optimism", "dex_type": "UniswapV3"}
+        action = {
+            "pool_address": "0xPOOL",
+            "chain": "optimism",
+            "dex_type": "UniswapV3",
+        }
         _exhaust(b._post_execute_exit_pool([action], 0))
 
         assert b.current_positions[0] == closed

@@ -372,6 +372,8 @@ def _v2_pool(**extra: Any) -> Dict[str, Any]:
         "decimals1": 18,
         "reserves": (1_000_000 * 10**6, 1_000_000 * 10**18),
         "total_supply": 2_000_000 * WAD,
+        # As many LP tokens as a $1,000 position mints, so it would earn half.
+        "gauge_total_supply": 1000 * WAD,
         # 1e-4 AERO per LP token over one day
         "gauge_observations": [(10**14 + 1, SECONDS_PER_DAY), (1, 0)],
         "gauge_daily_observations": [
@@ -387,12 +389,21 @@ class TestV2Metrics:
     """Tests for aero_v2_pool_metrics."""
 
     def test_apr(self) -> None:
-        """APR = reward per LP token x AERO price / LP price, annualised."""
+        """APR = reward per LP token x stake share x AERO price / LP price, annualised."""
         metrics = aero_v2_pool_metrics(_v2_pool(), aero_price=0.5)
-        # The LP token is worth $1 and earns 1e-4 AERO, at $0.5, per day.
+        # The LP token is worth $1 and earns 1e-4 AERO, at $0.5, per day, halved
+        # by the position's own stake.
         assert metrics["tvl"] == pytest.approx(2_000_000)
-        assert metrics["apr"] == pytest.approx(0.5e-4 * 365 * 100, rel=1e-6)
-        assert metrics["daily_returns"] == pytest.approx([0.5e-4, 0.5e-4])
+        assert metrics["apr"] == pytest.approx(0.25e-4 * 365 * 100, rel=1e-6)
+        assert metrics["daily_returns"] == pytest.approx([0.25e-4, 0.25e-4])
+
+    @pytest.mark.parametrize(
+        "position_usd, share", [(1000.0, 0.5), (3000.0, 0.25), (0.0, 1.0)]
+    )
+    def test_position_dilutes_the_stake(self, position_usd: float, share: float) -> None:
+        """The share is the gauge's stake over that stake plus the position's LP."""
+        metrics = aero_v2_pool_metrics(_v2_pool(), 0.5, position_usd=position_usd)
+        assert metrics["apr"] == pytest.approx(0.5e-4 * 365 * 100 * share, rel=1e-6)
 
     def test_empty_pool(self) -> None:
         """A pool without supply earns no APR."""
@@ -416,7 +427,7 @@ class TestV2Metrics:
             ],
         )
         metrics = aero_v2_pool_metrics(pool, aero_price=0.5)
-        assert metrics["daily_returns"] == pytest.approx([0.5e-4, 0.5e-4])
+        assert metrics["daily_returns"] == pytest.approx([0.25e-4, 0.25e-4])
 
     def test_gauge_with_one_observation_has_no_series(self) -> None:
         """Without two returns in either ring no Sharpe series exists, and it is logged."""
@@ -427,7 +438,7 @@ class TestV2Metrics:
         )
         with patch(f"{MODULE}.logger") as logger:
             metrics = aero_v2_pool_metrics(pool, aero_price=0.5)
-        assert metrics["daily_returns"] == pytest.approx([0.5e-4])
+        assert metrics["daily_returns"] == pytest.approx([0.25e-4])
         assert "too few gauge observations" in logger.warning.call_args.args[0]
 
 
@@ -588,6 +599,8 @@ class TestReadAeroPoolState:
         v2, cl = pools
         assert v2["reserves"] == (10, 20)
         assert v2["total_supply"] == 30
+        assert v2["gauge_total_supply"] == 30
+        assert (_address(8), "totalSupply()", ()) in multicall.calls
         assert cl["staked_liquidity"] == 40
         assert (cl["balance0"], cl["sqrt_price_x96"], cl["tick"]) == (50, 2**96, 0)
         assert v2["gauge_hourly_observations"] == [(1, 2), (0, 1)]

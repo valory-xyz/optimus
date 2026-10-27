@@ -3317,9 +3317,9 @@ AERO_DEPTH_WINDOW_SECONDS = 7 * SECONDS_PER_DAY
 # Oldest first, ending with the live reading: the gauge tapes' 48-slot hourly
 # ring, which fills the Sharpe series of a gauge too quiet for its daily ring.
 AERO_HOURLY_LOOKBACKS = [hour * 60 * 60 for hour in range(48, -1, -1)]
-# CL emissions are shared by the staked in-range liquidity, so a position's
-# APR falls as it grows. It is quoted for a position of this size.
-AERO_CL_REFERENCE_POSITION_USD = 1000.0
+# Emissions are shared by the gauge's stake, which a position's own stake
+# dilutes, so its APR falls as it grows. It is quoted for a position of this size.
+AERO_REFERENCE_POSITION_USD = 1000.0
 # Immutable pool data lives in the shared price cache so it survives the
 # per-cycle re-execution of this module.
 AERO_POOL_CACHE_PREFIX = "aero_pools"
@@ -3711,14 +3711,21 @@ def _cl_liquidity_per_token1(
     return 1 / value_per_liquidity
 
 
-def aero_v2_pool_metrics(pool: Dict[str, Any], aero_price: float) -> Dict[str, Any]:
+def aero_v2_pool_metrics(
+    pool: Dict[str, Any],
+    aero_price: float,
+    position_usd: float = AERO_REFERENCE_POSITION_USD,
+) -> Dict[str, Any]:
     """Return APR, TVL and daily emission returns of an Aero stable/volatile pool.
 
     Emissions APR = growth of the gauge's ``rewardPerToken`` (AERO per staked LP,
-    1e18-scaled) x AERO price / LP token price, annualised.
+    1e18-scaled) x AERO price / LP token price, annualised. The rate is scaled
+    by the gauge's stake over that stake plus the position's LP, since the
+    position's stake dilutes the pool.
 
-    :param pool: the pool with its live reads (reserves, supply, tapes).
+    :param pool: the pool with its live reads (reserves, supply, stake, tapes).
     :param aero_price: the AERO price in USD.
+    :param position_usd: the position size the APR is quoted for.
     :return: ``apr`` (percent), ``tvl`` and ``daily_returns``.
     """
     reserve0, reserve1 = pool["reserves"]
@@ -3729,9 +3736,11 @@ def aero_v2_pool_metrics(pool: Dict[str, Any], aero_price: float) -> Dict[str, A
     if not total_supply or not tvl:
         return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
     lp_price = tvl / (total_supply / WAD)
+    staked = pool["gauge_total_supply"]
+    share = staked / (staked + position_usd / lp_price * WAD)
 
     def to_return(rate_per_second: float, seconds: int) -> float:
-        return rate_per_second * seconds / WAD * aero_price / lp_price
+        return rate_per_second * seconds / WAD * share * aero_price / lp_price
 
     observed = pool["gauge_observations"]
     rate = _rate_per_second(observed[0], observed[1], 0, 1) if observed else None
@@ -3747,7 +3756,7 @@ def aero_cl_pool_metrics(
     pool: Dict[str, Any],
     aero_price: float,
     tick_bands: List[Dict[str, Any]],
-    position_usd: float = AERO_CL_REFERENCE_POSITION_USD,
+    position_usd: float = AERO_REFERENCE_POSITION_USD,
 ) -> Dict[str, Any]:
     """Return APR, TVL and daily emission returns of an Aero CL pool.
 
@@ -3873,6 +3882,7 @@ def read_aero_pool_state(
             pool_reads = [
                 (address, "getReserves()", (), ["uint256", "uint256", "uint256"]),
                 (address, "totalSupply()", (), ["uint256"]),
+                (gauge, "totalSupply()", (), ["uint256"]),
             ]
         calls.extend(pool_reads)
         calls.extend(
@@ -3914,12 +3924,13 @@ def read_aero_pool_state(
                     balance1=balance1[0],  # type: ignore[index]
                 )
         else:
-            reserves, supply = next(results), next(results)
-            state = [reserves, supply]
+            reserves, supply, staked = (next(results) for _ in range(3))
+            state = [reserves, supply, staked]
             if None not in state:
                 pool.update(
                     reserves=reserves[:2],  # type: ignore[index]
                     total_supply=supply[0],  # type: ignore[index]
+                    gauge_total_supply=staked[0],  # type: ignore[index]
                 )
         observed, daily, hourly, pool_observed = (next(results) for _ in range(4))
         if None in state or observed is None or daily is None:

@@ -518,7 +518,7 @@ class TestClaimClEmissions:
                 MOCK_ADDRESS,
                 MOCK_ACCOUNT,
                 MOCK_ADDRESS,
-                (MOCK_TOKEN_ID, 43),
+                [MOCK_TOKEN_ID, 43],
             )
 
         assert result == {"tx_hash": bytes.fromhex("c1a2")}

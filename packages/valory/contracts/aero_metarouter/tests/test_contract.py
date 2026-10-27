@@ -21,6 +21,7 @@
 
 import json
 from pathlib import Path
+from typing import Any, Tuple
 from unittest.mock import MagicMock, patch
 
 from eth_abi import decode
@@ -44,7 +45,7 @@ SAFE = "0x1111111111111111111111111111111111111111"
 ABI_PATH = Path(__file__).parents[1] / "build" / "contract_interface.json"
 
 
-def _real_instance() -> MagicMock:
+def _real_instance() -> Tuple[MagicMock, Any]:
     """Return a ledger api whose contract instance encodes with the real ABI."""
     w3 = Web3()
     abi = json.loads(ABI_PATH.read_text())["abi"]

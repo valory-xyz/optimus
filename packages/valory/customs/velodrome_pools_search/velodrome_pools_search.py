@@ -3428,13 +3428,16 @@ def discover_aero_pools(
         to ``[kind, token0, token1, gauge]``.
     """
     addresses = AERO_CONTRACT_ADDRESSES[chain_id]
-    cache = get_cached_price(
-        str(chain_id),
-        "index",
-        price_cache or {},
-        AERO_POOL_CACHE_TTL,
-        prefix=AERO_POOL_CACHE_PREFIX,
-    ) or _empty_aero_pool_cache()
+    cache = (
+        get_cached_price(
+            str(chain_id),
+            "index",
+            price_cache or {},
+            AERO_POOL_CACHE_TTL,
+            prefix=AERO_POOL_CACHE_PREFIX,
+        )
+        or _empty_aero_pool_cache()
+    )
 
     kinds = list(AERO_POOL_KINDS.items())
     lengths = aero_multicall(
@@ -3677,9 +3680,7 @@ def _cl_liquidity_per_token1(
     return 1 / value_per_liquidity
 
 
-def aero_v2_pool_metrics(
-    pool: Dict[str, Any], aero_price: float
-) -> Dict[str, Any]:
+def aero_v2_pool_metrics(pool: Dict[str, Any], aero_price: float) -> Dict[str, Any]:
     """Return APR, TVL and daily emission returns of an Aero stable/volatile pool.
 
     Emissions APR = growth of the gauge's ``rewardPerToken`` (AERO per staked LP,
@@ -3740,7 +3741,9 @@ def aero_cl_pool_metrics(
             pool["sqrt_price_x96"], band["tick_lower"], band["tick_upper"]
         )
         if per_token1 is not None:
-            position_liquidity += band.get("allocation", 0) * position_token1 * per_token1
+            position_liquidity += (
+                band.get("allocation", 0) * position_token1 * per_token1
+            )
     if not position_liquidity:
         return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
     share = position_liquidity / (pool["staked_liquidity"] + position_liquidity)
@@ -3795,22 +3798,40 @@ def read_aero_pool_state(
     activated = aero_multicall(
         w3,
         [
-            (addresses["leaf_voter"], "isActivated(address)", (pool["gauge"],), ["bool"])
+            (
+                addresses["leaf_voter"],
+                "isActivated(address)",
+                (pool["gauge"],),
+                ["bool"],
+            )
             for pool in pools
         ],
     )
     live = [
-        pool for pool, result in zip(pools, activated) if result is not None and result[0]
+        pool
+        for pool, result in zip(pools, activated)
+        if result is not None and result[0]
     ]
 
     calls: List[AeroCall] = []
     for pool in live:
         address, gauge = pool["id"], pool["gauge"]
         if pool["kind"] == "cl":
-            gauge_tape, pool_tape = addresses["cl_gauge_tape"], addresses["cl_pool_tape"]
-            gauge_output, pool_output = CL_GAUGE_TAPE_OBSERVATIONS, CL_POOL_TAPE_OBSERVATIONS
+            gauge_tape, pool_tape = (
+                addresses["cl_gauge_tape"],
+                addresses["cl_pool_tape"],
+            )
+            gauge_output, pool_output = (
+                CL_GAUGE_TAPE_OBSERVATIONS,
+                CL_POOL_TAPE_OBSERVATIONS,
+            )
             pool_reads: List[AeroCall] = [
-                (address, "slot0()", (), ["uint160", "int24", "uint16", "uint16", "uint16", "bool"]),
+                (
+                    address,
+                    "slot0()",
+                    (),
+                    ["uint160", "int24", "uint16", "uint16", "uint16", "bool"],
+                ),
                 (address, "stakedLiquidity()", (), ["uint128"]),
                 (pool["token0"], "balanceOf(address)", (address,), ["uint256"]),
                 (pool["token1"], "balanceOf(address)", (address,), ["uint256"]),
@@ -3825,9 +3846,19 @@ def read_aero_pool_state(
         calls.extend(pool_reads)
         calls.extend(
             [
-                (gauge_tape, "observe(address,uint48[])", (gauge, [0, SECONDS_PER_DAY]), gauge_output),
+                (
+                    gauge_tape,
+                    "observe(address,uint48[])",
+                    (gauge, [0, SECONDS_PER_DAY]),
+                    gauge_output,
+                ),
                 (gauge_tape, "dailyObservations(address)", (gauge,), gauge_output),
-                (pool_tape, "observe(address,uint48[])", (address, [0, AERO_DEPTH_WINDOW_SECONDS]), pool_output),
+                (
+                    pool_tape,
+                    "observe(address,uint48[])",
+                    (address, [0, AERO_DEPTH_WINDOW_SECONDS]),
+                    pool_output,
+                ),
             ]
         )
 
@@ -3970,16 +4001,19 @@ def get_opportunities_for_aero(
     chain_name = CHAIN_NAMES[chain_id]
     for pool in pools:
         if pool["kind"] == "cl":
-            pool["tick_bands"] = calculate_tick_lower_and_upper_velodrome(
-                chain=chain_name,
-                pool_address=pool["id"],
-                is_stable=False,
-                coingecko_api_key=coingecko_api_key,
-                x402_session=x402_session,
-                x402_proxy=x402_proxy,
-                price_cache=price_cache,
-                price_cache_ttl=price_cache_ttl,
-            ) or []
+            pool["tick_bands"] = (
+                calculate_tick_lower_and_upper_velodrome(
+                    chain=chain_name,
+                    pool_address=pool["id"],
+                    is_stable=False,
+                    coingecko_api_key=coingecko_api_key,
+                    x402_session=x402_session,
+                    x402_proxy=x402_proxy,
+                    price_cache=price_cache,
+                    price_cache_ttl=price_cache_ttl,
+                )
+                or []
+            )
             pool.update(aero_cl_pool_metrics(pool, aero_price, pool["tick_bands"]))
         else:
             pool.update(aero_v2_pool_metrics(pool, aero_price))
@@ -4123,7 +4157,10 @@ def calculate_aero_metrics(
     )
     if len(decimals) < 2:
         return None
-    pool["decimals0"], pool["decimals1"] = (decimals[pool["token0"]], decimals[pool["token1"]])
+    pool["decimals0"], pool["decimals1"] = (
+        decimals[pool["token0"]],
+        decimals[pool["token1"]],
+    )
     readable = read_aero_pool_state(w3, chain_id, [pool])
     aero_price = get_aero_price_usd(
         coingecko_api_key, x402_session, x402_proxy, price_cache, price_cache_ttl

@@ -27,7 +27,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     HELD_ASSETS,
     LiquidityTraderBaseBehaviour,
-    PositionStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import WithdrawFundsPayload
 from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (

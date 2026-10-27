@@ -3919,6 +3919,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         The penalty applies while ``penaltyRate > 0``, ``minStakeBlocks > 0`` and the
         current block is before ``depositBlock + minStakeBlocks``. A failed read is
         treated as inactive, so a flaky RPC never holds a position in its gauge.
+
+        :param gauge_address: the CL gauge the token is staked in.
+        :param token_id: the staked position NFT.
+        :param chain: the gauge's chain.
+        :yield: the gauge, gauge factory and ledger reads.
+        :return: whether unstaking now forfeits the position's emissions.
         """
         deposit_block = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,

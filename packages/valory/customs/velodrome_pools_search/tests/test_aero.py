@@ -29,34 +29,14 @@ from web3 import Web3
 
 import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as velo
 from packages.valory.customs.velodrome_pools_search.velodrome_pools_search import (
-    AERO_CONTRACT_ADDRESSES,
-    AERO_PROTOCOL,
-    AERO_TOKEN_ADDRESS_BASE,
-    BASE_CHAIN_ID,
-    OPTIMISM_CHAIN_ID,
-    SECONDS_PER_DAY,
-    SECONDS_PER_YEAR,
-    WAD,
-    _cl_liquidity_per_token1,
-    _daily_rates,
-    _rate_per_second,
-    _signature_types,
-    aero_cl_pool_metrics,
-    aero_daily_volume_usd,
-    aero_depth_metrics,
-    aero_multicall,
-    aero_v2_pool_metrics,
-    calculate_aero_metrics,
-    calculate_metrics,
-    discover_aero_pools,
-    get_aero_pools,
-    get_aero_price_usd,
-    get_opportunities_for_aero,
-    get_token_decimals,
-    read_aero_pool_state,
-    run,
-    sharpe_ratio_from_daily_returns,
-)
+    AERO_CONTRACT_ADDRESSES, AERO_PROTOCOL, AERO_TOKEN_ADDRESS_BASE,
+    BASE_CHAIN_ID, OPTIMISM_CHAIN_ID, SECONDS_PER_DAY, WAD,
+    _cl_liquidity_per_token1, _daily_rates, _rate_per_second, _signature_types,
+    aero_cl_pool_metrics, aero_daily_volume_usd, aero_depth_metrics,
+    aero_multicall, aero_v2_pool_metrics, calculate_aero_metrics,
+    calculate_metrics, discover_aero_pools, get_aero_pools, get_aero_price_usd,
+    get_opportunities_for_aero, get_token_decimals, read_aero_pool_state, run,
+    sharpe_ratio_from_daily_returns)
 
 MODULE = "packages.valory.customs.velodrome_pools_search.velodrome_pools_search"
 BASE = AERO_CONTRACT_ADDRESSES[BASE_CHAIN_ID]
@@ -159,13 +139,19 @@ class TestAeroMulticall:
 def _discovery_answers(volatile_pools: List[str]) -> Dict[Any, Any]:
     """Answers for one stable, a list of volatile and no CL pools."""
     stable_pool = _address(1)
-    pools = {BASE["stable_pool_factory"]: [stable_pool], BASE["volatile_pool_factory"]: volatile_pools, BASE["cl_factory"]: []}
+    pools = {
+        BASE["stable_pool_factory"]: [stable_pool],
+        BASE["volatile_pool_factory"]: volatile_pools,
+        BASE["cl_factory"]: [],
+    }
     return {
         "allPoolsLength()": lambda target, args: (len(pools[target]),),
         "allPools(uint256)": lambda target, args: (pools[target][args[0]],),
         "token0()": (USDC.lower(),),
         "token1()": (EUSD.lower(),),
-        "computeGaugeAddress(address)": lambda target, args: (_address(1000 + int(args[0], 16)),),
+        "computeGaugeAddress(address)": lambda target, args: (
+            _address(1000 + int(args[0], 16)),
+        ),
     }
 
 
@@ -189,10 +175,14 @@ class TestDiscoverAeroPools:
             again = discover_aero_pools(MagicMock(), BASE_CHAIN_ID, cache)
 
         assert set(again["pools"]) == {_address(1), _address(2), _address(3)}
-        listed = [args for _, sig, args in multicall.calls if sig == "allPools(uint256)"]
+        listed = [
+            args for _, sig, args in multicall.calls if sig == "allPools(uint256)"
+        ]
         assert listed == [(1,)]
 
-    @pytest.mark.parametrize("failing", ["allPoolsLength()", "allPools(uint256)", "token1()"])
+    @pytest.mark.parametrize(
+        "failing", ["allPoolsLength()", "allPools(uint256)", "token1()"]
+    )
     def test_failed_reads_are_retried_later(self, failing: str) -> None:
         """A factory whose pools cannot be read keeps its count, so they are read again."""
         answers = _discovery_answers([_address(2)])
@@ -209,7 +199,9 @@ class TestGetTokenDecimals:
     def test_reads_only_unknown_tokens(self) -> None:
         """Known decimals are reused and unreadable tokens are left out."""
         cache = {"decimals": {USDC: 6}}
-        multicall = _Multicall({(EUSD, "decimals()"): (18,), (WETH, "decimals()"): None})
+        multicall = _Multicall(
+            {(EUSD, "decimals()"): (18,), (WETH, "decimals()"): None}
+        )
         with patch(f"{MODULE}.aero_multicall", multicall):
             result = get_token_decimals(MagicMock(), [USDC, EUSD, WETH], cache)
         assert result == {USDC: 6, EUSD: 18}
@@ -245,7 +237,9 @@ class TestGetAeroPriceUsd:
         assert get_aero_price_usd(None, session, "https://proxy/", cache) == 0.678
         url = session.get.call_args.args[0]
         assert url == "https://proxy/api/v3/simple/token_price/base"
-        assert session.get.call_args.kwargs["params"]["contract_addresses"] == self.TOKEN
+        assert (
+            session.get.call_args.kwargs["params"]["contract_addresses"] == self.TOKEN
+        )
         assert get_aero_price_usd(None, price_cache=cache) == 0.678
 
     def test_x402_error_status(self) -> None:
@@ -257,11 +251,14 @@ class TestGetAeroPriceUsd:
         assert get_aero_price_usd(None, session, "https://proxy", cache) is None
         assert velo.is_recent_failure(self.TOKEN, 0, cache, "aero_spot")
 
-    @pytest.mark.parametrize("key, kwarg", [("CG-demo", "demo_api_key"), ("pro", "api_key")])
+    @pytest.mark.parametrize(
+        "key, kwarg", [("CG-demo", "demo_api_key"), ("pro", "api_key")]
+    )
     def test_api_key(self, key: str, kwarg: str) -> None:
         """Without x402 the CoinGecko client prices AERO by contract."""
-        with patch(f"{MODULE}.CoinGeckoAPI") as cg, patch(
-            f"{MODULE}.is_pro_api_key", return_value=kwarg == "api_key"
+        with (
+            patch(f"{MODULE}.CoinGeckoAPI") as cg,
+            patch(f"{MODULE}.is_pro_api_key", return_value=kwarg == "api_key"),
         ):
             cg.return_value.get_token_price.return_value = {self.TOKEN: {"usd": 0.6}}
             assert get_aero_price_usd(key) == 0.6
@@ -276,8 +273,9 @@ class TestGetAeroPriceUsd:
 
     def test_request_error(self) -> None:
         """A raising client is a failed fetch."""
-        with patch(f"{MODULE}.CoinGeckoAPI", side_effect=Exception("boom")), patch(
-            f"{MODULE}.is_pro_api_key", return_value=False
+        with (
+            patch(f"{MODULE}.CoinGeckoAPI", side_effect=Exception("boom")),
+            patch(f"{MODULE}.is_pro_api_key", return_value=False),
         ):
             assert get_aero_price_usd("key") is None
 
@@ -356,7 +354,11 @@ def _v2_pool(**extra: Any) -> Dict[str, Any]:
         "total_supply": 2_000_000 * WAD,
         # 1e-4 AERO per LP token over one day
         "gauge_observations": [(10**14 + 1, SECONDS_PER_DAY), (1, 0)],
-        "gauge_daily_observations": [(0, 0), (10**14, SECONDS_PER_DAY), (2 * 10**14, 2 * SECONDS_PER_DAY)],
+        "gauge_daily_observations": [
+            (0, 0),
+            (10**14, SECONDS_PER_DAY),
+            (2 * 10**14, 2 * SECONDS_PER_DAY),
+        ],
         **extra,
     }
 
@@ -396,7 +398,11 @@ def _cl_pool(**extra: Any) -> Dict[str, Any]:
         "staked_liquidity": 0,
         # 10 AERO credited over a day
         "gauge_observations": [(0, 10 * WAD, SECONDS_PER_DAY), (0, 0, 0)],
-        "gauge_daily_observations": [(0, 0, 0), (0, 10 * WAD, SECONDS_PER_DAY), (0, 30 * WAD, 2 * SECONDS_PER_DAY)],
+        "gauge_daily_observations": [
+            (0, 0, 0),
+            (0, 10 * WAD, SECONDS_PER_DAY),
+            (0, 30 * WAD, 2 * SECONDS_PER_DAY),
+        ],
         **extra,
     }
 
@@ -443,20 +449,35 @@ class TestDailyVolume:
         """Each swap's input and output are averaged."""
         newer = (0, 0, 4 * 10**6, 2 * 10**18, 0, 0, 0, 0, 2 * SECONDS_PER_DAY, 0)
         older = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-        pool = {"kind": "stable", "decimals0": 6, "decimals1": 18, "pool_observations": [newer, older]}
+        pool = {
+            "kind": "stable",
+            "decimals0": 6,
+            "decimals1": 18,
+            "pool_observations": [newer, older],
+        }
         assert aero_daily_volume_usd(pool) == pytest.approx(1.5)
 
     def test_cl(self) -> None:
         """CL volumes are read from their own slots."""
         newer = (0, SECONDS_PER_DAY, 0, 0, 0, 0, 2 * 10**6, 2 * 10**6, 0, 0, 0, 0, 0, 0)
         older = (0,) * 14
-        pool = {"kind": "cl", "decimals0": 6, "decimals1": 6, "pool_observations": [newer, older]}
+        pool = {
+            "kind": "cl",
+            "decimals0": 6,
+            "decimals1": 6,
+            "pool_observations": [newer, older],
+        }
         assert aero_daily_volume_usd(pool) == pytest.approx(2.0)
 
     def test_no_elapsed_time(self) -> None:
         """A single observation returned twice gives no volume."""
         observation = (0,) * 10
-        pool = {"kind": "stable", "decimals0": 6, "decimals1": 6, "pool_observations": [observation, observation]}
+        pool = {
+            "kind": "stable",
+            "decimals0": 6,
+            "decimals1": 6,
+            "pool_observations": [observation, observation],
+        }
         assert aero_daily_volume_usd(pool) is None
 
 
@@ -478,9 +499,27 @@ class TestReadAeroPoolState:
 
     def _pools(self) -> List[Dict[str, Any]]:
         return [
-            {"id": _address(1), "kind": "stable", "gauge": _address(8), "token0": USDC, "token1": EUSD},
-            {"id": _address(2), "kind": "cl", "gauge": _address(7), "token0": USDC, "token1": EUSD},
-            {"id": _address(3), "kind": "stable", "gauge": _address(9), "token0": USDC, "token1": EUSD},
+            {
+                "id": _address(1),
+                "kind": "stable",
+                "gauge": _address(8),
+                "token0": USDC,
+                "token1": EUSD,
+            },
+            {
+                "id": _address(2),
+                "kind": "cl",
+                "gauge": _address(7),
+                "token0": USDC,
+                "token1": EUSD,
+            },
+            {
+                "id": _address(3),
+                "kind": "stable",
+                "gauge": _address(9),
+                "token0": USDC,
+                "token1": EUSD,
+            },
         ]
 
     def test_reads_activated_pools(self) -> None:
@@ -498,7 +537,11 @@ class TestReadAeroPoolState:
         targets = {(target, sig) for target, sig, _ in multicall.calls}
         assert (BASE["gauge_tape"], "observe(address,uint48[])") in targets
         assert (BASE["cl_pool_tape"], "observe(address,uint48[])") in targets
-        assert not any(_address(3) == args[0] for _, sig, args in multicall.calls if sig == "observe(address,uint48[])")
+        assert not any(
+            _address(3) == args[0]
+            for _, sig, args in multicall.calls
+            if sig == "observe(address,uint48[])"
+        )
 
     def test_unreadable_pools_dropped(self) -> None:
         """A pool whose state cannot be read is left out; a missing pool tape is kept as None."""
@@ -543,11 +586,14 @@ class TestGetAeroPools:
         """Only whitelisted pools with readable decimals reach the live reads."""
         read = MagicMock(side_effect=lambda w3, chain_id, pools: pools)
         decimals = {USDC: 6, EUSD: 18}
-        with patch(f"{MODULE}.get_web3_connection"), patch(
-            f"{MODULE}.discover_aero_pools", return_value=self._cache()
-        ), patch(f"{MODULE}.read_aero_pool_state", read), patch(
-            f"{MODULE}.get_token_decimals",
-            side_effect=lambda w3, tokens, cache: decimals,
+        with (
+            patch(f"{MODULE}.get_web3_connection"),
+            patch(f"{MODULE}.discover_aero_pools", return_value=self._cache()),
+            patch(f"{MODULE}.read_aero_pool_state", read),
+            patch(
+                f"{MODULE}.get_token_decimals",
+                side_effect=lambda w3, tokens, cache: decimals,
+            ),
         ):
             pools = get_aero_pools(BASE_CHAIN_ID, [_address(3)], WHITELIST, {})
 
@@ -559,18 +605,23 @@ class TestGetAeroPools:
 
     def test_unknown_decimals_dropped(self) -> None:
         """A pool whose token decimals cannot be read is not priced."""
-        with patch(f"{MODULE}.get_web3_connection"), patch(
-            f"{MODULE}.discover_aero_pools", return_value=self._cache()
-        ), patch(
-            f"{MODULE}.read_aero_pool_state", side_effect=lambda w3, c, pools: pools
-        ), patch(f"{MODULE}.get_token_decimals", return_value={USDC: 6}):
+        with (
+            patch(f"{MODULE}.get_web3_connection"),
+            patch(f"{MODULE}.discover_aero_pools", return_value=self._cache()),
+            patch(
+                f"{MODULE}.read_aero_pool_state", side_effect=lambda w3, c, pools: pools
+            ),
+            patch(f"{MODULE}.get_token_decimals", return_value={USDC: 6}),
+        ):
             assert get_aero_pools(BASE_CHAIN_ID, [], WHITELIST, {}) == []
 
     def test_nothing_whitelisted(self) -> None:
         """No whitelisted pool means no live reads."""
-        with patch(f"{MODULE}.get_web3_connection"), patch(
-            f"{MODULE}.discover_aero_pools", return_value=self._cache()
-        ), patch(f"{MODULE}.read_aero_pool_state") as read:
+        with (
+            patch(f"{MODULE}.get_web3_connection"),
+            patch(f"{MODULE}.discover_aero_pools", return_value=self._cache()),
+            patch(f"{MODULE}.read_aero_pool_state") as read,
+        ):
             assert get_aero_pools(BASE_CHAIN_ID, [], {"base": {"0xdead": "X"}}) == []
         read.assert_not_called()
 
@@ -595,21 +646,26 @@ class TestGetOpportunitiesForAero:
 
     def _run(self, pools: Any, price: Optional[float] = 0.7, **kwargs: Any) -> Any:
         metrics = {"apr": 12.0, "tvl": 50_000.0, "daily_returns": [0.001, 0.002]}
-        with patch(f"{MODULE}.get_aero_pools", return_value=pools), patch(
-            f"{MODULE}.get_aero_price_usd", return_value=price
-        ), patch(f"{MODULE}.aero_v2_pool_metrics", return_value=metrics), patch(
-            f"{MODULE}.aero_cl_pool_metrics", return_value=metrics
-        ), patch(
-            f"{MODULE}.calculate_tick_lower_and_upper_velodrome",
-            return_value=[{"tick_lower": -1, "tick_upper": 1, "allocation": 1.0}],
-        ), patch(
-            f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.01
+        with (
+            patch(f"{MODULE}.get_aero_pools", return_value=pools),
+            patch(f"{MODULE}.get_aero_price_usd", return_value=price),
+            patch(f"{MODULE}.aero_v2_pool_metrics", return_value=metrics),
+            patch(f"{MODULE}.aero_cl_pool_metrics", return_value=metrics),
+            patch(
+                f"{MODULE}.calculate_tick_lower_and_upper_velodrome",
+                return_value=[{"tick_lower": -1, "tick_upper": 1, "allocation": 1.0}],
+            ),
+            patch(
+                f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.01
+            ),
         ):
             return get_opportunities_for_aero(
                 [],
                 "key",
                 BASE_CHAIN_ID,
-                coin_id_mapping={"base": {"usdc": "usd-coin", "eusd": "electronic-usd"}},
+                coin_id_mapping={
+                    "base": {"usdc": "usd-coin", "eusd": "electronic-usd"}
+                },
                 **kwargs,
             )
 
@@ -639,11 +695,15 @@ class TestGetOpportunitiesForAero:
 
     def test_optimism_dex_type(self) -> None:
         """Optimism opportunities keep the velodrome dex type."""
-        with patch(f"{MODULE}.get_aero_pools", return_value=[_live_pool(chain="optimism")]), patch(
-            f"{MODULE}.get_aero_price_usd", return_value=0.7
-        ), patch(
-            f"{MODULE}.aero_v2_pool_metrics",
-            return_value={"apr": 1.0, "tvl": 20_000.0, "daily_returns": []},
+        with (
+            patch(
+                f"{MODULE}.get_aero_pools", return_value=[_live_pool(chain="optimism")]
+            ),
+            patch(f"{MODULE}.get_aero_price_usd", return_value=0.7),
+            patch(
+                f"{MODULE}.aero_v2_pool_metrics",
+                return_value={"apr": 1.0, "tvl": 20_000.0, "daily_returns": []},
+            ),
         ):
             (opportunity,) = get_opportunities_for_aero([], None, OPTIMISM_CHAIN_ID)
         assert opportunity["dex_type"] == "velodrome"
@@ -667,25 +727,40 @@ class TestCalculateAeroMetrics:
             **extra,
         }
 
-    def _metrics(self, position: Dict[str, Any], readable: bool = True, decimals: Any = None) -> Any:
-        state = MagicMock(side_effect=lambda w3, chain_id, pools: pools if readable else [])
-        with patch(f"{MODULE}.get_web3_connection"), patch(
-            f"{MODULE}.get_token_decimals",
-            return_value=decimals if decimals is not None else {USDC: 6, EUSD: 18},
-        ), patch(f"{MODULE}.read_aero_pool_state", state), patch(
-            f"{MODULE}.get_aero_price_usd", return_value=0.7
-        ), patch(
-            f"{MODULE}.aero_v2_pool_metrics",
-            return_value={"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]},
-        ) as v2, patch(
-            f"{MODULE}.aero_cl_pool_metrics",
-            return_value={"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]},
-        ) as cl, patch(
-            f"{MODULE}.calculate_tick_lower_and_upper_velodrome", return_value=None
-        ), patch(
-            f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.02
+    def _metrics(
+        self, position: Dict[str, Any], readable: bool = True, decimals: Any = None
+    ) -> Any:
+        state = MagicMock(
+            side_effect=lambda w3, chain_id, pools: pools if readable else []
+        )
+        with (
+            patch(f"{MODULE}.get_web3_connection"),
+            patch(
+                f"{MODULE}.get_token_decimals",
+                return_value=decimals if decimals is not None else {USDC: 6, EUSD: 18},
+            ),
+            patch(f"{MODULE}.read_aero_pool_state", state),
+            patch(f"{MODULE}.get_aero_price_usd", return_value=0.7),
+            patch(
+                f"{MODULE}.aero_v2_pool_metrics",
+                return_value={"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]},
+            ) as v2,
+            patch(
+                f"{MODULE}.aero_cl_pool_metrics",
+                return_value={"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]},
+            ) as cl,
+            patch(
+                f"{MODULE}.calculate_tick_lower_and_upper_velodrome", return_value=None
+            ),
+            patch(
+                f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.02
+            ),
         ):
-            result = calculate_aero_metrics(position, "key", {"base": {"usdc": "usd-coin", "eusd": "electronic-usd"}})
+            result = calculate_aero_metrics(
+                position,
+                "key",
+                {"base": {"usdc": "usd-coin", "eusd": "electronic-usd"}},
+            )
         return result, v2, cl
 
     def test_v2(self) -> None:
@@ -723,9 +798,13 @@ class TestRunRoutesAero:
 
     def test_base_uses_aero(self) -> None:
         """Base goes to get_opportunities_for_aero, not to Sugar."""
-        with patch(f"{MODULE}.get_web3_connection"), patch(
-            f"{MODULE}.get_opportunities_for_aero", return_value=[{"pool": 1}]
-        ) as aero, patch(f"{MODULE}.get_opportunities_for_velodrome") as sugar:
+        with (
+            patch(f"{MODULE}.get_web3_connection"),
+            patch(
+                f"{MODULE}.get_opportunities_for_aero", return_value=[{"pool": 1}]
+            ) as aero,
+            patch(f"{MODULE}.get_opportunities_for_velodrome") as sugar,
+        ):
             result = run(
                 chains=["base"],
                 current_positions=[],

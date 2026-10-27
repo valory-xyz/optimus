@@ -3312,6 +3312,58 @@ class LiquidityTraderBaseBehaviour(
             or position.get("staked_amount", 0) > 0
         )
 
+    def _is_position_staked(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, bool]:
+        """Return whether the position may be staked, reading its Aero gauge when the stored flag says not."""
+        if self._has_staking_metadata(position):
+            return True
+        chain = position.get("chain")
+        pool_address = position.get("pool_address")
+        gauge_address = position.get("gauge_address")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        if not is_aero_position(position) or not gauge_address or not safe_address:
+            return False
+
+        # A restart between the stake tx and storing staked=True leaves the flag unset.
+        pool = self.pools.get(DexType.VELODROME.value)
+        if position.get("is_cl_pool"):
+            staked_ids, failed = yield from self._filter_staked_token_ids(
+                pool,
+                safe_address,
+                self._position_token_ids(position),
+                chain,
+                gauge_address,
+            )
+            staked = None if failed else bool(staked_ids)
+        else:
+            balance = yield from pool.read_staked_balance(
+                self,
+                lp_token=pool_address,
+                user_address=safe_address,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            staked = None if balance is None else balance > 0
+
+        if staked is None:
+            self.context.logger.warning(
+                f"Could not read the stake of Aero pool {pool_address} in gauge "
+                f"{gauge_address}; trusting the stored flag"
+            )
+            return False
+        return staked
+
+    @staticmethod
+    def _position_token_ids(position: Dict[str, Any]) -> List[int]:
+        """Return the CL token IDs a position holds."""
+        token_ids = [
+            p["token_id"] for p in position.get("positions", []) if "token_id" in p
+        ]
+        if not token_ids and position.get("token_id") is not None:
+            token_ids = [position["token_id"]]
+        return token_ids
+
     def _build_unstake_lp_tokens_action(
         self, position: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -3478,11 +3530,7 @@ class LiquidityTraderBaseBehaviour(
             return self._build_unstake_lp_tokens_action(position)
 
         positions_data = position.get("positions", [])
-        token_ids = [p["token_id"] for p in positions_data if "token_id" in p]
-        if not token_ids:
-            token_id = position.get("token_id")
-            if token_id is not None:
-                token_ids = [token_id]
+        token_ids = self._position_token_ids(position)
         if not token_ids:
             self._log_verification_fallback(
                 "unstake", "no_token_ids", pool_address, chain
@@ -3573,7 +3621,8 @@ class LiquidityTraderBaseBehaviour(
             status = position.get("status")
 
             if status == PositionStatus.OPEN.value:
-                if self._has_staking_metadata(position):
+                is_staked = yield from self._is_position_staked(position)
+                if is_staked:
                     unstake_action = (
                         yield from self._build_unstake_lp_tokens_action_verified(
                             position

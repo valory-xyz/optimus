@@ -102,3 +102,83 @@ class TestAeroPositionActions:
         b = _make_behaviour()
         assert b._has_staking_metadata(self._position()) is False
         assert b._has_staking_metadata(self._position(staked=True)) is True
+
+
+class TestIsPositionStaked:
+    """An Aero position the stored flag calls unstaked is checked on its gauge."""
+
+    def _behaviour(self, staked_balance=None, cl_staked=None):
+        b = _make_behaviour()
+        pool = MagicMock()
+        pool.read_staked_balance = MagicMock(side_effect=_make_gen(staked_balance))
+        pool.is_cl_token_staked = MagicMock(side_effect=_make_gen(cl_staked))
+        b.pools = {"velodrome": pool}
+        return b, pool
+
+    def _position(self, **extra):
+        return TestAeroPositionActions()._position(**extra)
+
+    def test_stored_flag_is_trusted_when_set(self) -> None:
+        """A position flagged staked is not read on-chain."""
+        b, pool = self._behaviour()
+        assert _exhaust(b._is_position_staked(self._position(staked=True))) is True
+        pool.read_staked_balance.assert_not_called()
+
+    def test_legacy_or_unreadable_position_is_not_read(self) -> None:
+        """Legacy positions, a missing gauge and a chain without a Safe keep the stored answer."""
+        b, pool = self._behaviour(staked_balance=5)
+        for position in (
+            self._position(protocol=None, gauge_address=None),
+            self._position(gauge_address=None),
+            self._position(chain="base"),
+        ):
+            assert _exhaust(b._is_position_staked(position)) is False
+        pool.read_staked_balance.assert_not_called()
+
+    def test_v2_stake_left_by_a_restart_is_found(self) -> None:
+        """LP in the gauge counts as staked even though staked=True was never stored."""
+        b, pool = self._behaviour(staked_balance=5)
+        assert _exhaust(b._is_position_staked(self._position())) is True
+        pool.read_staked_balance.assert_called_once_with(
+            b,
+            lp_token="0xPool",
+            user_address="0x" + "aa" * 20,
+            chain="optimism",
+            gauge_address="0xGauge",
+        )
+
+    def test_v2_empty_gauge_is_not_staked(self) -> None:
+        """No LP in the gauge is not staked."""
+        b, _ = self._behaviour(staked_balance=0)
+        assert _exhaust(b._is_position_staked(self._position())) is False
+
+    def test_cl_token_in_gauge_is_staked(self) -> None:
+        """A CL position whose token is in the gauge is staked."""
+        b, pool = self._behaviour(cl_staked=True)
+        position = self._position(is_cl_pool=True, positions=[{"token_id": 7}])
+        assert _exhaust(b._is_position_staked(position)) is True
+        assert pool.is_cl_token_staked.call_args.args[2] == 7
+
+    def test_cl_token_not_in_gauge(self) -> None:
+        """A CL position whose token is not in the gauge is not staked."""
+        b, _ = self._behaviour(cl_staked=False)
+        position = self._position(is_cl_pool=True, token_id=7)
+        assert _exhaust(b._is_position_staked(position)) is False
+
+    def test_unreadable_gauge_trusts_the_flag(self) -> None:
+        """A failed read falls back to the stored flag and is logged."""
+        b, _ = self._behaviour(staked_balance=None, cl_staked=None)
+        for position in (
+            self._position(),
+            self._position(is_cl_pool=True, token_id=7),
+        ):
+            assert _exhaust(b._is_position_staked(position)) is False
+        assert "Could not read the stake" in b.context.logger.warning.call_args.args[0]
+
+    def test_unstaking_actions_read_the_gauge(self) -> None:
+        """The withdrawal's unstake step builds an unstake for a stake left by a restart."""
+        b, _ = self._behaviour(staked_balance=5)
+        actions = _exhaust(
+            b._prepare_unstaking_actions([self._position(status="open")])
+        )
+        assert [a["action"] for a in actions] == ["UnstakeLpTokens"]

@@ -30,6 +30,7 @@ from web3 import Web3
 import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as velo
 from packages.valory.customs.velodrome_pools_search.velodrome_pools_search import (
     AERO_CONTRACT_ADDRESSES,
+    AERO_HOURLY_LOOKBACKS,
     AERO_PROTOCOL,
     AERO_TOKEN_ADDRESS_BASE,
     BASE_CHAIN_ID,
@@ -405,6 +406,30 @@ class TestV2Metrics:
         )
         assert metrics["apr"] == 0.0
 
+    def test_quiet_gauge_falls_back_to_the_hourly_ring(self) -> None:
+        """A daily ring with one return is merged with the hourly ring and the live reading."""
+        pool = _v2_pool(
+            gauge_daily_observations=[(0, 0), (10**14, SECONDS_PER_DAY)],
+            gauge_hourly_observations=[
+                (10**14, SECONDS_PER_DAY),
+                (3 * 10**14, 3 * SECONDS_PER_DAY),
+            ],
+        )
+        metrics = aero_v2_pool_metrics(pool, aero_price=0.5)
+        assert metrics["daily_returns"] == pytest.approx([0.5e-4, 0.5e-4])
+
+    def test_gauge_with_one_observation_has_no_series(self) -> None:
+        """Without two returns in either ring no Sharpe series exists, and it is logged."""
+        pool = _v2_pool(
+            id=_address(1),
+            gauge_daily_observations=[(0, 0)],
+            gauge_hourly_observations=[(0, 0), (10**14, SECONDS_PER_DAY)],
+        )
+        with patch(f"{MODULE}.logger") as logger:
+            metrics = aero_v2_pool_metrics(pool, aero_price=0.5)
+        assert metrics["daily_returns"] == pytest.approx([0.5e-4])
+        assert "too few gauge observations" in logger.warning.call_args.args[0]
+
 
 def _cl_pool(**extra: Any) -> Dict[str, Any]:
     return {
@@ -455,6 +480,18 @@ class TestClMetrics:
         """A tape that has not grown gives 0 APR."""
         pool = _cl_pool(gauge_observations=[(0, 5, 10), (0, 5, 0)])
         assert aero_cl_pool_metrics(pool, 1.0, self.BANDS)["apr"] == 0.0
+
+    def test_quiet_gauge_falls_back_to_the_hourly_ring(self) -> None:
+        """CL gauges merge their rings by the observation timestamp too."""
+        pool = _cl_pool(
+            gauge_daily_observations=[(0, 0, 0)],
+            gauge_hourly_observations=[
+                (0, 10 * WAD, SECONDS_PER_DAY),
+                (0, 30 * WAD, 2 * SECONDS_PER_DAY),
+            ],
+        )
+        metrics = aero_cl_pool_metrics(pool, 1.0, self.BANDS, position_usd=1000.0)
+        assert metrics["daily_returns"] == pytest.approx([0.01, 0.02])
 
 
 class TestDailyVolume:
@@ -553,6 +590,12 @@ class TestReadAeroPoolState:
         assert v2["total_supply"] == 30
         assert cl["staked_liquidity"] == 40
         assert (cl["balance0"], cl["sqrt_price_x96"], cl["tick"]) == (50, 2**96, 0)
+        assert v2["gauge_hourly_observations"] == [(1, 2), (0, 1)]
+        assert (
+            BASE["gauge_tape"],
+            "observe(address,uint48[])",
+            (_address(8), AERO_HOURLY_LOOKBACKS),
+        ) in multicall.calls
         targets = {(target, sig) for target, sig, _ in multicall.calls}
         assert (BASE["gauge_tape"], "observe(address,uint48[])") in targets
         assert (BASE["cl_pool_tape"], "observe(address,uint48[])") in targets
@@ -571,6 +614,16 @@ class TestReadAeroPoolState:
             pools = read_aero_pool_state(MagicMock(), BASE_CHAIN_ID, self._pools())
         assert [pool["id"] for pool in pools] == [_address(2)]
         assert pools[0]["pool_observations"] is None
+
+    def test_unreadable_hourly_ring_is_empty(self) -> None:
+        """A failed hourly read leaves the pool with only its daily ring."""
+        answers = _state_answers()
+        answers["observe(address,uint48[])"] = lambda target, args: (
+            None if args[1] == AERO_HOURLY_LOOKBACKS else ([(1, 2), (0, 1)],)
+        )
+        with patch(f"{MODULE}.aero_multicall", _Multicall(answers)):
+            pools = read_aero_pool_state(MagicMock(), BASE_CHAIN_ID, self._pools())
+        assert [pool["gauge_hourly_observations"] for pool in pools] == [[], []]
 
     def test_unreadable_cl_pool_dropped(self) -> None:
         """A CL pool whose staked liquidity cannot be read is left out."""

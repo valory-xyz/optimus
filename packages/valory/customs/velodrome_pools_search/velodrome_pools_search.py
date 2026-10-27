@@ -3314,6 +3314,9 @@ SECONDS_PER_YEAR = 365 * SECONDS_PER_DAY
 MULTICALL_BATCH_SIZE = 200
 # Cumulative pool volume is read over this window for the depth score.
 AERO_DEPTH_WINDOW_SECONDS = 7 * SECONDS_PER_DAY
+# Oldest first, ending with the live reading: the gauge tapes' 48-slot hourly
+# ring, which fills the Sharpe series of a gauge too quiet for its daily ring.
+AERO_HOURLY_LOOKBACKS = [hour * 60 * 60 for hour in range(48, -1, -1)]
 # CL emissions are shared by the staked in-range liquidity, so a position's
 # APR falls as it grows. It is quoted for a position of this size.
 AERO_CL_REFERENCE_POSITION_USD = 1000.0
@@ -3612,6 +3615,34 @@ def _daily_rates(
     return rates
 
 
+def _emission_rates(
+    pool: Dict[str, Any], value_index: int, time_index: int
+) -> List[float]:
+    """Return the per-second emission growth between a gauge's tape observations.
+
+    The daily ring is written only on a day the gauge is touched, so a quiet
+    gauge falls back to every observation both rings and the live reading hold.
+    """
+    rates = _daily_rates(pool["gauge_daily_observations"], value_index, time_index)
+    if len(rates) >= 2:
+        return rates
+    by_time = {
+        observation[time_index]: observation
+        for observation in [
+            *pool["gauge_daily_observations"],
+            *pool["gauge_hourly_observations"],
+        ]
+    }
+    rates = _daily_rates(
+        [by_time[timestamp] for timestamp in sorted(by_time)], value_index, time_index
+    )
+    if len(rates) < 2:
+        logger.warning(
+            f"Aero pool {pool['id']} has too few gauge observations for a Sharpe ratio"
+        )
+    return rates
+
+
 def sharpe_ratio_from_daily_returns(
     daily_returns: List[float], risk_free_rate: float = 0.03
 ) -> Optional[float]:
@@ -3707,7 +3738,7 @@ def aero_v2_pool_metrics(pool: Dict[str, Any], aero_price: float) -> Dict[str, A
     apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
     daily_returns = [
         to_return(daily_rate, SECONDS_PER_DAY)
-        for daily_rate in _daily_rates(pool["gauge_daily_observations"], 0, 1)
+        for daily_rate in _emission_rates(pool, 0, 1)
     ]
     return {"apr": apr, "tvl": tvl, "daily_returns": daily_returns}
 
@@ -3756,7 +3787,7 @@ def aero_cl_pool_metrics(
     apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
     daily_returns = [
         to_return(daily_rate, SECONDS_PER_DAY)
-        for daily_rate in _daily_rates(pool["gauge_daily_observations"], 1, 2)
+        for daily_rate in _emission_rates(pool, 1, 2)
     ]
     return {"apr": apr, "tvl": tvl, "daily_returns": daily_returns}
 
@@ -3854,6 +3885,12 @@ def read_aero_pool_state(
                 ),
                 (gauge_tape, "dailyObservations(address)", (gauge,), gauge_output),
                 (
+                    gauge_tape,
+                    "observe(address,uint48[])",
+                    (gauge, AERO_HOURLY_LOOKBACKS),
+                    gauge_output,
+                ),
+                (
                     pool_tape,
                     "observe(address,uint48[])",
                     (address, [0, AERO_DEPTH_WINDOW_SECONDS]),
@@ -3884,12 +3921,13 @@ def read_aero_pool_state(
                     reserves=reserves[:2],  # type: ignore[index]
                     total_supply=supply[0],  # type: ignore[index]
                 )
-        observed, daily, pool_observed = next(results), next(results), next(results)
+        observed, daily, hourly, pool_observed = (next(results) for _ in range(4))
         if None in state or observed is None or daily is None:
             logger.warning(f"Could not read the state of Aero pool {pool['id']}")
             continue
         pool["gauge_observations"] = observed[0]
         pool["gauge_daily_observations"] = daily[0]
+        pool["gauge_hourly_observations"] = hourly[0] if hourly else []
         pool["pool_observations"] = pool_observed[0] if pool_observed else None
         readable.append(pool)
     return readable

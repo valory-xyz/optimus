@@ -10,7 +10,7 @@ fingerprint:
   build/contract_interface.json: bafybeie3rkxdync3jd5elmicug5v7iy3coqkqd5jy46547np6febgsapha
   contract.py: bafybeieyxnxpcp4rnbp3k2bi7m3ujjiy3yjrf3ocljqd5u5oflcsdijyaq
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
-  tests/test_contract.py: bafybeiacav4cwajz3qmyevhpmhb5vqkjhvc2mlueibr23xzlmwbzrf3vhm
+  tests/test_contract.py: bafybeia3oqjpcb3gj6seoy6liemt7a6frru6k44dbnm7pfwl22v7qfrmau
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: AeroMetarouterContract

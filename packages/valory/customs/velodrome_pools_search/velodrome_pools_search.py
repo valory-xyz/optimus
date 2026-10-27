@@ -3260,6 +3260,910 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     return sorted_pools[:n]
 
 
+# ---------------------------------------------------------------------------
+# Aero
+#
+# Aerodrome (Base) and Velodrome (Optimism) were upgraded into Aero on
+# 2026-10-22 and their v2 gauges were killed. Aero has no Sugar contracts:
+# pools are listed from its factories and priced from its tapes. Addresses
+# come from deployment-addresses/ in dromos-labs/metadex-public and
+# dromos-labs/metadex-slipstream-public.
+# ---------------------------------------------------------------------------
+
+AERO_PROTOCOL = "aero"
+MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11"
+# Aero's emissions token; xAERO on leaf chains redeems 1:1 for it.
+AERO_TOKEN_ADDRESS_BASE = "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee"
+AERO_CONTRACT_ADDRESSES: Dict[int, Dict[str, str]] = {
+    BASE_CHAIN_ID: {
+        "stable_pool_factory": "0x78589E876edcEbdce72ee3436ab3c9AD3a7cEF2D",
+        "volatile_pool_factory": "0x8E6a9FCd1d638CC760Ffba397605Fe3355dE76D2",
+        "cl_factory": "0x9CB220581b91b0C83223012FE69688b92aD07a76",
+        "stable_gauge_factory": "0x1e0f776E88649285f99e65Fa599aD6e0f9D97800",
+        "volatile_gauge_factory": "0x9FBCf2Df0DC553ce40Ef63963Bff465b76792B7E",
+        "cl_gauge_factory": "0xf437f62053ACB121665b8fDBfeA8F214FB8E589d",
+        "leaf_voter": "0x382409fad8503FbCdbB27A4211551fa03e884078",
+        "gauge_tape": "0x9ED69af7cf564D85804486D580c37e0F057dABFa",
+        "cl_gauge_tape": "0x0575b823C22585f1828BBc133d5e522A8499165C",
+        "pool_tape": "0x34bdD64B19D8631F936c2D07F19AAa6B83515992",
+        "cl_pool_tape": "0x27D5EB73e7406675F6B0CbD037490ec3dba935a4",
+    },
+    OPTIMISM_CHAIN_ID: {
+        "stable_pool_factory": "0x78589E876edcEbdce72ee3436ab3c9AD3a7cEF2D",
+        "volatile_pool_factory": "0x8E6a9FCd1d638CC760Ffba397605Fe3355dE76D2",
+        "cl_factory": "0xfeaB42D90055db3a0616249f76B6002D72266778",
+        "stable_gauge_factory": "0x3924b18EDd37267dab6eDd99a3Bb339bf2b668fD",
+        "volatile_gauge_factory": "0x1B5D13975371806D699dC616A96D15B8eD26e5Ca",
+        "cl_gauge_factory": "0xf437f62053ACB121665b8fDBfeA8F214FB8E589d",
+        "leaf_voter": "0x382409fad8503FbCdbB27A4211551fa03e884078",
+        "gauge_tape": "0x1F246123F9385462789f862bC4BA45abaa98cF69",
+        "cl_gauge_tape": "0x0575b823C22585f1828BBc133d5e522A8499165C",
+        "pool_tape": "0x34bdD64B19D8631F936c2D07F19AAa6B83515992",
+        "cl_pool_tape": "0x27D5EB73e7406675F6B0CbD037490ec3dba935a4",
+    },
+}
+# Pool kind -> (pool factory key, gauge factory key)
+AERO_POOL_KINDS: Dict[str, Tuple[str, str]] = {
+    "stable": ("stable_pool_factory", "stable_gauge_factory"),
+    "volatile": ("volatile_pool_factory", "volatile_gauge_factory"),
+    "cl": ("cl_factory", "cl_gauge_factory"),
+}
+
+SECONDS_PER_DAY = 24 * 60 * 60
+SECONDS_PER_YEAR = 365 * SECONDS_PER_DAY
+MULTICALL_BATCH_SIZE = 200
+# Cumulative pool volume is read over this window for the depth score.
+AERO_DEPTH_WINDOW_SECONDS = 7 * SECONDS_PER_DAY
+# CL emissions are shared by the staked in-range liquidity, so a position's
+# APR falls as it grows. It is quoted for a position of this size.
+AERO_CL_REFERENCE_POSITION_USD = 1000.0
+# Immutable pool data lives in the shared price cache so it survives the
+# per-cycle re-execution of this module.
+AERO_POOL_CACHE_PREFIX = "aero_pools"
+AERO_POOL_CACHE_TTL = 30 * SECONDS_PER_DAY
+AERO_PRICE_CACHE_PREFIX = "aero_spot"
+WAD = 10**18
+
+# Tape observation layouts (IGaugeTape, ICLGaugeTape, IPoolTape, ICLPoolTape)
+GAUGE_TAPE_OBSERVATIONS = ["(uint224,uint32)[]"]
+CL_GAUGE_TAPE_OBSERVATIONS = ["(uint112,uint112,uint32)[]"]
+POOL_TAPE_OBSERVATIONS = [
+    "(uint128,uint128,uint128,uint128,uint128,uint128,uint128,uint128,uint48,uint48)[]"
+]
+CL_POOL_TAPE_OBSERVATIONS = [
+    "(uint160,uint40,uint32,int24,uint160,uint48,uint120,uint120,uint120,uint120,"
+    "uint120,uint120,uint120,uint120)[]"
+]
+
+MULTICALL3_ABI = [
+    {
+        "inputs": [
+            {
+                "components": [
+                    {"name": "target", "type": "address"},
+                    {"name": "allowFailure", "type": "bool"},
+                    {"name": "callData", "type": "bytes"},
+                ],
+                "name": "calls",
+                "type": "tuple[]",
+            }
+        ],
+        "name": "aggregate3",
+        "outputs": [
+            {
+                "components": [
+                    {"name": "success", "type": "bool"},
+                    {"name": "returnData", "type": "bytes"},
+                ],
+                "name": "returnData",
+                "type": "tuple[]",
+            }
+        ],
+        "stateMutability": "payable",
+        "type": "function",
+    }
+]
+
+# (target, function signature, arguments, output types)
+AeroCall = Tuple[str, str, Tuple[Any, ...], List[str]]
+
+
+def _signature_types(signature: str) -> List[str]:
+    """Return the argument types of a flat function signature."""
+    inner = signature[signature.index("(") + 1 : -1]
+    return [arg_type for arg_type in inner.split(",") if arg_type]
+
+
+def aero_multicall(w3: Any, calls: List[AeroCall]) -> List[Optional[Tuple[Any, ...]]]:
+    """Run read calls through Multicall3 ``aggregate3``.
+
+    :param w3: web3 connection to the chain.
+    :param calls: the reads to batch.
+    :return: one decoded result per call, or None where the call failed.
+    """
+    multicall = w3.eth.contract(address=MULTICALL3_ADDRESS, abi=MULTICALL3_ABI)
+    results: List[Optional[Tuple[Any, ...]]] = []
+    for start in range(0, len(calls), MULTICALL_BATCH_SIZE):
+        batch = calls[start : start + MULTICALL_BATCH_SIZE]
+        encoded = [
+            (
+                Web3.to_checksum_address(target),
+                True,
+                Web3.keccak(text=signature)[:4]
+                + w3.codec.encode(_signature_types(signature), list(args)),
+            )
+            for target, signature, args, _ in batch
+        ]
+        try:
+            answers = multicall.functions.aggregate3(encoded).call()
+        except Exception as e:
+            logger.warning(f"Multicall batch of {len(batch)} reads failed: {e}")
+            results.extend([None] * len(batch))
+            continue
+        for (_, _, _, output_types), (success, data) in zip(batch, answers):
+            if not success or not data:
+                results.append(None)
+                continue
+            try:
+                results.append(tuple(w3.codec.decode(output_types, data)))
+            except Exception:  # nosec B112 -- an undecodable answer is a failed read
+                results.append(None)
+    return results
+
+
+def _empty_aero_pool_cache() -> Dict[str, Any]:
+    """Return an empty immutable-pool-data cache."""
+    return {"counts": {}, "pools": {}, "decimals": {}}
+
+
+def discover_aero_pools(
+    w3: Any, chain_id: int, price_cache: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """List Aero pools with their tokens and gauge, reading only pools not yet cached.
+
+    :param w3: web3 connection to the chain.
+    :param chain_id: the chain to list.
+    :param price_cache: the shared cache that keeps the data between cycles.
+    :return: ``{"counts", "pools", "decimals"}`` where ``pools`` maps a pool address
+        to ``[kind, token0, token1, gauge]``.
+    """
+    addresses = AERO_CONTRACT_ADDRESSES[chain_id]
+    cache = get_cached_price(
+        str(chain_id),
+        "index",
+        price_cache or {},
+        AERO_POOL_CACHE_TTL,
+        prefix=AERO_POOL_CACHE_PREFIX,
+    ) or _empty_aero_pool_cache()
+
+    kinds = list(AERO_POOL_KINDS.items())
+    lengths = aero_multicall(
+        w3,
+        [
+            (addresses[factory_key], "allPoolsLength()", (), ["uint256"])
+            for _, (factory_key, _) in kinds
+        ],
+    )
+
+    for (kind, (factory_key, gauge_factory_key)), length in zip(kinds, lengths):
+        factory = addresses[factory_key]
+        if length is None:
+            logger.warning(f"Could not read the pool count of the Aero {kind} factory")
+            continue
+        start = cache["counts"].get(factory, 0)
+        pool_addresses = aero_multicall(
+            w3,
+            [
+                (factory, "allPools(uint256)", (index,), ["address"])
+                for index in range(start, length[0])
+            ],
+        )
+        if any(result is None for result in pool_addresses):
+            logger.warning(f"Could not list the new Aero {kind} pools; retrying later")
+            continue
+
+        new_pools = [Web3.to_checksum_address(result[0]) for result in pool_addresses]  # type: ignore[index]
+        details = aero_multicall(
+            w3,
+            [
+                call
+                for pool in new_pools
+                for call in (
+                    (pool, "token0()", (), ["address"]),
+                    (pool, "token1()", (), ["address"]),
+                    (
+                        addresses[gauge_factory_key],
+                        "computeGaugeAddress(address)",
+                        (pool,),
+                        ["address"],
+                    ),
+                )
+            ],
+        )
+        if any(result is None for result in details):
+            logger.warning(f"Could not read the new Aero {kind} pools; retrying later")
+            continue
+
+        for index, pool in enumerate(new_pools):
+            token0, token1, gauge = (
+                Web3.to_checksum_address(result[0])  # type: ignore[index]
+                for result in details[3 * index : 3 * index + 3]
+            )
+            cache["pools"][pool] = [kind, token0, token1, gauge]
+        cache["counts"][factory] = length[0]
+
+    set_cached_value(
+        str(chain_id), "index", cache, price_cache, prefix=AERO_POOL_CACHE_PREFIX
+    )
+    return cache
+
+
+def get_token_decimals(
+    w3: Any, tokens: List[str], cache: Dict[str, Any]
+) -> Dict[str, int]:
+    """Return token decimals, reading only the tokens not yet cached.
+
+    :param w3: web3 connection to the chain.
+    :param tokens: the token addresses.
+    :param cache: the Aero pool cache whose ``decimals`` entry is updated.
+    :return: decimals by token address, for every token that could be read.
+    """
+    known = cache["decimals"]
+    missing = sorted({token for token in tokens if token not in known})
+    for token, result in zip(
+        missing,
+        aero_multicall(w3, [(token, "decimals()", (), ["uint8"]) for token in missing]),
+    ):
+        if result is not None:
+            known[token] = result[0]
+    return {token: known[token] for token in tokens if token in known}
+
+
+def get_aero_price_usd(
+    coingecko_api_key: Optional[str],
+    x402_session: Any = None,
+    x402_proxy: Optional[str] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
+) -> Optional[float]:
+    """Return the USD price of AERO, priced by its Base contract.
+
+    CoinGecko's ``aerodrome-finance`` id still lists the legacy AERO, so the
+    coin id cannot be used.
+
+    :param coingecko_api_key: CoinGecko API key, used without x402.
+    :param x402_session: optional x402 session.
+    :param x402_proxy: optional x402 proxy URL.
+    :param price_cache: the shared price cache.
+    :param price_cache_ttl: how long a price is reused, in seconds.
+    :return: the price, or None when it cannot be fetched.
+    """
+    token = AERO_TOKEN_ADDRESS_BASE.lower()
+    cached = get_cached_price(
+        token, 0, price_cache or {}, price_cache_ttl, prefix=AERO_PRICE_CACHE_PREFIX
+    )
+    if cached is not None:
+        return cached["usd"]
+    if is_recent_failure(token, 0, price_cache, prefix=AERO_PRICE_CACHE_PREFIX):
+        return None
+
+    try:
+        if x402_session is not None and x402_proxy is not None:
+            _reset_x402_adapter(x402_session)
+            response = x402_session.get(
+                f"{x402_proxy.rstrip('/')}/api/v3/simple/token_price/base",
+                params={"contract_addresses": token, "vs_currencies": "usd"},
+                timeout=30,
+            )
+            prices = response.json() if response.status_code == 200 else {}
+        elif coingecko_api_key:
+            cg = (
+                CoinGeckoAPI(api_key=coingecko_api_key)
+                if is_pro_api_key(coingecko_api_key)
+                else CoinGeckoAPI(demo_api_key=coingecko_api_key)
+            )
+            prices = cg.get_token_price(
+                id="base", contract_addresses=token, vs_currencies="usd"
+            )
+        else:
+            logger.warning("No CoinGecko API key provided and no x402 available")
+            return None
+        price = (prices or {}).get(token, {}).get("usd")
+    except Exception as e:
+        logger.error(f"Error fetching the AERO price: {e}")
+        price = None
+
+    if not price:
+        set_failed_fetch(token, 0, price_cache, prefix=AERO_PRICE_CACHE_PREFIX)
+        return None
+    set_cached_value(
+        token, 0, {"usd": price}, price_cache, prefix=AERO_PRICE_CACHE_PREFIX
+    )
+    return float(price)
+
+
+def _rate_per_second(
+    newer: Tuple[Any, ...], older: Tuple[Any, ...], value_index: int, time_index: int
+) -> Optional[float]:
+    """Return the per-second growth of a cumulative tape value between two observations.
+
+    A tape answers a lookback older than its oldest observation with that
+    observation, so the elapsed time comes from the returned timestamps, not
+    from the requested ``secondsAgo``.
+    """
+    elapsed = newer[time_index] - older[time_index]
+    if elapsed <= 0:
+        return None
+    return (newer[value_index] - older[value_index]) / elapsed
+
+
+def _daily_rates(
+    observations: List[Tuple[Any, ...]], value_index: int, time_index: int
+) -> List[float]:
+    """Return the per-second growth between consecutive daily tape observations."""
+    rates = []
+    for older, newer in zip(observations, observations[1:]):
+        rate = _rate_per_second(newer, older, value_index, time_index)
+        if rate is not None:
+            rates.append(rate)
+    return rates
+
+
+def sharpe_ratio_from_daily_returns(
+    daily_returns: List[float], risk_free_rate: float = 0.03
+) -> Optional[float]:
+    """Return the annualised Sharpe ratio of a series of daily returns, capped at +-10.
+
+    :param daily_returns: the returns, one per day.
+    :param risk_free_rate: the annual risk-free rate.
+    :return: the ratio, 0 for a series without variance, None below two returns.
+    """
+    if len(daily_returns) < 2:
+        return None
+    returns = np.array(daily_returns, dtype=float)
+    std = returns.std(ddof=1)
+    if std == 0 or not np.isfinite(std):
+        return 0
+    excess = returns.mean() - risk_free_rate / 365
+    sharpe = excess * 365 / (std * np.sqrt(365))
+    return float(max(min(sharpe, 10), -10))
+
+
+def aero_depth_metrics(
+    tvl_usd: float,
+    daily_volume_usd: Optional[float],
+    max_allocation_percentage: float = DEFAULT_MAX_ALLOCATION_PERCENTAGE,
+    price_impact: float = 0.01,
+) -> Tuple[Optional[float], Optional[float]]:
+    """Return the depth score and maximum position size, as for the Sugar pools.
+
+    :param tvl_usd: the pool's value locked.
+    :param daily_volume_usd: the pool's volume per day, None when unknown.
+    :param max_allocation_percentage: the largest share of TVL a position may take.
+    :param price_impact: the price impact the depth score is quoted at.
+    :return: ``(depth_score, max_position_size)``, ``(None, None)`` without volume.
+    """
+    if daily_volume_usd is None:
+        return None, None
+    depth_score = (
+        np.log1p(max(0.0, tvl_usd)) * np.log1p(max(0.0, daily_volume_usd))
+    ) / (max(price_impact, 0.001) * 100)
+    max_position_size = min(tvl_usd * max_allocation_percentage, 1e7)
+    return float(min(depth_score, 1e6)), float(max_position_size)
+
+
+def _amount_usd(amount: float, decimals: int, price_usd: float = 1.0) -> float:
+    """Convert a raw token amount to USD."""
+    return amount / (10**decimals) * price_usd
+
+
+def _cl_liquidity_per_token1(
+    sqrt_price_x96: int, tick_lower: int, tick_upper: int
+) -> Optional[float]:
+    """Return the liquidity one raw unit of token1-denominated value buys in a band.
+
+    Only an in-range band (``tick_lower <= tick < tick_upper``) earns emissions,
+    so out-of-range bands return None.
+    """
+    sqrt_price = sqrt_price_x96 / 2**96
+    sqrt_lower = 1.0001 ** (tick_lower / 2)
+    sqrt_upper = 1.0001 ** (tick_upper / 2)
+    if not sqrt_lower <= sqrt_price < sqrt_upper:
+        return None
+    # Value of liquidity L in token1 units: amount0 * price + amount1.
+    value_per_liquidity = (sqrt_upper - sqrt_price) * sqrt_price / sqrt_upper + (
+        sqrt_price - sqrt_lower
+    )
+    return 1 / value_per_liquidity
+
+
+def aero_v2_pool_metrics(
+    pool: Dict[str, Any], aero_price: float
+) -> Dict[str, Any]:
+    """Return APR, TVL and daily emission returns of an Aero stable/volatile pool.
+
+    Emissions APR = growth of the gauge's ``rewardPerToken`` (AERO per staked LP,
+    1e18-scaled) x AERO price / LP token price, annualised.
+
+    :param pool: the pool with its live reads (reserves, supply, tapes).
+    :param aero_price: the AERO price in USD.
+    :return: ``apr`` (percent), ``tvl`` and ``daily_returns``.
+    """
+    reserve0, reserve1 = pool["reserves"]
+    tvl = _amount_usd(reserve0, pool["decimals0"]) + _amount_usd(
+        reserve1, pool["decimals1"]
+    )
+    total_supply = pool["total_supply"]
+    if not total_supply or not tvl:
+        return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
+    lp_price = tvl / (total_supply / WAD)
+
+    def to_return(rate_per_second: float, seconds: int) -> float:
+        return rate_per_second * seconds / WAD * aero_price / lp_price
+
+    observed = pool["gauge_observations"]
+    rate = _rate_per_second(observed[0], observed[1], 0, 1) if observed else None
+    apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
+    daily_returns = [
+        to_return(daily_rate, SECONDS_PER_DAY)
+        for daily_rate in _daily_rates(pool["gauge_daily_observations"], 0, 1)
+    ]
+    return {"apr": apr, "tvl": tvl, "daily_returns": daily_returns}
+
+
+def aero_cl_pool_metrics(
+    pool: Dict[str, Any],
+    aero_price: float,
+    tick_bands: List[Dict[str, Any]],
+    position_usd: float = AERO_CL_REFERENCE_POSITION_USD,
+) -> Dict[str, Any]:
+    """Return APR, TVL and daily emission returns of an Aero CL pool.
+
+    The gauge's ``cumulativeCredited`` grows by the AERO credited to staked
+    in-range liquidity; a position earns that times its liquidity over the
+    staked liquidity plus its own, since its stake dilutes the pool.
+
+    :param pool: the pool with its live reads (slot0, staked liquidity, tapes).
+    :param aero_price: the AERO price in USD.
+    :param tick_bands: the bands the position would be split into.
+    :param position_usd: the position size the APR is quoted for.
+    :return: ``apr`` (percent), ``tvl`` and ``daily_returns``.
+    """
+    tvl = _amount_usd(pool["balance0"], pool["decimals0"]) + _amount_usd(
+        pool["balance1"], pool["decimals1"]
+    )
+    # Pool tokens are whitelisted stablecoins, valued at $1.
+    position_token1 = position_usd * 10 ** pool["decimals1"]
+    position_liquidity = 0.0
+    for band in tick_bands:
+        per_token1 = _cl_liquidity_per_token1(
+            pool["sqrt_price_x96"], band["tick_lower"], band["tick_upper"]
+        )
+        if per_token1 is not None:
+            position_liquidity += band.get("allocation", 0) * position_token1 * per_token1
+    if not position_liquidity:
+        return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
+    share = position_liquidity / (pool["staked_liquidity"] + position_liquidity)
+
+    def to_return(rate_per_second: float, seconds: int) -> float:
+        return rate_per_second * seconds / WAD * share * aero_price / position_usd
+
+    observed = pool["gauge_observations"]
+    rate = _rate_per_second(observed[0], observed[1], 1, 2) if observed else None
+    apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
+    daily_returns = [
+        to_return(daily_rate, SECONDS_PER_DAY)
+        for daily_rate in _daily_rates(pool["gauge_daily_observations"], 1, 2)
+    ]
+    return {"apr": apr, "tvl": tvl, "daily_returns": daily_returns}
+
+
+def aero_daily_volume_usd(pool: Dict[str, Any]) -> Optional[float]:
+    """Return a pool's volume per day from its pool tape.
+
+    Each swap adds its input and its output to the tape, so the two sides are
+    averaged.
+    """
+    observed = pool.get("pool_observations")
+    if not observed:
+        return None
+    if pool["kind"] == "cl":
+        volume0, volume1, time_index = 6, 7, 1
+    else:
+        volume0, volume1, time_index = 2, 3, 8
+    rate0 = _rate_per_second(observed[0], observed[1], volume0, time_index)
+    rate1 = _rate_per_second(observed[0], observed[1], volume1, time_index)
+    if rate0 is None or rate1 is None:
+        return None
+    return (
+        _amount_usd(rate0 * SECONDS_PER_DAY, pool["decimals0"])
+        + _amount_usd(rate1 * SECONDS_PER_DAY, pool["decimals1"])
+    ) / 2
+
+
+def read_aero_pool_state(
+    w3: Any, chain_id: int, pools: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Read the live state of whitelisted Aero pools and keep those with an activated gauge.
+
+    :param w3: web3 connection to the chain.
+    :param chain_id: the pools' chain.
+    :param pools: the pools, each with ``id``, ``kind`` and ``gauge``.
+    :return: the pools with an activated gauge and every read, updated in place.
+    """
+    addresses = AERO_CONTRACT_ADDRESSES[chain_id]
+    activated = aero_multicall(
+        w3,
+        [
+            (addresses["leaf_voter"], "isActivated(address)", (pool["gauge"],), ["bool"])
+            for pool in pools
+        ],
+    )
+    live = [
+        pool for pool, result in zip(pools, activated) if result is not None and result[0]
+    ]
+
+    calls: List[AeroCall] = []
+    for pool in live:
+        address, gauge = pool["id"], pool["gauge"]
+        if pool["kind"] == "cl":
+            gauge_tape, pool_tape = addresses["cl_gauge_tape"], addresses["cl_pool_tape"]
+            gauge_output, pool_output = CL_GAUGE_TAPE_OBSERVATIONS, CL_POOL_TAPE_OBSERVATIONS
+            pool_reads: List[AeroCall] = [
+                (address, "slot0()", (), ["uint160", "int24", "uint16", "uint16", "uint16", "bool"]),
+                (address, "stakedLiquidity()", (), ["uint128"]),
+                (pool["token0"], "balanceOf(address)", (address,), ["uint256"]),
+                (pool["token1"], "balanceOf(address)", (address,), ["uint256"]),
+            ]
+        else:
+            gauge_tape, pool_tape = addresses["gauge_tape"], addresses["pool_tape"]
+            gauge_output, pool_output = GAUGE_TAPE_OBSERVATIONS, POOL_TAPE_OBSERVATIONS
+            pool_reads = [
+                (address, "getReserves()", (), ["uint256", "uint256", "uint256"]),
+                (address, "totalSupply()", (), ["uint256"]),
+            ]
+        calls.extend(pool_reads)
+        calls.extend(
+            [
+                (gauge_tape, "observe(address,uint48[])", (gauge, [0, SECONDS_PER_DAY]), gauge_output),
+                (gauge_tape, "dailyObservations(address)", (gauge,), gauge_output),
+                (pool_tape, "observe(address,uint48[])", (address, [0, AERO_DEPTH_WINDOW_SECONDS]), pool_output),
+            ]
+        )
+
+    results = iter(aero_multicall(w3, calls))
+    readable = []
+    for pool in live:
+        if pool["kind"] == "cl":
+            slot0, staked, balance0, balance1 = (next(results) for _ in range(4))
+            state = [slot0, staked, balance0, balance1]
+            if None not in state:
+                pool.update(
+                    sqrt_price_x96=slot0[0],  # type: ignore[index]
+                    tick=slot0[1],  # type: ignore[index]
+                    staked_liquidity=staked[0],  # type: ignore[index]
+                    balance0=balance0[0],  # type: ignore[index]
+                    balance1=balance1[0],  # type: ignore[index]
+                )
+        else:
+            reserves, supply = next(results), next(results)
+            state = [reserves, supply]
+            if None not in state:
+                pool.update(
+                    reserves=reserves[:2],  # type: ignore[index]
+                    total_supply=supply[0],  # type: ignore[index]
+                )
+        observed, daily, pool_observed = next(results), next(results), next(results)
+        if None in state or observed is None or daily is None:
+            logger.warning(f"Could not read the state of Aero pool {pool['id']}")
+            continue
+        pool["gauge_observations"] = observed[0]
+        pool["gauge_daily_observations"] = daily[0]
+        pool["pool_observations"] = pool_observed[0] if pool_observed else None
+        readable.append(pool)
+    return readable
+
+
+def get_aero_pools(
+    chain_id: int,
+    current_positions: List[str],
+    whitelisted_assets: Dict[str, Any],
+    price_cache: Optional[Dict[str, Any]] = None,
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Return the whitelisted Aero pools with an activated gauge and their live state.
+
+    Immutable pool data is cached; live reads are made only for pools that pass
+    the whitelist filter.
+
+    :param chain_id: the chain to search.
+    :param current_positions: pools the agent already holds, skipped.
+    :param whitelisted_assets: investable tokens per chain.
+    :param price_cache: the shared cache that keeps immutable pool data.
+    :return: the pools, or an error dictionary.
+    """
+    rpc_url = RPC_ENDPOINTS[chain_id]
+    w3 = get_web3_connection(rpc_url)
+    if not w3.is_connected():
+        return {"error": f"Failed to connect to RPC endpoint: {rpc_url}"}
+
+    chain_name = CHAIN_NAMES[chain_id]
+    addresses = AERO_CONTRACT_ADDRESSES[chain_id]
+    cache = discover_aero_pools(w3, chain_id, price_cache)
+    candidates = [
+        {
+            "id": address,
+            "chain": chain_name,
+            "kind": kind,
+            "pool_factory": addresses[AERO_POOL_KINDS[kind][0]],
+            "token0": token0,
+            "token1": token1,
+            "gauge": gauge,
+            "inputTokens": [{"id": token0, "symbol": ""}, {"id": token1, "symbol": ""}],
+        }
+        for address, (kind, token0, token1, gauge) in cache["pools"].items()
+    ]
+    whitelisted = get_filtered_pools_for_velodrome(
+        candidates, current_positions, whitelisted_assets
+    )
+    if not whitelisted:
+        return []
+
+    decimals = get_token_decimals(
+        w3,
+        [token for pool in whitelisted for token in (pool["token0"], pool["token1"])],
+        cache,
+    )
+    set_cached_value(
+        str(chain_id), "index", cache, price_cache, prefix=AERO_POOL_CACHE_PREFIX
+    )
+    priced = []
+    for pool in whitelisted:
+        if pool["token0"] in decimals and pool["token1"] in decimals:
+            pool["decimals0"] = decimals[pool["token0"]]
+            pool["decimals1"] = decimals[pool["token1"]]
+            priced.append(pool)
+    return read_aero_pool_state(w3, chain_id, priced)
+
+
+def get_opportunities_for_aero(
+    current_positions: List[str],
+    coingecko_api_key: Optional[str],
+    chain_id: int,
+    top_n: int = 10,
+    whitelisted_assets: Optional[Dict[str, Any]] = None,
+    coin_id_mapping: Any = None,
+    x402_session: Any = None,
+    x402_proxy: Optional[str] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
+    **kwargs: Any,
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Find Aero pools to invest in, with their APR and risk metrics.
+
+    :param current_positions: pools the agent already holds, skipped.
+    :param coingecko_api_key: CoinGecko API key.
+    :param chain_id: the chain to search.
+    :param top_n: how many pools to return.
+    :param whitelisted_assets: investable tokens per chain.
+    :param coin_id_mapping: CoinGecko ids by token symbol, for the IL risk.
+    :param x402_session: optional x402 session.
+    :param x402_proxy: optional x402 proxy URL.
+    :param price_cache: the shared price cache.
+    :param price_cache_ttl: how long a price is reused, in seconds.
+    :param kwargs: filter parameters (min_tvl_threshold, max_allocation_percentage, ...).
+    :return: the opportunities, or an error dictionary.
+    """
+    pools = get_aero_pools(
+        chain_id, current_positions, whitelisted_assets or {}, price_cache
+    )
+    if isinstance(pools, dict):
+        return pools
+    if not pools:
+        return {"error": "No suitable pools found"}
+
+    aero_price = get_aero_price_usd(
+        coingecko_api_key, x402_session, x402_proxy, price_cache, price_cache_ttl
+    )
+    if not aero_price:
+        return {"error": "Could not price AERO, so no emissions APR can be computed"}
+
+    chain_name = CHAIN_NAMES[chain_id]
+    for pool in pools:
+        if pool["kind"] == "cl":
+            pool["tick_bands"] = calculate_tick_lower_and_upper_velodrome(
+                chain=chain_name,
+                pool_address=pool["id"],
+                is_stable=False,
+                coingecko_api_key=coingecko_api_key,
+                x402_session=x402_session,
+                x402_proxy=x402_proxy,
+                price_cache=price_cache,
+                price_cache_ttl=price_cache_ttl,
+            ) or []
+            pool.update(aero_cl_pool_metrics(pool, aero_price, pool["tick_bands"]))
+        else:
+            pool.update(aero_v2_pool_metrics(pool, aero_price))
+
+    candidates = apply_composite_pre_filter(
+        pools,
+        top_n=top_n,
+        apr_weight=kwargs.get("apr_weight", 0.7),
+        tvl_weight=kwargs.get("tvl_weight", 0.3),
+        min_tvl_threshold=kwargs.get("min_tvl_threshold", DEFAULT_MIN_TVL_THRESHOLD),
+        min_volume_threshold=None,
+    )
+    if not candidates:
+        return {"error": "No filtered pools available"}
+
+    max_allocation_percentage = kwargs.get(
+        "max_allocation_percentage", DEFAULT_MAX_ALLOCATION_PERCENTAGE
+    )
+    dex_type = AERODROME if chain_name == "base" else VELODROME
+    opportunities = []
+    for pool in candidates:
+        depth_score, max_position_size = aero_depth_metrics(
+            pool["tvl"], aero_daily_volume_usd(pool), max_allocation_percentage
+        )
+        opportunity = {
+            "dex_type": dex_type,
+            "protocol": AERO_PROTOCOL,
+            "pool_address": pool["id"],
+            "pool_id": pool["id"],
+            "pool_factory": pool["pool_factory"],
+            "gauge_address": pool["gauge"],
+            "chain": chain_name,
+            "tvl": pool["tvl"],
+            "is_lp": True,
+            "token_count": 2,
+            "is_cl_pool": pool["kind"] == "cl",
+            "is_stable": pool["kind"] == "stable",
+            "apr": pool["apr"],
+            "advertised_apr": pool["apr"],
+            "token0": pool["token0"],
+            "token0_symbol": pool["inputTokens"][0]["symbol"],
+            "token1": pool["token1"],
+            "token1_symbol": pool["inputTokens"][1]["symbol"],
+            "sharpe_ratio": sharpe_ratio_from_daily_returns(pool["daily_returns"]),
+            "depth_score": depth_score,
+            "max_position_size": max_position_size,
+            "il_risk_score": _aero_il_risk_score(
+                pool,
+                coingecko_api_key,
+                coin_id_mapping,
+                x402_session,
+                x402_proxy,
+                price_cache,
+                price_cache_ttl,
+            ),
+        }
+        if pool["kind"] == "cl":
+            opportunity["tick_bands"] = pool["tick_bands"]
+        opportunities.append(opportunity)
+    return opportunities
+
+
+def _aero_il_risk_score(
+    pool: Dict[str, Any],
+    coingecko_api_key: Optional[str],
+    coin_id_mapping: Any,
+    x402_session: Any,
+    x402_proxy: Optional[str],
+    price_cache: Optional[Dict[str, Any]],
+    price_cache_ttl: int,
+) -> Optional[float]:
+    """Return the IL risk score of a pool's token pair, as for the Sugar pools."""
+    token_ids = [
+        get_coin_id_from_symbol(
+            coin_id_mapping or {}, token["symbol"] or "", pool["chain"]
+        )
+        for token in pool["inputTokens"]
+    ]
+    valid_token_ids = [token_id for token_id in token_ids if token_id]
+    if len(valid_token_ids) < 2:
+        return None
+    return calculate_velodrome_il_risk_score_multi(
+        valid_token_ids,
+        coingecko_api_key,
+        pool_id=pool["id"],
+        chain=pool["chain"],
+        x402_session=x402_session,
+        x402_proxy=x402_proxy,
+        price_cache=price_cache,
+        price_cache_ttl=price_cache_ttl,
+    )
+
+
+def calculate_aero_metrics(
+    position: Dict[str, Any],
+    coingecko_api_key: Optional[str],
+    coin_id_mapping: Any,
+    x402_session: Any = None,
+    x402_proxy: Optional[str] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
+) -> Optional[Dict[str, Any]]:
+    """Return the risk metrics of a held Aero position.
+
+    :param position: the stored position, with ``gauge_address``.
+    :param coingecko_api_key: CoinGecko API key.
+    :param coin_id_mapping: CoinGecko ids by token symbol, for the IL risk.
+    :param x402_session: optional x402 session.
+    :param x402_proxy: optional x402 proxy URL.
+    :param price_cache: the shared price cache.
+    :param price_cache_ttl: how long a price is reused, in seconds.
+    :return: the metrics, or None when the pool cannot be read.
+    """
+    chain_name = position.get("chain", "").lower()
+    chain_id = next(
+        (cid for cid, name in CHAIN_NAMES.items() if name == chain_name), None
+    )
+    if chain_id not in AERO_CONTRACT_ADDRESSES or not position.get("gauge_address"):
+        logger.error(f"Cannot read Aero metrics for position {position}")
+        return None
+
+    w3 = get_web3_connection(RPC_ENDPOINTS[chain_id])
+    pool = {
+        "id": Web3.to_checksum_address(position["pool_address"]),
+        "chain": chain_name,
+        "kind": (
+            "cl"
+            if position.get("is_cl_pool")
+            else ("stable" if position.get("is_stable") else "volatile")
+        ),
+        "token0": Web3.to_checksum_address(position["token0"]),
+        "token1": Web3.to_checksum_address(position["token1"]),
+        "gauge": Web3.to_checksum_address(position["gauge_address"]),
+        "inputTokens": [
+            {"symbol": position.get("token0_symbol", "")},
+            {"symbol": position.get("token1_symbol", "")},
+        ],
+    }
+    decimals = get_token_decimals(
+        w3, [pool["token0"], pool["token1"]], _empty_aero_pool_cache()
+    )
+    if len(decimals) < 2:
+        return None
+    pool["decimals0"], pool["decimals1"] = (decimals[pool["token0"]], decimals[pool["token1"]])
+    readable = read_aero_pool_state(w3, chain_id, [pool])
+    aero_price = get_aero_price_usd(
+        coingecko_api_key, x402_session, x402_proxy, price_cache, price_cache_ttl
+    )
+    if not readable or not aero_price:
+        return None
+
+    if pool["kind"] == "cl":
+        tick_bands = calculate_tick_lower_and_upper_velodrome(
+            chain=chain_name,
+            pool_address=pool["id"],
+            is_stable=False,
+            coingecko_api_key=coingecko_api_key,
+            x402_session=x402_session,
+            x402_proxy=x402_proxy,
+            price_cache=price_cache,
+            price_cache_ttl=price_cache_ttl,
+        )
+        pool.update(aero_cl_pool_metrics(pool, aero_price, tick_bands or []))
+    else:
+        pool.update(aero_v2_pool_metrics(pool, aero_price))
+    depth_score, max_position_size = aero_depth_metrics(
+        pool["tvl"], aero_daily_volume_usd(pool)
+    )
+    return {
+        "il_risk_score": _aero_il_risk_score(
+            pool,
+            coingecko_api_key,
+            coin_id_mapping,
+            x402_session,
+            x402_proxy,
+            price_cache,
+            price_cache_ttl,
+        ),
+        "sharpe_ratio": sharpe_ratio_from_daily_returns(pool["daily_returns"]),
+        "depth_score": depth_score,
+        "max_position_size": max_position_size,
+    }
+
+
 def get_opportunities_for_velodrome(
     current_positions,
     coingecko_api_key,
@@ -3397,6 +4301,17 @@ def calculate_metrics(
     Returns:
         Dictionary containing calculated metrics or None if calculation fails
     """
+    if position.get("protocol") == AERO_PROTOCOL:
+        return calculate_aero_metrics(
+            position,
+            coingecko_api_key,
+            coin_id_mapping,
+            x402_session,
+            x402_proxy,
+            price_cache,
+            price_cache_ttl,
+        )
+
     try:
         # Extract position details
         pool_id = position.get("pool_address")
@@ -3616,7 +4531,9 @@ def _run_impl(
             continue
 
         # Check if chain is supported
-        if chain_id not in SUGAR_CONTRACT_ADDRESSES:
+        if chain_id not in SUGAR_CONTRACT_ADDRESSES and (
+            chain_id not in AERO_CONTRACT_ADDRESSES
+        ):
             error_msg = f"Unsupported chain: {chain}"
             logger.error(error_msg)
             get_errors().append(error_msg)
@@ -3666,16 +4583,26 @@ def _run_impl(
         }
 
         # Pass explicit parameters separately and remaining kwargs for filter parameters
-        result = get_opportunities_for_velodrome(
-            kwargs.get("current_positions", []),
-            kwargs["coingecko_api_key"],
-            chain_id,
-            sugar_address,
-            rpc_url,
-            kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
-            **explicit_params,
-            **remaining_kwargs,  # Pass remaining kwargs for filter parameters (min_tvl_threshold, min_volume_threshold, max_allocation_percentage)
-        )
+        if chain_id in AERO_CONTRACT_ADDRESSES:
+            result = get_opportunities_for_aero(
+                kwargs.get("current_positions", []),
+                kwargs["coingecko_api_key"],
+                chain_id,
+                kwargs.get("top_n", 10),
+                **explicit_params,
+                **remaining_kwargs,
+            )
+        else:
+            result = get_opportunities_for_velodrome(
+                kwargs.get("current_positions", []),
+                kwargs["coingecko_api_key"],
+                chain_id,
+                sugar_address,
+                rpc_url,
+                kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
+                **explicit_params,
+                **remaining_kwargs,  # Pass remaining kwargs for filter parameters (min_tvl_threshold, min_volume_threshold, max_allocation_percentage)
+            )
 
         # Process results
         if isinstance(result, dict) and "error" in result:

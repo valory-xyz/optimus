@@ -1667,7 +1667,7 @@ class TestRun:
         mock_conn.return_value = mock_w3
         mock_opp.return_value = [{"pool": "data"}]
         result = run(
-            chains=["optimism"],
+            chains=["mode"],
             current_positions=[],
             whitelisted_assets={},
             coingecko_api_key="key",
@@ -1689,7 +1689,7 @@ class TestRun:
         mock_conn.return_value = mock_w3
         mock_opp.return_value = {"error": "fail"}
         result = run(
-            chains=["optimism"],
+            chains=["mode"],
             current_positions=[],
             whitelisted_assets={},
             coingecko_api_key="key",
@@ -1710,7 +1710,7 @@ class TestRun:
         mock_conn.return_value = mock_w3
         mock_opp.return_value = []
         result = run(
-            chains=["optimism"],
+            chains=["mode"],
             current_positions=[],
             whitelisted_assets={},
             coingecko_api_key="key",

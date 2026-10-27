@@ -33,9 +33,25 @@ from packages.valory.skills.liquidity_trader_abci.tests.behaviours.test_decision
     _make_behaviour,
     _make_gen_method,
 )
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    skill_input_hex_to_payload,
+)
 
 GAUGE = "0xGauge"
 TX_RESULT = {"tx_hash": b"data", "contract_address": "0x" + "cc" * 20}
+SAFE_TX_HASH = "0x" + "ab" * 32
+GAS_ESTIMATE = 400_000
+
+
+def _contract_interact(gas_estimate: Any, calls: List[Dict[str, Any]]) -> Any:
+    """Return a contract_interact fake answering the Safe tx hash and gas reads."""
+
+    def method(*args: Any, **kwargs: Any) -> Any:
+        calls.append(kwargs)
+        yield
+        return gas_estimate if kwargs["data_key"] == "gas" else SAFE_TX_HASH
+
+    return method
 
 
 def _recording(result: Any, calls: List[Dict[str, Any]]) -> Any:
@@ -130,7 +146,7 @@ class TestStakingCalls:
             setattr(pool, name, method)
         b.pools = {"velodrome": pool}
         b._get_token_balance = _make_gen_method(1000)
-        b.contract_interact = _make_gen_method("0x" + "ab" * 32)
+        b.contract_interact = _contract_interact(GAS_ESTIMATE, [])
         return b
 
     def test_v2_stake_uses_stored_gauge(self) -> None:
@@ -244,3 +260,77 @@ class TestStakingCalls:
             )
         )
         assert calls[0]["protocol"] == "aero"
+
+
+class TestGaugeGasLimit:
+    """Aero gauge txs carry a gas limit with headroom; every other tx carries 0."""
+
+    BUILDERS = [
+        ("get_stake_lp_tokens_tx_hash", "stake_lp_tokens"),
+        ("get_unstake_lp_tokens_tx_hash", "unstake_lp_tokens"),
+        ("get_claim_staking_rewards_tx_hash", "claim_rewards"),
+    ]
+
+    def _payload(
+        self,
+        builder: str,
+        pool_method: str,
+        action: Dict[str, Any],
+        gas_estimate: Any,
+        calls: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        b = _make_behaviour()
+        b.context.agent_address = "0x" + "AB" * 20
+        pool = MagicMock()
+        setattr(pool, pool_method, _make_gen_method(TX_RESULT))
+        pool.get_staked_balance = _make_gen_method(100)
+        b.pools = {"velodrome": pool}
+        b._get_token_balance = _make_gen_method(1000)
+        b.contract_interact = _contract_interact(gas_estimate, calls)
+
+        payload_string, _, _ = _exhaust(getattr(b, builder)(action))
+
+        return skill_input_hex_to_payload(payload_string)
+
+    @pytest.mark.parametrize("builder, pool_method", BUILDERS)
+    def test_aero_gauge_tx_carries_buffered_estimate(
+        self, builder: str, pool_method: str
+    ) -> None:
+        """The payload's gas limit is the Safe tx estimate times 1.3."""
+        calls: List[Dict[str, Any]] = []
+
+        payload = self._payload(
+            builder, pool_method, _aero_action(), GAS_ESTIMATE, calls
+        )
+
+        assert payload["gas_limit"] == 520_000
+        assert payload["safe_tx_gas"] == 0
+        (estimate_call,) = [c for c in calls if c["data_key"] == "gas"]
+        assert estimate_call["contract_callable"] == "get_raw_safe_transaction"
+        assert estimate_call["to_address"] == TX_RESULT["contract_address"]
+        assert estimate_call["data"] == TX_RESULT["tx_hash"]
+        assert estimate_call["signatures_by_owner"] == {
+            "0x" + "AB" * 20: "00" * 12 + "ab" * 20 + "00" * 32 + "01"
+        }
+
+    @pytest.mark.parametrize("builder, pool_method", BUILDERS)
+    def test_legacy_gauge_tx_carries_zero(self, builder: str, pool_method: str) -> None:
+        """A tx on a pre-Aero gauge is left to settlement's own estimate."""
+        calls: List[Dict[str, Any]] = []
+
+        payload = self._payload(
+            builder, pool_method, _aero_action(protocol=None), GAS_ESTIMATE, calls
+        )
+
+        assert payload["gas_limit"] == 0
+        assert not [c for c in calls if c["data_key"] == "gas"]
+
+    @pytest.mark.parametrize("gas_estimate", [None, 0])
+    @pytest.mark.parametrize("builder, pool_method", BUILDERS)
+    def test_failed_estimate_falls_back_to_zero(
+        self, builder: str, pool_method: str, gas_estimate: Any
+    ) -> None:
+        """An unestimable Aero gauge tx is still built, with no gas limit."""
+        payload = self._payload(builder, pool_method, _aero_action(), gas_estimate, [])
+
+        assert payload["gas_limit"] == 0

@@ -2957,6 +2957,13 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, pool_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[str]]:
         """Return the stored gauge address, else query the legacy voter for it."""
+        gauge_address = yield from self.read_gauge_address(pool_address, **kwargs)
+        return None if gauge_address == ZERO_ADDRESS else gauge_address
+
+    def read_gauge_address(
+        self, pool_address: str, **kwargs: Any
+    ) -> Generator[None, None, Optional[str]]:
+        """Return the pool's gauge, ZERO_ADDRESS when it has none, None when the voter cannot be read."""
         # Aero positions and actions carry their gauge: Aero's voters revert on
         # gauges(pool), so only legacy pools are looked up.
         if kwargs.get("gauge_address"):
@@ -2992,9 +2999,14 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
+        if gauge_address is None:
+            self.context.logger.warning(
+                f"Could not read the gauge of pool {pool_address}"
+            )
+            return None
         if not gauge_address or gauge_address == ZERO_ADDRESS:
             self.context.logger.warning(f"No gauge found for pool {pool_address}")
-            return None
+            return ZERO_ADDRESS
 
         self.context.logger.info(
             f"Found gauge address: {gauge_address} for pool: {pool_address}"
@@ -3306,7 +3318,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def read_pending_rewards(
         self, lp_token: str, user_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[int]]:
-        """Check earned rewards without claiming; None when the gauge's earned() cannot be read."""
+        """Check earned rewards without claiming; None when the gauge or its earned() cannot be read."""
         chain = kwargs.get("chain")
         if not chain:
             self.context.logger.error(
@@ -3318,12 +3330,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"Getting pending rewards for LP token: {lp_token}, user: {user_address} on chain: {chain}"
         )
 
-        # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(
+        gauge_address = yield from self.read_gauge_address(
             lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
         )
-        if not gauge_address:
-            self.context.logger.warning(f"No gauge found for LP token {lp_token}")
+        if gauge_address is None:
+            return None
+        if gauge_address == ZERO_ADDRESS:
             return 0
 
         # Get earned rewards
@@ -3357,7 +3369,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def read_staked_balance(
         self, lp_token: str, user_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[int]]:
-        """Get the staked balance of LP tokens in gauge; None when the gauge's balanceOf() cannot be read."""
+        """Get the staked balance of LP tokens in gauge; None when the gauge or its balanceOf() cannot be read."""
         chain = kwargs.get("chain")
         if not chain:
             self.context.logger.error(
@@ -3369,12 +3381,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"Getting staked balance for LP token: {lp_token}, user: {user_address} on chain: {chain}"
         )
 
-        # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(
+        gauge_address = yield from self.read_gauge_address(
             lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
         )
-        if not gauge_address:
-            self.context.logger.warning(f"No gauge found for LP token {lp_token}")
+        if gauge_address is None:
+            return None
+        if gauge_address == ZERO_ADDRESS:
             return 0
 
         # Get staked balance

@@ -4563,6 +4563,20 @@ class TestGetGaugeAddress:
         result = exhaust_generator(b.get_gauge_address("0xPool", chain="optimism"))
         assert result is None
 
+    @pytest.mark.parametrize(
+        "answer, expected",
+        [(None, None), (ZERO_ADDRESS, ZERO_ADDRESS), ("", ZERO_ADDRESS)],
+    )
+    def test_read_tells_a_failed_lookup_from_no_gauge(
+        self, answer: Any, expected: Any
+    ) -> None:
+        """read_gauge_address is None only when the voter cannot be read."""
+        b = make_behaviour()
+        b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
+        b.contract_interact = make_contract_interact([answer])
+        result = exhaust_generator(b.read_gauge_address("0xPool", chain="optimism"))
+        assert result == expected
+
 
 class TestStakeLpTokens:
     """Tests for stake_lp_tokens generator."""

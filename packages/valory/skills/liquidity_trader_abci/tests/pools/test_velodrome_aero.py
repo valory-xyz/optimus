@@ -29,6 +29,7 @@ import pytest
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     AERO_PROTOCOL,
+    ZERO_ADDRESS,
     VelodromePoolBehaviour,
     is_aero_position,
 )
@@ -594,9 +595,16 @@ class TestReadPendingRewards:
 
     def test_no_gauge_has_nothing_pending(self) -> None:
         """A pool without a gauge has nothing to claim."""
-        b = _aero_behaviour({"gauges": None})
+        b = _aero_behaviour({"gauges": ZERO_ADDRESS})
         b.context.params.velodrome_voter_contract_addresses = {CHAIN: "0xVoter"}
         assert exhaust_generator(b.read_pending_rewards(POOL, SAFE, chain=CHAIN)) == 0
+
+    def test_unreadable_gauge(self) -> None:
+        """A failed voter lookup is unreadable, not nothing pending."""
+        b = _aero_behaviour({"gauges": None})
+        b.context.params.velodrome_voter_contract_addresses = {CHAIN: "0xVoter"}
+        assert exhaust_generator(b.read_pending_rewards(POOL, SAFE, chain=CHAIN)) is None
+        assert not b.contract_interact.called("earned")
 
 
 class TestReadStakedBalance:
@@ -617,6 +625,17 @@ class TestReadStakedBalance:
             )
             == 0
         )
+
+    @pytest.mark.parametrize("gauge, expected", [(ZERO_ADDRESS, 0), (None, None)])
+    def test_legacy_gauge_lookup(self, gauge: Any, expected: Any) -> None:
+        """A pool without a gauge has nothing staked; a failed voter lookup is unreadable."""
+        b = _aero_behaviour({"gauges": gauge})
+        b.context.params.velodrome_voter_contract_addresses = {CHAIN: "0xVoter"}
+        assert (
+            exhaust_generator(b.read_staked_balance(POOL, SAFE, chain=CHAIN))
+            == expected
+        )
+        assert not b.contract_interact.called("balance_of")
 
     def test_empty_balance(self) -> None:
         """A zero balance is read as zero, not as unreadable."""

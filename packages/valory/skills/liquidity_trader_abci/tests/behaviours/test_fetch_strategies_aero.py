@@ -69,7 +69,9 @@ class TestRewardToken:
     )
     def test_symbol(self, chain, position, symbol) -> None:
         """Aero pays AERO on Base and xAERO on Optimism."""
-        assert self._behaviour()._get_velo_family_reward_symbol(chain, position) == symbol
+        assert (
+            self._behaviour()._get_velo_family_reward_symbol(chain, position) == symbol
+        )
 
     def test_aero_reward_priced_by_contract(self) -> None:
         """Aero rewards are priced as Base AERO by contract, not by coin id."""
@@ -83,7 +85,10 @@ class TestRewardToken:
 
         b._fetch_token_price = _price
         b._fetch_coin_price = MagicMock()
-        assert _drive(b._fetch_velo_family_reward_price("optimism", AERO_POSITION)) == 0.678
+        assert (
+            _drive(b._fetch_velo_family_reward_price("optimism", AERO_POSITION))
+            == 0.678
+        )
         assert calls == [(AERO_TOKEN_ADDRESS_BASE, "base")]
         b._fetch_coin_price.assert_not_called()
 

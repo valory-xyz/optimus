@@ -144,9 +144,9 @@ class VelodromeCLGaugeContract(Contract):
         """Get the emissions earned by an account across its Aero CL gauge stakes."""
         checksumed_account = ledger_api.api.to_checksum_address(account)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        earned_amount = contract_instance.get_function_by_signature(
-            "earned(address)"
-        )(checksumed_account).call()
+        earned_amount = contract_instance.get_function_by_signature("earned(address)")(
+            checksumed_account
+        ).call()
         return dict(earned=earned_amount)
 
     @classmethod

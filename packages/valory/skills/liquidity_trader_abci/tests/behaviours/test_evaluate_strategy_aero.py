@@ -268,7 +268,9 @@ class TestCachedClOpportunityOnAeroChains:
                 "aero_metarouter_contract_addresses": {"base": "0xMetarouter"},
             }
         )
-        result = _drive(b._reconstruct_actions_from_cached_cl_pool(self._cached(), "base"))
+        result = _drive(
+            b._reconstruct_actions_from_cached_cl_pool(self._cached(), "base")
+        )
         assert result is None
 
     def test_aero_cache_restakes_on_its_gauge(self):

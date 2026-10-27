@@ -41,9 +41,11 @@ class AeroCLGaugeFactoryContract(Contract):
     ) -> JSONLike:
         """Get the early-unstake penalty that applies to a CL gauge."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        min_stake_blocks, penalty_rate = contract_instance.functions.effectivePenaltyConfig(
-            ledger_api.api.to_checksum_address(gauge)
-        ).call()
+        min_stake_blocks, penalty_rate = (
+            contract_instance.functions.effectivePenaltyConfig(
+                ledger_api.api.to_checksum_address(gauge)
+            ).call()
+        )
         return dict(
             penalty_config=dict(
                 min_stake_blocks=min_stake_blocks, penalty_rate=penalty_rate

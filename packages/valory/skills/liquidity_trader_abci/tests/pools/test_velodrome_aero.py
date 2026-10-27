@@ -71,9 +71,7 @@ def _aero_behaviour(answers: Dict[str, Any]) -> VelodromePoolBehaviour:
     b = make_behaviour()
     params = b.context.params
     params.aero_metarouter_contract_addresses = {CHAIN: METAROUTER}
-    params.aero_non_fungible_position_manager_contract_addresses = {
-        CHAIN: "0xAeroNPM"
-    }
+    params.aero_non_fungible_position_manager_contract_addresses = {CHAIN: "0xAeroNPM"}
     params.velodrome_non_fungible_position_manager_contract_addresses = {
         CHAIN: "0xLegacyNPM"
     }

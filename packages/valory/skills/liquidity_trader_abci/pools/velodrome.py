@@ -701,11 +701,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> str:
         """Return the position manager that holds CL positions of ``protocol``."""
         if protocol == AERO_PROTOCOL:
-            return self.params.aero_non_fungible_position_manager_contract_addresses.get(
+            return (
+                self.params.aero_non_fungible_position_manager_contract_addresses.get(
+                    chain, ""
+                )
+            )
+        return (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain, ""
             )
-        return self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-            chain, ""
         )
 
     def _get_swap_deadline(self) -> int:
@@ -939,9 +943,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
         """Add liquidity to a Velodrome Concentrated Liquidity pool with price monitoring."""
         # Get NonFungiblePositionManager contract address
-        position_manager_address = (
-            self._get_position_manager_address(chain, protocol)
-        )
+        position_manager_address = self._get_position_manager_address(chain, protocol)
         if not position_manager_address:
             self.context.logger.error(
                 f"No NonFungiblePositionManager contract address found for chain {chain}"
@@ -1257,9 +1259,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         protocol: Optional[str] = None,
     ) -> Generator[None, None, Tuple[Optional[bytes], Optional[str], Optional[bool]]]:
         """Exit positions from a Velodrome concentrated liquidity pool."""
-        position_manager_address = (
-            self._get_position_manager_address(chain, protocol)
-        )
+        position_manager_address = self._get_position_manager_address(chain, protocol)
         if not position_manager_address:
             self.context.logger.error(
                 f"No NonFungiblePositionManager contract address found for chain {chain}"
@@ -1414,9 +1414,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, token_id: int, chain: str, protocol: Optional[str] = None
     ) -> Generator[None, None, Optional[str]]:
         """Return the on-chain owner of a Velodrome CL position NFT, or None on failure."""
-        position_manager_address = (
-            self._get_position_manager_address(chain, protocol)
-        )
+        position_manager_address = self._get_position_manager_address(chain, protocol)
         if not position_manager_address:
             self.context.logger.error(
                 f"No position manager address found for chain {chain}"
@@ -1443,9 +1441,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, token_id: int, chain: str, protocol: Optional[str] = None
     ) -> Generator[None, None, Optional[int]]:
         """Get liquidity for token"""
-        position_manager_address = (
-            self._get_position_manager_address(chain, protocol)
-        )
+        position_manager_address = self._get_position_manager_address(chain, protocol)
         if not position_manager_address:
             self.context.logger.error(
                 f"No NonFungiblePositionManager contract address found for chain {chain}"
@@ -1478,9 +1474,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         protocol: Optional[str] = None,
     ) -> Generator[None, None, Optional[str]]:
         """Decrease liquidity"""
-        position_manager_address = (
-            self._get_position_manager_address(chain, protocol)
-        )
+        position_manager_address = self._get_position_manager_address(chain, protocol)
         if not position_manager_address:
             self.context.logger.error(
                 f"No NonFungiblePositionManager contract address found for chain {chain}"
@@ -1513,9 +1507,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         protocol: Optional[str] = None,
     ) -> Generator[None, None, Optional[str]]:
         """Collect tokens"""
-        position_manager_address = (
-            self._get_position_manager_address(chain, protocol)
-        )
+        position_manager_address = self._get_position_manager_address(chain, protocol)
         if not position_manager_address:
             self.context.logger.error(
                 f"No NonFungiblePositionManager contract address found for chain {chain}"
@@ -3905,7 +3897,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             "is_multisend": False,
         }
 
-    def _get_latest_block_number(self, chain: str) -> Generator[None, None, Optional[int]]:
+    def _get_latest_block_number(
+        self, chain: str
+    ) -> Generator[None, None, Optional[int]]:
         """Return the latest block number on ``chain``, or None on failure."""
         response = yield from self.get_ledger_api_response(
             performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore

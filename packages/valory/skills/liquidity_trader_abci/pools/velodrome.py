@@ -3940,6 +3940,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
         if response.performative != LedgerApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"Could not read the latest block on {chain}: {response}"
+            )
             return None
         return response.state.body.get("number")
 

@@ -499,12 +499,14 @@ class TestLatestBlockNumber:
         assert exhaust_generator(b._get_latest_block_number(CHAIN)) == 42
 
     def test_failure_returns_none(self) -> None:
-        """A failed ledger call returns None."""
+        """A failed ledger call is logged and returns None."""
         b = _aero_behaviour({})
         response = MagicMock()
         response.performative = LedgerApiMessage.Performative.ERROR
         b.get_ledger_api_response = _mock_gen(response)
         assert exhaust_generator(b._get_latest_block_number(CHAIN)) is None
+        b.context.logger.warning.assert_called_once()
+        assert CHAIN in b.context.logger.warning.call_args[0][0]
 
 
 class TestAeroClaims:

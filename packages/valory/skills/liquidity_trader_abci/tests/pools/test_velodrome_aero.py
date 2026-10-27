@@ -569,6 +569,17 @@ class TestAeroClaims:
         assert "tx_hash" not in result
         assert result["success"] is True
 
+    def test_cl_claim_unreadable_earned_is_an_error(self) -> None:
+        """A failed earned read is an error, not an empty claim."""
+        b = _aero_behaviour({"earned_by_account": None})
+        result = exhaust_generator(
+            b.claim_cl_rewards(
+                GAUGE, [1], chain=CHAIN, safe_address=SAFE, protocol=AERO_PROTOCOL
+            )
+        )
+        assert "error" in result
+        assert not b.contract_interact.called("claim_cl_emissions")
+
     def test_cl_claim_tx_fails(self) -> None:
         """A failed claim tx is an error."""
         b = _aero_behaviour({"earned_by_account": 3, "claim_cl_emissions": None})

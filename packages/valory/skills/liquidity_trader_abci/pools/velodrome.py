@@ -3351,6 +3351,13 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, lp_token: str, user_address: str, **kwargs: Any
     ) -> Generator[None, None, int]:
         """Get the staked balance of LP tokens in gauge."""
+        staked = yield from self.read_staked_balance(lp_token, user_address, **kwargs)
+        return staked or 0
+
+    def read_staked_balance(
+        self, lp_token: str, user_address: str, **kwargs: Any
+    ) -> Generator[None, None, Optional[int]]:
+        """Get the staked balance of LP tokens in gauge; None when the gauge's balanceOf() cannot be read."""
         chain = kwargs.get("chain")
         if not chain:
             self.context.logger.error(
@@ -3381,11 +3388,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
-        if not balance_result:
+        if balance_result is None:
             self.context.logger.warning(
                 f"Could not get staked balance for user {user_address}"
             )
-            return 0
+            return None
 
         staked_amount = balance_result if isinstance(balance_result, int) else 0
         self.context.logger.info(f"Staked balance for {user_address}: {staked_amount}")

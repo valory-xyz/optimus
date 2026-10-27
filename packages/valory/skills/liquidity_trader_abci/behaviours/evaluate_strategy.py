@@ -244,13 +244,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"{pool_address}; retrying its exit next cycle"
                 )
                 continue
+            staked_balance = yield from pool.read_staked_balance(
+                self, lp_token=pool_address, user_address=safe_address, chain=chain
+            )
+            if staked_balance is None:
+                # Exiting without the unstake would find no LP tokens in the Safe.
+                self.context.logger.warning(
+                    f"Could not read the staked balance of legacy pool "
+                    f"{pool_address}; retrying its exit next cycle"
+                )
+                continue
             if pending_rewards:
                 claim_action = self._build_claim_staking_rewards_action(position)
                 if claim_action:
                     actions.append(claim_action)
-            staked_balance = yield from pool.get_staked_balance(
-                self, lp_token=pool_address, user_address=safe_address, chain=chain
-            )
             if staked_balance:
                 unstake_action = self._build_unstake_lp_tokens_action(position)
                 if unstake_action:

@@ -540,3 +540,32 @@ class TestReadPendingRewards:
         b.context.params.velodrome_voter_contract_addresses = {CHAIN: "0xVoter"}
         assert exhaust_generator(b.read_pending_rewards(POOL, SAFE, chain=CHAIN)) == 0
 
+
+class TestReadStakedBalance:
+    """read_staked_balance tells an unreadable gauge from an empty one."""
+
+    def test_unreadable_balance(self) -> None:
+        """A failed balanceOf() read is None, while get_staked_balance still reports 0."""
+        b = _aero_behaviour({"balance_of": None})
+        assert (
+            exhaust_generator(
+                b.read_staked_balance(POOL, SAFE, chain=CHAIN, gauge_address=GAUGE)
+            )
+            is None
+        )
+        assert (
+            exhaust_generator(
+                b.get_staked_balance(POOL, SAFE, chain=CHAIN, gauge_address=GAUGE)
+            )
+            == 0
+        )
+
+    def test_empty_balance(self) -> None:
+        """A zero balance is read as zero, not as unreadable."""
+        b = _aero_behaviour({"balance_of": 0})
+        assert (
+            exhaust_generator(
+                b.read_staked_balance(POOL, SAFE, chain=CHAIN, gauge_address=GAUGE)
+            )
+            == 0
+        )

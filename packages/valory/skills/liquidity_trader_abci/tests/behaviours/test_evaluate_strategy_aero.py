@@ -70,11 +70,11 @@ def _legacy_cl(**extra):
     }
 
 
-def _pool(pending, staked: int) -> MagicMock:
+def _pool(pending, staked) -> MagicMock:
     """Return a velodrome pool behaviour reporting the given gauge state."""
     pool = MagicMock()
     pool.read_pending_rewards = MagicMock(side_effect=_gen_return(pending))
-    pool.get_staked_balance = MagicMock(side_effect=_gen_return(staked))
+    pool.read_staked_balance = MagicMock(side_effect=_gen_return(staked))
     return pool
 
 
@@ -127,7 +127,17 @@ class TestPrepareLegacyVelodromeExitActions:
         b._build_unstake_lp_tokens_action_verified = _gen_return(None)
         actions = _drive(b._prepare_legacy_velodrome_exit_actions(), sends=[None] * 10)
         assert [a["pool_address"] for a in actions] == ["0xLegacyCL"]
-        b.pools["velodrome"].get_staked_balance.assert_not_called()
+        b.pools["velodrome"].read_staked_balance.assert_not_called()
+
+    def test_v2_unreadable_stake_waits(self):
+        """When the staked balance cannot be read the position is left for the next cycle."""
+        b = _mk(
+            current_positions=[_legacy_v2(), _legacy_cl()],
+            pools={"velodrome": _pool(5, None)},
+        )
+        b._build_unstake_lp_tokens_action_verified = _gen_return(None)
+        actions = _drive(b._prepare_legacy_velodrome_exit_actions(), sends=[None] * 10)
+        assert [a["pool_address"] for a in actions] == ["0xLegacyCL"]
 
     def test_v2_without_safe_still_exits(self):
         """When the claim and unstake cannot be built the exit is still sent."""

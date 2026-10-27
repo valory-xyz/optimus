@@ -123,8 +123,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.set_done()
                 return
 
-            # Legacy Velodrome/Aerodrome gauges earn nothing since the Aero
-            # upgrade, so their positions are exited before any other gate.
             legacy_exit_actions = (
                 yield from self._prepare_legacy_velodrome_exit_actions()
             )
@@ -196,15 +194,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _prepare_legacy_velodrome_exit_actions(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
-        """Build claim, unstake and exit actions for open positions in legacy pools.
-
-        A Velodrome-family position without ``protocol`` predates Aero, and its
-        gauge stopped receiving emissions at the upgrade. It is exited through
-        the legacy contracts it was entered with.
-
-        :yield: contract reads of the legacy gauges' stake and reward state
-        :return: the actions for this cycle, None when no legacy position is open
-        """
+        """Build exit actions for open legacy Velodrome-family positions, whose gauges no longer earn."""
         legacy_positions = [
             position
             for position in self.current_positions

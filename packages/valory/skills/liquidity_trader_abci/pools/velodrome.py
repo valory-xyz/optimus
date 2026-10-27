@@ -85,8 +85,6 @@ class AllocationStatus(Enum):
     FAILED = "failed"
 
 
-# Positions entered through Aero (Base, Optimism) carry ``"protocol": "aero"``;
-# a Velodrome-family position without it is in a legacy pool.
 AERO_PROTOCOL = "aero"
 
 
@@ -3951,18 +3949,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def _is_cl_unstake_penalty_active(
         self, gauge_address: str, token_id: int, chain: str
     ) -> Generator[None, None, bool]:
-        """Return True while unstaking ``token_id`` would forfeit its Aero CL emissions.
-
-        The penalty applies while ``penaltyRate > 0``, ``minStakeBlocks > 0`` and the
-        current block is before ``depositBlock + minStakeBlocks``. A failed read is
-        treated as inactive, so a flaky RPC never holds a position in its gauge.
-
-        :param gauge_address: the CL gauge the token is staked in.
-        :param token_id: the staked position NFT.
-        :param chain: the gauge's chain.
-        :yield: the gauge, gauge factory and ledger reads.
-        :return: whether unstaking now forfeits the position's emissions.
-        """
+        """Return True while unstaking the token forfeits its emissions; a failed read is inactive."""
         deposit_block = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=gauge_address,

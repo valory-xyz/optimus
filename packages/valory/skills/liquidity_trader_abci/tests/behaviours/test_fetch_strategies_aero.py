@@ -148,7 +148,7 @@ def _transfer(token: str, sender: str, recipient: str) -> Dict[str, Any]:
 
 
 class TestMetarouterEntryValidation:
-    """The v2 pool address check reads Metarouter entries correctly (D12)."""
+    """The v2 pool address check reads Metarouter entries correctly."""
 
     def test_pool_found_from_lp_mint(self) -> None:
         """The pool is the LP mint, not one of the token pulls through the router."""

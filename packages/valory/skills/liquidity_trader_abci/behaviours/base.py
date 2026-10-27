@@ -3666,20 +3666,17 @@ class LiquidityTraderBaseBehaviour(
             if status == "OPEN" or status == "open":
                 self.context.logger.info(f"Creating exit action for position {i + 1}")
 
-                # Use base class method to build exit action
                 action = self._build_exit_pool_action_base(position)
                 if action:
                     action["description"] = (
                         f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for {purpose}"
                     )
 
-                    # Add required assets field
                     action["assets"] = [
                         position.get("token0"),
                         position.get("token1"),
                     ]
 
-                    # Add missing fields that are required for proper transaction preparation
                     if position.get("pool_fee") is not None:
                         action["pool_fee"] = position.get("pool_fee")
                     if position.get("tick_spacing") is not None:

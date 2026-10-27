@@ -32,6 +32,10 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union,
 import numpy as np
 from web3 import Web3
 
+from packages.valory.contracts.aero_cl_gauge_factory.contract import (
+    AeroCLGaugeFactoryContract,
+)
+from packages.valory.contracts.aero_metarouter.contract import AeroMetarouterContract
 from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
@@ -52,6 +56,7 @@ from packages.valory.contracts.velodrome_slipstream_helper.contract import (
 )
 from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
 
@@ -78,6 +83,16 @@ class AllocationStatus(Enum):
     WAITING = "waiting"
     TIMEOUT = "timeout"
     FAILED = "failed"
+
+
+# Positions entered through Aero (Base, Optimism) carry ``"protocol": "aero"``;
+# a Velodrome-family position without it is in a legacy pool.
+AERO_PROTOCOL = "aero"
+
+
+def is_aero_position(position: Dict[str, Any]) -> bool:
+    """Return True when the position or action was entered through Aero."""
+    return position.get("protocol") == AERO_PROTOCOL
 
 
 # Mirrors LiquidityTraderBaseBehaviour.MAX_VERIFY_RETRIES so the stake-side
@@ -304,6 +319,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             kwargs.get("tick_ranges"),
         )  # Pass pre-calculated tick ranges if available
         tick_spacing = kwargs.get("tick_spacing")  # Pass tick spacing if available
+        protocol = kwargs.get("protocol")
 
         # Check required parameters based on pool type
         if is_cl_pool:
@@ -352,6 +368,18 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     pool_fee=kwargs.get("pool_fee"),
                     tick_ranges=tick_ranges,
                     tick_spacing=tick_spacing,
+                    protocol=protocol,
+                )
+            )
+        elif protocol == AERO_PROTOCOL:
+            return (
+                yield from self._enter_aero_v2_pool(
+                    pool_address=pool_address,
+                    safe_address=safe_address,
+                    assets=assets,
+                    chain=chain,
+                    max_amounts_in=max_amounts_in,
+                    pool_factory=kwargs.get("pool_factory"),
                 )
             )
         else:
@@ -386,6 +414,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain = kwargs.get("chain")
         is_cl_pool = kwargs.get("is_cl_pool", False)
         is_stable = kwargs.get("is_stable")
+        protocol = kwargs.get("protocol")
         if not all([pool_address, safe_address, chain]):
             self.context.logger.error(
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
@@ -412,6 +441,16 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     token_ids=token_ids,
                     liquidities=liquidities,
                     pool_address=pool_address,
+                    protocol=protocol,
+                )
+            )
+        elif protocol == AERO_PROTOCOL:
+            return (
+                yield from self._exit_aero_v2_pool(
+                    pool_address=pool_address,
+                    safe_address=safe_address,
+                    chain=chain,
+                    liquidity=kwargs.get("liquidity"),
                 )
             )
         else:
@@ -657,6 +696,204 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
+    def _get_position_manager_address(
+        self, chain: str, protocol: Optional[str] = None
+    ) -> str:
+        """Return the position manager that holds CL positions of ``protocol``."""
+        if protocol == AERO_PROTOCOL:
+            return self.params.aero_non_fungible_position_manager_contract_addresses.get(
+                chain, ""
+            )
+        return self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+            chain, ""
+        )
+
+    def _get_swap_deadline(self) -> int:
+        """Return a deadline 20 minutes after the last round transition."""
+        last_update_time = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+        return int(last_update_time) + (20 * 60)
+
+    @staticmethod
+    def _quote_aero_add_liquidity(
+        amounts: List[int], reserves: Tuple[int, int]
+    ) -> Tuple[int, int]:
+        """Return what the Metarouter commits after trimming the larger side to the pool ratio."""
+        amount_a, amount_b = amounts
+        reserve_a, reserve_b = reserves
+        if not reserve_a or not reserve_b:
+            return amount_a, amount_b
+        amount_b_optimal = amount_a * reserve_b // reserve_a
+        if amount_b_optimal <= amount_b:
+            return amount_a, amount_b_optimal
+        return amount_b * reserve_a // reserve_b, amount_b
+
+    def _enter_aero_v2_pool(
+        self,
+        pool_address: str,
+        safe_address: str,
+        assets: list,
+        chain: str,
+        max_amounts_in: list,
+        pool_factory: Optional[str],
+    ) -> Generator[None, None, Optional[Tuple[Optional[bytes], Optional[str]]]]:
+        """Add liquidity to an Aero stable/volatile pool through the Metarouter."""
+        metarouter_address = self.params.aero_metarouter_contract_addresses.get(
+            chain, ""
+        )
+        if not metarouter_address or not pool_factory:
+            self.context.logger.error(
+                f"Missing Aero Metarouter ({metarouter_address}) or pool factory "
+                f"({pool_factory}) for pool {pool_address} on {chain}"
+            )
+            return None, None
+
+        # Aero has no quoteAddLiquidity: the reserves give what the router
+        # commits, and the token order of assets is the pool's.
+        reserves = yield from self._get_pool_reserves(pool_address, chain)
+        if not reserves:
+            return None, None
+
+        expected_a, expected_b = self._quote_aero_add_liquidity(
+            max_amounts_in, reserves
+        )
+        slippage_tolerance = self.params.slippage_tolerance
+        amount_a_min = int(expected_a * (1 - slippage_tolerance))
+        amount_b_min = int(expected_b * (1 - slippage_tolerance))
+        self.context.logger.info(
+            f"Aero v2 add liquidity - expected: {expected_a}/{expected_b}, "
+            f"min with {slippage_tolerance:.1%} slippage: {amount_a_min}/{amount_b_min}"
+        )
+
+        tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=metarouter_address,
+            contract_public_id=AeroMetarouterContract.contract_id,
+            contract_callable="get_add_liquidity_tx",
+            data_key="tx_hash",
+            factory=pool_factory,
+            token_a=assets[0],
+            token_b=assets[1],
+            amount_a=max_amounts_in[0],
+            amount_b=max_amounts_in[1],
+            amount_a_min=amount_a_min,
+            amount_b_min=amount_b_min,
+            recipient=safe_address,
+            deadline=self._get_swap_deadline(),
+            chain_id=chain,
+        )
+        return tx_hash, metarouter_address
+
+    def _exit_aero_v2_pool(
+        self,
+        pool_address: str,
+        safe_address: str,
+        chain: str,
+        liquidity: Optional[int],
+    ) -> Generator[None, None, Tuple[Optional[bytes], Optional[str], Optional[bool]]]:
+        """Remove liquidity from an Aero stable/volatile pool through the Metarouter."""
+        metarouter_address = self.params.aero_metarouter_contract_addresses.get(
+            chain, ""
+        )
+        if not metarouter_address:
+            self.context.logger.error(f"No Aero Metarouter address for chain {chain}")
+            return None, None, None
+
+        if not liquidity:
+            liquidity = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromePoolContract.contract_id,
+                contract_callable="get_balance",
+                data_key="balance",
+                account=safe_address,
+                chain_id=chain,
+            )
+        if not liquidity:
+            self.context.logger.error(
+                f"No liquidity found for account ({safe_address}) in pool ({pool_address})"
+            )
+            return None, None, None
+
+        reserves = yield from self._get_pool_reserves(pool_address, chain)
+        total_supply = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromePoolContract.contract_id,
+            contract_callable="get_total_supply",
+            data_key="total_supply",
+            chain_id=chain,
+        )
+        if not reserves or not total_supply:
+            self.context.logger.error(
+                f"Unable to quote remove liquidity for pool {pool_address}"
+            )
+            return None, None, None
+
+        slippage_tolerance = self.params.slippage_tolerance
+        amount0_min, amount1_min = (
+            int(liquidity * reserve // total_supply * (1 - slippage_tolerance))
+            for reserve in reserves
+        )
+
+        approve_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromePoolContract.contract_id,
+            contract_callable="build_approval_tx",
+            data_key="tx_hash",
+            spender=metarouter_address,
+            amount=liquidity,
+            chain_id=chain,
+        )
+        remove_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=metarouter_address,
+            contract_public_id=AeroMetarouterContract.contract_id,
+            contract_callable="get_remove_liquidity_tx",
+            data_key="tx_hash",
+            pool=pool_address,
+            liquidity=liquidity,
+            amount0_min=amount0_min,
+            amount1_min=amount1_min,
+            recipient=safe_address,
+            deadline=self._get_swap_deadline(),
+            chain_id=chain,
+        )
+        if not approve_tx_hash or not remove_tx_hash:
+            self.context.logger.error(
+                f"Failed to build the Aero remove liquidity txs for pool {pool_address}"
+            )
+            return None, None, None
+
+        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
+        multisend_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=[
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": pool_address,
+                    "value": 0,
+                    "data": approve_tx_hash,
+                },
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": metarouter_address,
+                    "value": 0,
+                    "data": remove_tx_hash,
+                },
+            ],
+            chain_id=chain,
+        )
+        if not multisend_tx_hash:
+            return None, None, None
+        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
+
     def _get_cached_price_at_selection(
         self, chain: str
     ) -> Generator[None, None, float]:
@@ -698,13 +935,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         pool_fee: Optional[int] = None,
         tick_ranges: Optional[List[Dict]] = None,
         tick_spacing: Optional[int] = None,
+        protocol: Optional[str] = None,
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
         """Add liquidity to a Velodrome Concentrated Liquidity pool with price monitoring."""
         # Get NonFungiblePositionManager contract address
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
-            )
+            self._get_position_manager_address(chain, protocol)
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -1018,12 +1254,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         token_ids: List[int],
         liquidities: List[int],
         pool_address: str,
+        protocol: Optional[str] = None,
     ) -> Generator[None, None, Tuple[Optional[bytes], Optional[str], Optional[bool]]]:
         """Exit positions from a Velodrome concentrated liquidity pool."""
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
-            )
+            self._get_position_manager_address(chain, protocol)
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -1044,7 +1279,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Process each position
         for index, position_token_id in enumerate(token_ids):
-            owner = yield from self.get_cl_position_owner(position_token_id, chain)
+            owner = yield from self.get_cl_position_owner(
+                position_token_id, chain, protocol
+            )
             if owner is not None and owner.lower() != safe_address.lower():
                 self.context.logger.warning(
                     f"Skipping exit for token {position_token_id}: owner "
@@ -1054,7 +1291,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             cached_liquidity = liquidities[index] if index < len(liquidities) else None
             fresh_liquidity = yield from self.get_liquidity_for_token_velodrome(
-                position_token_id, chain
+                position_token_id, chain, protocol
             )
             if fresh_liquidity is None:
                 if not cached_liquidity:
@@ -1086,7 +1323,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 amount0_min,
                 amount1_min,
             ) = yield from self._calculate_slippage_protection_for_velodrome_decrease(
-                position_token_id, chain, pool_address
+                position_token_id, chain, pool_address, protocol
             )
 
             if amount0_min is None or amount1_min is None:
@@ -1103,6 +1340,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 amount1_min,
                 deadline,
                 chain,
+                protocol,
             )
             if not decrease_liquidity_tx_hash:
                 self.context.logger.warning(
@@ -1126,6 +1364,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 amount0_max=amount_max,
                 amount1_max=amount_max,
                 chain=chain,
+                protocol=protocol,
             )
             if not collect_tokens_tx_hash:
                 self.context.logger.warning(
@@ -1172,13 +1411,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
     def get_cl_position_owner(
-        self, token_id: int, chain: str
+        self, token_id: int, chain: str, protocol: Optional[str] = None
     ) -> Generator[None, None, Optional[str]]:
         """Return the on-chain owner of a Velodrome CL position NFT, or None on failure."""
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
-            )
+            self._get_position_manager_address(chain, protocol)
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -1203,13 +1440,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         return owner
 
     def get_liquidity_for_token_velodrome(
-        self, token_id: int, chain: str
+        self, token_id: int, chain: str, protocol: Optional[str] = None
     ) -> Generator[None, None, Optional[int]]:
         """Get liquidity for token"""
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
-            )
+            self._get_position_manager_address(chain, protocol)
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -1240,12 +1475,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         amount1_min: int,
         deadline: int,
         chain: str,
+        protocol: Optional[str] = None,
     ) -> Generator[None, None, Optional[str]]:
         """Decrease liquidity"""
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
-            )
+            self._get_position_manager_address(chain, protocol)
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -1276,12 +1510,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         amount0_max: int,
         amount1_max: int,
         chain: str,
+        protocol: Optional[str] = None,
     ) -> Generator[None, None, Optional[str]]:
         """Collect tokens"""
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
-            )
+            self._get_position_manager_address(chain, protocol)
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -2731,7 +2964,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def get_gauge_address(
         self, pool_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[str]]:
-        """Query voter contract for gauge address."""
+        """Return the stored gauge address, else query the legacy voter for it."""
+        # Aero positions and actions carry their gauge: Aero's voters revert on
+        # gauges(pool), so only legacy pools are looked up.
+        if kwargs.get("gauge_address"):
+            return kwargs["gauge_address"]
+
         chain = kwargs.get("chain")
         if not chain:
             self.context.logger.error(
@@ -2794,7 +3032,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return {"error": error_msg}
 
         # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        gauge_address = yield from self.get_gauge_address(
+            lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
+        )
         if not gauge_address:
             error_msg = f"No gauge found for LP token {lp_token}"
             self.context.logger.error(error_msg)
@@ -2911,7 +3151,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return {"error": error_msg}
 
         # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        gauge_address = yield from self.get_gauge_address(
+            lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
+        )
         if not gauge_address:
             error_msg = f"No gauge found for LP token {lp_token}"
             self.context.logger.error(error_msg)
@@ -2932,6 +3174,24 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             error_msg = f"Insufficient staked balance. Requested: {amount}, Available: {staked_balance or 0}"
             self.context.logger.error(error_msg)
             return {"error": error_msg}
+
+        if kwargs.get("protocol") == AERO_PROTOCOL:
+            penalty_active = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeGaugeContract.contract_id,
+                contract_callable="is_penalty_active",
+                data_key="is_penalty_active",
+                account=safe_address,
+                chain_id=chain,
+            )
+            if penalty_active:
+                error_msg = (
+                    f"Early-unstake penalty is active on gauge {gauge_address}; "
+                    "unstaking now would forfeit the accrued emissions"
+                )
+                self.context.logger.warning(error_msg)
+                return {"error": error_msg}
 
         # Create withdraw transaction
         withdraw_tx_hash = yield from self.contract_interact(
@@ -2979,7 +3239,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        gauge_address = yield from self.get_gauge_address(
+            lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
+        )
         if not gauge_address:
             error_msg = f"No gauge found for LP token {lp_token}"
             self.context.logger.error(error_msg)
@@ -2987,7 +3249,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Check pending rewards before claiming
         pending_rewards = yield from self.get_pending_rewards(
-            lp_token, safe_address, chain=chain
+            lp_token, safe_address, chain=chain, gauge_address=gauge_address
         )
         if pending_rewards == 0:
             self.context.logger.info("No pending rewards to claim")
@@ -2997,16 +3259,28 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 "success": True,
             }
 
-        # Create claim rewards transaction
-        claim_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=gauge_address,
-            contract_public_id=VelodromeGaugeContract.contract_id,
-            contract_callable="get_reward",
-            data_key="tx_hash",
-            account=safe_address,
-            chain_id=chain,
-        )
+        # Create claim rewards transaction: Aero gauges revert on getReward
+        if kwargs.get("protocol") == AERO_PROTOCOL:
+            claim_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeGaugeContract.contract_id,
+                contract_callable="claim_emissions",
+                data_key="tx_hash",
+                account=safe_address,
+                recipient=safe_address,
+                chain_id=chain,
+            )
+        else:
+            claim_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeGaugeContract.contract_id,
+                contract_callable="get_reward",
+                data_key="tx_hash",
+                account=safe_address,
+                chain_id=chain,
+            )
 
         if not claim_tx_hash:
             error_msg = "Failed to create claim rewards transaction"
@@ -3040,7 +3314,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        gauge_address = yield from self.get_gauge_address(
+            lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
+        )
         if not gauge_address:
             self.context.logger.warning(f"No gauge found for LP token {lp_token}")
             return 0
@@ -3082,7 +3358,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        gauge_address = yield from self.get_gauge_address(
+            lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
+        )
         if not gauge_address:
             self.context.logger.warning(f"No gauge found for LP token {lp_token}")
             return 0
@@ -3124,7 +3402,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        gauge_address = yield from self.get_gauge_address(
+            lp_token, chain=chain, gauge_address=kwargs.get("gauge_address")
+        )
         if not gauge_address:
             self.context.logger.warning(f"No gauge found for LP token {lp_token}")
             return 0
@@ -3177,11 +3457,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         # Get position manager address
-        position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
-            )
-        )
+        protocol = kwargs.get("protocol")
+        position_manager_address = self._get_position_manager_address(chain, protocol)
         if not position_manager_address:
             self.context.logger.error(
                 f"No position manager address found for chain {chain}"
@@ -3357,6 +3634,23 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"Unstaking CL NFT positions {token_ids} from gauge {gauge_address} on chain: {chain}"
         )
 
+        if kwargs.get("protocol") == AERO_PROTOCOL:
+            unpenalised_token_ids = []
+            for token_id in token_ids:
+                penalty_active = yield from self._is_cl_unstake_penalty_active(
+                    gauge_address, token_id, chain
+                )
+                if penalty_active:
+                    self.context.logger.warning(
+                        f"Early-unstake penalty is active for token {token_id} on "
+                        f"gauge {gauge_address}; keeping it staked this cycle"
+                    )
+                    continue
+                unpenalised_token_ids.append(token_id)
+            token_ids = unpenalised_token_ids
+            if not token_ids:
+                return {"error": "Every token is inside its early-unstake window"}
+
         multi_send_txs = []
         unstaked_positions = []
 
@@ -3449,6 +3743,13 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(
             f"Claiming CL rewards from gauge: {gauge_address} for token IDs: {token_ids} on chain: {chain}"
         )
+
+        if kwargs.get("protocol") == AERO_PROTOCOL:
+            return (
+                yield from self._claim_aero_cl_emissions(
+                    gauge_address, token_ids, chain, safe_address
+                )
+            )
 
         multi_send_txs = []
         tokens_with_rewards = []
@@ -3556,6 +3857,115 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             "is_multisend": True,
         }
 
+    def _claim_aero_cl_emissions(
+        self,
+        gauge_address: str,
+        token_ids: List[int],
+        chain: str,
+        safe_address: str,
+    ) -> Generator[None, None, Dict[str, Any]]:
+        """Claim the emissions of staked Aero CL positions in one claimEmissions call."""
+        earned = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="earned_by_account",
+            data_key="earned",
+            account=safe_address,
+            chain_id=chain,
+        )
+        if not earned:
+            self.context.logger.info("No pending Aero CL emissions to claim")
+            return {
+                "message": "No tokens with pending rewards found",
+                "tokens_checked": token_ids,
+                "success": True,
+            }
+
+        claim_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="claim_cl_emissions",
+            data_key="tx_hash",
+            account=safe_address,
+            recipient=safe_address,
+            token_ids=token_ids,
+            chain_id=chain,
+        )
+        if not claim_tx_hash:
+            return {"error": "Failed to create Aero CL claimEmissions transaction"}
+
+        return {
+            "tx_hash": claim_tx_hash,
+            "contract_address": gauge_address,
+            "gauge_address": gauge_address,
+            "pending_rewards": earned,
+            "success": True,
+            "is_multisend": False,
+        }
+
+    def _get_latest_block_number(self, chain: str) -> Generator[None, None, Optional[int]]:
+        """Return the latest block number on ``chain``, or None on failure."""
+        response = yield from self.get_ledger_api_response(
+            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
+            ledger_callable="get_block",
+            block_identifier="latest",
+            chain_id=chain,
+        )
+        if response.performative != LedgerApiMessage.Performative.STATE:
+            return None
+        return response.state.body.get("number")
+
+    def _is_cl_unstake_penalty_active(
+        self, gauge_address: str, token_id: int, chain: str
+    ) -> Generator[None, None, bool]:
+        """Return True while unstaking ``token_id`` would forfeit its Aero CL emissions.
+
+        The penalty applies while ``penaltyRate > 0``, ``minStakeBlocks > 0`` and the
+        current block is before ``depositBlock + minStakeBlocks``. A failed read is
+        treated as inactive, so a flaky RPC never holds a position in its gauge.
+        """
+        deposit_block = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="deposit_block",
+            data_key="deposit_block",
+            token_id=token_id,
+            chain_id=chain,
+        )
+        gauge_factory = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="gauge_factory",
+            data_key="gauge_factory",
+            chain_id=chain,
+        )
+        if deposit_block is None or not gauge_factory:
+            return False
+
+        penalty_config = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_factory,
+            contract_public_id=AeroCLGaugeFactoryContract.contract_id,
+            contract_callable="effective_penalty_config",
+            data_key="penalty_config",
+            gauge=gauge_address,
+            chain_id=chain,
+        )
+        current_block = yield from self._get_latest_block_number(chain)
+        if not penalty_config or current_block is None:
+            return False
+
+        min_stake_blocks = penalty_config["min_stake_blocks"]
+        return (
+            penalty_config["penalty_rate"] > 0
+            and min_stake_blocks > 0
+            and current_block < deposit_block + min_stake_blocks
+        )
+
     def get_cl_pending_rewards(
         self, account: str, **kwargs: Any
     ) -> Generator[None, None, int]:
@@ -3563,6 +3973,19 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain = kwargs.get("chain")
         gauge_address = kwargs.get("gauge_address")
         token_id = kwargs.get("token_id")
+
+        if kwargs.get("protocol") == AERO_PROTOCOL and chain and gauge_address:
+            # Aero CL gauges only expose the account-wide earned(address).
+            earned = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeCLGaugeContract.contract_id,
+                contract_callable="earned_by_account",
+                data_key="earned",
+                account=account,
+                chain_id=chain,
+            )
+            return earned if isinstance(earned, int) else 0
 
         if not all([chain, gauge_address, token_id]):
             self.context.logger.error(
@@ -3895,7 +4318,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
     def _calculate_slippage_protection_for_velodrome_decrease(
-        self, token_id: int, chain: str, pool_address: str
+        self,
+        token_id: int,
+        chain: str,
+        pool_address: str,
+        protocol: Optional[str] = None,
     ) -> Generator[None, None, Tuple[int, int]]:
         """Calculate slippage protection for Velodrome decrease liquidity operations"""
         try:
@@ -3908,8 +4335,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             else:
                 is_withdrawal = False
 
-            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain, ""
+            position_manager_address = self._get_position_manager_address(
+                chain, protocol
             )
             if not position_manager_address:
                 self.context.logger.error(

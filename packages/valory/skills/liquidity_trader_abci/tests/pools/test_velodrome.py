@@ -2610,7 +2610,7 @@ class TestExitClPool:
         # Token 2 is not owned by the Safe (e.g. transferred externally).
         owners = {1: "0xSafe", 2: "0xOther", 3: "0xSafe"}
 
-        def owner_stub(token_id, chain):
+        def owner_stub(token_id, chain, protocol=None):
             """Owner stub."""
             yield
             return owners[token_id]
@@ -4784,10 +4784,9 @@ class TestClaimRewards:
         """Zero pending rewards returns success with message."""
         b = make_behaviour()
         b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
-        # 1: get_gauge in claim_rewards -> "0xGauge"
-        # 2: get_gauge in get_pending_rewards -> "0xGauge"
-        # 3: earned -> 0
-        b.contract_interact = make_contract_interact(["0xGauge", "0xGauge", 0])
+        # 1: get_gauge in claim_rewards -> "0xGauge" (reused by get_pending_rewards)
+        # 2: earned -> 0
+        b.contract_interact = make_contract_interact(["0xGauge", 0])
         result = exhaust_generator(
             b.claim_rewards("0xLP", chain="optimism", safe_address="0xSafe")
         )
@@ -4798,11 +4797,10 @@ class TestClaimRewards:
         """Claim tx failure returns error."""
         b = make_behaviour()
         b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
-        # 1: get_gauge -> 0xGauge
-        # 2: get_gauge in get_pending_rewards -> 0xGauge
-        # 3: earned -> 100
-        # 4: claim_tx -> None
-        b.contract_interact = make_contract_interact(["0xGauge", "0xGauge", 100, None])
+        # 1: get_gauge -> 0xGauge (reused by get_pending_rewards)
+        # 2: earned -> 100
+        # 3: claim_tx -> None
+        b.contract_interact = make_contract_interact(["0xGauge", 100, None])
         result = exhaust_generator(
             b.claim_rewards("0xLP", chain="optimism", safe_address="0xSafe")
         )
@@ -4813,9 +4811,7 @@ class TestClaimRewards:
         """Happy path with rewards to claim."""
         b = make_behaviour()
         b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
-        b.contract_interact = make_contract_interact(
-            ["0xGauge", "0xGauge", 100, "0xClaimTxHash"]
-        )
+        b.contract_interact = make_contract_interact(["0xGauge", 100, "0xClaimTxHash"])
         result = exhaust_generator(
             b.claim_rewards("0xLP", chain="optimism", safe_address="0xSafe")
         )

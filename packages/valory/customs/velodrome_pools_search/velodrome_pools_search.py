@@ -3260,19 +3260,10 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     return sorted_pools[:n]
 
 
-# ---------------------------------------------------------------------------
-# Aero
-#
-# Aerodrome (Base) and Velodrome (Optimism) were upgraded into Aero on
-# 2026-10-22 and their v2 gauges were killed. Aero has no Sugar contracts:
-# pools are listed from its factories and priced from its tapes. Addresses
-# come from deployment-addresses/ in dromos-labs/metadex-public and
-# dromos-labs/metadex-slipstream-public.
-# ---------------------------------------------------------------------------
+# Aero has no Sugar: pools are listed from its factories and priced from its tapes.
 
 AERO_PROTOCOL = "aero"
 MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11"
-# Aero's emissions token; xAERO on leaf chains redeems 1:1 for it.
 AERO_TOKEN_ADDRESS_BASE = "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee"
 AERO_CONTRACT_ADDRESSES: Dict[int, Dict[str, str]] = {
     BASE_CHAIN_ID: {
@@ -3312,13 +3303,11 @@ AERO_POOL_KINDS: Dict[str, Tuple[str, str]] = {
 SECONDS_PER_DAY = 24 * 60 * 60
 SECONDS_PER_YEAR = 365 * SECONDS_PER_DAY
 MULTICALL_BATCH_SIZE = 200
-# Cumulative pool volume is read over this window for the depth score.
 AERO_DEPTH_WINDOW_SECONDS = 7 * SECONDS_PER_DAY
 # Oldest first, ending with the live reading: the gauge tapes' 48-slot hourly
 # ring, which fills the Sharpe series of a gauge too quiet for its daily ring.
 AERO_HOURLY_LOOKBACKS = [hour * 60 * 60 for hour in range(48, -1, -1)]
-# Emissions are shared by the gauge's stake, which a position's own stake
-# dilutes, so its APR falls as it grows. It is quoted for a position of this size.
+# APRs are quoted for a position of this size, since its own stake dilutes the gauge's.
 AERO_REFERENCE_POSITION_USD = 1000.0
 # Immutable pool data lives in the shared price cache so it survives the
 # per-cycle re-execution of this module.
@@ -3367,7 +3356,6 @@ MULTICALL3_ABI = [
     }
 ]
 
-# (target, function signature, arguments, output types)
 AeroCall = Tuple[str, str, Tuple[Any, ...], List[str]]
 
 
@@ -3532,10 +3520,7 @@ def get_aero_price_usd(
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
 ) -> Optional[float]:
-    """Return the USD price of AERO, priced by its Base contract.
-
-    CoinGecko's ``aerodrome-finance`` id still lists the legacy AERO, so the
-    coin id cannot be used.
+    """Return the USD price of Aero's AERO by its Base contract, not by a coin id.
 
     :param coingecko_api_key: CoinGecko API key, used without x402.
     :param x402_session: optional x402 session.
@@ -3591,12 +3576,7 @@ def get_aero_price_usd(
 def _rate_per_second(
     newer: Tuple[Any, ...], older: Tuple[Any, ...], value_index: int, time_index: int
 ) -> Optional[float]:
-    """Return the per-second growth of a cumulative tape value between two observations.
-
-    A tape answers a lookback older than its oldest observation with that
-    observation, so the elapsed time comes from the returned timestamps, not
-    from the requested ``secondsAgo``.
-    """
+    """Return the per-second growth of a cumulative tape value, timed by the returned timestamps."""
     elapsed = newer[time_index] - older[time_index]
     if elapsed <= 0:
         return None
@@ -3618,11 +3598,7 @@ def _daily_rates(
 def _emission_rates(
     pool: Dict[str, Any], value_index: int, time_index: int
 ) -> List[float]:
-    """Return the per-second emission growth between a gauge's tape observations.
-
-    The daily ring is written only on a day the gauge is touched, so a quiet
-    gauge falls back to every observation both rings and the live reading hold.
-    """
+    """Return the per-second emission growth over a gauge's daily ring, or every ring when quiet."""
     rates = _daily_rates(pool["gauge_daily_observations"], value_index, time_index)
     if len(rates) >= 2:
         return rates
@@ -3667,21 +3643,17 @@ def aero_depth_metrics(
     tvl_usd: float,
     daily_volume_usd: Optional[float],
     max_allocation_percentage: float = DEFAULT_MAX_ALLOCATION_PERCENTAGE,
-    price_impact: float = 0.01,
 ) -> Tuple[Optional[float], Optional[float]]:
-    """Return the depth score and maximum position size, as for the Sugar pools.
+    """Return the depth score and maximum position size, as for Sugar pools at a 1% price impact.
 
     :param tvl_usd: the pool's value locked.
     :param daily_volume_usd: the pool's volume per day, None when unknown.
     :param max_allocation_percentage: the largest share of TVL a position may take.
-    :param price_impact: the price impact the depth score is quoted at.
     :return: ``(depth_score, max_position_size)``, ``(None, None)`` without volume.
     """
     if daily_volume_usd is None:
         return None, None
-    depth_score = (
-        np.log1p(max(0.0, tvl_usd)) * np.log1p(max(0.0, daily_volume_usd))
-    ) / (max(price_impact, 0.001) * 100)
+    depth_score = np.log1p(max(0.0, tvl_usd)) * np.log1p(max(0.0, daily_volume_usd))
     max_position_size = min(tvl_usd * max_allocation_percentage, 1e7)
     return float(min(depth_score, 1e6)), float(max_position_size)
 
@@ -3694,11 +3666,7 @@ def _amount_usd(amount: float, decimals: int, price_usd: float = 1.0) -> float:
 def _cl_liquidity_per_token1(
     sqrt_price_x96: int, tick_lower: int, tick_upper: int
 ) -> Optional[float]:
-    """Return the liquidity one raw unit of token1-denominated value buys in a band.
-
-    Only an in-range band (``tick_lower <= tick < tick_upper``) earns emissions,
-    so out-of-range bands return None.
-    """
+    """Return the liquidity one raw unit of token1 value buys in an in-range band, else None."""
     sqrt_price = sqrt_price_x96 / 2**96
     sqrt_lower = 1.0001 ** (tick_lower / 2)
     sqrt_upper = 1.0001 ** (tick_upper / 2)
@@ -3711,6 +3679,34 @@ def _cl_liquidity_per_token1(
     return 1 / value_per_liquidity
 
 
+def _emission_metrics(
+    pool: Dict[str, Any],
+    tvl: float,
+    return_per_reward: Optional[float],
+    value_index: int,
+    time_index: int,
+) -> Dict[str, Any]:
+    """Return APR, TVL and daily returns of gauge emissions, given the return per reward."""
+    if return_per_reward is None:
+        return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
+
+    def to_return(rate_per_second: float, seconds: int) -> float:
+        return rate_per_second * seconds / WAD * return_per_reward
+
+    observed = pool["gauge_observations"]
+    rate = (
+        _rate_per_second(observed[0], observed[1], value_index, time_index)
+        if observed
+        else None
+    )
+    apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
+    daily_returns = [
+        to_return(daily_rate, SECONDS_PER_DAY)
+        for daily_rate in _emission_rates(pool, value_index, time_index)
+    ]
+    return {"apr": apr, "tvl": tvl, "daily_returns": daily_returns}
+
+
 def aero_v2_pool_metrics(
     pool: Dict[str, Any],
     aero_price: float,
@@ -3719,9 +3715,7 @@ def aero_v2_pool_metrics(
     """Return APR, TVL and daily emission returns of an Aero stable/volatile pool.
 
     Emissions APR = growth of the gauge's ``rewardPerToken`` (AERO per staked LP,
-    1e18-scaled) x AERO price / LP token price, annualised. The rate is scaled
-    by the gauge's stake over that stake plus the position's LP, since the
-    position's stake dilutes the pool.
+    1e18-scaled) x stake share x AERO price / LP token price, annualised.
 
     :param pool: the pool with its live reads (reserves, supply, stake, tapes).
     :param aero_price: the AERO price in USD.
@@ -3734,22 +3728,11 @@ def aero_v2_pool_metrics(
     )
     total_supply = pool["total_supply"]
     if not total_supply or not tvl:
-        return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
+        return _emission_metrics(pool, tvl, None, 0, 1)
     lp_price = tvl / (total_supply / WAD)
     staked = pool["gauge_total_supply"]
     share = staked / (staked + position_usd / lp_price * WAD)
-
-    def to_return(rate_per_second: float, seconds: int) -> float:
-        return rate_per_second * seconds / WAD * share * aero_price / lp_price
-
-    observed = pool["gauge_observations"]
-    rate = _rate_per_second(observed[0], observed[1], 0, 1) if observed else None
-    apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
-    daily_returns = [
-        to_return(daily_rate, SECONDS_PER_DAY)
-        for daily_rate in _emission_rates(pool, 0, 1)
-    ]
-    return {"apr": apr, "tvl": tvl, "daily_returns": daily_returns}
+    return _emission_metrics(pool, tvl, share * aero_price / lp_price, 0, 1)
 
 
 def aero_cl_pool_metrics(
@@ -3761,8 +3744,7 @@ def aero_cl_pool_metrics(
     """Return APR, TVL and daily emission returns of an Aero CL pool.
 
     The gauge's ``cumulativeCredited`` grows by the AERO credited to staked
-    in-range liquidity; a position earns that times its liquidity over the
-    staked liquidity plus its own, since its stake dilutes the pool.
+    in-range liquidity, which the position shares in proportion to its liquidity.
 
     :param pool: the pool with its live reads (slot0, staked liquidity, tapes).
     :param aero_price: the AERO price in USD.
@@ -3785,28 +3767,13 @@ def aero_cl_pool_metrics(
                 band.get("allocation", 0) * position_token1 * per_token1
             )
     if not position_liquidity:
-        return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
+        return _emission_metrics(pool, tvl, None, 1, 2)
     share = position_liquidity / (pool["staked_liquidity"] + position_liquidity)
-
-    def to_return(rate_per_second: float, seconds: int) -> float:
-        return rate_per_second * seconds / WAD * share * aero_price / position_usd
-
-    observed = pool["gauge_observations"]
-    rate = _rate_per_second(observed[0], observed[1], 1, 2) if observed else None
-    apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
-    daily_returns = [
-        to_return(daily_rate, SECONDS_PER_DAY)
-        for daily_rate in _emission_rates(pool, 1, 2)
-    ]
-    return {"apr": apr, "tvl": tvl, "daily_returns": daily_returns}
+    return _emission_metrics(pool, tvl, share * aero_price / position_usd, 1, 2)
 
 
 def aero_daily_volume_usd(pool: Dict[str, Any]) -> Optional[float]:
-    """Return a pool's volume per day from its pool tape.
-
-    Each swap adds its input and its output to the tape, so the two sides are
-    averaged.
-    """
+    """Return a pool's volume per day, averaging the tape's input and output sides."""
     observed = pool.get("pool_observations")
     if not observed:
         return None
@@ -3853,7 +3820,7 @@ def read_aero_pool_state(
         if result is not None and result[0]
     ]
 
-    calls: List[AeroCall] = []
+    pool_calls: List[List[AeroCall]] = []
     for pool in live:
         address, gauge = pool["id"], pool["gauge"]
         if pool["kind"] == "cl":
@@ -3884,9 +3851,9 @@ def read_aero_pool_state(
                 (address, "totalSupply()", (), ["uint256"]),
                 (gauge, "totalSupply()", (), ["uint256"]),
             ]
-        calls.extend(pool_reads)
-        calls.extend(
-            [
+        pool_calls.append(
+            pool_reads
+            + [
                 (
                     gauge_tape,
                     "observe(address,uint48[])",
@@ -3909,33 +3876,32 @@ def read_aero_pool_state(
             ]
         )
 
-    results = iter(aero_multicall(w3, calls))
+    results = aero_multicall(w3, [call for calls in pool_calls for call in calls])
     readable = []
-    for pool in live:
-        if pool["kind"] == "cl":
-            slot0, staked, balance0, balance1 = (next(results) for _ in range(4))
-            state = [slot0, staked, balance0, balance1]
-            if None not in state:
-                pool.update(
-                    sqrt_price_x96=slot0[0],  # type: ignore[index]
-                    tick=slot0[1],  # type: ignore[index]
-                    staked_liquidity=staked[0],  # type: ignore[index]
-                    balance0=balance0[0],  # type: ignore[index]
-                    balance1=balance1[0],  # type: ignore[index]
-                )
-        else:
-            reserves, supply, staked = (next(results) for _ in range(3))
-            state = [reserves, supply, staked]
-            if None not in state:
-                pool.update(
-                    reserves=reserves[:2],  # type: ignore[index]
-                    total_supply=supply[0],  # type: ignore[index]
-                    gauge_total_supply=staked[0],  # type: ignore[index]
-                )
-        observed, daily, hourly, pool_observed = (next(results) for _ in range(4))
+    start = 0
+    for pool, calls in zip(live, pool_calls):
+        *state, observed, daily, hourly, pool_observed = results[
+            start : start + len(calls)
+        ]
+        start += len(calls)
         if None in state or observed is None or daily is None:
             logger.warning(f"Could not read the state of Aero pool {pool['id']}")
             continue
+        if pool["kind"] == "cl":
+            slot0, staked, balance0, balance1 = state
+            pool.update(
+                sqrt_price_x96=slot0[0],  # type: ignore[index]
+                staked_liquidity=staked[0],  # type: ignore[index]
+                balance0=balance0[0],  # type: ignore[index]
+                balance1=balance1[0],  # type: ignore[index]
+            )
+        else:
+            reserves, supply, staked = state
+            pool.update(
+                reserves=reserves[:2],  # type: ignore[index]
+                total_supply=supply[0],  # type: ignore[index]
+                gauge_total_supply=staked[0],  # type: ignore[index]
+            )
         pool["gauge_observations"] = observed[0]
         pool["gauge_daily_observations"] = daily[0]
         pool["gauge_hourly_observations"] = hourly[0] if hourly else []
@@ -3950,17 +3916,7 @@ def get_aero_pools(
     whitelisted_assets: Dict[str, Any],
     price_cache: Optional[Dict[str, Any]] = None,
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-    """Return the whitelisted Aero pools with an activated gauge and their live state.
-
-    Immutable pool data is cached; live reads are made only for pools that pass
-    the whitelist filter.
-
-    :param chain_id: the chain to search.
-    :param current_positions: pools the agent already holds, skipped.
-    :param whitelisted_assets: investable tokens per chain.
-    :param price_cache: the shared cache that keeps immutable pool data.
-    :return: the pools, or an error dictionary.
-    """
+    """Return the whitelisted Aero pools with an activated gauge and their live state."""
     rpc_url = RPC_ENDPOINTS[chain_id]
     w3 = get_web3_connection(rpc_url)
     if not w3.is_connected():
@@ -4705,9 +4661,9 @@ def _run_impl(
                 chain_id,
                 sugar_address,
                 rpc_url,
-                kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
+                kwargs.get("top_n", 10),
                 **explicit_params,
-                **remaining_kwargs,  # Pass remaining kwargs for filter parameters (min_tvl_threshold, min_volume_threshold, max_allocation_percentage)
+                **remaining_kwargs,
             )
 
         # Process results

@@ -372,7 +372,7 @@ def _v2_pool(**extra: Any) -> Dict[str, Any]:
         "decimals1": 18,
         "reserves": (1_000_000 * 10**6, 1_000_000 * 10**18),
         "total_supply": 2_000_000 * WAD,
-        # As many LP tokens as a $1,000 position mints, so it would earn half.
+        # As many LP tokens as the reference position mints, so it would earn half.
         "gauge_total_supply": 1000 * WAD,
         # 1e-4 AERO per LP token over one day
         "gauge_observations": [(10**14 + 1, SECONDS_PER_DAY), (1, 0)],
@@ -391,8 +391,7 @@ class TestV2Metrics:
     def test_apr(self) -> None:
         """APR = reward per LP token x stake share x AERO price / LP price, annualised."""
         metrics = aero_v2_pool_metrics(_v2_pool(), aero_price=0.5)
-        # The LP token is worth $1 and earns 1e-4 AERO, at $0.5, per day, halved
-        # by the position's own stake.
+        # Each LP token earns 1e-4 AERO a day, halved by the position's own stake.
         assert metrics["tvl"] == pytest.approx(2_000_000)
         assert metrics["apr"] == pytest.approx(0.25e-4 * 365 * 100, rel=1e-6)
         assert metrics["daily_returns"] == pytest.approx([0.25e-4, 0.25e-4])
@@ -602,7 +601,7 @@ class TestReadAeroPoolState:
         assert v2["gauge_total_supply"] == 30
         assert (_address(8), "totalSupply()", ()) in multicall.calls
         assert cl["staked_liquidity"] == 40
-        assert (cl["balance0"], cl["sqrt_price_x96"], cl["tick"]) == (50, 2**96, 0)
+        assert (cl["balance0"], cl["sqrt_price_x96"]) == (50, 2**96)
         assert v2["gauge_hourly_observations"] == [(1, 2), (0, 1)]
         assert (
             BASE["gauge_tape"],

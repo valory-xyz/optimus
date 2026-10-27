@@ -698,7 +698,7 @@ class TestHttpHandlerMethods:
                 }
             }
         )
-        result = handler._withdrawal_deficit_response(funds, "optimism")
+        result = handler._withdrawal_deficit_response(funds, "optimism", 350)
         assert result == {
             "optimism": {
                 TOPUP_AGENT: {ZERO_ADDRESS: {"balance": None, "deficit": "350"}}

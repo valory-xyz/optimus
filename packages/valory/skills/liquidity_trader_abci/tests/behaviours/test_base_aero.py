@@ -19,12 +19,13 @@
 
 """Tests for the Aero additions to LiquidityTraderBaseBehaviour."""
 
+from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    AERO_TOKEN_ADDRESS_BASE,
     REWARD_TOKEN_ADDRESSES,
-    XAERO_ADDRESSES,
 )
 from packages.valory.skills.liquidity_trader_abci.tests.behaviours.test_base import (
     _exhaust,
@@ -32,7 +33,18 @@ from packages.valory.skills.liquidity_trader_abci.tests.behaviours.test_base imp
     _make_gen,
 )
 
-XAERO = XAERO_ADDRESSES["optimism"]
+AERO_TOKEN_ADDRESS_BASE = "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee"
+XAERO = "0xbdEaeA5205d16f34Cb40038052d91235D87B4C54"
+
+
+def _aero_behaviour() -> Any:
+    """Return a behaviour with Aero's reward tokens configured."""
+    b = _make_behaviour()
+    b.params.aero_reward_token_contract_addresses = {
+        "optimism": XAERO,
+        "base": AERO_TOKEN_ADDRESS_BASE,
+    }
+    return b
 
 
 def test_aero_reward_tokens_are_excluded_from_investment() -> None:
@@ -41,12 +53,33 @@ def test_aero_reward_tokens_are_excluded_from_investment() -> None:
     assert XAERO in REWARD_TOKEN_ADDRESSES["optimism"]
 
 
+@pytest.mark.parametrize(
+    "token_address, chain, expected",
+    [
+        (XAERO.lower(), "optimism", True),
+        ("0xOther", "optimism", False),
+        (None, "optimism", False),
+        (AERO_TOKEN_ADDRESS_BASE, "base", False),
+        (XAERO, "mode", False),
+    ],
+)
+def test_is_xaero(token_address, chain, expected) -> None:
+    """xAERO is the Aero reward token on every chain but Base."""
+    assert _aero_behaviour()._is_xaero(token_address, chain) is expected
+
+
 class TestXAeroPrice:
     """xAERO has no CoinGecko listing and is priced as Base AERO."""
 
+    def test_no_base_aero_configured(self) -> None:
+        """Without a Base AERO address there is no price."""
+        b = _make_behaviour()
+        b.params.aero_reward_token_contract_addresses = {}
+        assert _exhaust(b._fetch_aero_price()) is None
+
     def test_xaero_priced_as_base_aero(self) -> None:
         """The price request goes to Base for Aero's AERO contract."""
-        b = _make_behaviour()
+        b = _aero_behaviour()
         b.coingecko.chain_to_platform_id_mapping["base"] = "base"
         b._get_cached_price = _make_gen(None)  # type: ignore[method-assign]
         b._cache_price = _make_gen(None)  # type: ignore[method-assign]
@@ -67,7 +100,7 @@ class TestXAeroNeverSwapped:
 
     def test_swap_to_usdc_skips_xaero(self) -> None:
         """No swap action is built for xAERO."""
-        b = _make_behaviour()
+        b = _aero_behaviour()
         assert b._build_swap_to_usdc_action("optimism", XAERO.lower(), "xAERO") is None
 
 

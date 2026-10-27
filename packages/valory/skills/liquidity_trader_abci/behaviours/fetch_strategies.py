@@ -51,7 +51,6 @@ from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterCon
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    AERO_TOKEN_ADDRESS_BASE,
     Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
@@ -5333,13 +5332,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[float]]:
         """Fetch the USD price of the gauge reward token a position earns."""
         if is_aero_position(position):
-            # CoinGecko's ``aerodrome-finance`` id lists the legacy AERO, so
-            # Aero's AERO is priced by contract; xAERO is priced as AERO.
-            return (
-                yield from self._fetch_token_price(
-                    AERO_TOKEN_ADDRESS_BASE, Chain.BASE.value
-                )
-            )
+            return (yield from self._fetch_aero_price())
         coin_id = self.get_coin_id_from_symbol(
             self._get_velo_family_reward_symbol(chain), chain
         )

@@ -439,14 +439,6 @@ REWARD_TOKEN_ADDRESSES = {
     },
 }
 
-# xAERO redeems for AERO only on Base, where the agent Safe does not exist, and
-# its one market is too thin to sell into: it is held, valued at the AERO price
-# and never swapped or invested.
-XAERO_ADDRESSES = {
-    "optimism": "0xbdEaeA5205d16f34Cb40038052d91235D87B4C54",
-}
-AERO_TOKEN_ADDRESS_BASE = "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee"  # nosec B105
-
 
 class LiquidityTraderBaseBehaviour(
     BalancerPoolBehaviour, UniswapPoolBehaviour, VelodromePoolBehaviour, ABC
@@ -1899,14 +1891,29 @@ class LiquidityTraderBaseBehaviour(
         self.service_staking_state = StakingState(service_staking_state)
         return
 
+    def _is_xaero(self, token_address: Optional[str], chain: str) -> bool:
+        """Return whether the token is xAERO, which is held and never swapped."""
+        if chain == Chain.BASE.value or not token_address:
+            return False
+        xaero_address = self.params.aero_reward_token_contract_addresses.get(chain)
+        return bool(xaero_address) and token_address.lower() == xaero_address.lower()
+
+    def _fetch_aero_price(self) -> Generator[None, None, Optional[float]]:
+        """Fetch the price of Aero's AERO on Base."""
+        aero_address = self.params.aero_reward_token_contract_addresses.get(
+            Chain.BASE.value
+        )
+        if not aero_address:
+            return None
+        return (yield from self._fetch_token_price(aero_address, Chain.BASE.value))
+
     def _fetch_token_price(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
         """Fetch the price for a specific token, with in-memory caching."""
-        xaero_address = XAERO_ADDRESSES.get(chain)
-        if xaero_address and token_address.lower() == xaero_address.lower():
+        if self._is_xaero(token_address, chain):
             # xAERO has no CoinGecko listing; it redeems 1:1 for Base AERO.
-            return (yield from self._fetch_token_price(AERO_TOKEN_ADDRESS_BASE, "base"))
+            return (yield from self._fetch_aero_price())
 
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
@@ -3130,15 +3137,8 @@ class LiquidityTraderBaseBehaviour(
                 )
                 return None
 
-            xaero_address = XAERO_ADDRESSES.get(chain)
-            if (
-                xaero_address
-                and from_token_address
-                and from_token_address.lower() == xaero_address.lower()
-            ):
-                self.context.logger.info(
-                    "Skipping xAERO - it is held, never sold into its thin market"
-                )
+            if self._is_xaero(from_token_address, chain):
+                self.context.logger.info("Skipping xAERO during withdrawal")
                 return None
 
             swap_action = {

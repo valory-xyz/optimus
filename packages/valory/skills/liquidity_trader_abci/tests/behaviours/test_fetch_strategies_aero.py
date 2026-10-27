@@ -25,9 +25,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    AERO_TOKEN_ADDRESS_BASE,
-)
 from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
     TRANSFER_EVENT_SIGNATURE,
     ZERO_ADDRESS_PADDED,
@@ -85,11 +82,12 @@ class TestRewardToken:
 
         b._fetch_token_price = _price
         b._fetch_coin_price = MagicMock()
+        b.params.aero_reward_token_contract_addresses["base"] = "0xAERO"
         assert (
             _drive(b._fetch_velo_family_reward_price("optimism", AERO_POSITION))
             == 0.678
         )
-        assert calls == [(AERO_TOKEN_ADDRESS_BASE, "base")]
+        assert calls == [("0xAERO", "base")]
         b._fetch_coin_price.assert_not_called()
 
     def test_legacy_reward_priced_by_coin_id(self) -> None:

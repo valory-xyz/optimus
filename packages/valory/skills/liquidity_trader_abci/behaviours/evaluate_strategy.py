@@ -69,6 +69,9 @@ from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    is_aero_position,
+)
 from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
@@ -118,6 +121,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.send_a2a_transaction(payload)
                 yield from self.wait_until_round_end()
                 self.set_done()
+                return
+
+            # Legacy Velodrome/Aerodrome gauges earn nothing since the Aero
+            # upgrade, so their positions are exited before any other gate.
+            legacy_exit_actions = (
+                yield from self._prepare_legacy_velodrome_exit_actions()
+            )
+            if legacy_exit_actions:
+                # Reset the backoff so the next cycle evaluates Aero pools.
+                yield from self._restore_strategy_state()
+                self._update_strategy_backoff(legacy_exit_actions)
+                yield from self._persist_strategy_state()
+                yield from self.send_actions(legacy_exit_actions)
                 return
 
             # Check minimum hold period
@@ -174,6 +190,67 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Send final actions
             yield from self.send_actions(actions)
+
+    def _prepare_legacy_velodrome_exit_actions(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Build claim, unstake and exit actions for open positions in legacy pools.
+
+        A Velodrome-family position without ``protocol`` predates Aero, and its
+        gauge stopped receiving emissions at the upgrade. It is exited through
+        the legacy contracts it was entered with.
+
+        :yield: contract reads of the legacy gauges' stake and reward state
+        :return: the actions for this cycle, empty when no legacy position is open
+        """
+        legacy_positions = [
+            position
+            for position in self.current_positions
+            if position.get("status") == PositionStatus.OPEN.value
+            and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
+            and not is_aero_position(position)
+        ]
+        if not legacy_positions:
+            return []
+
+        self.context.logger.info(
+            f"Exiting {len(legacy_positions)} legacy Velodrome/Aerodrome position(s)"
+        )
+        pool = self.pools.get(DexType.VELODROME.value)
+        actions: List[Dict[str, Any]] = []
+        for position in legacy_positions:
+            if position.get("is_cl_pool"):
+                # A legacy CL gauge's withdraw pays out the emissions itself.
+                unstake_action = (
+                    yield from self._build_unstake_lp_tokens_action_verified(position)
+                )
+                if unstake_action:
+                    actions.append(unstake_action)
+                continue
+
+            # A legacy v2 gauge's withdraw only accrues, so claim before it.
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            pending_rewards = yield from pool.get_pending_rewards(
+                self, lp_token=pool_address, user_address=safe_address, chain=chain
+            )
+            if pending_rewards:
+                claim_action = self._build_claim_staking_rewards_action(position)
+                if claim_action:
+                    actions.append(claim_action)
+            staked_balance = yield from pool.get_staked_balance(
+                self, lp_token=pool_address, user_address=safe_address, chain=chain
+            )
+            if staked_balance:
+                unstake_action = self._build_unstake_lp_tokens_action(position)
+                if unstake_action:
+                    actions.append(unstake_action)
+
+        actions.extend(
+            self._prepare_exit_pool_actions(legacy_positions, purpose="Aero migration")
+        )
+        return actions
 
     def send_actions(self, actions: Optional[List[Any]] = None) -> Generator:
         """Send actions and complete the round."""
@@ -923,7 +1000,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         if hasattr(
                             self, "_get_velo_token_address"
                         ):  # pragma: no branch
-                            velo_token_address = self._get_velo_token_address(chain)
+                            velo_token_address = self._get_velo_token_address(
+                                chain, position
+                            )
                             if velo_token_address:
                                 result[velo_token_address] = float(velo_rewards)
                                 self.context.logger.info(
@@ -3525,6 +3604,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "description": f"Stake LP tokens for {pool_address}",
                 }
 
+            if opportunity.get("gauge_address"):
+                stake_action["gauge_address"] = opportunity["gauge_address"]
+            if opportunity.get("protocol"):
+                stake_action["protocol"] = opportunity["protocol"]
+
             self.context.logger.info(f"Created stake LP tokens action: {stake_action}")
             return stake_action
 
@@ -3576,6 +3660,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Add gauge address if available
             if gauge_address:
                 claim_action["gauge_address"] = gauge_address
+            if position.get("protocol"):
+                claim_action["protocol"] = position["protocol"]
 
             self.context.logger.info(
                 f"Created claim staking rewards action: {claim_action}"
@@ -3591,8 +3677,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_gauge_address_for_position(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[str]]:
-        """Get gauge address for a position using voter contract."""
+        """Get gauge address for a position, from the position or the legacy voter."""
         try:
+            if position.get("gauge_address"):
+                return position["gauge_address"]
+
             chain = position.get("chain")
             pool_address = position.get("pool_address")
 
@@ -3643,6 +3732,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Only add staking for Velodrome pools
         if dex_type not in VELODROME_FAMILY_DEX_TYPES:
             return False
+
+        # Aero opportunities carry their activated gauge.
+        if is_aero_position(opportunity):
+            return bool(opportunity.get("gauge_address"))
 
         # Check if chain has voter contract configured
         chain = opportunity.get("chain")
@@ -3890,6 +3983,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "No cached enter pool action found, cannot reconstruct"
                 )
                 return None
+            if chain in self.params.aero_metarouter_contract_addresses and (
+                not is_aero_position(cached_enter_action)
+            ):
+                self.context.logger.info(
+                    f"Cached CL opportunity on {chain} is a legacy pool; not reusing it"
+                )
+                return None
 
             # Get current token balances
             safe_address = self.params.safe_contract_addresses.get(chain)
@@ -3966,6 +4066,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 ),
                 "is_cl_pool": True,
             }
+            for key in ("protocol", "gauge_address"):
+                if cached_enter_action.get(key):
+                    temp_opportunity[key] = cached_enter_action[key]
 
             if self._should_add_staking_actions(temp_opportunity):
                 stake_action = self._build_stake_lp_tokens_action(temp_opportunity)

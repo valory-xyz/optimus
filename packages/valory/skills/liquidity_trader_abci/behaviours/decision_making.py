@@ -517,6 +517,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "is_stable",
             "is_cl_pool",
             "advertised_apr",
+            "protocol",
+            "gauge_address",
         ]
 
         # Create the current_position dictionary with only the desired information
@@ -1881,6 +1883,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if tick_ranges:
                 kwargs["tick_ranges"] = tick_ranges
                 self.context.logger.info(f"Added tick_ranges to kwargs: {tick_ranges}")
+            if action.get("protocol"):
+                kwargs["protocol"] = action["protocol"]
+                kwargs["pool_factory"] = action.get("pool_factory")
 
             # Log final kwargs before passing to pool.enter
             self.context.logger.info(f"Final kwargs for pool.enter: {kwargs}")
@@ -2059,6 +2064,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if dex_type in VELODROME_FAMILY_DEX_TYPES:
             exit_pool_kwargs["is_stable"] = is_stable
             exit_pool_kwargs["is_cl_pool"] = is_cl_pool
+            exit_pool_kwargs["protocol"] = action.get("protocol")
 
             # For Velodrome CL pools, we need to handle multiple positions
             if is_cl_pool:
@@ -4172,7 +4178,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            self, pool_address, chain=chain
+                            self,
+                            pool_address,
+                            chain=chain,
+                            gauge_address=matching_position.get("gauge_address"),
                         )
 
                 if not token_ids or not gauge_address:
@@ -4187,6 +4196,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     gauge_address=gauge_address,
                     chain=chain,
                     safe_address=safe_address,
+                    protocol=action.get("protocol"),
                 )
             else:
                 # For regular pools, get LP token balance to stake
@@ -4205,6 +4215,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     amount=lp_balance,
                     chain=chain,
                     safe_address=safe_address,
+                    gauge_address=action.get("gauge_address"),
                 )
 
             if result is None:
@@ -4337,7 +4348,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            self, pool_address, chain=chain
+                            self,
+                            pool_address,
+                            chain=chain,
+                            gauge_address=matching_position.get("gauge_address"),
                         )
 
                 if not token_ids or not gauge_address:
@@ -4352,11 +4366,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     gauge_address=gauge_address,
                     chain=chain,
                     safe_address=safe_address,
+                    protocol=action.get("protocol"),
                 )
             else:
                 # For regular pools, get staked balance
                 staked_balance = yield from pool.get_staked_balance(
-                    self, lp_token=pool_address, user_address=safe_address, chain=chain
+                    self,
+                    lp_token=pool_address,
+                    user_address=safe_address,
+                    chain=chain,
+                    gauge_address=action.get("gauge_address"),
                 )
 
                 if not staked_balance or staked_balance <= 0:
@@ -4371,6 +4390,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     amount=staked_balance,
                     chain=chain,
                     safe_address=safe_address,
+                    gauge_address=action.get("gauge_address"),
+                    protocol=action.get("protocol"),
                 )
 
             if not result or result.get("error"):
@@ -4504,7 +4525,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address from pool if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            self, pool_address, chain=chain
+                            self,
+                            pool_address,
+                            chain=chain,
+                            gauge_address=matching_position.get("gauge_address"),
                         )
 
                 if not token_ids or not gauge_address:
@@ -4547,11 +4571,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     token_ids=token_ids,
                     chain=chain,
                     safe_address=safe_address,
+                    protocol=action.get("protocol"),
                 )
             else:
                 # For regular pools
                 result = yield from pool.claim_rewards(
-                    self, lp_token=pool_address, chain=chain, safe_address=safe_address
+                    self,
+                    lp_token=pool_address,
+                    chain=chain,
+                    safe_address=safe_address,
+                    gauge_address=action.get("gauge_address"),
+                    protocol=action.get("protocol"),
                 )
 
             if not result or result.get("error"):

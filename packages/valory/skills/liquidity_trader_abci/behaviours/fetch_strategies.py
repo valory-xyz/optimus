@@ -51,6 +51,7 @@ from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterCon
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    AERO_TOKEN_ADDRESS_BASE,
     Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
@@ -65,6 +66,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     initial_value_ts_kv_key,
     total_withdrawals_kv_key,
     withdrawals_ts_kv_key,
+)
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    is_aero_position,
 )
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     Event,
@@ -932,9 +936,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Get position manager address
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain
-            )
+            self._get_position_manager_address(chain, position.get("protocol"))
             if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
@@ -1336,12 +1338,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 position, chain, user_address
             )
             if velo_rewards > 0:
-                # Get VELO/AERO token address for the chain
-                velo_token_address = self._get_velo_token_address(chain)
+                # Get the gauge reward token address for the position
+                velo_token_address = self._get_velo_token_address(chain, position)
                 if velo_token_address:
                     # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
                     user_balances[velo_token_address] = velo_rewards
-                    reward_symbol = self._get_velo_family_reward_symbol(chain)
+                    reward_symbol = self._get_velo_family_reward_symbol(
+                        chain, position
+                    )
                     self.context.logger.info(
                         f"Added {reward_symbol} rewards to position: {velo_rewards}"
                     )
@@ -1353,9 +1357,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         }
 
         # Add the gauge reward token (VELO / AERO) to token_info if rewards exist
-        velo_token_address = self._get_velo_token_address(chain)
+        velo_token_address = self._get_velo_token_address(chain, position)
         if velo_token_address and velo_token_address in user_balances:
-            token_info[velo_token_address] = self._get_velo_family_reward_symbol(chain)
+            token_info[velo_token_address] = self._get_velo_family_reward_symbol(
+                chain, position
+            )
 
         return user_balances, details, token_info
 
@@ -1608,7 +1614,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
         ):
             # Get reward-token address and check if it's in current_balances
-            velo_token_address = self._get_velo_token_address(chain)
+            velo_token_address = self._get_velo_token_address(chain, position)
             if velo_token_address and velo_token_address in current_balances:
                 velo_balance = current_balances[velo_token_address]
                 if velo_balance > 0:
@@ -1616,11 +1622,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        reward_symbol = self._get_velo_family_reward_symbol(chain)
-                        velo_coin_id = self.get_coin_id_from_symbol(
-                            reward_symbol, chain
+                        reward_symbol = self._get_velo_family_reward_symbol(
+                            chain, position
                         )
-                        velo_price = yield from self._fetch_coin_price(velo_coin_id)
+                        velo_price = yield from self._fetch_velo_family_reward_price(
+                            chain, position
+                        )
                         if velo_price is None:
                             # Returning ``None`` signals "could not compute"
                             # to the caller so the position's last-known
@@ -1654,7 +1661,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         if velo_rewards_usd > 0:
             velo_balance = current_balances.get(
-                self._get_velo_token_address(chain), Decimal(0)
+                self._get_velo_token_address(chain, position), Decimal(0)
             )
             velo_price = (
                 velo_rewards_usd / velo_balance if velo_balance > 0 else Decimal(0)
@@ -1842,7 +1849,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate amounts for this position
             amount0, amount1 = yield from self._calculate_position_amounts(
-                position_details, current_tick, sqrt_price_x96, pos, dex_type, chain
+                position_details,
+                current_tick,
+                sqrt_price_x96,
+                pos,
+                dex_type,
+                chain,
+                protocol=position.get("protocol"),
             )
 
             total_token0_qty += Decimal(amount0)
@@ -1875,6 +1888,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         position: Dict[str, Any],
         dex_type: str,
         chain: str,
+        protocol: Optional[str] = None,
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:
         """Calculate token amounts with DEX-specific logic."""
         # Extract position details
@@ -1902,8 +1916,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Use DEX-specific calculation methods
         if dex_type in VELODROME_FAMILY_DEX_TYPES and token_id:
             # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
-            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain
+            position_manager_address = self._get_position_manager_address(
+                chain, protocol
             )
             if position_manager_address:
                 self.context.logger.info(
@@ -1965,10 +1979,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address,
     ):
         """Calculate the user's share value and token balances in a Velodrome CL pool."""
-        position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain
-            )
+        position_manager_address = self._get_position_manager_address(
+            chain, position.get("protocol")
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -2010,7 +2022,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         user_balance = None
         if position.get("staked"):
             resolved, gauge_address = yield from self._resolve_velodrome_gauge_address(
-                pool_address, chain
+                pool_address, chain, position.get("gauge_address")
             )
             if not resolved or gauge_address is None:
                 # pool.balanceOf(safe) is 0 for a staked LP because the
@@ -3190,8 +3202,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     return
 
-                position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                    chain
+                position_manager_address = self._get_position_manager_address(
+                    chain, position.get("protocol")
                 )
                 if not position_manager_address:
                     self.context.logger.warning(
@@ -3240,7 +3252,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if position.get("staked"):
                 resolved, gauge_address = (
                     yield from self._resolve_velodrome_gauge_address(
-                        pool_address, chain
+                        pool_address, chain, position.get("gauge_address")
                     )
                 )
                 if not resolved or gauge_address is None:
@@ -3286,7 +3298,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
     def _resolve_velodrome_gauge_address(
-        self, pool_address: str, chain: str
+        self, pool_address: str, chain: str, gauge_address: Optional[str] = None
     ) -> Generator[None, None, Tuple[bool, Optional[str]]]:
         """Look up the Velodrome / Aerodrome gauge address for a pool.
 
@@ -3300,12 +3312,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         :param pool_address: the LP pool address whose gauge to look up.
         :param chain: chain name used to pick the Voter contract address.
+        :param gauge_address: the gauge stored on an Aero position, returned
+            as is because Aero's voters revert on ``gauges(pool)``.
         :yield: None.
         :return: ``(True, gauge_address)`` on a successful lookup,
             ``(True, None)`` when the chain has no configured Voter or
             the pool has no gauge, and ``(False, None)`` when the Voter
             RPC call itself fails.
         """
+        if gauge_address:
+            return True, gauge_address
+
         voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
         if not voter_address:
             self.context.logger.warning(
@@ -5227,7 +5244,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if is_cl_pool:
                 # For CL pools, we need the gauge address
                 gauge_address = yield from pool.get_gauge_address(
-                    self, pool_address, chain=chain
+                    self,
+                    pool_address,
+                    chain=chain,
+                    gauge_address=position.get("gauge_address"),
                 )
                 if not gauge_address:
                     self.context.logger.warning(
@@ -5237,20 +5257,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 positions_data = position.get("positions", [])
                 token_ids = [pos["token_id"] for pos in positions_data]
                 pending_rewards = 0
-                for token_id in token_ids:
-                    rewards = yield from pool.get_cl_pending_rewards(
+                if is_aero_position(position):
+                    # Aero CL gauges report one account-wide earned amount.
+                    pending_rewards = yield from pool.get_cl_pending_rewards(
                         self,
                         account=user_address,
                         gauge_address=gauge_address,
                         chain=chain,
-                        token_id=token_id,
+                        protocol=position["protocol"],
                     )
-                    if rewards:
-                        pending_rewards += rewards
+                else:
+                    for token_id in token_ids:
+                        rewards = yield from pool.get_cl_pending_rewards(
+                            self,
+                            account=user_address,
+                            gauge_address=gauge_address,
+                            chain=chain,
+                            token_id=token_id,
+                        )
+                        if rewards:
+                            pending_rewards += rewards
             else:
                 # For regular pools
                 pending_rewards = yield from pool.get_pending_rewards(
-                    self, lp_token=pool_address, user_address=user_address, chain=chain
+                    self,
+                    lp_token=pool_address,
+                    user_address=user_address,
+                    chain=chain,
+                    gauge_address=position.get("gauge_address"),
                 )
 
             if pending_rewards and pending_rewards > 0:
@@ -5269,23 +5303,49 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return Decimal(0)
 
-    def _get_velo_token_address(self, chain: str) -> Optional[str]:
-        """Get the VELO token address for the specified chain from params."""
+    def _get_velo_token_address(
+        self, chain: str, position: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """Get the gauge reward token address for the chain, or for an Aero position."""
+        if position is not None and is_aero_position(position):
+            return self.params.aero_reward_token_contract_addresses.get(chain)
         velo_addresses = self.params.velo_token_contract_addresses
         return velo_addresses.get(chain)
 
-    def _get_velo_family_reward_symbol(self, chain: str) -> str:
+    def _get_velo_family_reward_symbol(
+        self, chain: str, position: Optional[Dict[str, Any]] = None
+    ) -> str:
         """Return the LP-gauge reward token symbol for the chain.
 
-        Aerodrome on Base distributes AERO; Velodrome on Optimism and Mode
-        distributes VELO. ``_get_velo_token_address`` already returns the
-        correct contract per chain, but a few sites still need the symbol
-        for UI labels and CoinGecko price lookups.
+        Legacy Aerodrome on Base distributed AERO; legacy Velodrome on Optimism
+        and Mode distributed VELO. Aero pays AERO on Base and xAERO on Optimism.
+        ``_get_velo_token_address`` already returns the correct contract, but a
+        few sites still need the symbol for UI labels and price lookups.
 
         :param chain: chain name used to pick the reward token symbol.
-        :return: ``"AERO"`` on Base, ``"VELO"`` on every other chain.
+        :param position: the position the reward is for, when known.
+        :return: the reward token symbol.
         """
+        if position is not None and is_aero_position(position):
+            return "AERO" if chain == Chain.BASE.value else "xAERO"
         return "AERO" if chain == Chain.BASE.value else "VELO"
+
+    def _fetch_velo_family_reward_price(
+        self, chain: str, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Fetch the USD price of the gauge reward token a position earns."""
+        if is_aero_position(position):
+            # CoinGecko's ``aerodrome-finance`` id lists the legacy AERO, so
+            # Aero's AERO is priced by contract; xAERO is priced as AERO.
+            return (
+                yield from self._fetch_token_price(
+                    AERO_TOKEN_ADDRESS_BASE, Chain.BASE.value
+                )
+            )
+        coin_id = self.get_coin_id_from_symbol(
+            self._get_velo_family_reward_symbol(chain), chain
+        )
+        return (yield from self._fetch_coin_price(coin_id))
 
     def _validate_velodrome_v2_pool_addresses(self) -> Generator[None, None, None]:
         """Validate Velodrome v2 pool addresses for all positions."""

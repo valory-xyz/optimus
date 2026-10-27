@@ -2218,7 +2218,7 @@ class TestCalculateCorrectedYield:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         obj.get_coin_id_from_symbol = lambda s, c: "velodrome-finance"
         obj._fetch_coin_price = _gen_return(0.5)
         pos = {
@@ -4663,7 +4663,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         pos = {
             "token0": "0xT0",
             "token1": "0xT1",
@@ -4697,7 +4697,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         obj.get_coin_id_from_symbol = lambda s, c: "velodrome-finance"
         obj._fetch_coin_price = _gen_return(None)
         pos = {
@@ -4727,7 +4727,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         pos = {
             "token0": "0xT0",
             "token1": "0xT1",
@@ -4755,7 +4755,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         pos = {
             "token0": "0xT0",
             "token1": "0xT1",

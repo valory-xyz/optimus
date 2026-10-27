@@ -64,6 +64,7 @@ from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
 )
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     VelodromePoolBehaviour,
+    is_aero_position,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     StakingState,
@@ -429,12 +430,22 @@ REWARD_TOKEN_ADDRESSES = {
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
         "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "VELO",  # VELO on Optimism
+        "0xbdEaeA5205d16f34Cb40038052d91235D87B4C54": "xAERO",  # Aero emissions on Optimism
     },
     "base": {
         "0x54330d28ca3357F294334BDC454a032e7f353416": "OLAS",  # OLAS on Base
-        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # AERO on Base
+        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # legacy Aerodrome AERO
+        "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee": "AERO",  # Aero emissions on Base
     },
 }
+
+# xAERO redeems for AERO only on Base, where the agent Safe does not exist, and
+# its one market is too thin to sell into: it is held, valued at the AERO price
+# and never swapped or invested.
+XAERO_ADDRESSES = {
+    "optimism": "0xbdEaeA5205d16f34Cb40038052d91235D87B4C54",
+}
+AERO_TOKEN_ADDRESS_BASE = "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee"
 
 
 class LiquidityTraderBaseBehaviour(
@@ -1892,6 +1903,11 @@ class LiquidityTraderBaseBehaviour(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
         """Fetch the price for a specific token, with in-memory caching."""
+        xaero_address = XAERO_ADDRESSES.get(chain)
+        if xaero_address and token_address.lower() == xaero_address.lower():
+            # xAERO has no CoinGecko listing; it redeems 1:1 for Base AERO.
+            return (yield from self._fetch_token_price(AERO_TOKEN_ADDRESS_BASE, "base"))
+
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
@@ -3034,6 +3050,9 @@ class LiquidityTraderBaseBehaviour(
             "is_cl_pool": is_cl_pool,
         }
 
+        if position.get("protocol"):
+            exit_pool_action["protocol"] = position["protocol"]
+
         # Add assets if provided
         if tokens:
             exit_pool_action["assets"] = [token.get("token") for token in tokens]
@@ -3108,6 +3127,17 @@ class LiquidityTraderBaseBehaviour(
             ):
                 self.context.logger.info(
                     "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
+                )
+                return None
+
+            xaero_address = XAERO_ADDRESSES.get(chain)
+            if (
+                xaero_address
+                and from_token_address
+                and from_token_address.lower() == xaero_address.lower()
+            ):
+                self.context.logger.info(
+                    "Skipping xAERO - it is held, never sold into its thin market"
                 )
                 return None
 
@@ -3273,6 +3303,9 @@ class LiquidityTraderBaseBehaviour(
 
     def _has_staking_metadata(self, position: Dict[str, Any]) -> bool:
         """Check if position has staking metadata."""
+        if is_aero_position(position):
+            # Aero positions store their gauge whether or not they are staked.
+            return bool(position.get("staked"))
         return bool(
             position.get("gauge_address")
             or position.get("staked")
@@ -3347,6 +3380,8 @@ class LiquidityTraderBaseBehaviour(
             # Add gauge address if available
             if gauge_address:
                 unstake_action["gauge_address"] = gauge_address
+            if position.get("protocol"):
+                unstake_action["protocol"] = position["protocol"]
 
             self.context.logger.info(
                 f"Created unstake LP tokens action: {unstake_action}"
@@ -3517,6 +3552,105 @@ class LiquidityTraderBaseBehaviour(
             filtered_position.pop("token_id", None)
         filtered_position["gauge_address"] = gauge_address
         return self._build_unstake_lp_tokens_action(filtered_position)
+
+    def _prepare_unstaking_actions(
+        self, positions: List[Dict[str, Any]]
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """
+        Prepare unstaking actions in standard action format.
+
+        :param positions: current positions
+        :yield: while awaiting on-chain stake-state verification
+        :return: list of unstaking positions actions in standard format
+        """
+        actions = []
+
+        self.context.logger.info("Preparing unstaking actions")
+        self.context.logger.info(f"Positions data: {positions}")
+
+        for i, position in enumerate(positions):
+            self.context.logger.info(f"Processing position {i + 1}: {position}")
+            status = position.get("status")
+
+            if status == PositionStatus.OPEN.value:
+                if self._has_staking_metadata(position):
+                    unstake_action = (
+                        yield from self._build_unstake_lp_tokens_action_verified(
+                            position
+                        )
+                    )
+                    if unstake_action:
+                        actions.append(unstake_action)
+                        self.context.logger.info(
+                            "Added unstake LP tokens action before exit"
+                        )
+
+        self.context.logger.info(f"Unstaking actions prepared: {actions}")
+        return actions
+
+    def _prepare_exit_pool_actions(
+        self, positions: List[Dict[str, Any]], purpose: str = "withdrawal"
+    ) -> List[Dict[str, Any]]:
+        """
+        Prepare exit pool actions in standard action format.
+
+        :param positions: current positions
+        :param purpose: why the pools are exited, used in the action description
+        :return: list of exit pool actions in standard format
+        """
+        actions = []
+
+        self.context.logger.info(
+            f"Preparing exit actions for {len(positions)} positions"
+        )
+        self.context.logger.info(f"Positions type: {type(positions)}")
+        self.context.logger.info(f"Positions data: {positions}")
+
+        for i, position in enumerate(positions):
+            self.context.logger.info(f"Processing position {i + 1}: {position}")
+            self.context.logger.info(f"Position {i + 1} keys: {list(position.keys())}")
+            status = position.get("status")
+            self.context.logger.info(
+                f"Position {i + 1} status: {status} (type: {type(status)})"
+            )
+
+            if status == "OPEN" or status == "open":
+                self.context.logger.info(f"Creating exit action for position {i + 1}")
+
+                # Use base class method to build exit action
+                action = self._build_exit_pool_action_base(position)
+                if action:
+                    action["description"] = (
+                        f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for {purpose}"
+                    )
+
+                    # Add required assets field
+                    action["assets"] = [
+                        position.get("token0"),
+                        position.get("token1"),
+                    ]
+
+                    # Add missing fields that are required for proper transaction preparation
+                    if position.get("pool_fee") is not None:
+                        action["pool_fee"] = position.get("pool_fee")
+                    if position.get("tick_spacing") is not None:
+                        action["tick_spacing"] = position.get("tick_spacing")
+                    if position.get("tick_ranges") is not None:
+                        action["tick_ranges"] = position.get("tick_ranges")
+
+                    self.context.logger.info(f"Created exit action: {action}")
+                    actions.append(action)
+                else:
+                    self.context.logger.error(
+                        f"Failed to create exit action for position {i + 1}"
+                    )
+            else:
+                self.context.logger.info(
+                    f"Skipping position {i + 1} with status: {status}"
+                )
+
+        self.context.logger.info(f"Total exit actions prepared: {len(actions)}")
+        return actions
 
     def _update_airdrop_rewards(
         self, new_amount: int, chain: str, tx_hash: str = None  # type: ignore[assignment]

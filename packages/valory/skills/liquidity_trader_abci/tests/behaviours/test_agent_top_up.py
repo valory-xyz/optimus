@@ -281,7 +281,9 @@ class TestNoMove:
         harness.get_funds_status.side_effect = RuntimeError("rpc down")
         _assert_no_tx(harness.run())
         harness.get_agent_topup.assert_not_called()
-        assert "rpc down" in harness.ctx.logger.warning.call_args[0][0]
+        error = harness.ctx.logger.error.call_args
+        assert "rpc down" in error[0][0]
+        assert error.kwargs["exc_info"] is True
         assert harness.state.last_topup_check is None
 
     def test_rule_fails(self) -> None:
@@ -289,7 +291,9 @@ class TestNoMove:
         harness = _Harness(topups={"optimism": _move(5)})
         harness.get_agent_topup.side_effect = RuntimeError("bad status")
         _assert_no_tx(harness.run())
-        assert "bad status" in harness.ctx.logger.warning.call_args[0][0]
+        error = harness.ctx.logger.error.call_args
+        assert "bad status" in error[0][0]
+        assert error.kwargs["exc_info"] is True
         assert harness.state.last_topup_check is None
 
     @pytest.mark.parametrize(
@@ -358,6 +362,16 @@ class TestNoMove:
         harness.ctx.logger.error.assert_called_once()
         assert harness.state.last_topup_check is None
         assert harness.state.topup_in_flight_chains == set()
+        assert harness.state.topup_failed_chains == {"optimism"}
+
+    def test_no_safe_address_on_the_chain(self) -> None:
+        """A move on a chain without an Agent Safe address sends no tx and counts as failed."""
+        harness = _Harness(topups={"optimism": _move(5)}, funds=GAS_PAID)
+        harness.params.safe_contract_addresses = {}
+        _assert_no_tx(harness.run())
+        harness.contract_interact.assert_not_called()
+        assert "no Agent Safe address" in harness.ctx.logger.error.call_args[0][0]
+        assert harness.state.last_topup_check is None
         assert harness.state.topup_failed_chains == {"optimism"}
 
     def test_investing_paused_unreadable(self) -> None:

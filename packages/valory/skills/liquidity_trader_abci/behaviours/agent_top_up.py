@@ -30,7 +30,7 @@ from packages.valory.skills.funds_manager.behaviours import (
     GET_AGENT_TOPUP_METHOD_NAME,
     GET_FUNDS_STATUS_METHOD_NAME,
 )
-from packages.valory.skills.funds_manager.models import FundRequirements
+from packages.valory.skills.funds_manager.models import AgentTopUp, FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     SAFE_TX_GAS,
@@ -56,7 +56,7 @@ TOPUP_TX_DATA = b""
 
 
 class TopUpMove(NamedTuple):
-    """A native transfer from the Agent Safe to the Agent Signer."""
+    """TopUpMove"""
 
     chain: str
     wei: int
@@ -74,10 +74,10 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             self._record_unsettled_topups()
             move = yield from self._get_topup_move()
             if move is not None:
-                tx_hash = yield from self._prepare_topup_tx(move.chain, move.wei)
+                move_safe = self.params.safe_contract_addresses.get(move.chain)
+                tx_hash = yield from self._prepare_topup_tx(move, move_safe)
                 if tx_hash is not None:
-                    chain = move.chain
-                    safe_address = self.params.safe_contract_addresses.get(chain)
+                    chain, safe_address = move.chain, move_safe
                     self.shared_state.topup_in_flight_chains.add(chain)
                     self._close_topup_check()
                 else:
@@ -96,10 +96,15 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
             self.set_done()
 
+    def _is_retry(self) -> bool:
+        """Return whether this round follows itself after NO_MAJORITY or a timeout."""
+        # The previous visit's payload never reached consensus, so neither the
+        # tx it prepared nor its gate decision took effect.
+        return self.round_sequence.last_round_id == self.matching_round.auto_round_id()
+
     def _record_unsettled_topups(self) -> None:
         """Count a top-up tx that never reached PostTxSettlement as failed."""
-        # A retry of this round never sent the tx its first visit prepared.
-        if self.round_sequence.last_round_id == self.matching_round.auto_round_id():
+        if self._is_retry():
             return
         state = self.shared_state
         state.topup_failed_chains |= state.topup_in_flight_chains
@@ -108,10 +113,8 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
     def _is_topup_check_due(self) -> bool:
         """Open the gate at start, then at most once per check interval."""
         last_check = self.shared_state.last_topup_check
-        # A retry of this round re-checks: the visit that closed the gate sent
-        # a payload that never reached consensus.
         return (
-            self.round_sequence.last_round_id == self.matching_round.auto_round_id()
+            self._is_retry()
             or last_check is None
             or self._get_current_timestamp() - last_check
             >= AGENT_TOPUP_CHECK_INTERVAL_SECONDS
@@ -138,9 +141,10 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         try:
             funds = get_funds_status()
         except Exception as exc:  # pylint: disable=broad-except
-            self.context.logger.warning(
+            self.context.logger.error(
                 f"Agent top-up skipped: reading the funds status raised "
-                f"{type(exc).__name__}({exc})."
+                f"{type(exc).__name__}({exc}).",
+                exc_info=True,
             )
             return None
 
@@ -176,34 +180,42 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
                 agent_need_override=agent_need_override,
             )
         except Exception as exc:  # pylint: disable=broad-except
-            self.context.logger.warning(
+            self.context.logger.error(
                 f"Agent top-up skipped: the top-up rule raised "
-                f"{type(exc).__name__}({exc})."
+                f"{type(exc).__name__}({exc}).",
+                exc_info=True,
             )
             return None
-        undecided = False
-        for chain, topup in topups.items():
-            if topup.move <= 0:
-                self.shared_state.topup_failed_chains.discard(chain)
-                continue
+        return self._select_move(funds, topups)
+
+    def _select_move(
+        self, funds: FundRequirements, topups: Dict[str, AgentTopUp]
+    ) -> Optional[TopUpMove]:
+        """Return the first move the Agent Signer can pay the gas for.
+
+        :param funds: the status the top-up rule ran on.
+        :param topups: the top-up rule result, per chain.
+        :return: the move, or None when nothing moves.
+        """
+        moves = {chain: topup.move for chain, topup in topups.items() if topup.move > 0}
+        self.shared_state.topup_failed_chains -= topups.keys() - moves.keys()
+        for chain, wei in moves.items():
             pays_gas = signer_pays_topup_gas(funds, chain, self.context.agent_address)
-            if not pays_gas:
-                reason = (
-                    "cannot pay the gas"
-                    if pays_gas is False
-                    else "native balance could not be read"
+            if pays_gas:
+                self.context.logger.info(
+                    f"Agent top-up: moving {wei} wei from the Agent Safe "
+                    f"to the Agent Signer on {chain}."
                 )
-                self.context.logger.warning(
-                    f"Agent top-up skipped on {chain}: the Agent Signer {reason}."
-                )
-                undecided = True
-                continue
-            self.context.logger.info(
-                f"Agent top-up: moving {topup.move} wei from the Agent Safe "
-                f"to the Agent Signer on {chain}."
+                return TopUpMove(chain, wei)
+            reason = (
+                "cannot pay the gas"
+                if pays_gas is False
+                else "native balance could not be read"
             )
-            return TopUpMove(chain, topup.move)
-        if undecided:
+            self.context.logger.warning(
+                f"Agent top-up skipped on {chain}: the Agent Signer {reason}."
+            )
+        if moves:
             return None
         if not self._native_balances_read(funds):
             self.context.logger.warning(
@@ -255,10 +267,16 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
         return {chain: need}
 
     def _prepare_topup_tx(
-        self, chain: str, amount: int
+        self, move: TopUpMove, safe_address: Optional[str]
     ) -> Generator[None, None, Optional[str]]:
         """Build the Agent Safe -> Agent Signer transfer: one plain CALL, no data."""
-        safe_address = self.params.safe_contract_addresses.get(chain)
+        chain, amount = move
+        if safe_address is None:
+            self.context.logger.error(
+                f"Agent top-up skipped on {chain}: no Agent Safe address is "
+                f"configured."
+            )
+            return None
         agent_address = self.context.agent_address
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,

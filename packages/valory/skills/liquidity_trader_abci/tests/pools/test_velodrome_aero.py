@@ -170,6 +170,43 @@ class TestEnterAeroV2Pool:
         assert result == (None, None)
 
 
+class TestEnterAeroClPool:
+    """Tests for the Aero CL entry."""
+
+    def test_enter_mints_aero_cl_through_aero_npm(self) -> None:
+        """enter() mints an Aero CL position on Aero's NPM, not the legacy one."""
+        b = _aero_behaviour({"mint": "0xMintTx"})
+        b._get_cached_price_at_selection = _mock_gen(1.0)
+        b._check_price_movement = _mock_gen(False)
+        b._get_sqrt_price_x96 = _mock_gen(2**96)
+        b._get_token_decimals = _mock_gen(18)
+        band = {
+            "tick_lower": -100,
+            "tick_upper": 100,
+            "allocation": 1.0,
+            "token0_ratio": 0.5,
+            "token1_ratio": 0.5,
+        }
+        result = exhaust_generator(
+            b.enter(
+                pool_address=POOL,
+                safe_address=SAFE,
+                assets=["0xA", "0xB"],
+                chain=CHAIN,
+                max_amounts_in=[1000, 1000],
+                is_cl_pool=True,
+                tick_ranges=[band],
+                tick_spacing=60,
+                protocol=AERO_PROTOCOL,
+            )
+        )
+
+        assert result == (["0xMintTx"], "0xAeroNPM")
+        (call,) = b.contract_interact.called("mint")
+        assert call["contract_address"] == "0xAeroNPM"
+        assert call["recipient"] == SAFE
+
+
 class TestExitAeroV2Pool:
     """Tests for the Aero stable/volatile exit."""
 
@@ -502,3 +539,4 @@ class TestReadPendingRewards:
         b = _aero_behaviour({"gauges": None})
         b.context.params.velodrome_voter_contract_addresses = {CHAIN: "0xVoter"}
         assert exhaust_generator(b.read_pending_rewards(POOL, SAFE, chain=CHAIN)) == 0
+

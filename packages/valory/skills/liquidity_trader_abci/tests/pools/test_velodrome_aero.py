@@ -405,8 +405,8 @@ class TestAeroUnstake:
         )
         assert result["tx_hash"] == b"w"
 
-    def test_cl_skips_tokens_inside_penalty_window(self) -> None:
-        """Only CL tokens past their minimum stake are withdrawn."""
+    def test_cl_one_penalised_token_holds_every_token(self) -> None:
+        """One CL token inside its window keeps the whole position staked."""
         b = _aero_behaviour({"withdraw": b"w", "get_tx_data": "0xab"})
         b._is_cl_unstake_penalty_active = MagicMock(
             side_effect=lambda gauge, token_id, chain: _gen(token_id == 1)
@@ -420,7 +420,23 @@ class TestAeroUnstake:
                 protocol=AERO_PROTOCOL,
             )
         )
-        assert result["unstaked_positions"] == [{"token_id": 2}]
+        assert "early-unstake" in result["error"].lower()
+        assert not b.contract_interact.called("withdraw")
+
+    def test_cl_no_penalised_token_withdraws_every_token(self) -> None:
+        """Every CL token is withdrawn when none is inside its window."""
+        b = _aero_behaviour({"withdraw": b"w", "get_tx_data": "0xab"})
+        b._is_cl_unstake_penalty_active = _mock_gen(False)
+        result = exhaust_generator(
+            b.unstake_cl_lp_tokens(
+                [1, 2],
+                GAUGE,
+                chain=CHAIN,
+                safe_address=SAFE,
+                protocol=AERO_PROTOCOL,
+            )
+        )
+        assert result["unstaked_positions"] == [{"token_id": 1}, {"token_id": 2}]
 
     def test_cl_all_tokens_penalised(self) -> None:
         """When every token is inside its window nothing is withdrawn."""
@@ -431,7 +447,7 @@ class TestAeroUnstake:
                 [1], GAUGE, chain=CHAIN, safe_address=SAFE, protocol=AERO_PROTOCOL
             )
         )
-        assert "early-unstake" in result["error"]
+        assert "early-unstake" in result["error"].lower()
 
 
 def _gen(value: Any) -> Any:

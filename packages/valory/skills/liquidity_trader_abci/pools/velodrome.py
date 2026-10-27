@@ -3659,21 +3659,19 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
 
         if kwargs.get("protocol") == AERO_PROTOCOL:
-            unpenalised_token_ids = []
+            # The exit that follows closes the whole position, so hold every token
+            # while any one of them would forfeit its emissions.
             for token_id in token_ids:
                 penalty_active = yield from self._is_cl_unstake_penalty_active(
                     gauge_address, token_id, chain
                 )
                 if penalty_active:
-                    self.context.logger.warning(
+                    error_msg = (
                         f"Early-unstake penalty is active for token {token_id} on "
-                        f"gauge {gauge_address}; keeping it staked this cycle"
+                        f"gauge {gauge_address}; keeping the position staked this cycle"
                     )
-                    continue
-                unpenalised_token_ids.append(token_id)
-            token_ids = unpenalised_token_ids
-            if not token_ids:
-                return {"error": "Every token is inside its early-unstake window"}
+                    self.context.logger.warning(error_msg)
+                    return {"error": error_msg}
 
         multi_send_txs = []
         unstaked_positions = []

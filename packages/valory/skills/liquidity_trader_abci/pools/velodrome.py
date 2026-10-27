@@ -3871,7 +3871,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
         if earned is None:
-            error_msg = f"Could not read the Aero CL emissions earned on {gauge_address}"
+            error_msg = (
+                f"Could not read the Aero CL emissions earned on {gauge_address}"
+            )
             self.context.logger.error(error_msg)
             return {"error": error_msg}
         if not earned:

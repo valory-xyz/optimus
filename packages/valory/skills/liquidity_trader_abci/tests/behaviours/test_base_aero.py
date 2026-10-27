@@ -64,7 +64,7 @@ def test_aero_reward_tokens_are_excluded_from_investment() -> None:
     ],
 )
 def test_is_xaero(token_address, chain, expected) -> None:
-    """xAERO is the Aero reward token on every chain but Base."""
+    """The Aero reward token is xAERO on every chain but Base."""
     assert _aero_behaviour()._is_xaero(token_address, chain) is expected
 
 

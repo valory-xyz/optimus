@@ -22,6 +22,7 @@
 # pylint: skip-file
 
 from typing import Any, Dict, Optional
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -33,7 +34,6 @@ from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
     paid_call_chain,
     signer_pays_topup_gas,
     withdrawal_agent_need,
-    withdrawal_gas_deficit,
     x402_agent_need_extra,
 )
 
@@ -161,23 +161,6 @@ class TestX402AgentNeedExtra:
         assert x402_agent_need_extra(funds, "optimism", AGENT, 1000) == {}
 
 
-class TestWithdrawalGasDeficit:
-    """Tests for withdrawal_gas_deficit."""
-
-    def test_gas_for_each_action_plus_buffer_minus_balance(self) -> None:
-        """Two actions need 2.4e12 wei."""
-        assert withdrawal_gas_deficit(2, 400_000_000_000) == 2_000_000_000_000
-
-    @pytest.mark.parametrize("balance", [2_400_000_000_000, 10**18])
-    def test_zero_when_the_balance_covers_it(self, balance: int) -> None:
-        """No shortfall once the balance covers the gas."""
-        assert withdrawal_gas_deficit(2, balance) == 0
-
-    def test_zero_without_actions(self) -> None:
-        """No action left needs no gas."""
-        assert withdrawal_gas_deficit(0, 0) == 0
-
-
 class TestExecutedWithdrawalCount:
     """Tests for executed_withdrawal_count."""
 
@@ -187,16 +170,33 @@ class TestExecutedWithdrawalCount:
             ({"withdrawal_transaction_hashes": '["0x1", "0x2"]'}, 2),
             ({"withdrawal_transaction_hashes": None}, 0),
             ({}, 0),
-            (None, None),
-            ({"withdrawal_transaction_hashes": "x"}, None),
-            ({"withdrawal_transaction_hashes": "1"}, None),
         ],
     )
-    def test_counts_or_none(
-        self, withdrawal_data: Optional[Dict[str, Any]], count: Optional[int]
+    def test_counts_the_stored_hashes(
+        self, withdrawal_data: Dict[str, Any], count: int
     ) -> None:
-        """Nothing stored counts 0; a failed read or an unparsable value is None."""
-        assert executed_withdrawal_count(withdrawal_data) == count
+        """Nothing stored counts 0."""
+        logger = MagicMock()
+        assert executed_withdrawal_count(withdrawal_data, logger) == count
+        logger.warning.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "withdrawal_data, reason",
+        [
+            (None, "KV store read failed"),
+            ({"withdrawal_transaction_hashes": "x"}, "is not JSON"),
+            ({"withdrawal_transaction_hashes": "1"}, "is a int, not a list"),
+            ({"withdrawal_transaction_hashes": '{"a": 1, "b": 2}'}, "is a dict"),
+            ({"withdrawal_transaction_hashes": '"0x1"'}, "is a str"),
+        ],
+    )
+    def test_unknown_count_is_logged(
+        self, withdrawal_data: Optional[Dict[str, Any]], reason: str
+    ) -> None:
+        """A failed read or a value that is not a JSON list is None, with a warning."""
+        logger = MagicMock()
+        assert executed_withdrawal_count(withdrawal_data, logger) is None
+        assert reason in logger.warning.call_args[0][0]
 
 
 class TestWithdrawalAgentNeed:
@@ -206,6 +206,12 @@ class TestWithdrawalAgentNeed:
         """The need is the gas for the actions not executed yet, less the balance."""
         need = withdrawal_agent_need(_funds(), "optimism", AGENT, {}, 3, 1)
         assert need == 2_400_000_000_000 - 100
+
+    @pytest.mark.parametrize("balance", [2_400_000_000_000, 10**18])
+    def test_a_balance_covering_the_gas_needs_nothing(self, balance: int) -> None:
+        """Two actions cost 2.4e12 wei with the buffer."""
+        funds = _funds(balance=balance)
+        assert withdrawal_agent_need(funds, "optimism", AGENT, {}, 2, 0) == 0
 
     def test_nothing_left_needs_nothing(self) -> None:
         """Once every action executed nothing is needed."""

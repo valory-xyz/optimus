@@ -39,7 +39,7 @@ from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
 from packages.valory.skills.liquidity_trader_abci.utils.agent_topup import (
-    ESTIMATED_GAS_PER_TX,
+    ESTIMATED_GAS_COST_PER_TX_WEI,
 )
 from packages.valory.skills.optimus_abci.handlers import (
     BASIUS_AGENT_PROFILE_PATH,
@@ -649,6 +649,69 @@ class TestHttpHandlerMethods:
         assert result == {
             "optimism": {TOPUP_AGENT: {ZERO_ADDRESS: {"balance": "50", "deficit": "7"}}}
         }
+
+    def test_withdrawal_deficit_response_keys_the_configured_native_token(
+        self,
+    ) -> None:
+        """A native token configured as 0xeeee...eeee is reported under that address."""
+        handler, ctx = _make_http_handler()
+        ctx.agent_address = TOPUP_AGENT
+        funds = _topup_funds(native=EEEE_ADDRESS)
+        result = handler._withdrawal_deficit_response(funds, "optimism", 7)
+        assert result == {
+            "optimism": {TOPUP_AGENT: {EEEE_ADDRESS: {"balance": "50", "deficit": "7"}}}
+        }
+
+    def test_withdrawal_deficit_response_defaults_to_the_deficit_as_read(
+        self,
+    ) -> None:
+        """Without a need the Agent Signer native deficit is reported as read."""
+        handler, ctx = _make_http_handler()
+        ctx.agent_address = TOPUP_AGENT
+        result = handler._withdrawal_deficit_response(_topup_funds(), "optimism")
+        assert result == {
+            "optimism": {
+                TOPUP_AGENT: {ZERO_ADDRESS: {"balance": "50", "deficit": "350"}}
+            }
+        }
+
+    def test_withdrawal_deficit_response_unread_balance_is_null(self) -> None:
+        """An unread balance is reported as null, not as the string None."""
+        handler, ctx = _make_http_handler()
+        ctx.agent_address = TOPUP_AGENT
+        funds = FundRequirements.model_validate(
+            {
+                "optimism": {
+                    "accounts": {
+                        TOPUP_AGENT: {
+                            "tokens": {
+                                ZERO_ADDRESS: {
+                                    "topup": 400,
+                                    "threshold": 200,
+                                    "is_native": True,
+                                    "balance": None,
+                                    "deficit": 350,
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+        result = handler._withdrawal_deficit_response(funds, "optimism")
+        assert result == {
+            "optimism": {
+                TOPUP_AGENT: {ZERO_ADDRESS: {"balance": None, "deficit": "350"}}
+            }
+        }
+
+    def test_withdrawal_deficit_response_without_a_native_entry_is_empty(
+        self,
+    ) -> None:
+        """No Agent Signer native entry on the chain reports nothing."""
+        handler, ctx = _make_http_handler()
+        ctx.agent_address = TOPUP_AGENT
+        assert handler._withdrawal_deficit_response(_topup_funds(), "base", 7) == {}
 
     def test_get_handler_no_match(self) -> None:
         """Test _get_handler when URL doesn't match base pattern."""
@@ -7048,11 +7111,13 @@ class TestActivityGoalChat:
 
 TOPUP_AGENT = "0x1111111111111111111111111111111111111111"
 TOPUP_SAFE = "0x2222222222222222222222222222222222222222"
+EEEE_ADDRESS = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 
 
 def _topup_funds(
     signer_balance: Optional[int] = 50,
     safe_balance: Optional[int] = 10**18,
+    native: str = ZERO_ADDRESS,
 ) -> FundRequirements:
     """An Optimism status with Agent Signer and Agent Safe native entries."""
     signer_deficit = None
@@ -7076,8 +7141,8 @@ def _topup_funds(
         {
             "optimism": {
                 "accounts": {
-                    TOPUP_AGENT: {"tokens": {ZERO_ADDRESS: signer}},
-                    TOPUP_SAFE: {"tokens": {ZERO_ADDRESS: safe}},
+                    TOPUP_AGENT: {"tokens": {native: signer}},
+                    TOPUP_SAFE: {"tokens": {native: safe}},
                 }
             }
         }
@@ -7162,7 +7227,6 @@ class TestFundsStatusAfterAgentTopUp:
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
         body = _served(handler)
         assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "0"
-        # need 350 - safe 100 + safe topup 1000
         assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "1250"
 
     @pytest.mark.parametrize("in_flight_chains", [set(), {"optimism"}])
@@ -7198,7 +7262,6 @@ class TestFundsStatusAfterAgentTopUp:
         )
         handler._is_in_withdrawal_mode = MagicMock(return_value=False)
         body = _served(handler)
-        # max(deficit 395, x402 1005 - balance 5)
         assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "1000"
 
     def test_normal_mode_x402_need_is_part_of_the_signer_need(self) -> None:
@@ -7211,7 +7274,6 @@ class TestFundsStatusAfterAgentTopUp:
         body = _served(handler)
         assert rule.call_args.kwargs["agent_need_extra"] == {"optimism": 605}
         assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "0"
-        # need max(395, 1005 - 5) = 1000 - safe 100 + safe topup 1000
         assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS]["deficit"] == "1900"
 
     def test_normal_mode_unread_balance_is_left_as_read(self) -> None:
@@ -7230,7 +7292,7 @@ class TestFundsStatusAfterAgentTopUp:
             return_value={"withdrawal_transaction_hashes": "[]"}
         )
         body = _served(handler)
-        gas = int(ESTIMATED_GAS_PER_TX * 1.2) - 50
+        gas = ESTIMATED_GAS_COST_PER_TX_WEI * 12 // 10 - 50
         assert rule.call_args.kwargs["agent_need_override"] == {"optimism": gas}
         assert body == {
             "optimism": {
@@ -7248,7 +7310,7 @@ class TestFundsStatusAfterAgentTopUp:
             return_value={"withdrawal_transaction_hashes": "[]"}
         )
         body = _served(handler)
-        gas = int(ESTIMATED_GAS_PER_TX * 1.2) - 50
+        gas = ESTIMATED_GAS_COST_PER_TX_WEI * 12 // 10 - 50
         assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == str(gas)
         assert TOPUP_SAFE not in body["optimism"]
 
@@ -7261,7 +7323,7 @@ class TestFundsStatusAfterAgentTopUp:
             return_value={"withdrawal_transaction_hashes": "[]"}
         )
         body = _served(handler)
-        gas = int(ESTIMATED_GAS_PER_TX * 1.2) - 50
+        gas = ESTIMATED_GAS_COST_PER_TX_WEI * 12 // 10 - 50
         assert body["optimism"][TOPUP_AGENT][ZERO_ADDRESS]["deficit"] == "0"
         assert body["optimism"][TOPUP_SAFE][ZERO_ADDRESS] == {
             "balance": "0",

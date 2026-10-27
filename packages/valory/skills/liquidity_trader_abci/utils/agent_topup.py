@@ -17,14 +17,10 @@
 #
 # ------------------------------------------------------------------------------
 
-"""The optimus inputs to the funds_manager Agent Signer top-up rule.
-
-``AgentTopUpRound`` and the ``/funds-status`` handler both apply the rule, and
-must derive its inputs the same way or the handler reports a shortfall the
-round would never move.
-"""
+"""Agent Signer top-up inputs shared by AgentTopUpRound and /funds-status."""
 
 import json
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from packages.valory.skills.funds_manager.models import (
@@ -32,11 +28,9 @@ from packages.valory.skills.funds_manager.models import (
     TokenRequirement,
 )
 
-ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
-# Ten times one Safe ``execTransaction`` on Optimism or Base, so a fee spike
-# does not leave the top-up stuck in settlement.
+ESTIMATED_GAS_COST_PER_TX_WEI = 1000000000000  # 0.000001 ETH
+# 10x ESTIMATED_GAS_COST_PER_TX_WEI: headroom for fee spikes during settlement.
 TOPUP_GAS_FLOOR = 10000000000000
-WITHDRAWAL_GAS_BUFFER = 1.2
 
 
 def paid_call_chain(
@@ -120,34 +114,35 @@ def signer_pays_topup_gas(
     return native[1].balance >= TOPUP_GAS_FLOOR
 
 
-def withdrawal_gas_deficit(num_actions: int, balance: int) -> int:
-    """Return the wei the agent EOA lacks to pay for the withdrawal actions left.
-
-    :param num_actions: the withdrawal actions still to execute.
-    :param balance: the agent EOA native balance, in wei.
-    :return: the shortfall in wei, ``0`` when the balance covers it.
-    """
-    total_gas_needed = int(ESTIMATED_GAS_PER_TX * num_actions * WITHDRAWAL_GAS_BUFFER)
-    return max(0, total_gas_needed - balance)
-
-
 def executed_withdrawal_count(
-    withdrawal_data: Optional[Dict[str, Any]],
+    withdrawal_data: Optional[Dict[str, Any]], logger: logging.Logger
 ) -> Optional[int]:
     """Return how many withdrawal transactions have executed.
 
     :param withdrawal_data: the KV store read of ``withdrawal_transaction_hashes``,
         or ``None`` when the read failed.
+    :param logger: the logger to report an unreadable count on.
     :return: the count, or ``None`` when it cannot be known.
     """
     if withdrawal_data is None:
+        logger.warning("Executed withdrawal count unknown: the KV store read failed.")
         return None
+    raw = withdrawal_data.get("withdrawal_transaction_hashes") or "[]"
     try:
-        return len(
-            json.loads(withdrawal_data.get("withdrawal_transaction_hashes") or "[]")
+        hashes = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            f"Executed withdrawal count unknown: withdrawal_transaction_hashes "
+            f"is not JSON ({exc})."
         )
-    except (TypeError, ValueError):
         return None
+    if not isinstance(hashes, list):
+        logger.warning(
+            f"Executed withdrawal count unknown: withdrawal_transaction_hashes "
+            f"is a {type(hashes).__name__}, not a list."
+        )
+        return None
+    return len(hashes)
 
 
 def withdrawal_agent_need(  # pylint: disable=too-many-arguments
@@ -166,8 +161,9 @@ def withdrawal_agent_need(  # pylint: disable=too-many-arguments
     :param agent_need_extra: the x402 extra added to the Agent Signer need.
     :param num_actions: the withdrawal actions prepared.
     :param executed_count: the withdrawal transactions executed, or ``None``.
-    :return: the need in wei, or ``None`` when the actions are not prepared yet
-        or the executed ones cannot be counted.
+    :return: the need in wei; ``0`` when the Agent Signer has no native
+        requirement, no deficit, or an unread balance; ``None`` when the actions
+        are not prepared yet or the executed ones cannot be counted.
     """
     if num_actions == 0:
         return None
@@ -180,4 +176,6 @@ def withdrawal_agent_need(  # pylint: disable=too-many-arguments
         return 0
     if executed_count is None:
         return None
-    return withdrawal_gas_deficit(max(0, num_actions - executed_count), signer.balance)
+    actions_left = max(0, num_actions - executed_count)
+    gas_needed = ESTIMATED_GAS_COST_PER_TX_WEI * actions_left * 12 // 10
+    return max(0, gas_needed - signer.balance)

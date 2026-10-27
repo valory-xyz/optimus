@@ -88,7 +88,10 @@ from packages.valory.skills.funds_manager.behaviours import (
     GET_AGENT_TOPUP_METHOD_NAME,
     GET_FUNDS_STATUS_METHOD_NAME,
 )
-from packages.valory.skills.funds_manager.models import FundRequirements
+from packages.valory.skills.funds_manager.models import (
+    FundRequirements,
+    TokenRequirement,
+)
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     TradingType,
@@ -195,7 +198,7 @@ WEB3_READ_RETRY_INITIAL_DELAY = 1.0
 
 # Gas units a LiFi ETH->USDC swap costs on Optimism. Used only when the live
 # estimate fails and LiFi's own gasLimit is absent. This is a gas LIMIT and is
-# deliberately not ESTIMATED_GAS_PER_TX, which is a cost in wei: multiplying
+# deliberately not ESTIMATED_GAS_COST_PER_TX_WEI, which is a cost in wei: multiplying
 # that by a gas price is a unit error.
 #
 # The gas_price it is multiplied by comes from w3.eth.gas_price, which on an
@@ -408,6 +411,11 @@ USDC_ADDRESSES = {
     "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
     "base": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 }
+
+
+def _balance_str(token: TokenRequirement) -> Optional[str]:
+    """Return a funds-status balance, None when it was not read."""
+    return None if token.balance is None else str(token.balance)
 
 
 def load_fsm_spec() -> Dict:
@@ -2090,30 +2098,27 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.info("Funds status: Withdrawal mode detected")
             chain = self.context.params.target_investment_chains[0]
             num_actions = len(self._get_withdrawal_actions())
+            if num_actions == 0:
+                # AgentTopUpRound defers here too, so nothing moves.
+                self._send_ok_response(http_msg, http_dialogue, {})
+                return
             need = withdrawal_agent_need(
                 funds,
                 chain,
                 self.context.agent_address,
                 agent_need_extra,
                 num_actions,
-                executed_withdrawal_count(self._read_withdrawal_data()),
+                executed_withdrawal_count(
+                    self._read_withdrawal_data(), self.context.logger
+                ),
             )
             self.context.logger.info(f"Funds status: Withdrawal gas need = {need}")
             if need is None:
-                # AgentTopUpRound defers here too, so nothing moves.
-                response = {}
-                if num_actions > 0:
-                    self.context.logger.warning(
-                        "Funds status: the executed withdrawal count could not be "
-                        "read, reporting the Agent Signer deficit as read."
-                    )
-                    native = native_requirement(
-                        funds, chain, self.context.agent_address
-                    )
-                    deficit = native[1].deficit if native is not None else None
-                    response = self._withdrawal_deficit_response(
-                        funds, chain, deficit or 0
-                    )
+                self.context.logger.warning(
+                    "Funds status: the executed withdrawal count could not be "
+                    "read, reporting the Agent Signer deficit as read."
+                )
+                response = self._withdrawal_deficit_response(funds, chain)
                 self._send_ok_response(http_msg, http_dialogue, response)
                 return
             response = self._withdrawal_deficit_response(funds, chain, need)
@@ -2139,9 +2144,6 @@ class HttpHandler(BaseHttpHandler):
         agent_need_override: Optional[Dict[str, int]],
     ) -> Dict:
         """Report what is left once the Agent Safe has topped up the Agent Signer.
-
-        A pending top-up counts as done; only a chain whose last top-up failed
-        keeps its deficits as read.
 
         :param response: the funds-status response, x402 deficit included.
         :param funds: the status the response was built from.
@@ -2181,9 +2183,7 @@ class HttpHandler(BaseHttpHandler):
                     .setdefault(account, {})
                     .setdefault(token_address, {})
                 )
-                token_data.setdefault(
-                    "balance", None if token.balance is None else str(token.balance)
-                )
+                token_data.setdefault("balance", _balance_str(token))
                 token_data["deficit"] = str(deficit)
         return response
 
@@ -2204,26 +2204,31 @@ class HttpHandler(BaseHttpHandler):
             return []
 
     def _withdrawal_deficit_response(
-        self, funds: FundRequirements, chain: str, need: int
+        self, funds: FundRequirements, chain: str, need: Optional[int] = None
     ) -> Dict:
         """
-        Report the withdrawal gas the Agent Signer lacks, in the funds_manager response format.
+        Report the Agent Signer withdrawal gas deficit, in funds_manager format.
 
         :param funds: the status returned by ``get_funds_status()``.
         :param chain: the chain the withdrawal runs on.
-        :param need: the gas the Agent Signer lacks, in wei.
+        :param need: the gas the Agent Signer lacks, in wei, or None for the
+            deficit as read.
         :return: the response, empty when nothing is needed.
         """
-        if need <= 0:
-            return {}
         agent_address = self.context.agent_address
         native = native_requirement(funds, chain, agent_address)
-        balance = native[1].balance if native is not None else None
+        if native is None:
+            return {}
+        token_address, token = native
+        if need is None:
+            need = token.deficit or 0
+        if need <= 0:
+            return {}
         return {
             chain: {
                 agent_address: {
-                    ZERO_ADDRESS: {
-                        "balance": str(balance),
+                    token_address: {
+                        "balance": _balance_str(token),
                         "deficit": str(need),
                     }
                 }

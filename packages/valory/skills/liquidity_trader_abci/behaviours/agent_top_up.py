@@ -244,7 +244,7 @@ class AgentTopUpBehaviour(LiquidityTraderBaseBehaviour):
             self.context.agent_address,
             agent_need_extra,
             len(self.synchronized_data.withdrawal_actions),
-            executed_withdrawal_count(withdrawal_data),
+            executed_withdrawal_count(withdrawal_data, self.context.logger),
         )
         if need is None:
             self.context.logger.info(

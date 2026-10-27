@@ -3956,6 +3956,36 @@ def get_aero_pools(
     return read_aero_pool_state(w3, chain_id, priced)
 
 
+def _apply_aero_pool_metrics(
+    pool: Dict[str, Any],
+    aero_price: float,
+    chain_name: str,
+    coingecko_api_key: Optional[str],
+    x402_session: Any,
+    x402_proxy: Optional[str],
+    price_cache: Optional[Dict[str, Any]],
+    price_cache_ttl: int,
+) -> None:
+    """Price a pool in place, storing its tick bands when it is a CL pool."""
+    if pool["kind"] == "cl":
+        pool["tick_bands"] = (
+            calculate_tick_lower_and_upper_velodrome(
+                chain=chain_name,
+                pool_address=pool["id"],
+                is_stable=False,
+                coingecko_api_key=coingecko_api_key,
+                x402_session=x402_session,
+                x402_proxy=x402_proxy,
+                price_cache=price_cache,
+                price_cache_ttl=price_cache_ttl,
+            )
+            or []
+        )
+        pool.update(aero_cl_pool_metrics(pool, aero_price, pool["tick_bands"]))
+    else:
+        pool.update(aero_v2_pool_metrics(pool, aero_price))
+
+
 def get_opportunities_for_aero(
     current_positions: List[str],
     coingecko_api_key: Optional[str],
@@ -4000,23 +4030,16 @@ def get_opportunities_for_aero(
 
     chain_name = CHAIN_NAMES[chain_id]
     for pool in pools:
-        if pool["kind"] == "cl":
-            pool["tick_bands"] = (
-                calculate_tick_lower_and_upper_velodrome(
-                    chain=chain_name,
-                    pool_address=pool["id"],
-                    is_stable=False,
-                    coingecko_api_key=coingecko_api_key,
-                    x402_session=x402_session,
-                    x402_proxy=x402_proxy,
-                    price_cache=price_cache,
-                    price_cache_ttl=price_cache_ttl,
-                )
-                or []
-            )
-            pool.update(aero_cl_pool_metrics(pool, aero_price, pool["tick_bands"]))
-        else:
-            pool.update(aero_v2_pool_metrics(pool, aero_price))
+        _apply_aero_pool_metrics(
+            pool,
+            aero_price,
+            chain_name,
+            coingecko_api_key,
+            x402_session,
+            x402_proxy,
+            price_cache,
+            price_cache_ttl,
+        )
 
     candidates = apply_composite_pre_filter(
         pools,
@@ -4168,20 +4191,16 @@ def calculate_aero_metrics(
     if not readable or not aero_price:
         return None
 
-    if pool["kind"] == "cl":
-        tick_bands = calculate_tick_lower_and_upper_velodrome(
-            chain=chain_name,
-            pool_address=pool["id"],
-            is_stable=False,
-            coingecko_api_key=coingecko_api_key,
-            x402_session=x402_session,
-            x402_proxy=x402_proxy,
-            price_cache=price_cache,
-            price_cache_ttl=price_cache_ttl,
-        )
-        pool.update(aero_cl_pool_metrics(pool, aero_price, tick_bands or []))
-    else:
-        pool.update(aero_v2_pool_metrics(pool, aero_price))
+    _apply_aero_pool_metrics(
+        pool,
+        aero_price,
+        chain_name,
+        coingecko_api_key,
+        x402_session,
+        x402_proxy,
+        price_cache,
+        price_cache_ttl,
+    )
     depth_score, max_position_size = aero_depth_metrics(
         pool["tvl"], aero_daily_volume_usd(pool)
     )

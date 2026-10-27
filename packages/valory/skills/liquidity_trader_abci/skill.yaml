@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
-  behaviours/base.py: bafybeida7op7aw4khxvwyloxlb227rv3goyffvjwlihlbbaqd7dqrqppxu
+  behaviours/base.py: bafybeidkokp4k2q67ixbk2l5a65m2rcivsljmrb2swadc7n6wtscx5kndq
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeif5otdf6drh67omqypcypwm6nql34lu5wfclszmmm4x4pvpywp2ja
   behaviours/decision_making.py: bafybeifbiiul76fc5sehiqjmyrybwprzf2qyjs76o3zdaofelela7ih5bi

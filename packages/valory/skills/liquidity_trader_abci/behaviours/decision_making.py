@@ -71,6 +71,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies im
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    is_aero_position,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import Event
 from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
     DecisionMakingRound,
@@ -96,6 +99,10 @@ from packages.valory.skills.liquidity_trader_abci.utils.feed import (
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
+
+# Aero gauges call their tape through a relay that fails open under a gas cap,
+# so a bare estimate can land below what the gauge call needs.
+AERO_GAUGE_GAS_MULTIPLIER = 1.3
 
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
@@ -4118,6 +4125,50 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error renaming entry costs key: {e}")
 
+    def _get_gauge_gas_limit(
+        self,
+        action: Dict[str, Any],
+        safe_address: str,
+        to_address: str,
+        data: bytes,
+        operation: int,
+    ) -> Generator[None, None, int]:
+        """Get the gas limit for a gauge Safe tx; 0 leaves it to settlement's estimate."""
+        if not is_aero_position(action):
+            return 0
+
+        agent_address = self.context.agent_address
+        # Pre-validated signature (v=1): the Safe accepts it when its owner sends the tx.
+        signature = agent_address[2:].lower().rjust(64, "0") + "0" * 64 + "01"
+        estimate = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction",
+            data_key="gas",
+            sender_address=agent_address,
+            owners=(agent_address,),
+            to_address=to_address,
+            value=ETHER_VALUE,
+            data=data,
+            signatures_by_owner={agent_address: signature},
+            operation=operation,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=action.get("chain"),
+        )
+        if not estimate:
+            self.context.logger.warning(
+                "Could not estimate gas for the Aero gauge tx; "
+                "leaving the gas limit to transaction settlement"
+            )
+            return 0
+
+        gas_limit = int(estimate * AERO_GAUGE_GAS_MULTIPLIER)
+        self.context.logger.info(
+            f"Aero gauge tx gas limit: {gas_limit} (estimate {estimate})"
+        )
+        return gas_limit
+
     def get_stake_lp_tokens_tx_hash(
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
@@ -4269,6 +4320,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Hash of the Safe staking transaction: {safe_tx_hash}"
             )
 
+            gas_limit = yield from self._get_gauge_gas_limit(
+                action, safe_address, contract_address, tx_hash, operation
+            )
+
             payload_string = hash_payload_to_hex(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
@@ -4276,6 +4331,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 operation=operation,
                 to_address=contract_address,
                 data=tx_hash,
+                gas_limit=gas_limit,
             )
 
             self.context.logger.info(
@@ -4444,6 +4500,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Hash of the Safe unstaking transaction: {safe_tx_hash}"
             )
 
+            gas_limit = yield from self._get_gauge_gas_limit(
+                action, safe_address, contract_address, tx_hash, operation
+            )
+
             payload_string = hash_payload_to_hex(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
@@ -4451,6 +4511,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 operation=operation,
                 to_address=contract_address,
                 data=tx_hash,
+                gas_limit=gas_limit,
             )
 
             self.context.logger.info(
@@ -4634,6 +4695,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Hash of the Safe reward claiming transaction: {safe_tx_hash}"
             )
 
+            gas_limit = yield from self._get_gauge_gas_limit(
+                action, safe_address, contract_address, tx_hash, operation
+            )
+
             payload_string = hash_payload_to_hex(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
@@ -4641,6 +4706,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 operation=operation,
                 to_address=contract_address,
                 data=tx_hash,
+                gas_limit=gas_limit,
             )
 
             self.context.logger.info(

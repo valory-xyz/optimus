@@ -207,6 +207,64 @@ class TestEnterAeroClPool:
         assert call["recipient"] == SAFE
 
 
+class TestExitAeroClPool:
+    """Tests for the Aero CL exit."""
+
+    def test_exit_burns_aero_cl_through_aero_npm(self) -> None:
+        """exit() reads and burns an Aero CL position on Aero's NPM, not the legacy one."""
+        position = {
+            "nonce": 0,
+            "operator": "0x0",
+            "token0": "0xA",
+            "token1": "0xB",
+            "tickSpacing": 60,
+            "tickLower": -100,
+            "tickUpper": 100,
+            "liquidity": 100,
+        }
+        b = _aero_behaviour(
+            {
+                "ownerOf": SAFE,
+                "get_position": position,
+                "decrease_liquidity": "0xDecreaseTx",
+                "collect": "0xCollectTx",
+                "get_tx_data": "0xabcd",
+            }
+        )
+        b._read_kv = _mock_gen({"withdrawal_status": "WITHDRAWING"})
+        result = exhaust_generator(
+            b.exit(
+                pool_address=POOL,
+                safe_address=SAFE,
+                chain=CHAIN,
+                is_cl_pool=True,
+                protocol=AERO_PROTOCOL,
+                token_ids=[1],
+                liquidities=[100],
+            )
+        )
+
+        assert result == (bytes.fromhex("abcd"), "0xMulti", True)
+        npm_calls = [
+            c
+            for c in b.contract_interact.calls
+            if c["contract_callable"] != "get_tx_data"
+        ]
+        assert [c["contract_callable"] for c in npm_calls] == [
+            "ownerOf",
+            "get_position",
+            "get_position",
+            "decrease_liquidity",
+            "collect",
+        ]
+        assert {c["contract_address"] for c in npm_calls} == {"0xAeroNPM"}
+        (multisend,) = b.contract_interact.called("get_tx_data")
+        assert [tx["to"] for tx in multisend["multi_send_txs"]] == [
+            "0xAeroNPM",
+            "0xAeroNPM",
+        ]
+
+
 class TestExitAeroV2Pool:
     """Tests for the Aero stable/volatile exit."""
 

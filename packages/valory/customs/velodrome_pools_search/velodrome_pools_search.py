@@ -4568,8 +4568,9 @@ def _run_impl(
             continue
 
         # Check if chain is supported
-        if chain_id not in SUGAR_CONTRACT_ADDRESSES and (
-            chain_id not in AERO_CONTRACT_ADDRESSES
+        if (
+            chain_id not in SUGAR_CONTRACT_ADDRESSES
+            and chain_id not in AERO_CONTRACT_ADDRESSES
         ):
             error_msg = f"Unsupported chain: {chain}"
             logger.error(error_msg)

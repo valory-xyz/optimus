@@ -4000,8 +4000,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "No cached enter pool action found, cannot reconstruct"
                 )
                 return None
-            if chain in self.params.aero_metarouter_contract_addresses and (
-                not is_aero_position(cached_enter_action)
+            if (
+                chain in self.params.aero_metarouter_contract_addresses
+                and not is_aero_position(cached_enter_action)
             ):
                 self.context.logger.info(
                     f"Cached CL opportunity on {chain} is a legacy pool; not reusing it"

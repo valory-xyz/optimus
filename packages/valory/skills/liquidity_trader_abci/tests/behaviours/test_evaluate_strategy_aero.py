@@ -70,10 +70,10 @@ def _legacy_cl(**extra):
     }
 
 
-def _pool(pending: int, staked: int) -> MagicMock:
+def _pool(pending, staked: int) -> MagicMock:
     """Return a velodrome pool behaviour reporting the given gauge state."""
     pool = MagicMock()
-    pool.get_pending_rewards = MagicMock(side_effect=_gen_return(pending))
+    pool.read_pending_rewards = MagicMock(side_effect=_gen_return(pending))
     pool.get_staked_balance = MagicMock(side_effect=_gen_return(staked))
     return pool
 
@@ -108,7 +108,7 @@ class TestPrepareLegacyVelodromeExitActions:
         assert "protocol" not in exit_action
         assert exit_action["description"] == "Exit A/B pool for Aero migration"
         pool = b.pools["velodrome"]
-        pool.get_pending_rewards.assert_called_once_with(
+        pool.read_pending_rewards.assert_called_once_with(
             b, lp_token="0xLegacyV2", user_address=SAFE, chain="optimism"
         )
 
@@ -117,6 +117,17 @@ class TestPrepareLegacyVelodromeExitActions:
         b = _mk(current_positions=[_legacy_v2()], pools={"velodrome": _pool(0, 0)})
         actions = _drive(b._prepare_legacy_velodrome_exit_actions(), sends=[None] * 10)
         assert [a["action"] for a in actions] == [Action.EXIT_POOL.value]
+
+    def test_v2_unreadable_rewards_waits(self):
+        """When pending rewards cannot be read the position is left for the next cycle."""
+        b = _mk(
+            current_positions=[_legacy_v2(), _legacy_cl()],
+            pools={"velodrome": _pool(None, 100)},
+        )
+        b._build_unstake_lp_tokens_action_verified = _gen_return(None)
+        actions = _drive(b._prepare_legacy_velodrome_exit_actions(), sends=[None] * 10)
+        assert [a["pool_address"] for a in actions] == ["0xLegacyCL"]
+        b.pools["velodrome"].get_staked_balance.assert_not_called()
 
     def test_v2_without_safe_still_exits(self):
         """When the claim and unstake cannot be built the exit is still sent."""
@@ -141,7 +152,7 @@ class TestPrepareLegacyVelodromeExitActions:
             Action.EXIT_POOL.value,
         ]
         assert actions[-1]["token_ids"] == [7]
-        b.pools["velodrome"].get_pending_rewards.assert_not_called()
+        b.pools["velodrome"].read_pending_rewards.assert_not_called()
 
     def test_cl_not_staked_only_exits(self):
         """A CL position no longer in its gauge is only exited."""

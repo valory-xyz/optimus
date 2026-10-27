@@ -292,6 +292,23 @@ class TestAeroUnstake:
         (penalty,) = b.contract_interact.called("is_penalty_active")
         assert penalty["account"] == SAFE
 
+    def test_v2_unreadable_penalty_withdraws(self) -> None:
+        """An unreadable penalty never holds the stake, as for CL gauges."""
+        b = _aero_behaviour(
+            {"balance_of": 100, "is_penalty_active": None, "withdraw": b"w"}
+        )
+        result = exhaust_generator(
+            b.unstake_lp_tokens(
+                POOL,
+                100,
+                chain=CHAIN,
+                safe_address=SAFE,
+                gauge_address=GAUGE,
+                protocol=AERO_PROTOCOL,
+            )
+        )
+        assert result["tx_hash"] == b"w"
+
     def test_cl_skips_tokens_inside_penalty_window(self) -> None:
         """Only CL tokens past their minimum stake are withdrawn."""
         b = _aero_behaviour({"withdraw": b"w", "get_tx_data": "0xab"})
@@ -459,3 +476,29 @@ class TestAeroClaims:
         )
         assert result == expected
         assert not b.contract_interact.called("earned")
+
+
+class TestReadPendingRewards:
+    """read_pending_rewards tells an unreadable gauge from an empty one."""
+
+    def test_unreadable_earned(self) -> None:
+        """A failed earned() read is None, while get_pending_rewards still reports 0."""
+        b = _aero_behaviour({"earned": None})
+        assert (
+            exhaust_generator(
+                b.read_pending_rewards(POOL, SAFE, chain=CHAIN, gauge_address=GAUGE)
+            )
+            is None
+        )
+        assert (
+            exhaust_generator(
+                b.get_pending_rewards(POOL, SAFE, chain=CHAIN, gauge_address=GAUGE)
+            )
+            == 0
+        )
+
+    def test_no_gauge_has_nothing_pending(self) -> None:
+        """A pool without a gauge has nothing to claim."""
+        b = _aero_behaviour({"gauges": None})
+        b.context.params.velodrome_voter_contract_addresses = {CHAIN: "0xVoter"}
+        assert exhaust_generator(b.read_pending_rewards(POOL, SAFE, chain=CHAIN)) == 0

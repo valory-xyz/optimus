@@ -3184,6 +3184,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 )
                 self.context.logger.warning(error_msg)
                 return {"error": error_msg}
+            if penalty_active is None:
+                # As for CL gauges, an unreadable penalty never holds the stake.
+                self.context.logger.warning(
+                    f"Could not read the early-unstake penalty of gauge "
+                    f"{gauge_address}; unstaking anyway"
+                )
 
         # Create withdraw transaction
         withdraw_tx_hash = yield from self.contract_interact(
@@ -3294,6 +3300,13 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, lp_token: str, user_address: str, **kwargs: Any
     ) -> Generator[None, None, int]:
         """Check earned rewards without claiming."""
+        earned = yield from self.read_pending_rewards(lp_token, user_address, **kwargs)
+        return earned or 0
+
+    def read_pending_rewards(
+        self, lp_token: str, user_address: str, **kwargs: Any
+    ) -> Generator[None, None, Optional[int]]:
+        """Check earned rewards without claiming; None when the gauge's earned() cannot be read."""
         chain = kwargs.get("chain")
         if not chain:
             self.context.logger.error(
@@ -3328,7 +3341,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.warning(
                 f"Could not get earned rewards for user {user_address}"
             )
-            return 0
+            return None
 
         earned_amount = earned_result if isinstance(earned_result, int) else 0
         self.context.logger.info(f"Pending rewards for {user_address}: {earned_amount}")

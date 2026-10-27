@@ -22,6 +22,8 @@
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
+import pytest
+
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
     PositionStatus,
@@ -168,6 +170,35 @@ class TestStakingCalls:
                 _aero_action(is_cl_pool=True, gauge_address=None)
             )
         )
+        assert gauge_calls[0]["gauge_address"] == GAUGE
+
+    @pytest.mark.parametrize(
+        "builder, pool_method",
+        [
+            ("get_unstake_lp_tokens_tx_hash", "unstake_cl_lp_tokens"),
+            ("get_claim_staking_rewards_tx_hash", "claim_cl_rewards"),
+        ],
+    )
+    def test_cl_unstake_and_claim_resolve_gauge_from_position(
+        self, builder: str, pool_method: str
+    ) -> None:
+        """Without a gauge on the action the open position's stored gauge is used."""
+        gauge_calls: List[Dict[str, Any]] = []
+        b = self._behaviour(
+            get_gauge_address=_recording(GAUGE, gauge_calls),
+            **{pool_method: _make_gen_method(TX_RESULT)},
+        )
+        b._filter_staked_token_ids = _make_gen_method(([1], False))
+        b.current_positions = [
+            {
+                "pool_address": "0xPOOL",
+                "chain": "optimism",
+                "status": PositionStatus.OPEN.value,
+                "positions": [{"token_id": 1}],
+                "gauge_address": GAUGE,
+            }
+        ]
+        _exhaust(getattr(b, builder)(_aero_action(is_cl_pool=True, gauge_address=None)))
         assert gauge_calls[0]["gauge_address"] == GAUGE
 
     def test_v2_unstake_uses_stored_gauge_and_protocol(self) -> None:

@@ -218,6 +218,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
         pool = self.pools.get(DexType.VELODROME.value)
         actions: List[Dict[str, Any]] = []
+        exiting: List[Dict[str, Any]] = []
         for position in legacy_positions:
             if position.get("is_cl_pool"):
                 # A legacy CL gauge's withdraw pays out the emissions itself.
@@ -226,15 +227,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if unstake_action:
                     actions.append(unstake_action)
+                exiting.append(position)
                 continue
 
             # A legacy v2 gauge's withdraw only accrues, so claim before it.
             chain = position.get("chain")
             pool_address = position.get("pool_address")
             safe_address = self.params.safe_contract_addresses.get(chain)
-            pending_rewards = yield from pool.get_pending_rewards(
+            pending_rewards = yield from pool.read_pending_rewards(
                 self, lp_token=pool_address, user_address=safe_address, chain=chain
             )
+            if pending_rewards is None:
+                # Unstaking without the claim would leave the rewards behind.
+                self.context.logger.warning(
+                    f"Could not read the pending rewards of legacy pool "
+                    f"{pool_address}; retrying its exit next cycle"
+                )
+                continue
             if pending_rewards:
                 claim_action = self._build_claim_staking_rewards_action(position)
                 if claim_action:
@@ -246,9 +255,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 unstake_action = self._build_unstake_lp_tokens_action(position)
                 if unstake_action:
                     actions.append(unstake_action)
+            exiting.append(position)
 
         actions.extend(
-            self._prepare_exit_pool_actions(legacy_positions, purpose="Aero migration")
+            self._prepare_exit_pool_actions(exiting, purpose="Aero migration")
         )
         return actions
 

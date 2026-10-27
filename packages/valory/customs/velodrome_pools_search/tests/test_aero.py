@@ -29,14 +29,33 @@ from web3 import Web3
 
 import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as velo
 from packages.valory.customs.velodrome_pools_search.velodrome_pools_search import (
-    AERO_CONTRACT_ADDRESSES, AERO_PROTOCOL, AERO_TOKEN_ADDRESS_BASE,
-    BASE_CHAIN_ID, OPTIMISM_CHAIN_ID, SECONDS_PER_DAY, WAD,
-    _cl_liquidity_per_token1, _daily_rates, _rate_per_second, _signature_types,
-    aero_cl_pool_metrics, aero_daily_volume_usd, aero_depth_metrics,
-    aero_multicall, aero_v2_pool_metrics, calculate_aero_metrics,
-    calculate_metrics, discover_aero_pools, get_aero_pools, get_aero_price_usd,
-    get_opportunities_for_aero, get_token_decimals, read_aero_pool_state, run,
-    sharpe_ratio_from_daily_returns)
+    AERO_CONTRACT_ADDRESSES,
+    AERO_PROTOCOL,
+    AERO_TOKEN_ADDRESS_BASE,
+    BASE_CHAIN_ID,
+    OPTIMISM_CHAIN_ID,
+    SECONDS_PER_DAY,
+    WAD,
+    _cl_liquidity_per_token1,
+    _daily_rates,
+    _rate_per_second,
+    _signature_types,
+    aero_cl_pool_metrics,
+    aero_daily_volume_usd,
+    aero_depth_metrics,
+    aero_multicall,
+    aero_v2_pool_metrics,
+    calculate_aero_metrics,
+    calculate_metrics,
+    discover_aero_pools,
+    get_aero_pools,
+    get_aero_price_usd,
+    get_opportunities_for_aero,
+    get_token_decimals,
+    read_aero_pool_state,
+    run,
+    sharpe_ratio_from_daily_returns,
+)
 
 MODULE = "packages.valory.customs.velodrome_pools_search.velodrome_pools_search"
 BASE = AERO_CONTRACT_ADDRESSES[BASE_CHAIN_ID]
@@ -369,7 +388,7 @@ class TestV2Metrics:
     def test_apr(self) -> None:
         """APR = reward per LP token x AERO price / LP price, annualised."""
         metrics = aero_v2_pool_metrics(_v2_pool(), aero_price=0.5)
-        # LP price is ; 1e-4 AERO x /bin/bash.5 per day.
+        # The LP token is worth $1 and earns 1e-4 AERO, at $0.5, per day.
         assert metrics["tvl"] == pytest.approx(2_000_000)
         assert metrics["apr"] == pytest.approx(0.5e-4 * 365 * 100, rel=1e-6)
         assert metrics["daily_returns"] == pytest.approx([0.5e-4, 0.5e-4])

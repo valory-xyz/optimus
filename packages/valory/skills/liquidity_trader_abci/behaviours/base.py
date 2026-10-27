@@ -2232,7 +2232,7 @@ class LiquidityTraderBaseBehaviour(
         return data
 
     def _read_investing_paused(self) -> Generator[None, None, bool]:
-        """Read the investing_paused flag from the KV store, False if unreadable."""
+        """Return investing_paused, False when unreadable."""
         investing_paused = yield from self._read_investing_paused_or_none()
         return bool(investing_paused)
 

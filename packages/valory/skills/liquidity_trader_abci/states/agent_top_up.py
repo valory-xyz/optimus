@@ -38,7 +38,7 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
 
 
 class AgentTopUpRound(CollectSameUntilThresholdRound):
-    """A round that moves native token from the Agent Safe to the Agent Signer."""
+    """AgentTopUpRound"""
 
     payload_class = AgentTopUpPayload
     synchronized_data_class = SynchronizedData

@@ -340,7 +340,7 @@ class TestSynchronizedData:
         assert isinstance(result, dict)
 
     def test_participant_to_agent_topup(self) -> None:
-        """Test participant_to_agent_topup property."""
+        """The agent top-up votes deserialize to a dict."""
         data = self._make_collection_data("participant_to_agent_topup")
         result = data.participant_to_agent_topup
         assert isinstance(result, dict)

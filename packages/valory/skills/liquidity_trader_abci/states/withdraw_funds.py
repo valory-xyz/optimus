@@ -67,8 +67,7 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
             synchronized_data = synchronized_data.update(  # type: ignore[assignment]
                 synchronized_data_class=SynchronizedData,
                 actions=serialized_actions,  # Use standard actions field
-                # Kept apart from `actions`, which later rounds overwrite, so the
-                # withdrawal-gas need stays readable in the next periods.
+                # Kept apart from actions, which later rounds overwrite.
                 withdrawal_actions=serialized_actions,
                 last_action="WITHDRAWAL_INITIATED",
                 last_executed_action_index=None,  # Reset action index for new actions

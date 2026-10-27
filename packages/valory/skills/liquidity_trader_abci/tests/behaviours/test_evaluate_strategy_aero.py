@@ -90,7 +90,7 @@ class TestPrepareLegacyVelodromeExitActions:
                 {"status": "open", "dex_type": "balancerPool"},
             ]
         )
-        assert _drive(b._prepare_legacy_velodrome_exit_actions()) == []
+        assert _drive(b._prepare_legacy_velodrome_exit_actions()) is None
 
     def test_v2_claims_then_unstakes_then_exits(self):
         """A staked legacy v2 position claims, unstakes and exits, in that order."""
@@ -219,6 +219,28 @@ class TestAsyncActLegacyExit:
             json.loads(writes[STRATEGY_BACKOFF_KV_KEY])["consecutive_no_action_count"]
             == 0
         )
+
+
+    def test_unprepared_legacy_exit_holds_the_cycle(self):
+        """An open legacy position whose exit waits a cycle blocks every new entry."""
+        b = _mk(current_positions=[_legacy_v2()], pools={"velodrome": _pool(None, 0)})
+        b._read_investing_paused = _gen_return(False)
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock()
+        b._apply_tip_filters_to_exit_decisions = MagicMock()
+        b._update_strategy_backoff = MagicMock()
+        sent = []
+
+        def _send(actions=None):
+            sent.append(actions)
+            yield
+
+        b.send_actions = _send
+        _drive(b.async_act(), sends=[None] * 20)
+
+        assert sent == [[]]
+        b.check_and_prepare_non_whitelisted_swaps.assert_not_called()
+        b._apply_tip_filters_to_exit_decisions.assert_not_called()
+        b._update_strategy_backoff.assert_not_called()
 
 
 class TestAeroStakingActions:

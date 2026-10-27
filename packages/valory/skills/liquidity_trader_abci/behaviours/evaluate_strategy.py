@@ -128,11 +128,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             legacy_exit_actions = (
                 yield from self._prepare_legacy_velodrome_exit_actions()
             )
-            if legacy_exit_actions:
-                # Reset the backoff so the next cycle evaluates Aero pools.
-                yield from self._restore_strategy_state()
-                self._update_strategy_backoff(legacy_exit_actions)
-                yield from self._persist_strategy_state()
+            if legacy_exit_actions is not None:
+                if legacy_exit_actions:
+                    # Reset the backoff so the next cycle evaluates Aero pools.
+                    yield from self._restore_strategy_state()
+                    self._update_strategy_backoff(legacy_exit_actions)
+                    yield from self._persist_strategy_state()
+                # Nothing new is entered while a legacy position is still open.
                 yield from self.send_actions(legacy_exit_actions)
                 return
 
@@ -193,7 +195,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _prepare_legacy_velodrome_exit_actions(
         self,
-    ) -> Generator[None, None, List[Dict[str, Any]]]:
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Build claim, unstake and exit actions for open positions in legacy pools.
 
         A Velodrome-family position without ``protocol`` predates Aero, and its
@@ -201,7 +203,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         the legacy contracts it was entered with.
 
         :yield: contract reads of the legacy gauges' stake and reward state
-        :return: the actions for this cycle, empty when no legacy position is open
+        :return: the actions for this cycle, None when no legacy position is open
         """
         legacy_positions = [
             position
@@ -211,7 +213,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             and not is_aero_position(position)
         ]
         if not legacy_positions:
-            return []
+            return None
 
         self.context.logger.info(
             f"Exiting {len(legacy_positions)} legacy Velodrome/Aerodrome position(s)"

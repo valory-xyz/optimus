@@ -2435,12 +2435,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         token_value_usd = None
 
                 if token_price is None:
-                    velo_token_address = self._get_velo_token_address(chain)
+                    velo_token_address = self._get_velo_token_address(chain, None)
                     if token_address == ZERO_ADDRESS:
                         token_price = yield from self._fetch_zero_address_price()
                     elif token_address.lower() == velo_token_address:
                         velo_coin_id = self.get_coin_id_from_symbol(
-                            self._get_velo_family_reward_symbol(chain), chain
+                            self._get_velo_family_reward_symbol(chain, None), chain
                         )
                         token_price = yield from self._fetch_coin_price(velo_coin_id)
                     else:
@@ -5301,7 +5301,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return Decimal(0)
 
     def _get_velo_token_address(
-        self, chain: str, position: Optional[Dict[str, Any]] = None
+        self, chain: str, position: Optional[Dict[str, Any]]
     ) -> Optional[str]:
         """Get the gauge reward token address for the chain, or for an Aero position."""
         if position is not None and is_aero_position(position):
@@ -5310,19 +5310,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         return velo_addresses.get(chain)
 
     def _get_velo_family_reward_symbol(
-        self, chain: str, position: Optional[Dict[str, Any]] = None
+        self, chain: str, position: Optional[Dict[str, Any]]
     ) -> str:
-        """Return the LP-gauge reward token symbol for the chain.
-
-        Legacy Aerodrome on Base distributed AERO; legacy Velodrome on Optimism
-        and Mode distributed VELO. Aero pays AERO on Base and xAERO on Optimism.
-        ``_get_velo_token_address`` already returns the correct contract, but a
-        few sites still need the symbol for UI labels and price lookups.
-
-        :param chain: chain name used to pick the reward token symbol.
-        :param position: the position the reward is for, when known.
-        :return: the reward token symbol.
-        """
+        """Return the gauge reward token symbol for the chain, or for an Aero position."""
         if position is not None and is_aero_position(position):
             return "AERO" if chain == Chain.BASE.value else "xAERO"
         return "AERO" if chain == Chain.BASE.value else "VELO"
@@ -5334,7 +5324,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if is_aero_position(position):
             return (yield from self._fetch_aero_price())
         coin_id = self.get_coin_id_from_symbol(
-            self._get_velo_family_reward_symbol(chain), chain
+            self._get_velo_family_reward_symbol(chain, None), chain
         )
         return (yield from self._fetch_coin_price(coin_id))
 

@@ -53,7 +53,7 @@ class TestRewardToken:
         b = self._behaviour()
         assert b._get_velo_token_address("optimism", AERO_POSITION) == "0xXAERO"
         assert b._get_velo_token_address("optimism", {}) == "0xVELO"
-        assert b._get_velo_token_address("optimism") == "0xVELO"
+        assert b._get_velo_token_address("optimism", None) == "0xVELO"
 
     @pytest.mark.parametrize(
         "chain, position, symbol",

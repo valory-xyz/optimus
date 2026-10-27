@@ -601,14 +601,14 @@ class TestGetVeloTokenAddress:
         obj = _mk()
 
         obj.params.velo_token_contract_addresses = {"optimism": "0xVELO"}
-        assert obj._get_velo_token_address("optimism") == "0xVELO"
+        assert obj._get_velo_token_address("optimism", None) == "0xVELO"
 
     def test_not_found(self):
         """Test not found."""
         obj = _mk()
 
         obj.params.velo_token_contract_addresses = {}
-        assert obj._get_velo_token_address("mode") is None
+        assert obj._get_velo_token_address("mode", None) is None
 
 
 class TestIsAirdropTransfer:
@@ -10106,17 +10106,17 @@ class TestGetVeloFamilyRewardSymbol:
     def test_base_returns_aero(self):
         """Aerodrome on Base distributes AERO."""
         obj = _mk()
-        assert obj._get_velo_family_reward_symbol(Chain.BASE.value) == "AERO"
+        assert obj._get_velo_family_reward_symbol(Chain.BASE.value, None) == "AERO"
 
     def test_optimism_returns_velo(self):
         """Velodrome on Optimism distributes VELO."""
         obj = _mk()
-        assert obj._get_velo_family_reward_symbol(Chain.OPTIMISM.value) == "VELO"
+        assert obj._get_velo_family_reward_symbol(Chain.OPTIMISM.value, None) == "VELO"
 
     def test_mode_returns_velo(self):
         """Velodrome on Mode distributes VELO."""
         obj = _mk()
-        assert obj._get_velo_family_reward_symbol(Chain.MODE.value) == "VELO"
+        assert obj._get_velo_family_reward_symbol(Chain.MODE.value, None) == "VELO"
 
 
 class TestShouldIncludeTransferOptimismChain:

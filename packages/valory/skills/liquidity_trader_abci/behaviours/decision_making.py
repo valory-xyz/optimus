@@ -738,38 +738,38 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         is_cl_pool = action.get("is_cl_pool", False)
         dex_type = action.get("dex_type")
+        # Closed rows for the same pool keep the exit they were closed by.
         exited = [
             position
             for position in self.current_positions
             if position.get("pool_address") == pool_address
+            and position.get("chain") == action.get("chain")
             and position.get("status") == PositionStatus.OPEN.value
         ]
 
-        # Find all positions with the matching pool address and update their status
-        for position in self.current_positions:
-            if position.get("pool_address") == pool_address:
-                position["status"] = PositionStatus.CLOSED.value
-                position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
-                position["exit_timestamp"] = int(self._get_current_timestamp())
+        for position in exited:
+            position["status"] = PositionStatus.CLOSED.value
+            position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
+            position["exit_timestamp"] = int(self._get_current_timestamp())
 
-                # Record TiP performance metrics
-                self._record_tip_performance(position)
+            # Record TiP performance metrics
+            self._record_tip_performance(position)
 
-                # For Velodrome CL pools, log all the positions that were exited
-                if (
-                    dex_type in VELODROME_FAMILY_DEX_TYPES
-                    and is_cl_pool
-                    and "positions" in position
-                ):
-                    position_ids = [
-                        pos["token_id"] for pos in position.get("positions", [])
-                    ]
-                    self.context.logger.info(
-                        f"Closed Velodrome CL pool with {len(position_ids)} positions. "
-                        f"Token IDs: {position_ids}"
-                    )
-                else:
-                    self.context.logger.info(f"Closing position: {position}")
+            # For Velodrome CL pools, log all the positions that were exited
+            if (
+                dex_type in VELODROME_FAMILY_DEX_TYPES
+                and is_cl_pool
+                and "positions" in position
+            ):
+                position_ids = [
+                    pos["token_id"] for pos in position.get("positions", [])
+                ]
+                self.context.logger.info(
+                    f"Closed Velodrome CL pool with {len(position_ids)} positions. "
+                    f"Token IDs: {position_ids}"
+                )
+            else:
+                self.context.logger.info(f"Closing position: {position}")
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
@@ -4771,6 +4771,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if (
                 position.get("pool_address") == pool_address
                 and position.get("chain") == chain
+                and position.get("status") == PositionStatus.OPEN.value
             ):
                 # Remove staking metadata from position
                 position["staked"] = False

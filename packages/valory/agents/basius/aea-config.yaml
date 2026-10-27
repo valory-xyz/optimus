@@ -71,8 +71,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeicfw7qjtnlcbw6awsvxdahqu42fxsfsd3wy7mbyhcbls4l5pee3by
-- valory/liquidity_trader_abci:0.1.0:bafybeihmgkzbucowpamhqyy3rlikjcg5mriwyxj3fhzqh5ifkoulju3ciu
-- valory/optimus_abci:0.1.0:bafybeibixcqfrqtt53yct7ucziuew4mgpi4bafkgmv6jt6mzt6qh5iipve
+- valory/liquidity_trader_abci:0.1.0:bafybeic54ydrccoyqiwkssl5ese7irfrmkgtdzvsnc3ukz4o7lktidjadq
+- valory/optimus_abci:0.1.0:bafybeifd5dwqwlgp2xtv764htaxvrrrjxwe3aagbkmlc54j2wfvywabg3i
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
@@ -83,7 +83,7 @@ customs:
 - valory/balancer_pools_search:0.1.0:bafybeib3bc4xgzxbv473a2govkaxzxcreklzisczsiz3sbn33kixgy53re
 - valory/uniswap_pools_search:0.1.0:bafybeihzeranzyljdsxzwmdui4apye2xxuhxbiqcl65isxgcti35hxdyu4
 - valory/asset_lending:0.1.0:bafybeifiotxje5ndkdj673oo2uxfpj76fd32qjp7tpxbbdmidbzcqna23a
-- valory/velodrome_pools_search:0.1.0:bafybeieofumijxfrh7u4n44e7tggztzw7krnjvgjg6p3diso4p2br7cuwi
+- valory/velodrome_pools_search:0.1.0:bafybeiahj7z2enrf3pwybtz7oymou5tjsx7h2itkzel2p74w6t724iqi5q
 default_ledger: ethereum
 required_ledgers:
 - ethereum

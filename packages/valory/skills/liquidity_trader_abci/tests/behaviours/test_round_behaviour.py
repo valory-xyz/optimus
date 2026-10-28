@@ -21,6 +21,9 @@
 
 # pylint: skip-file
 
+from packages.valory.skills.liquidity_trader_abci.behaviours.agent_top_up import (
+    AgentTopUpBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import (
     CallCheckpointBehaviour,
 )
@@ -61,6 +64,7 @@ class TestLiquidityTraderRoundBehaviour:
     def test_behaviours_set(self) -> None:
         """Test behaviours contains all expected behaviour classes."""
         expected_behaviours = {
+            AgentTopUpBehaviour,
             CallCheckpointBehaviour,
             CheckStakingKPIMetBehaviour,
             GetPositionsBehaviour,
@@ -72,3 +76,9 @@ class TestLiquidityTraderRoundBehaviour:
         }
         actual = set(LiquidityTraderRoundBehaviour.behaviours)
         assert actual == expected_behaviours
+
+    def test_period_starts_with_the_agent_top_up(self) -> None:
+        """The Agent Signer top-up runs before the strategies are fetched."""
+        assert (
+            LiquidityTraderRoundBehaviour.initial_behaviour_cls is AgentTopUpBehaviour
+        )

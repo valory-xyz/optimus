@@ -93,6 +93,7 @@ class Event(Enum):
     STAKING_KPI_MET = "staking_kpi_met"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
     STANDBY = "standby"
+    TOPUP_DONE = "topup_done"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -208,6 +209,11 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_checkpoint")
 
     @property
+    def participant_to_agent_topup(self) -> DeserializedCollection:
+        """Get the participants to the AgentTopUp round."""
+        return self._get_deserialized("participant_to_agent_topup")
+
+    @property
     def participant_to_staking_kpi(self) -> DeserializedCollection:
         """Get the participants to the CheckStakingKPIMet round."""
         return self._get_deserialized("participant_to_staking_kpi")
@@ -311,13 +317,13 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_withdraw_funds")
 
     @property
-    def withdrawal_actions(self) -> Optional[List[Dict[str, Any]]]:
+    def withdrawal_actions(self) -> List[Dict[str, Any]]:
         """Get the withdrawal actions."""
-        serialized = self.db.get("withdrawal_actions", "[]")
-        if serialized is None:
-            serialized = "[]"
-        withdrawal_actions = json.loads(serialized)
-        return withdrawal_actions
+        serialized = self.db.get("withdrawal_actions", None)
+        # Cross-period setup seeds the key with this property's own empty list.
+        if not serialized:
+            return []
+        return json.loads(serialized)
 
     @property
     def investing_paused(self) -> bool:

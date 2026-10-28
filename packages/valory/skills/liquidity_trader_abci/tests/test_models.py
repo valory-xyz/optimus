@@ -76,6 +76,17 @@ class TestSharedState:
         assert state.x402_eoa_sufficient is False
         assert state.x402_pot_checked is False
 
+    def test_a_fresh_process_has_no_topup_check(self) -> None:
+        """A restart forgets the last top-up check, so the next period checks."""
+        state = SharedState(name="state", skill_context=MagicMock())
+        assert state.last_topup_check is None
+
+    def test_a_fresh_process_has_no_failed_top_up(self) -> None:
+        """A restart counts no top-up as failed or in flight."""
+        state = SharedState(name="state", skill_context=MagicMock())
+        assert state.topup_failed_chains == set()
+        assert state.topup_in_flight_chains == set()
+
     def test_chat_state_defaults(self) -> None:
         """A fresh SharedState has no stored loss limit and no pending chat write."""
         mock_context = MagicMock()

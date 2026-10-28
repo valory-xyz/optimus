@@ -31,6 +31,7 @@ import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as 
 from packages.valory.customs.velodrome_pools_search.velodrome_pools_search import (
     AERO_CONTRACT_ADDRESSES,
     AERO_HOURLY_LOOKBACKS,
+    AERO_IL_PRICE_DAYS,
     AERO_PROTOCOL,
     AERO_TOKEN_ADDRESS_BASE,
     BASE_CHAIN_ID,
@@ -55,6 +56,7 @@ from packages.valory.customs.velodrome_pools_search.velodrome_pools_search impor
     get_token_decimals,
     read_aero_pool_state,
     run,
+    set_cached_price,
     sharpe_ratio_from_daily_returns,
 )
 
@@ -62,6 +64,7 @@ MODULE = "packages.valory.customs.velodrome_pools_search.velodrome_pools_search"
 BASE = AERO_CONTRACT_ADDRESSES[BASE_CHAIN_ID]
 USDC = Web3.to_checksum_address("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
 EUSD = Web3.to_checksum_address("0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4")
+MSUSD = Web3.to_checksum_address("0x526728dbc96689597f85ae4cd716d4f7fccbae9d")
 WETH = Web3.to_checksum_address("0x4200000000000000000000000000000000000006")
 WHITELIST = {"base": {USDC.lower(): "USDC", EUSD.lower(): "eUSD"}}
 
@@ -748,7 +751,11 @@ class TestGetOpportunitiesForAero:
                 "key",
                 BASE_CHAIN_ID,
                 coin_id_mapping={
-                    "base": {"usdc": "usd-coin", "eusd": "electronic-usd"}
+                    "base": {
+                        "usdc": "usd-coin",
+                        "eusd": "electronic-usd",
+                        "msusd": "metronome-synth-usd",
+                    }
                 },
                 **kwargs,
             )
@@ -776,6 +783,61 @@ class TestGetOpportunitiesForAero:
         assert "tick_bands" not in v2
         assert cl["is_cl_pool"] is True
         assert cl["tick_bands"][0]["tick_lower"] == -1
+
+    @staticmethod
+    def _price_cache(msusd_price: float) -> Dict[str, Any]:
+        """Return a price cache holding the histories the IL risk score fetched."""
+        cache: Dict[str, Any] = {}
+        for coin_id, price in (
+            ("usd-coin", 1.0),
+            ("electronic-usd", 0.999),
+            ("metronome-synth-usd", msusd_price),
+        ):
+            history = {"prices": [[0, 1.0], [1, price]]}
+            set_cached_price(coin_id, AERO_IL_PRICE_DAYS, history, cache)
+        return cache
+
+    def _msusd_and_eusd_pools(self, msusd_price: float, **kwargs: Any) -> List[str]:
+        msusd_pool = _live_pool(
+            id=_address(3),
+            token1=MSUSD,
+            inputTokens=[
+                {"id": USDC, "symbol": "USDC"},
+                {"id": MSUSD, "symbol": "msUSD"},
+            ],
+        )
+        opportunities = self._run(
+            [_live_pool(), msusd_pool],
+            price_cache=self._price_cache(msusd_price),
+            **kwargs,
+        )
+        return [opportunity["pool_address"] for opportunity in opportunities]
+
+    def test_depegged_token_drops_its_pools(self) -> None:
+        """A pool holding a token priced more than 2% below $1 is not offered."""
+        assert self._msusd_and_eusd_pools(0.88) == [_address(1)]
+
+    def test_token_near_peg_is_kept(self) -> None:
+        """A token within 2% of $1 keeps its pool."""
+        assert self._msusd_and_eusd_pools(0.995) == [_address(1), _address(3)]
+
+    @pytest.mark.parametrize(
+        "msusd_price, max_stable_depeg, offered",
+        [(0.88, 0.15, [_address(1), _address(3)]), (0.995, 0.001, [_address(1)])],
+    )
+    def test_threshold_read_from_parameter(
+        self, msusd_price: float, max_stable_depeg: float, offered: List[str]
+    ) -> None:
+        """The depeg threshold comes from the max_stable_depeg strategy parameter."""
+        pools = self._msusd_and_eusd_pools(
+            msusd_price, max_stable_depeg=max_stable_depeg
+        )
+        assert pools == offered
+
+    def test_token_without_price_is_kept(self) -> None:
+        """A token with no fetched price keeps the $1 assumption."""
+        (opportunity,) = self._run([_live_pool()], price_cache={})
+        assert opportunity["pool_address"] == _address(1)
 
     def test_optimism_dex_type(self) -> None:
         """Optimism opportunities keep the velodrome dex type."""

@@ -3314,6 +3314,9 @@ AERO_REFERENCE_POSITION_USD = 1000.0
 AERO_POOL_CACHE_PREFIX = "aero_pools"
 AERO_POOL_CACHE_TTL = 30 * SECONDS_PER_DAY
 AERO_PRICE_CACHE_PREFIX = "aero_spot"
+# Pool tokens are valued at $1, so a token priced further below that is not entered.
+DEFAULT_MAX_STABLE_DEPEG = 0.02
+AERO_IL_PRICE_DAYS = 90
 WAD = 10**18
 
 # Tape observation layouts (IGaugeTape, ICLGaugeTape, IPoolTape, ICLPoolTape)
@@ -4016,7 +4019,8 @@ def get_opportunities_for_aero(
     :param x402_proxy: optional x402 proxy URL.
     :param price_cache: the shared price cache.
     :param price_cache_ttl: how long a price is reused, in seconds.
-    :param kwargs: filter parameters (min_tvl_threshold, max_allocation_percentage, ...).
+    :param kwargs: filter parameters (min_tvl_threshold, max_allocation_percentage,
+        max_stable_depeg, ...).
     :return: the opportunities, or an error dictionary.
     """
     pools = get_aero_pools(
@@ -4060,9 +4064,23 @@ def get_opportunities_for_aero(
     max_allocation_percentage = kwargs.get(
         "max_allocation_percentage", DEFAULT_MAX_ALLOCATION_PERCENTAGE
     )
+    max_stable_depeg = kwargs.get("max_stable_depeg", DEFAULT_MAX_STABLE_DEPEG)
     dex_type = AERODROME if chain_name == "base" else VELODROME
     opportunities = []
     for pool in candidates:
+        il_risk_score = _aero_il_risk_score(
+            pool,
+            coingecko_api_key,
+            coin_id_mapping,
+            x402_session,
+            x402_proxy,
+            price_cache,
+            price_cache_ttl,
+        )
+        if _has_depegged_token(
+            pool, coin_id_mapping, price_cache, price_cache_ttl, max_stable_depeg
+        ):
+            continue
         depth_score, max_position_size = aero_depth_metrics(
             pool["tvl"], aero_daily_volume_usd(pool), max_allocation_percentage
         )
@@ -4088,15 +4106,7 @@ def get_opportunities_for_aero(
             "sharpe_ratio": sharpe_ratio_from_daily_returns(pool["daily_returns"]),
             "depth_score": depth_score,
             "max_position_size": max_position_size,
-            "il_risk_score": _aero_il_risk_score(
-                pool,
-                coingecko_api_key,
-                coin_id_mapping,
-                x402_session,
-                x402_proxy,
-                price_cache,
-                price_cache_ttl,
-            ),
+            "il_risk_score": il_risk_score,
         }
         if pool["kind"] == "cl":
             opportunity["tick_bands"] = pool["tick_bands"]
@@ -4126,6 +4136,7 @@ def _aero_il_risk_score(
     return calculate_velodrome_il_risk_score_multi(
         valid_token_ids,
         coingecko_api_key,
+        time_period=AERO_IL_PRICE_DAYS,
         pool_id=pool["id"],
         chain=pool["chain"],
         x402_session=x402_session,
@@ -4133,6 +4144,47 @@ def _aero_il_risk_score(
         price_cache=price_cache,
         price_cache_ttl=price_cache_ttl,
     )
+
+
+def _has_depegged_token(
+    pool: Dict[str, Any],
+    coin_id_mapping: Any,
+    price_cache: Optional[Dict[str, Any]],
+    price_cache_ttl: int,
+    max_stable_depeg: float,
+) -> bool:
+    """Return whether a pool token is priced more than ``max_stable_depeg`` below $1.
+
+    Reads the price history ``_aero_il_risk_score`` cached, so it makes no request.
+    A token without one keeps the $1 the pool metrics assume.
+
+    :param pool: the pool, with its token symbols.
+    :param coin_id_mapping: CoinGecko ids by token symbol.
+    :param price_cache: the shared price cache.
+    :param price_cache_ttl: how long a price is reused, in seconds.
+    :param max_stable_depeg: how far below $1 a token may trade, as a fraction.
+    :return: True when the pool should be skipped.
+    """
+    for token in pool["inputTokens"]:
+        symbol = token["symbol"] or ""
+        coin_id = get_coin_id_from_symbol(coin_id_mapping or {}, symbol, pool["chain"])
+        history = coin_id and get_cached_price(
+            coin_id, AERO_IL_PRICE_DAYS, price_cache or {}, price_cache_ttl
+        )
+        if not history or not history.get("prices"):
+            logger.warning(
+                f"No price for {symbol} ({token['id']}) in pool {pool['id']}, "
+                "so it is taken to be at $1"
+            )
+            continue
+        price = history["prices"][-1][1]
+        if price < 1 - max_stable_depeg:
+            logger.warning(
+                f"Skipping pool {pool['id']}: {symbol} ({token['id']}) is priced "
+                f"at ${price:.4f}, more than {max_stable_depeg:.2%} below $1"
+            )
+            return True
+    return False
 
 
 def calculate_aero_metrics(

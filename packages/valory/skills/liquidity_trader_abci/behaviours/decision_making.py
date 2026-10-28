@@ -103,6 +103,27 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 # so a bare estimate can land below what the gauge call needs.
 AERO_GAUGE_GAS_MULTIPLIER = 1.3
 
+# Aero's position manager appends tickLower and tickUpper to IncreaseLiquidity;
+# both layouts start with (liquidity, amount0, amount1).
+INCREASE_LIQUIDITY_DATA_TYPES = {
+    to_hex(keccak(text="IncreaseLiquidity(uint256,uint128,uint256,uint256)"))[2:]: [
+        "uint128",
+        "uint256",
+        "uint256",
+    ],
+    to_hex(
+        keccak(text="IncreaseLiquidity(uint256,uint128,uint256,uint256,int24,int24)")
+    )[2:]: ["uint128", "uint256", "uint256", "int24", "int24"],
+}
+
+
+def _increase_liquidity_data_types(log: Dict[str, Any]) -> Optional[List[str]]:
+    """Return the data layout of an IncreaseLiquidity log, or None for any other log."""
+    topics = log.get("topics", [])
+    if not topics:
+        return None
+    return INCREASE_LIQUIDITY_DATA_TYPES.get(topics[0][2:])
+
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that executes all the actions."""
@@ -3108,20 +3129,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        # Define the event signature and calculate its hash
-        event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
-        event_signature_hash = keccak(text=event_signature)
-        event_signature_hex = to_hex(event_signature_hash)[2:]
-
-        # Extract logs from the response
-        logs = response.get("logs", [])
-
         # Find all logs that match the IncreaseLiquidity event
         matching_logs = [
             log
-            for log in logs
-            if log.get("topics", [])
-            and log.get("topics", [])[0][2:] == event_signature_hex
+            for log in response.get("logs", [])
+            if _increase_liquidity_data_types(log)
         ]
 
         if not matching_logs:
@@ -3172,7 +3184,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 data_bytes = bytes.fromhex(data_hex[2:])
-                decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+                decoded_data = decode(_increase_liquidity_data_types(log), data_bytes)
                 liquidity = decoded_data[0]
                 amount0 = decoded_data[1]
                 amount1 = decoded_data[2]
@@ -3215,20 +3227,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None, None, None, None, None
 
-        # Define the event signature and calculate its hash
-        event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
-        event_signature_hash = keccak(text=event_signature)
-        event_signature_hex = to_hex(event_signature_hash)[2:]
-
-        # Extract logs from the response
-        logs = response.get("logs", [])
-
         # Find the log that matches the IncreaseLiquidity event
         log = next(
             (
                 log
-                for log in logs
-                if log.get("topics", [])[0][2:] == event_signature_hex
+                for log in response.get("logs", [])
+                if _increase_liquidity_data_types(log)
             ),
             None,
         )
@@ -3255,7 +3259,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None, None, None, None
 
             data_bytes = bytes.fromhex(data_hex[2:])
-            decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+            decoded_data = decode(_increase_liquidity_data_types(log), data_bytes)
             liquidity = decoded_data[0]
             amount0 = decoded_data[1]
             amount1 = decoded_data[2]

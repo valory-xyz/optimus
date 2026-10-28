@@ -23,6 +23,8 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 import pytest
+from eth_abi import encode
+from eth_utils import keccak, to_hex
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
@@ -334,3 +336,68 @@ class TestGaugeGasLimit:
         payload = self._payload(builder, pool_method, _aero_action(), gas_estimate, [])
 
         assert payload["gas_limit"] == 0
+
+
+LEGACY_INCREASE_LIQUIDITY = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
+AERO_INCREASE_LIQUIDITY = (
+    "IncreaseLiquidity(uint256,uint128,uint256,uint256,int24,int24)"
+)
+
+
+def _increase_liquidity_log(
+    signature: str, token_id: int, liquidity: int, amount0: int, amount1: int
+) -> Dict[str, Any]:
+    """Build an IncreaseLiquidity log; the Aero layout carries the band's ticks too."""
+    types = ["uint128", "uint256", "uint256"]
+    values: List[int] = [liquidity, amount0, amount1]
+    if signature == AERO_INCREASE_LIQUIDITY:
+        types += ["int24", "int24"]
+        values += [11, 12]
+    return {
+        "topics": [
+            to_hex(keccak(text=signature)),
+            "0x" + encode(["uint256"], [token_id]).hex(),
+        ],
+        "data": "0x" + encode(types, values).hex(),
+    }
+
+
+def _receipt_behaviour(logs: List[Dict[str, Any]]) -> Any:
+    b = _make_behaviour()
+    b.get_transaction_receipt = _make_gen_method({"logs": logs, "blockNumber": 16})
+    b.get_block = _make_gen_method({"timestamp": 12345})
+    return b
+
+
+class TestAeroIncreaseLiquidity:
+    """The mint receipt parsers read Aero's six-field IncreaseLiquidity."""
+
+    def test_all_positions_reads_aero_log(self) -> None:
+        """An Aero mint's token ID, liquidity and amounts are read."""
+        log = _increase_liquidity_log(AERO_INCREASE_LIQUIDITY, 39253, 500, 70, 80)
+        b = _receipt_behaviour([log])
+
+        result = _exhaust(b._get_all_positions_from_tx_receipt("0xhash", "base"))
+
+        assert result == [(39253, 500, 70, 80, 12345)]
+
+    def test_all_positions_reads_legacy_and_aero_logs_together(self) -> None:
+        """Both layouts are read from one receipt, in log order."""
+        logs = [
+            _increase_liquidity_log(LEGACY_INCREASE_LIQUIDITY, 1, 100, 50, 60),
+            _increase_liquidity_log(AERO_INCREASE_LIQUIDITY, 39254, 200, 70, 80),
+        ]
+        b = _receipt_behaviour(logs)
+
+        result = _exhaust(b._get_all_positions_from_tx_receipt("0xhash", "base"))
+
+        assert result == [(1, 100, 50, 60, 12345), (39254, 200, 70, 80, 12345)]
+
+    def test_mint_receipt_reads_aero_log(self) -> None:
+        """The single-position parser reads an Aero mint too."""
+        log = _increase_liquidity_log(AERO_INCREASE_LIQUIDITY, 39253, 500, 70, 80)
+        b = _receipt_behaviour([{"topics": []}, log])
+
+        result = _exhaust(b._get_data_from_mint_tx_receipt("0xhash", "base"))
+
+        assert result == (39253, 500, 70, 80, 12345)

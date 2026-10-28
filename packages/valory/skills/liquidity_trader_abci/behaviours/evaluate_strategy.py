@@ -136,6 +136,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.send_actions(legacy_exit_actions)
                 return
 
+            restake_actions = yield from self._prepare_aero_restake_actions()
+            if restake_actions:
+                yield from self.send_actions(restake_actions)
+                return
+
             # Check minimum hold period
             # Check if no current positions and uninvested ETH, prepare swap to USDC
             actions = yield from self.check_and_prepare_non_whitelisted_swaps()
@@ -259,6 +264,65 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         actions.extend(
             self._prepare_exit_pool_actions(exiting, purpose="Aero migration")
         )
+        return actions
+
+    def _prepare_aero_restake_actions(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Build stake actions for open Aero positions whose stake did not settle, as they earn nothing unstaked."""
+        pool = self.pools.get(DexType.VELODROME.value)
+        actions: List[Dict[str, Any]] = []
+        for position in self.current_positions:
+            gauge_address = position.get("gauge_address")
+            if (
+                position.get("status") != PositionStatus.OPEN.value
+                or not is_aero_position(position)
+                or not gauge_address
+                or position.get("staked")
+            ):
+                continue
+
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            needs_stake: Optional[bool] = None
+            if position.get("is_cl_pool"):
+                token_ids = self._position_token_ids(position)
+                staked_ids, failed = yield from self._filter_staked_token_ids(
+                    pool, safe_address, token_ids, chain, gauge_address
+                )
+                if not failed:
+                    needs_stake = len(staked_ids) < len(token_ids)
+            else:
+                staked_balance = yield from pool.read_staked_balance(
+                    self,
+                    lp_token=pool_address,
+                    user_address=safe_address,
+                    chain=chain,
+                    gauge_address=gauge_address,
+                )
+                lp_balance = yield from self._get_token_balance(
+                    chain, safe_address, pool_address
+                )
+                if staked_balance is not None and lp_balance is not None:
+                    needs_stake = staked_balance == 0 and lp_balance > 0
+
+            if needs_stake is None:
+                self.context.logger.warning(
+                    f"Could not read the stake of Aero pool {pool_address} in gauge "
+                    f"{gauge_address}; checking it again next cycle"
+                )
+                continue
+            if not needs_stake:
+                continue
+
+            self.context.logger.info(
+                f"Aero pool {pool_address} is open but not staked in gauge "
+                f"{gauge_address}; staking it"
+            )
+            stake_action = self._build_stake_lp_tokens_action(position)
+            if stake_action:
+                actions.append(stake_action)
         return actions
 
     def send_actions(self, actions: Optional[List[Any]] = None) -> Generator:

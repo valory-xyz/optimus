@@ -242,6 +242,153 @@ class TestAsyncActLegacyExit:
         b._update_strategy_backoff.assert_not_called()
 
 
+def _aero(is_cl_pool, **extra):
+    """Return an open Aero position that holds a gauge but no recorded stake."""
+    return {
+        "status": "open",
+        "dex_type": "aerodrome",
+        "chain": "optimism",
+        "pool_address": "0xAeroPool",
+        "is_cl_pool": is_cl_pool,
+        "protocol": "aero",
+        "gauge_address": GAUGE,
+        "positions": [{"token_id": 39253}, {"token_id": 39254}],
+        **extra,
+    }
+
+
+class TestPrepareAeroRestakeActions:
+    """Tests for _prepare_aero_restake_actions."""
+
+    def _mk(self, position, staked_ids=None, failed=False, staked=0, lp=10):
+        b = _mk(current_positions=[position], pools={"velodrome": _pool(0, staked)})
+        b._filter_staked_token_ids = MagicMock(
+            side_effect=_gen_return((staked_ids or [], failed))
+        )
+        b._get_token_balance = MagicMock(side_effect=_gen_return(lp))
+        return b
+
+    def test_positions_without_a_missing_stake_are_skipped(self):
+        """Closed, legacy, gauge-less and recorded-staked positions read nothing."""
+        positions = [
+            _aero(True, status="closed"),
+            _aero(True, protocol=None),
+            _aero(True, gauge_address=None),
+            _aero(True, staked=True),
+        ]
+        b = _mk(current_positions=positions, pools={"velodrome": _pool(0, 0)})
+        b._filter_staked_token_ids = MagicMock()
+
+        assert _drive(b._prepare_aero_restake_actions()) == []
+        b._filter_staked_token_ids.assert_not_called()
+
+    def test_cl_with_an_unstaked_token_is_staked(self):
+        """A CL position with a token missing from its gauge gets a stake action."""
+        b = self._mk(_aero(True), staked_ids=[39253])
+
+        actions = _drive(b._prepare_aero_restake_actions())
+
+        assert [a["action"] for a in actions] == [Action.STAKE_LP_TOKENS.value]
+        assert actions[0]["pool_address"] == "0xAeroPool"
+        assert actions[0]["gauge_address"] == GAUGE
+        assert actions[0]["protocol"] == "aero"
+        b._filter_staked_token_ids.assert_called_once_with(
+            b.pools["velodrome"], SAFE, [39253, 39254], "optimism", GAUGE
+        )
+
+    def test_cl_fully_staked_is_left(self):
+        """A CL position whose tokens are all in the gauge needs no stake."""
+        b = self._mk(_aero(True), staked_ids=[39253, 39254])
+        assert _drive(b._prepare_aero_restake_actions()) == []
+
+    def test_cl_unreadable_stake_waits(self):
+        """When the gauge cannot be read the position is checked next cycle."""
+        b = self._mk(_aero(True), failed=True)
+        assert _drive(b._prepare_aero_restake_actions()) == []
+
+    def test_v2_unstaked_lp_is_staked(self):
+        """A v2 position with nothing in its gauge and LP in the Safe gets a stake action."""
+        b = self._mk(_aero(False), staked=0, lp=10)
+
+        actions = _drive(b._prepare_aero_restake_actions())
+
+        assert [a["action"] for a in actions] == [Action.STAKE_LP_TOKENS.value]
+        assert actions[0]["gauge_address"] == GAUGE
+        b.pools["velodrome"].read_staked_balance.assert_called_once_with(
+            b,
+            lp_token="0xAeroPool",
+            user_address=SAFE,
+            chain="optimism",
+            gauge_address=GAUGE,
+        )
+
+    def test_v2_staked_or_without_lp_is_left(self):
+        """A v2 position already in its gauge, or with no LP in the Safe, needs no stake."""
+        assert (
+            _drive(self._mk(_aero(False), staked=5)._prepare_aero_restake_actions())
+            == []
+        )
+        assert (
+            _drive(self._mk(_aero(False), lp=0)._prepare_aero_restake_actions()) == []
+        )
+
+    def test_unbuildable_stake_action_is_dropped(self):
+        """A stake action that cannot be built is not sent."""
+        b = self._mk(_aero(False))
+        b._build_stake_lp_tokens_action = MagicMock(return_value=None)
+        assert _drive(b._prepare_aero_restake_actions()) == []
+
+    def test_v2_unreadable_balances_wait(self):
+        """When either balance cannot be read the position is checked next cycle."""
+        assert (
+            _drive(self._mk(_aero(False), staked=None)._prepare_aero_restake_actions())
+            == []
+        )
+        assert (
+            _drive(self._mk(_aero(False), lp=None)._prepare_aero_restake_actions())
+            == []
+        )
+
+
+class TestAsyncActAeroRestake:
+    """A missing Aero stake is sent before the TiP and strategy gates."""
+
+    def _mk(self, restake_actions):
+        b = _mk()
+        b._read_investing_paused = _gen_return(False)
+        b._prepare_legacy_velodrome_exit_actions = _gen_return(None)
+        b._prepare_aero_restake_actions = _gen_return(restake_actions)
+        b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
+        b._apply_tip_filters_to_exit_decisions = MagicMock(
+            side_effect=_gen_return((False, []))
+        )
+        b.sent = []
+
+        def _send(actions=None):
+            b.sent.append(actions)
+            yield
+
+        b.send_actions = _send
+        return b
+
+    def test_restake_ends_the_cycle(self):
+        """Stake actions are sent alone and the TiP gate is not reached."""
+        stake = [{"action": Action.STAKE_LP_TOKENS.value}]
+        b = self._mk(stake)
+        _drive(b.async_act(), sends=[None] * 20)
+
+        assert b.sent == [stake]
+        b._apply_tip_filters_to_exit_decisions.assert_not_called()
+
+    def test_no_restake_continues_to_the_gates(self):
+        """With nothing to stake the cycle reaches the TiP gate as before."""
+        b = self._mk([])
+        _drive(b.async_act(), sends=[None] * 20)
+
+        assert b.sent == [None]
+        b._apply_tip_filters_to_exit_decisions.assert_called_once()
+
+
 class TestAeroStakingActions:
     """Aero opportunities and positions carry their gauge and protocol."""
 

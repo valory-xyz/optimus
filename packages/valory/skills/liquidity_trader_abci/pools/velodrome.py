@@ -1042,10 +1042,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 position["amount1_desired"] = 0
                 continue
 
-            # Calculate amounts based on allocation and individual band token ratios
-            token0_ratio = position.get("token0_ratio", 0.5)
-            token1_ratio = position.get("token1_ratio", 0.5)
-
             token0_decimals = yield from self._get_token_decimals(chain, assets[0])
             token1_decimals = yield from self._get_token_decimals(chain, assets[1])
             token_decimals = [token0_decimals, token1_decimals]
@@ -1056,6 +1052,22 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             if total_band_investment is None:
                 return None, None
+
+            # A narrow band's split moves far more than the price between
+            # selection and mint, so split at the live price when possible.
+            live_ratios = yield from self._get_live_band_token_ratios(
+                chain, position, sqrt_price_x96
+            )
+            if live_ratios is None:
+                self.context.logger.warning(
+                    f"Could not split band [{position['tick_lower']}, "
+                    f"{position['tick_upper']}] at the live price; using the "
+                    f"split cached at selection"
+                )
+                token0_ratio = position.get("token0_ratio", 0.5)
+                token1_ratio = position.get("token1_ratio", 0.5)
+            else:
+                token0_ratio, token1_ratio = live_ratios
 
             # Apply individual band ratios using pool price
             amount0_desired, amount1_desired = self._calculate_individual_token_amounts(
@@ -1132,7 +1144,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Calculate slippage protection for this specific position
             slippage_tolerance = self.params.slippage_tolerance
             amount0_min, amount1_min = self._calculate_slippage_protection(
-                max_amounts_in, slippage_tolerance
+                [amount0_desired, amount1_desired], slippage_tolerance
             )
 
             if amount0_min is None or amount1_min is None:
@@ -1181,6 +1193,36 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         # Return the list of transaction hashes
         return tx_hashes, position_manager_address
+
+    def _get_live_band_token_ratios(
+        self, chain: str, band: Dict[str, Any], sqrt_price_x96: int
+    ) -> Generator[None, None, Optional[Tuple[float, float]]]:
+        """Return a band's (token0, token1) value split at the given pool price, or None when the helper is unreadable."""
+        sqrt_ratio_a_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+            chain, band["tick_lower"]
+        )
+        sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+            chain, band["tick_upper"]
+        )
+        if not sqrt_ratio_a_x96 or not sqrt_ratio_b_x96:
+            return None
+        if sqrt_price_x96 < sqrt_ratio_a_x96:
+            return 1.0, 0.0
+        if sqrt_price_x96 > sqrt_ratio_b_x96:
+            return 0.0, 1.0
+
+        # Same unit-liquidity math as the split computed at selection.
+        amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
+            chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, 10**30
+        )
+        amount0_in_token1 = amount0 * (sqrt_price_x96 / (2**96)) ** 2
+        total_amount = amount0_in_token1 + amount1
+        if total_amount <= 0:
+            return None
+        return (
+            round(amount0_in_token1 / total_amount, 5),
+            round(amount1 / total_amount, 5),
+        )
 
     def _get_pool_is_stable(
         self, pool_address: str, chain: str

@@ -180,6 +180,7 @@ class TestEnterAeroClPool:
         b._check_price_movement = _mock_gen(False)
         b._get_sqrt_price_x96 = _mock_gen(2**96)
         b._get_token_decimals = _mock_gen(18)
+        b._get_live_band_token_ratios = _mock_gen(None)
         band = {
             "tick_lower": -100,
             "tick_upper": 100,

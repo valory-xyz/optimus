@@ -5,7 +5,7 @@
         "custom/valory/max_apr_selection/0.1.0": "bafybeib2szveecjhwlu5aeww5umtso5sm4btogsrjuqg4tk5uormjmsppi",
         "custom/valory/balancer_pools_search/0.1.0": "bafybeib3bc4xgzxbv473a2govkaxzxcreklzisczsiz3sbn33kixgy53re",
         "custom/valory/uniswap_pools_search/0.1.0": "bafybeihzeranzyljdsxzwmdui4apye2xxuhxbiqcl65isxgcti35hxdyu4",
-        "custom/valory/velodrome_pools_search/0.1.0": "bafybeibfyk5sf55ked53xtpmj4lnaws427z5hniuwn4bymcq2xvkafev6e",
+        "custom/valory/velodrome_pools_search/0.1.0": "bafybeidtopjnotgsktyvrkzxdfxkeh5u34xynt24ykao252mrd5mapof7m",
         "contract/valory/velodrome_router/0.1.0": "bafybeifokp7em6ziibuftu7e77u3x72k7dfidrmmxnfisxuiwnh64px42q",
         "contract/valory/velodrome_cl_pool/0.1.0": "bafybeidwjgc3oja3itgkl5d35txrcyik337bqaiojsbsr65twuuhvg6vvm",
         "contract/valory/velodrome_pool/0.1.0": "bafybeigpjgshmzw3b3na76jk7ps4xsdpbbrfekvf5fbdmkepugmekksrke",
@@ -27,10 +27,10 @@
         "contract/valory/mech_activity/0.1.0": "bafybeifpthgtqxob46nyk7zw2enbihm4mzben5mbbwm7qdx4axzllwyy6u",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeieokuyssll6fhiddrknlw33jzytp5koomgslfgd4parafhgbdggtm",
         "skill/valory/optimus_abci/0.1.0": "bafybeift6pl6pxnkflogku7zfehvynu6bziyfb7jmm7olayt5fcqrkmhum",
-        "agent/valory/optimus/0.1.0": "bafybeiggyublwl4ghqg5n6ndnlac4yl2324eogpvtwah7afxka6elwnhty",
-        "agent/valory/basius/0.1.0": "bafybeihfh53ryjeyeozmqcgepdkdywczozr2gwm5rro5x6wdojifyk756m",
-        "service/valory/optimus/0.1.0": "bafybeieibds3lwrzivq7achvb25vjej3tfamlygchyirhuoiz4jylffluu",
-        "service/valory/basius/0.1.0": "bafybeignxosoy6qo6kytr5ujombqsxq43cfwatlma6mxjd2ke2nox2nq4a"
+        "agent/valory/optimus/0.1.0": "bafybeibatblre7bi3ai2imqkk4d2xrjllmnzgxmdkhkeju5r4pw4l77pmu",
+        "agent/valory/basius/0.1.0": "bafybeicgz62zslajtfvtrvvqdx3e5rvackhpnvb6leikibbkof4ev52dk4",
+        "service/valory/optimus/0.1.0": "bafybeicaoibwr3ex32co5adb5zjgfqdbbwoy33mexsdmo3at7don4jsvki",
+        "service/valory/basius/0.1.0": "bafybeibnbcu5nrhgpp3bzc4lonhgyajvdmrgglx3drwfdyo7lumlenjhke"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

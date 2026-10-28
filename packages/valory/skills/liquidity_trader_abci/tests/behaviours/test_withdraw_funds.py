@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -998,3 +999,29 @@ class TestReadInvestingPaused:
         obj._read_kv = fake_read_kv
         with pytest.raises(ValueError, match="boom"):
             _drive(obj._read_investing_paused())
+
+
+class TestReadInvestingPausedOrNone:
+    """Tests for _read_investing_paused_or_none."""
+
+    @pytest.mark.parametrize(
+        "kv, paused",
+        [
+            ({"investing_paused": "true"}, True),
+            ({"investing_paused": "false"}, False),
+            ({"investing_paused": None}, False),
+            (None, None),
+            ({"investing_paused": 1}, None),
+        ],
+    )
+    def test_unreadable_flag_is_none(self, kv: Any, paused: Any) -> None:
+        """An unreachable store or a malformed flag is unknown, not False."""
+        obj = _make_behaviour()
+
+        def fake_read_kv(keys):
+            """Fake read kv."""
+            yield
+            return kv
+
+        obj._read_kv = fake_read_kv
+        assert _drive(obj._read_investing_paused_or_none()) is paused

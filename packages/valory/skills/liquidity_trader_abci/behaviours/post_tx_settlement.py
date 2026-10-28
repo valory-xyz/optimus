@@ -25,9 +25,18 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
+    AgentTopUpRound,
     CheckStakingKPIMetRound,
     PostTxSettlementPayload,
     PostTxSettlementRound,
+)
+
+# Vanity and top-up txs do not reflect real tx gas costs.
+UNTRACKED_GAS_SUBMITTERS = frozenset(
+    {
+        AgentTopUpRound.auto_round_id(),
+        CheckStakingKPIMetRound.auto_round_id(),
+    }
 )
 
 
@@ -41,11 +50,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             msg = f"The transaction submitted by {self.synchronized_data.tx_submitter} was successfully settled."
             self.context.logger.info(msg)
-            # we do not want to track the gas costs for vanity tx
-            if (
-                not self.synchronized_data.tx_submitter
-                == CheckStakingKPIMetRound.auto_round_id()
-            ):
+            if self.synchronized_data.tx_submitter not in UNTRACKED_GAS_SUBMITTERS:
                 yield from self.fetch_and_log_gas_details()
 
             # ``chain_id`` is ``Optional[str]`` on the synced data; today
@@ -53,6 +58,12 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             # caller from silently writing ``…_None`` keys.
             chain_id = self.synchronized_data.chain_id
             if chain_id:
+                if (
+                    self.synchronized_data.tx_submitter
+                    == AgentTopUpRound.auto_round_id()
+                ):
+                    self.shared_state.topup_in_flight_chains.discard(chain_id)
+                    self.shared_state.topup_failed_chains.discard(chain_id)
                 yield from self._invalidate_caches_after_tx(chain_id)
             else:
                 self.context.logger.warning(

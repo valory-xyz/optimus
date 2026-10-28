@@ -32,6 +32,9 @@ from packages.valory.skills.abstract_round_abci.base import (
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     PostTxSettlementPayload,
 )
+from packages.valory.skills.liquidity_trader_abci.states.agent_top_up import (
+    AgentTopUpRound,
+)
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
@@ -71,6 +74,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
         """Process the end of the block."""
         if self.threshold_reached:
             submitter_to_event: Dict[str, Event] = {
+                AgentTopUpRound.auto_round_id(): Event.TOPUP_DONE,
                 CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
                 CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
                 DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,

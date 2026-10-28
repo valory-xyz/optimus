@@ -35,7 +35,8 @@ from packages.valory.skills.termination_abci.rounds import (
 )
 
 abci_app_transition_mapping: AbciAppTransitionMapping = {
-    RegistrationAbci.FinishedRegistrationRound: LiquidityTraderAbci.FetchStrategiesRound,
+    RegistrationAbci.FinishedRegistrationRound: LiquidityTraderAbci.AgentTopUpRound,
+    LiquidityTraderAbci.FinishedAgentTopUpRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
     LiquidityTraderAbci.FinishedCallCheckpointRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
     LiquidityTraderAbci.FinishedCheckStakingKPIMetRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
     LiquidityTraderAbci.FinishedDecisionMakingRound: ResetAndPauseAbci.ResetAndPauseRound,
@@ -45,7 +46,7 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     LiquidityTraderAbci.FailedMultiplexerRound: ResetAndPauseAbci.ResetAndPauseRound,
     TxSettlementAbci.FinishedTransactionSubmissionRound: LiquidityTraderAbci.PostTxSettlementRound,
     TxSettlementAbci.FailedRound: ResetAndPauseAbci.ResetAndPauseRound,
-    ResetAndPauseAbci.FinishedResetAndPauseRound: LiquidityTraderAbci.FetchStrategiesRound,
+    ResetAndPauseAbci.FinishedResetAndPauseRound: LiquidityTraderAbci.AgentTopUpRound,
     ResetAndPauseAbci.FinishedResetAndPauseErrorRound: RegistrationAbci.RegistrationRound,
 }
 

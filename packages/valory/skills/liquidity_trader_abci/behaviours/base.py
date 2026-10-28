@@ -749,7 +749,8 @@ class LiquidityTraderBaseBehaviour(
         via ``_invalidate_caches_after_tx``. On a cache miss, hits
         SafeApi, persists the result, then returns it. On API failure
         with no usable cache, falls back to the persisted cached
-        payload if there is one. The on-chain backstop in
+        payload if there is one, with each amount refreshed on-chain
+        where the read succeeds. The on-chain backstop in
         ``_supplement_with_onchain_whitelisted_balances`` runs
         unconditionally after this stage as a supplement: it covers
         whitelisted tokens that SafeApi may omit even on a successful
@@ -791,6 +792,7 @@ class LiquidityTraderBaseBehaviour(
                 cache_age = SAFE_BALANCES_CACHE_TTL_SECONDS
 
         cached_payload = cached_blob.get(balances_key)
+        served_stale = False
         use_cache = (
             cache_age is not None
             and 0 <= cache_age < SAFE_BALANCES_CACHE_TTL_SECONDS
@@ -846,6 +848,7 @@ class LiquidityTraderBaseBehaviour(
                             "SafeApi failed, using stale cached balances"
                         )
                         all_balances = json.loads(cached_payload)
+                        served_stale = True
                     except (json.JSONDecodeError, TypeError):
                         all_balances = []
                 else:
@@ -907,6 +910,11 @@ class LiquidityTraderBaseBehaviour(
                             "fiat_conversion": fiat_conversion,
                         }
                     )
+
+        if served_stale:
+            yield from self._refresh_stale_balances_onchain(
+                chain, safe_address, balances
+            )
 
         # On-chain backstop for held ERC20s and native ETH. Catches the case
         # where SafeApi is unavailable (e.g. monthly quota exceeded) or returns
@@ -3851,6 +3859,52 @@ class LiquidityTraderBaseBehaviour(
                 f"Error fetching reward balances for {chain}: {str(e)}"
             )
             return reward_balances
+
+    def _refresh_stale_balances_onchain(
+        self,
+        chain: str,
+        safe_address: str,
+        balances: List[Dict[str, Any]],
+    ) -> Generator[None, None, None]:
+        """Overwrite stale cached amounts in ``balances`` with on-chain reads.
+
+        The stale SafeApi payload sizes swaps and transfers, so an amount
+        that no longer matches the Safe builds a tx that reverts. An entry
+        keeps its cached amount when the read fails. An entry whose amount
+        changed loses ``fiat_balance`` so its USD value is recomputed from
+        the fresh amount.
+
+        :param chain: the chain to read on-chain balances from.
+        :param safe_address: the Safe contract address to read balances for.
+        :param balances: parsed balance entries to refresh in place.
+        :yield: None, for async-style generator progression.
+        """
+        for entry in balances:
+            address = entry["address"]
+            try:
+                if entry["asset_type"] == "native":
+                    onchain_balance = yield from self._get_native_balance(
+                        chain, safe_address
+                    )
+                else:
+                    onchain_balance = yield from self._get_token_balance(
+                        chain, safe_address, address
+                    )
+            except Exception as e:
+                self.context.logger.warning(
+                    f"Error refreshing stale balance of {address} on {chain}: "
+                    f"{str(e)}; keeping the cached amount"
+                )
+                continue
+            if onchain_balance is None:
+                self.context.logger.warning(
+                    f"On-chain read of {address} on {chain} returned None; "
+                    "keeping the stale cached amount"
+                )
+                continue
+            if int(onchain_balance) != entry["balance"]:
+                entry["balance"] = int(onchain_balance)
+                entry["fiat_balance"] = None
 
     def _supplement_with_onchain_whitelisted_balances(
         self,

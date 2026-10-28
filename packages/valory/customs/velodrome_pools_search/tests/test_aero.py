@@ -31,7 +31,6 @@ import packages.valory.customs.velodrome_pools_search.velodrome_pools_search as 
 from packages.valory.customs.velodrome_pools_search.velodrome_pools_search import (
     AERO_CONTRACT_ADDRESSES,
     AERO_HOURLY_LOOKBACKS,
-    AERO_IL_PRICE_DAYS,
     AERO_PROTOCOL,
     AERO_TOKEN_ADDRESS_BASE,
     BASE_CHAIN_ID,
@@ -794,7 +793,7 @@ class TestGetOpportunitiesForAero:
             ("metronome-synth-usd", msusd_price),
         ):
             history = {"prices": [[0, 1.0], [1, price]]}
-            set_cached_price(coin_id, AERO_IL_PRICE_DAYS, history, cache)
+            set_cached_price(coin_id, 90, history, cache)
         return cache
 
     def _msusd_and_eusd_pools(self, msusd_price: float, **kwargs: Any) -> List[str]:

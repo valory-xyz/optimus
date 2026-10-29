@@ -1475,10 +1475,6 @@ class TestCalculateMetrics:
     """Tests for calculate_metrics function."""
 
     @patch(
-        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_apr",
-        return_value=None,
-    )
-    @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
     )
     @patch(
@@ -1488,11 +1484,7 @@ class TestCalculateMetrics:
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.calculate_velodrome_il_risk_score_multi"
     )
     def test_successful(
-        self,
-        mock_il: MagicMock,
-        mock_sharpe: MagicMock,
-        mock_liq: MagicMock,
-        _mock_apr: MagicMock,
+        self, mock_il: MagicMock, mock_sharpe: MagicMock, mock_liq: MagicMock
     ) -> None:
         """Test successful metrics calculation."""
         mock_il.return_value = -0.05
@@ -1530,17 +1522,13 @@ class TestCalculateMetrics:
         assert result is None
 
     @patch(
-        "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_apr",
-        return_value=None,
-    )
-    @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.analyze_velodrome_pool_liquidity"
     )
     @patch(
         "packages.valory.customs.velodrome_pools_search.velodrome_pools_search.get_velodrome_pool_sharpe_ratio"
     )
     def test_insufficient_token_ids(
-        self, mock_sharpe: MagicMock, mock_liq: MagicMock, _mock_apr: MagicMock
+        self, mock_sharpe: MagicMock, mock_liq: MagicMock
     ) -> None:
         """Test with insufficient valid token IDs.
         """
@@ -1570,62 +1558,6 @@ class TestCalculateMetrics:
         ):
             result = calculate_metrics(position, "key", {})  # type: ignore[arg-type]
             assert result is None
-
-
-class TestCalculateMetricsLiveApr:
-    """The metrics of a held pool carry the APR its opportunity would have."""
-
-    POOL = "0x36E3c209B373b861c185ecdBb8b2EbDD98587BDb"
-    SUGAR_DATA = {
-        "id": POOL,
-        "chain": "optimism",
-        "liquidity": 1000000,
-        "gauge_liquidity": 500000,
-        "emissions": 10**18,
-        "token0": "0xt0",
-        "token1": "0xt1",
-        "reserve0": 10**18,
-        "reserve1": 10**18,
-        "type": 0,
-    }
-    POSITION = {
-        "pool_address": POOL.lower(),
-        "chain": "optimism",
-        "token0": "0xt0",
-        "token1": "0xt1",
-        "token0_symbol": "UNKNOWN",
-        "token1_symbol": "UNKNOWN",
-        "pool_fee": 5,
-    }
-
-    def _metrics(self, pools: Any) -> Any:
-        with patch.object(vel_mod, "get_velodrome_pools", return_value=pools), patch.object(
-            vel_mod, "get_velodrome_pool_sharpe_ratio", return_value=1.5
-        ), patch.object(
-            vel_mod, "analyze_velodrome_pool_liquidity", return_value=(100, 5000)
-        ):
-            return calculate_metrics(dict(self.POSITION), "key", {})  # type: ignore[arg-type]
-
-    def test_apr_matches_the_opportunity_apr(self) -> None:
-        """The pool's Sugar entry is priced by the opportunity search's formula."""
-        expected = calculate_position_details_for_velodrome(self.SUGAR_DATA, "key")
-        assert expected["apr"] > 0
-        other = {"id": "0x" + "11" * 20, "sugar_data": {}}
-        result = self._metrics([other, {"id": self.POOL, "sugar_data": self.SUGAR_DATA}])
-        assert result["apr"] == expected["apr"]
-
-    def test_pool_not_listed_leaves_apr_out(self) -> None:
-        """A pool Sugar no longer lists gives no APR rather than a zero."""
-        result = self._metrics([{"id": "0x" + "11" * 20, "sugar_data": {}}])
-        assert result is not None
-        assert "apr" not in result
-        assert result["sharpe_ratio"] == 1.5
-
-    def test_sugar_error_leaves_apr_out(self) -> None:
-        """An unreadable Sugar contract gives no APR."""
-        result = self._metrics({"error": "rpc down"})
-        assert result is not None
-        assert "apr" not in result
 
 
 class TestRun:

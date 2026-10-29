@@ -921,6 +921,7 @@ class TestCalculateAeroMetrics:
     def test_v2(self) -> None:
         """A held stable position is valued from its pool's tapes."""
         result, v2, _ = self._metrics(self._position())
+        assert result["apr"] == 1.0
         assert result["il_risk_score"] == 0.02
         assert result["sharpe_ratio"] == 10
         assert result["depth_score"] is None
@@ -931,7 +932,7 @@ class TestCalculateAeroMetrics:
     def test_cl(self) -> None:
         """A held CL position is valued from its gauge's credited emissions."""
         result, _, cl = self._metrics(self._position(is_cl_pool=True))
-        assert result is not None
+        assert result["apr"] == 1.0
         assert cl.call_args.args[2] == []
 
     def test_unreadable(self) -> None:

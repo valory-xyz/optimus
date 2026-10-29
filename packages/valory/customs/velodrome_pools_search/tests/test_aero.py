@@ -883,7 +883,11 @@ class TestCalculateAeroMetrics:
         }
 
     def _metrics(
-        self, position: Dict[str, Any], readable: bool = True, decimals: Any = None
+        self,
+        position: Dict[str, Any],
+        readable: bool = True,
+        decimals: Any = None,
+        tick_bands: Any = None,
     ) -> Any:
         state = MagicMock(
             side_effect=lambda w3, chain_id, pools: pools if readable else []
@@ -905,7 +909,8 @@ class TestCalculateAeroMetrics:
                 return_value={"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]},
             ) as cl,
             patch(
-                f"{MODULE}.calculate_tick_lower_and_upper_velodrome", return_value=None
+                f"{MODULE}.calculate_tick_lower_and_upper_velodrome",
+                return_value=tick_bands,
             ),
             patch(
                 f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.02
@@ -931,9 +936,17 @@ class TestCalculateAeroMetrics:
 
     def test_cl(self) -> None:
         """A held CL position is valued from its gauge's credited emissions."""
-        result, _, cl = self._metrics(self._position(is_cl_pool=True))
+        bands = [{"tick_lower": -10, "tick_upper": 10, "allocation": 1.0}]
+        result, _, cl = self._metrics(self._position(is_cl_pool=True), tick_bands=bands)
         assert result["apr"] == 1.0
+        assert cl.call_args.args[2] == bands
+
+    def test_cl_without_tick_bands_has_no_apr(self) -> None:
+        """Unpriced tick bands give no live APR rather than an APR of 0."""
+        result, _, cl = self._metrics(self._position(is_cl_pool=True))
         assert cl.call_args.args[2] == []
+        assert "apr" not in result
+        assert result["il_risk_score"] == 0.02
 
     def test_unreadable(self) -> None:
         """Missing decimals, state or position data give no metrics."""

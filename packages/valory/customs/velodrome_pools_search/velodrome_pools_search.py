@@ -4261,8 +4261,7 @@ def calculate_aero_metrics(
     depth_score, max_position_size = aero_depth_metrics(
         pool["tvl"], aero_daily_volume_usd(pool)
     )
-    return {
-        "apr": pool["apr"],
+    metrics = {
         "il_risk_score": _aero_il_risk_score(
             pool,
             coingecko_api_key,
@@ -4276,6 +4275,10 @@ def calculate_aero_metrics(
         "depth_score": depth_score,
         "max_position_size": max_position_size,
     }
+    # A CL pool without tick bands is not priced, so its APR of 0 is left out.
+    if pool["kind"] != "cl" or pool["tick_bands"]:
+        metrics["apr"] = pool["apr"]
+    return metrics
 
 
 def get_opportunities_for_velodrome(

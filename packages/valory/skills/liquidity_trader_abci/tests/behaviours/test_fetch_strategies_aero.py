@@ -136,6 +136,8 @@ class TestStoredGauge:
         assert len(calls) == 1
         assert calls[0]["protocol"] == "aero"
         assert calls[0]["gauge_address"] == GAUGE
+        logged = [c.args[0] for c in b.context.logger.info.call_args_list]
+        assert any(m.startswith("Found AERO rewards: 3") for m in logged)
 
 
 def _transfer(token: str, sender: str, recipient: str) -> Dict[str, Any]:

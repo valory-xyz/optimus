@@ -5287,8 +5287,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if pending_rewards and pending_rewards > 0:
                 # Convert from wei to VELO (18 decimals)
                 velo_rewards = Decimal(pending_rewards) / Decimal(10**18)
+                reward_symbol = self._get_velo_family_reward_symbol(chain, position)
                 self.context.logger.info(
-                    f"Found VELO rewards: {velo_rewards} for position {pool_address}"
+                    f"Found {reward_symbol} rewards: {velo_rewards} for position {pool_address}"
                 )
                 return velo_rewards
 

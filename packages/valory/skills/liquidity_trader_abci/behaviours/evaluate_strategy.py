@@ -81,6 +81,8 @@ from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy impor
 MIN_SWAP_VALUE_USD = 0.5
 # An unroutable token is retried this often, so it cannot hold every cycle.
 SWEEP_RETRY_COOLDOWN_SECONDS = 6 * 3600
+# Stake attempts per Aero position before the cycle stops waiting on it.
+MAX_AERO_RESTAKE_ATTEMPTS = 3
 
 
 STRATEGY_BACKOFF_KV_KEY = "strategy_backoff_state"
@@ -318,13 +320,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if not needs_stake:
                 continue
 
+            attempts = position.get("restake_attempts", 0)
+            if attempts >= MAX_AERO_RESTAKE_ATTEMPTS:
+                self.context.logger.warning(
+                    f"Aero pool {pool_address} is still not staked in gauge "
+                    f"{gauge_address} after {attempts} attempts; no longer staking it"
+                )
+                continue
+
             self.context.logger.info(
                 f"Aero pool {pool_address} is open but not staked in gauge "
                 f"{gauge_address}; staking it"
             )
             stake_action = self._build_stake_lp_tokens_action(position)
             if stake_action:
+                position["restake_attempts"] = attempts + 1
                 actions.append(stake_action)
+        if actions:
+            self.store_current_positions()
         return actions
 
     def send_actions(self, actions: Optional[List[Any]] = None) -> Generator:

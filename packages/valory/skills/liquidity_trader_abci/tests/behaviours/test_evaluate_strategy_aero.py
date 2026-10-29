@@ -25,6 +25,7 @@ from unittest.mock import MagicMock
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
 from packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy import (
+    MAX_AERO_RESTAKE_ATTEMPTS,
     STRATEGY_BACKOFF_KV_KEY,
 )
 from packages.valory.skills.liquidity_trader_abci.tests.behaviours.test_evaluate_strategy import (
@@ -266,6 +267,7 @@ class TestPrepareAeroRestakeActions:
             side_effect=_gen_return((staked_ids or [], failed))
         )
         b._get_token_balance = MagicMock(side_effect=_gen_return(lp))
+        b.store_current_positions = MagicMock()
         return b
 
     def test_positions_without_a_missing_stake_are_skipped(self):
@@ -338,6 +340,19 @@ class TestPrepareAeroRestakeActions:
         b._build_stake_lp_tokens_action = MagicMock(return_value=None)
         assert _drive(b._prepare_aero_restake_actions()) == []
 
+    def test_restake_stops_after_max_attempts(self):
+        """A stake that never settles is retried MAX_AERO_RESTAKE_ATTEMPTS times, then left."""
+        position = _aero(False)
+        b = self._mk(position)
+
+        for attempt in range(1, MAX_AERO_RESTAKE_ATTEMPTS + 1):
+            assert len(_drive(b._prepare_aero_restake_actions())) == 1
+            assert position["restake_attempts"] == attempt
+        assert b.store_current_positions.call_count == MAX_AERO_RESTAKE_ATTEMPTS
+
+        assert _drive(b._prepare_aero_restake_actions()) == []
+        assert position["restake_attempts"] == MAX_AERO_RESTAKE_ATTEMPTS
+
     def test_v2_unreadable_balances_wait(self):
         """When either balance cannot be read the position is checked next cycle."""
         assert (
@@ -358,7 +373,9 @@ class TestAsyncActAeroRestake:
         b._read_investing_paused = _gen_return(False)
         b._prepare_legacy_velodrome_exit_actions = _gen_return(None)
         b._prepare_aero_restake_actions = _gen_return(restake_actions)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         b._apply_tip_filters_to_exit_decisions = MagicMock(
             side_effect=_gen_return((False, []))
         )
@@ -379,6 +396,19 @@ class TestAsyncActAeroRestake:
 
         assert b.sent == [stake]
         b._apply_tip_filters_to_exit_decisions.assert_not_called()
+
+    def test_failing_restake_stops_blocking_the_cycle(self):
+        """Once a position's stake attempts run out the cycle reaches the TiP gate."""
+        b = self._mk([])
+        position = _aero(False, restake_attempts=MAX_AERO_RESTAKE_ATTEMPTS)
+        b.current_positions = [position]
+        b.pools = {"velodrome": _pool(0, 0)}
+        b._get_token_balance = MagicMock(side_effect=_gen_return(10))
+        del b._prepare_aero_restake_actions
+        _drive(b.async_act(), sends=[None] * 20)
+
+        assert b.sent == [None]
+        b._apply_tip_filters_to_exit_decisions.assert_called_once()
 
     def test_no_restake_continues_to_the_gates(self):
         """With nothing to stake the cycle reaches the TiP gate as before."""

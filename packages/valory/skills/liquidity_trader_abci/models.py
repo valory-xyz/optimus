@@ -26,7 +26,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from time import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import requests
 from aea.skills.base import Model, SkillContext
@@ -215,6 +215,12 @@ class SharedState(BaseSharedState):
         # The swap's own verdict on the EOA, kept apart from the chat flag.
         self.x402_eoa_sufficient: bool = False
         self.x402_pot_checked: bool = False
+        # In memory, so a restart always checks.
+        self.last_topup_check: Optional[int] = None
+        # Chains with a top-up tx sent that has not settled yet.
+        self.topup_in_flight_chains: Set[str] = set()
+        # Chains whose latest top-up tx did not settle: their deficits are reported as read.
+        self.topup_failed_chains: Set[str] = set()
 
     def get_circuit_breaker(self, endpoint: str) -> EndpointCircuitBreaker:
         """Get or create the circuit breaker for an endpoint key (e.g. RPC URL)."""

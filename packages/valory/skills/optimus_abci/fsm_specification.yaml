@@ -24,6 +24,7 @@ alphabet_in:
 - STAKING_KPI_NOT_MET
 - STANDBY
 - SUSPICIOUS_ACTIVITY
+- TOPUP_DONE
 - TRANSFER_COMPLETED
 - UNRECOGNIZED
 - UPDATE
@@ -39,6 +40,7 @@ start_states:
 - RegistrationRound
 - RegistrationStartupRound
 states:
+- AgentTopUpRound
 - CallCheckpointRound
 - CheckLateTxHashesRound
 - CheckStakingKPIMetRound
@@ -62,6 +64,10 @@ states:
 - ValidateTransactionRound
 - WithdrawFundsRound
 transition_func:
+    (AgentTopUpRound, DONE): FetchStrategiesRound
+    (AgentTopUpRound, NO_MAJORITY): AgentTopUpRound
+    (AgentTopUpRound, ROUND_TIMEOUT): AgentTopUpRound
+    (AgentTopUpRound, SETTLE): RandomnessTransactionSubmissionRound
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NONE): CallCheckpointRound
@@ -130,6 +136,7 @@ transition_func:
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
+    (PostTxSettlementRound, TOPUP_DONE): FetchStrategiesRound
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
@@ -138,10 +145,10 @@ transition_func:
     (RandomnessTransactionSubmissionRound, NONE): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, ROUND_TIMEOUT): RandomnessTransactionSubmissionRound
-    (RegistrationRound, DONE): FetchStrategiesRound
+    (RegistrationRound, DONE): AgentTopUpRound
     (RegistrationRound, NO_MAJORITY): RegistrationRound
-    (RegistrationStartupRound, DONE): FetchStrategiesRound
-    (ResetAndPauseRound, DONE): FetchStrategiesRound
+    (RegistrationStartupRound, DONE): AgentTopUpRound
+    (ResetAndPauseRound, DONE): AgentTopUpRound
     (ResetAndPauseRound, NO_MAJORITY): RegistrationRound
     (ResetAndPauseRound, RESET_AND_PAUSE_TIMEOUT): RegistrationRound
     (ResetRound, DONE): RandomnessTransactionSubmissionRound

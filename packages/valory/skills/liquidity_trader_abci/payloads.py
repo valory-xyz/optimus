@@ -45,6 +45,11 @@ class CallCheckpointPayload(MultisigTxPayload):
 
 
 @dataclass(frozen=True)
+class AgentTopUpPayload(MultisigTxPayload):
+    """A transaction payload for the AgentTopUpRound."""
+
+
+@dataclass(frozen=True)
 class CheckStakingKPIMetPayload(MultisigTxPayload):
     """A transaction payload for the CheckStakingKPIMetRound."""
 

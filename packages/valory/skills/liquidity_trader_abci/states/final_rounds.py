@@ -26,6 +26,10 @@ class FailedMultiplexerRound(DegenerateRound):
     """FailedMultiplexerRound"""
 
 
+class FinishedAgentTopUpRound(DegenerateRound):
+    """FinishedAgentTopUpRound"""
+
+
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""
 

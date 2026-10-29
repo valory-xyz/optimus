@@ -25,6 +25,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours.agent_top_up import (
+    AgentTopUpBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import (
     CallCheckpointBehaviour,
 )
@@ -55,9 +58,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderA
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
 
-    initial_behaviour_cls = FetchStrategiesBehaviour
+    initial_behaviour_cls = AgentTopUpBehaviour
     abci_app_cls = LiquidityTraderAbciApp  # type: ignore
     behaviours: Set[Type[BaseBehaviour]] = [  # type: ignore[assignment]
+        AgentTopUpBehaviour,
         CallCheckpointBehaviour,
         CheckStakingKPIMetBehaviour,
         GetPositionsBehaviour,

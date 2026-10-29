@@ -63,11 +63,12 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
             # Store withdrawal actions in the standard actions field for normal flow processing
+            serialized_actions = json.dumps(withdrawal_actions, ensure_ascii=True)
             synchronized_data = synchronized_data.update(  # type: ignore[assignment]
                 synchronized_data_class=SynchronizedData,
-                actions=json.dumps(
-                    withdrawal_actions, ensure_ascii=True
-                ),  # Use standard actions field
+                actions=serialized_actions,  # Use standard actions field
+                # Kept apart from actions, which later rounds overwrite.
+                withdrawal_actions=serialized_actions,
                 last_action="WITHDRAWAL_INITIATED",
                 last_executed_action_index=None,  # Reset action index for new actions
             )

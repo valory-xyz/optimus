@@ -1,0 +1,40 @@
+{
+  "contractName": "CLGaugeFactory",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_gauge",
+          "type": "address"
+        }
+      ],
+      "name": "effectivePenaltyConfig",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "minStakeBlocks",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "penaltyRate",
+              "type": "uint256"
+            }
+          ],
+          "internalType": "struct ICLGaugeFactory.PenaltyConfig",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "",
+  "deployedBytecode": "",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

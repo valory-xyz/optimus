@@ -184,6 +184,8 @@ class SharedState(BaseSharedState):
         # Shared price cache passed to strategies via kwargs
         self.strategy_coingecko_price_cache: Dict[str, Any] = {}
         self.strategy_state_restored: bool = False
+        # When each "<chain>:<token>" was last given to the non-whitelisted sweep.
+        self.sweep_attempt_timestamps: Dict[str, float] = {}
         # Per-endpoint circuit breakers for external dependencies.
         self._endpoint_breakers: Dict[str, EndpointCircuitBreaker] = {}
         self._endpoint_breakers_lock = threading.Lock()
@@ -714,6 +716,17 @@ class Params(BaseParams):
         )
         self.velo_token_contract_addresses = json.loads(
             self._ensure("velo_token_contract_addresses", kwargs, str)
+        )
+        self.aero_metarouter_contract_addresses = json.loads(
+            self._ensure("aero_metarouter_contract_addresses", kwargs, str)
+        )
+        self.aero_non_fungible_position_manager_contract_addresses = json.loads(
+            self._ensure(
+                "aero_non_fungible_position_manager_contract_addresses", kwargs, str
+            )
+        )
+        self.aero_reward_token_contract_addresses = json.loads(
+            self._ensure("aero_reward_token_contract_addresses", kwargs, str)
         )
         # Root URL of the Safe Transaction Service the agent talks to.
         # Each fetcher derives its endpoint as

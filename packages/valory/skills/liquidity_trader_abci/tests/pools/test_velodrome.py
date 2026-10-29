@@ -1804,6 +1804,8 @@ class TestEnterClPool:
         mock_rs = MagicMock()
         mock_rs.last_round_transition_timestamp = mock_ts
         b.context.state.round_sequence = mock_rs
+        # Unreadable live split: each band keeps the split cached at selection.
+        b._get_live_band_token_ratios = _mock_gen(None)
         return b
 
     # --- early returns --------------------------------------------------
@@ -2473,6 +2475,137 @@ class TestEnterClPool:
         assert len(result[0]) == 2
         assert result[1] == "0xPosMgr"
 
+    def _mint_calls_for_two_bands(self, b: VelodromePoolBehaviour) -> list:
+        """Enter a 99.2%/0.8% two-band position and return the mint calls."""
+        tr = [
+            [
+                {
+                    "tick_lower": 11,
+                    "tick_upper": 12,
+                    "allocation": 0.992,
+                    "token0_ratio": 0.52,
+                    "token1_ratio": 0.48,
+                },
+                {
+                    "tick_lower": 10,
+                    "tick_upper": 12,
+                    "allocation": 0.008,
+                    "token0_ratio": 0.52,
+                    "token1_ratio": 0.48,
+                },
+            ]
+        ]
+        b._get_cached_price_at_selection = _mock_gen(1.0)
+        b._check_price_movement = _mock_gen(False)
+        b._get_sqrt_price_x96 = _mock_gen(2**96)
+        b._get_token_decimals = _mock_gen(18)
+        b._calculate_band_investment_with_pool_price = MagicMock(return_value=1)
+        b._calculate_individual_token_amounts = MagicMock(
+            side_effect=[(496_000, 496_000), (4_000, 4_000)]
+        )
+        mint_calls: list = []
+
+        def rec_contract_interact(**kwargs):
+            """Record mint calls."""
+            mint_calls.append(kwargs)
+            yield
+            return "0xMint"
+
+        b.contract_interact = rec_contract_interact
+        result = exhaust(
+            b._enter_cl_pool(
+                "0xPool",
+                "0xSafe",
+                ["0xT0", "0xT1"],
+                "optimism",
+                [500_000, 500_000],
+                True,
+                tick_ranges=tr,
+                tick_spacing=1,
+            )
+        )
+        assert result == (["0xMint", "0xMint"], "0xPosMgr")
+        return mint_calls
+
+    def test_band_minimums_follow_the_band_deposit(self) -> None:
+        """Each band's minimums come from its own deposit, not the Safe balance."""
+        mint_calls = self._mint_calls_for_two_bands(self._make_b())
+
+        mins = [(c["amount0_min"], c["amount1_min"]) for c in mint_calls]
+        # slippage_tolerance is 1%
+        assert mins == [(491_040, 491_040), (3_960, 3_960)]
+
+    def test_live_split_overrides_the_cached_split(self) -> None:
+        """A band is split at the live price when the helper can be read."""
+        b = self._make_b()
+        b._get_live_band_token_ratios = _mock_gen((0.24, 0.76))
+        self._mint_calls_for_two_bands(b)
+
+        ratios = [
+            c.args[1:3] for c in b._calculate_individual_token_amounts.call_args_list
+        ]
+        assert ratios == [(0.24, 0.76), (0.24, 0.76)]
+
+    def test_cached_split_used_when_live_split_unreadable(self) -> None:
+        """A band keeps the split cached at selection when the helper cannot be read."""
+        b = self._make_b()
+        self._mint_calls_for_two_bands(b)
+
+        ratios = [
+            c.args[1:3] for c in b._calculate_individual_token_amounts.call_args_list
+        ]
+        assert ratios == [(0.52, 0.48), (0.52, 0.48)]
+
+
+class TestGetLiveBandTokenRatios:
+    """Tests for _get_live_band_token_ratios."""
+
+    BAND = {"tick_lower": 11, "tick_upper": 12}
+
+    def _make_b(self, sqrt_ratios: List[int], amounts: tuple) -> Any:
+        b = make_behaviour()
+        b.get_velodrome_sqrt_ratio_at_tick = MagicMock(
+            side_effect=[_gen_return(r) for r in sqrt_ratios]
+        )
+        b.get_velodrome_amounts_for_liquidity = _mock_gen(amounts)
+        return b
+
+    @pytest.mark.parametrize(
+        "sqrt_price_x96, expected",
+        [(99, (1.0, 0.0)), (201, (0.0, 1.0))],
+    )
+    def test_price_outside_band(self, sqrt_price_x96: int, expected: tuple) -> None:
+        """A price below the band is all token0 and above it all token1."""
+        b = self._make_b([100, 200], (0, 0))
+        result = exhaust(
+            b._get_live_band_token_ratios("base", self.BAND, sqrt_price_x96)
+        )
+        assert result == expected
+
+    def test_price_inside_band_weights_token0_by_price(self) -> None:
+        """Inside the band, token0 is valued at the raw pool price."""
+        sqrt_price_x96 = 2 * 2**96  # raw price 4
+        b = self._make_b([2**96, 3 * 2**96], (100, 600))
+        result = exhaust(
+            b._get_live_band_token_ratios("base", self.BAND, sqrt_price_x96)
+        )
+        assert result == (0.4, 0.6)
+        b.get_velodrome_amounts_for_liquidity.assert_called_once_with(
+            "base", sqrt_price_x96, 2**96, 3 * 2**96, 10**30
+        )
+
+    @pytest.mark.parametrize(
+        "sqrt_ratios, amounts",
+        [([0, 200], (1, 1)), ([100, 0], (1, 1)), ([100, 200], (0, 0))],
+    )
+    def test_unreadable_helper_returns_none(
+        self, sqrt_ratios: List[int], amounts: tuple
+    ) -> None:
+        """An unreadable tick ratio or amount gives no split."""
+        b = self._make_b(sqrt_ratios, amounts)
+        result = exhaust(b._get_live_band_token_ratios("base", self.BAND, 150))
+        assert result is None
+
 
 class TestExitClPool:
     """Tests for _exit_cl_pool."""
@@ -2610,7 +2743,7 @@ class TestExitClPool:
         # Token 2 is not owned by the Safe (e.g. transferred externally).
         owners = {1: "0xSafe", 2: "0xOther", 3: "0xSafe"}
 
-        def owner_stub(token_id, chain):
+        def owner_stub(token_id, chain, protocol=None):
             """Owner stub."""
             yield
             return owners[token_id]
@@ -4563,6 +4696,20 @@ class TestGetGaugeAddress:
         result = exhaust_generator(b.get_gauge_address("0xPool", chain="optimism"))
         assert result is None
 
+    @pytest.mark.parametrize(
+        "answer, expected",
+        [(None, None), (ZERO_ADDRESS, ZERO_ADDRESS), ("", ZERO_ADDRESS)],
+    )
+    def test_read_tells_a_failed_lookup_from_no_gauge(
+        self, answer: Any, expected: Any
+    ) -> None:
+        """read_gauge_address is None only when the voter cannot be read."""
+        b = make_behaviour()
+        b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
+        b.contract_interact = make_contract_interact([answer])
+        result = exhaust_generator(b.read_gauge_address("0xPool", chain="optimism"))
+        assert result == expected
+
 
 class TestStakeLpTokens:
     """Tests for stake_lp_tokens generator."""
@@ -4784,10 +4931,9 @@ class TestClaimRewards:
         """Zero pending rewards returns success with message."""
         b = make_behaviour()
         b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
-        # 1: get_gauge in claim_rewards -> "0xGauge"
-        # 2: get_gauge in get_pending_rewards -> "0xGauge"
-        # 3: earned -> 0
-        b.contract_interact = make_contract_interact(["0xGauge", "0xGauge", 0])
+        # 1: get_gauge in claim_rewards -> "0xGauge" (reused by get_pending_rewards)
+        # 2: earned -> 0
+        b.contract_interact = make_contract_interact(["0xGauge", 0])
         result = exhaust_generator(
             b.claim_rewards("0xLP", chain="optimism", safe_address="0xSafe")
         )
@@ -4798,11 +4944,10 @@ class TestClaimRewards:
         """Claim tx failure returns error."""
         b = make_behaviour()
         b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
-        # 1: get_gauge -> 0xGauge
-        # 2: get_gauge in get_pending_rewards -> 0xGauge
-        # 3: earned -> 100
-        # 4: claim_tx -> None
-        b.contract_interact = make_contract_interact(["0xGauge", "0xGauge", 100, None])
+        # 1: get_gauge -> 0xGauge (reused by get_pending_rewards)
+        # 2: earned -> 100
+        # 3: claim_tx -> None
+        b.contract_interact = make_contract_interact(["0xGauge", 100, None])
         result = exhaust_generator(
             b.claim_rewards("0xLP", chain="optimism", safe_address="0xSafe")
         )
@@ -4813,9 +4958,7 @@ class TestClaimRewards:
         """Happy path with rewards to claim."""
         b = make_behaviour()
         b.params.velodrome_voter_contract_addresses = {"optimism": "0xVoter"}
-        b.contract_interact = make_contract_interact(
-            ["0xGauge", "0xGauge", 100, "0xClaimTxHash"]
-        )
+        b.contract_interact = make_contract_interact(["0xGauge", 100, "0xClaimTxHash"])
         result = exhaust_generator(
             b.claim_rewards("0xLP", chain="optimism", safe_address="0xSafe")
         )

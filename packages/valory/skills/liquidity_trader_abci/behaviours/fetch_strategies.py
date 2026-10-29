@@ -66,6 +66,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     total_withdrawals_kv_key,
     withdrawals_ts_kv_key,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    is_aero_position,
+)
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     Event,
     FetchStrategiesPayload,
@@ -117,6 +120,7 @@ SAFE_TRANSFERS_PAGE_LIMIT = 100
 # a different cadence.
 INITIAL_INVESTMENT_CACHE_TTL_SECONDS = 30 * 60
 WITHDRAWAL_CACHE_TTL_SECONDS = 30 * 60
+ROI_UNAVAILABLE = "N/A"
 
 
 def _transfer_unique_id(transfer: Dict[str, Any]) -> str:
@@ -932,9 +936,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Get position manager address
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain
-            )
+            self._get_position_manager_address(chain, position.get("protocol"))
             if position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
             else self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
@@ -1090,8 +1092,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :param staking_rewards_value: USD value of accrued staking rewards.
         :param airdrop_rewards_value: USD value of airdropped rewards.
         :param withdrawals_value: USD value of cumulative outflows, or
-            ``None`` when the fetcher failed and the caller should skip
-            ROI math to avoid treating a transient blip as zero.
+            ``None`` when the fetcher failed; the ROI figures of the
+            previous snapshot are then carried forward unchanged rather
+            than recomputed against zero withdrawals.
         :param initial_investment: USD value of initial funding inflows.
         :param volume: USD value of all positions ever opened.
         :param allocations: List of open allocations.
@@ -1112,6 +1115,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Convert to percentage by multiplying by 100
             total_roi = None
             partial_roi = None
+            value_in_withdrawals = (
+                float(withdrawals_value) if withdrawals_value is not None else None
+            )
             if (
                 initial_investment is not None
                 and initial_investment > 0
@@ -1146,9 +1152,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     total_roi = None
                     partial_roi = None
             elif withdrawals_value is None:
+                previous = self.portfolio_data or {}
+                total_roi = previous.get("total_roi")
+                partial_roi = previous.get("partial_roi")
+                value_in_withdrawals = previous.get("value_in_withdrawals")
                 self.context.logger.info(
-                    "ROI not calculated - withdrawals fetch failed this cycle; "
-                    "preserving last-known ROI by skipping the recompute."
+                    "ROI not recalculated - withdrawals fetch failed this cycle; "
+                    f"carrying forward last-known Total ROI={total_roi}, "
+                    f"Partial ROI={partial_roi}, Withdrawals={value_in_withdrawals}"
                 )
             else:
                 self.context.logger.info(
@@ -1226,9 +1237,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "portfolio_value": float(total_portfolio_value),
                 "value_in_pools": float(total_pools_value),
                 "value_in_safe": float(total_safe_value),
-                "value_in_withdrawals": (
-                    float(withdrawals_value) if withdrawals_value is not None else None
-                ),
+                "value_in_withdrawals": value_in_withdrawals,
                 "initial_investment": (
                     float(initial_investment)
                     if initial_investment is not None
@@ -1336,12 +1345,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 position, chain, user_address
             )
             if velo_rewards > 0:
-                # Get VELO/AERO token address for the chain
-                velo_token_address = self._get_velo_token_address(chain)
+                # Get the gauge reward token address for the position
+                velo_token_address = self._get_velo_token_address(chain, position)
                 if velo_token_address:
                     # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
                     user_balances[velo_token_address] = velo_rewards
-                    reward_symbol = self._get_velo_family_reward_symbol(chain)
+                    reward_symbol = self._get_velo_family_reward_symbol(chain, position)
                     self.context.logger.info(
                         f"Added {reward_symbol} rewards to position: {velo_rewards}"
                     )
@@ -1353,9 +1362,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         }
 
         # Add the gauge reward token (VELO / AERO) to token_info if rewards exist
-        velo_token_address = self._get_velo_token_address(chain)
+        velo_token_address = self._get_velo_token_address(chain, position)
         if velo_token_address and velo_token_address in user_balances:
-            token_info[velo_token_address] = self._get_velo_family_reward_symbol(chain)
+            token_info[velo_token_address] = self._get_velo_family_reward_symbol(
+                chain, position
+            )
 
         return user_balances, details, token_info
 
@@ -1608,7 +1619,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
         ):
             # Get reward-token address and check if it's in current_balances
-            velo_token_address = self._get_velo_token_address(chain)
+            velo_token_address = self._get_velo_token_address(chain, position)
             if velo_token_address and velo_token_address in current_balances:
                 velo_balance = current_balances[velo_token_address]
                 if velo_balance > 0:
@@ -1616,11 +1627,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        reward_symbol = self._get_velo_family_reward_symbol(chain)
-                        velo_coin_id = self.get_coin_id_from_symbol(
-                            reward_symbol, chain
+                        reward_symbol = self._get_velo_family_reward_symbol(
+                            chain, position
                         )
-                        velo_price = yield from self._fetch_coin_price(velo_coin_id)
+                        velo_price = yield from self._fetch_velo_family_reward_price(
+                            chain, position
+                        )
                         if velo_price is None:
                             # Returning ``None`` signals "could not compute"
                             # to the caller so the position's last-known
@@ -1654,7 +1666,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         if velo_rewards_usd > 0:
             velo_balance = current_balances.get(
-                self._get_velo_token_address(chain), Decimal(0)
+                self._get_velo_token_address(chain, position), Decimal(0)
             )
             velo_price = (
                 velo_rewards_usd / velo_balance if velo_balance > 0 else Decimal(0)
@@ -1842,7 +1854,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate amounts for this position
             amount0, amount1 = yield from self._calculate_position_amounts(
-                position_details, current_tick, sqrt_price_x96, pos, dex_type, chain
+                position_details,
+                current_tick,
+                sqrt_price_x96,
+                pos,
+                dex_type,
+                chain,
+                protocol=position.get("protocol"),
             )
 
             total_token0_qty += Decimal(amount0)
@@ -1875,6 +1893,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         position: Dict[str, Any],
         dex_type: str,
         chain: str,
+        protocol: Optional[str] = None,
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:
         """Calculate token amounts with DEX-specific logic."""
         # Extract position details
@@ -1902,8 +1921,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Use DEX-specific calculation methods
         if dex_type in VELODROME_FAMILY_DEX_TYPES and token_id:
             # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
-            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain
+            position_manager_address = self._get_position_manager_address(
+                chain, protocol
             )
             if position_manager_address:
                 self.context.logger.info(
@@ -1965,10 +1984,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address,
     ):
         """Calculate the user's share value and token balances in a Velodrome CL pool."""
-        position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                chain
-            )
+        position_manager_address = self._get_position_manager_address(
+            chain, position.get("protocol")
         )
         if not position_manager_address:
             self.context.logger.error(
@@ -2010,7 +2027,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         user_balance = None
         if position.get("staked"):
             resolved, gauge_address = yield from self._resolve_velodrome_gauge_address(
-                pool_address, chain
+                pool_address, chain, position.get("gauge_address")
             )
             if not resolved or gauge_address is None:
                 # pool.balanceOf(safe) is 0 for a staked LP because the
@@ -2426,12 +2443,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         token_value_usd = None
 
                 if token_price is None:
-                    velo_token_address = self._get_velo_token_address(chain)
+                    velo_token_address = self._get_velo_token_address(chain, None)
                     if token_address == ZERO_ADDRESS:
                         token_price = yield from self._fetch_zero_address_price()
                     elif token_address.lower() == velo_token_address:
                         velo_coin_id = self.get_coin_id_from_symbol(
-                            self._get_velo_family_reward_symbol(chain), chain
+                            self._get_velo_family_reward_symbol(chain, None), chain
                         )
                         token_price = yield from self._fetch_coin_price(velo_coin_id)
                     else:
@@ -2536,13 +2553,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def calculate_withdrawals_value(self) -> Generator[None, None, Optional[Decimal]]:
         """Aggregate USD withdrawal value across all target investment chains.
 
-        Returns ``None`` if any chain's fetcher fails so the caller can
-        preserve the last-known ROI rather than treating a transient API
-        blip as zero withdrawals (which would inflate Total ROI).
+        Returns ``None`` if any chain's fetcher fails without a cached total
+        to stand in, so the caller can preserve the last-known ROI rather
+        than treating a transient API blip as zero withdrawals (which would
+        inflate Total ROI).
 
         :yield: None.
         :return: Total withdrawals in USD across configured chains, or
-            ``None`` if at least one chain's fetch could not complete.
+            ``None`` if at least one chain's fetch could not complete and
+            no cached total could stand in for it.
         """
         total_withdrawal_value = Decimal(0)
         any_fetch_failed = False
@@ -2570,11 +2589,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[Decimal]]:
         """Compute withdrawals for one chain.
 
-        ``None`` signals a transient fetcher failure that the aggregator
-        must treat as "do not skew the total." A determined zero (no
-        outgoing transfers, unsupported chain, missing safe) is returned
-        as ``Decimal(0)`` so a configured but-quiet chain does not poison
-        the multi-chain total.
+        ``None`` signals a transient fetcher failure with no trustworthy
+        persisted total to fall back on; the aggregator must treat it as
+        "do not skew the total." A determined zero (no outgoing transfers,
+        unsupported chain, missing safe) is returned as ``Decimal(0)`` so
+        a configured but-quiet chain does not poison the multi-chain
+        total.
 
         :param chain: chain name from ``target_investment_chains``.
         :yield: None.
@@ -2623,10 +2643,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             ts_key = withdrawals_ts_kv_key(chain)
             total_key = total_withdrawals_kv_key(chain)
             now_ts = int(self._get_current_timestamp())
+            # A settled tx resets ``ts_key`` to "0" but leaves ``total_key``
+            # in place, so the cached total is only trustworthy while the
+            # timestamp still shows it was computed after the last tx.
+            total_is_post_tx = False
             last_calc = yield from self._read_kv(keys=(ts_key,))
             if last_calc and (ts := last_calc.get(ts_key)):
                 try:
                     age_seconds = now_ts - int(ts)
+                    total_is_post_tx = int(ts) > 0
                 except (ValueError, TypeError):
                     self.context.logger.warning(
                         f"Unparseable {ts_key} {ts!r}; treating cache as expired"
@@ -2637,19 +2662,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # this fallback into a spurious cache hit.
                     age_seconds = -1
                 if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
-                    cached = yield from self._read_kv(keys=(total_key,))
-                    cached_val = cached.get(total_key) if cached else None
-                    if cached_val is not None:
-                        try:
-                            self.context.logger.info(
-                                f"{chain} withdrawal cache hit ({age_seconds}s "
-                                f"old, ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
-                            )
-                            return Decimal(str(cached_val))
-                        except (InvalidOperation, ValueError, TypeError):
-                            self.context.logger.warning(
-                                "Failed to parse cached withdrawal value; recomputing"
-                            )
+                    cached_total = yield from self._read_cached_withdrawals_total(chain)
+                    if cached_total is not None:
+                        self.context.logger.info(
+                            f"{chain} withdrawal cache hit ({age_seconds}s "
+                            f"old, ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
+                        )
+                        return cached_total
 
             all_erc20_transfers = yield from self._track_erc20_transfers_optimism(
                 safe_address,
@@ -2657,15 +2676,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 chain=chain,
             )
             if all_erc20_transfers is None:
-                # ``None`` signals fetcher failure (exception or
-                # mid-pagination error). Skip the kv cache write so a
-                # transient blip doesn't pin ``withdrawal=0`` until the
-                # next TTL boundary, and surface ``None`` to the aggregator.
+                # No kv write on failure, so the next cycle retries.
+                cached_total = None
+                if total_is_post_tx:
+                    cached_total = yield from self._read_cached_withdrawals_total(chain)
+                if cached_total is None:
+                    self.context.logger.warning(
+                        f"Failed to fetch {chain} ERC20 transfers and no "
+                        "trustworthy cached total is available; returning None "
+                        "so the aggregator preserves last-known ROI"
+                    )
+                    return None
                 self.context.logger.warning(
-                    f"Failed to fetch {chain} ERC20 transfers; returning None "
-                    "without caching so the aggregator preserves last-known ROI"
+                    f"Failed to fetch {chain} ERC20 transfers; using the cached "
+                    f"cumulative withdrawals total ${cached_total} until the "
+                    "fetch recovers"
                 )
-                return None
+                return cached_total
             outgoing_erc20_transfers = all_erc20_transfers.get("outgoing", {})
             self.context.logger.info(
                 f"Outgoing {chain} ERC20 transfers: {outgoing_erc20_transfers}"
@@ -2694,6 +2721,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             "returning 0 (withdrawal accounting is missing for this chain)"
         )
         return Decimal(0)
+
+    def _read_cached_withdrawals_total(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Decimal]]:
+        """Read the persisted cumulative withdrawals total for ``chain``.
+
+        :param chain: chain name from ``target_investment_chains``.
+        :yield: None.
+        :return: the cached total, or ``None`` when it was never written
+            or does not parse as a number.
+        """
+        total_key = total_withdrawals_kv_key(chain)
+        cached = yield from self._read_kv(keys=(total_key,))
+        cached_val = cached.get(total_key) if cached else None
+        if cached_val is None:
+            return None
+        try:
+            return Decimal(str(cached_val))
+        except (InvalidOperation, ValueError, TypeError):
+            self.context.logger.warning(
+                f"Unparseable {total_key} {cached_val!r}; ignoring cached total"
+            )
+            return None
 
     def _track_and_calculate_withdrawal_value_mode(
         self,
@@ -3190,8 +3240,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     return
 
-                position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
-                    chain
+                position_manager_address = self._get_position_manager_address(
+                    chain, position.get("protocol")
                 )
                 if not position_manager_address:
                     self.context.logger.warning(
@@ -3240,7 +3290,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if position.get("staked"):
                 resolved, gauge_address = (
                     yield from self._resolve_velodrome_gauge_address(
-                        pool_address, chain
+                        pool_address, chain, position.get("gauge_address")
                     )
                 )
                 if not resolved or gauge_address is None:
@@ -3286,7 +3336,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
     def _resolve_velodrome_gauge_address(
-        self, pool_address: str, chain: str
+        self, pool_address: str, chain: str, gauge_address: Optional[str] = None
     ) -> Generator[None, None, Tuple[bool, Optional[str]]]:
         """Look up the Velodrome / Aerodrome gauge address for a pool.
 
@@ -3300,12 +3350,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         :param pool_address: the LP pool address whose gauge to look up.
         :param chain: chain name used to pick the Voter contract address.
+        :param gauge_address: the gauge stored on an Aero position, returned
+            as is because Aero's voters revert on ``gauges(pool)``.
         :yield: None.
         :return: ``(True, gauge_address)`` on a successful lookup,
             ``(True, None)`` when the chain has no configured Voter or
             the pool has no gauge, and ``(False, None)`` when the Voter
             RPC call itself fails.
         """
+        if gauge_address:
+            return True, gauge_address
+
         voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
         if not voter_address:
             self.context.logger.warning(
@@ -5227,7 +5282,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if is_cl_pool:
                 # For CL pools, we need the gauge address
                 gauge_address = yield from pool.get_gauge_address(
-                    self, pool_address, chain=chain
+                    self,
+                    pool_address,
+                    chain=chain,
+                    gauge_address=position.get("gauge_address"),
                 )
                 if not gauge_address:
                     self.context.logger.warning(
@@ -5237,27 +5295,42 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 positions_data = position.get("positions", [])
                 token_ids = [pos["token_id"] for pos in positions_data]
                 pending_rewards = 0
-                for token_id in token_ids:
-                    rewards = yield from pool.get_cl_pending_rewards(
+                if is_aero_position(position):
+                    # Aero CL gauges report one account-wide earned amount.
+                    pending_rewards = yield from pool.get_cl_pending_rewards(
                         self,
                         account=user_address,
                         gauge_address=gauge_address,
                         chain=chain,
-                        token_id=token_id,
+                        protocol=position["protocol"],
                     )
-                    if rewards:
-                        pending_rewards += rewards
+                else:
+                    for token_id in token_ids:
+                        rewards = yield from pool.get_cl_pending_rewards(
+                            self,
+                            account=user_address,
+                            gauge_address=gauge_address,
+                            chain=chain,
+                            token_id=token_id,
+                        )
+                        if rewards:
+                            pending_rewards += rewards
             else:
                 # For regular pools
                 pending_rewards = yield from pool.get_pending_rewards(
-                    self, lp_token=pool_address, user_address=user_address, chain=chain
+                    self,
+                    lp_token=pool_address,
+                    user_address=user_address,
+                    chain=chain,
+                    gauge_address=position.get("gauge_address"),
                 )
 
             if pending_rewards and pending_rewards > 0:
                 # Convert from wei to VELO (18 decimals)
                 velo_rewards = Decimal(pending_rewards) / Decimal(10**18)
+                reward_symbol = self._get_velo_family_reward_symbol(chain, position)
                 self.context.logger.info(
-                    f"Found VELO rewards: {velo_rewards} for position {pool_address}"
+                    f"Found {reward_symbol} rewards: {velo_rewards} for position {pool_address}"
                 )
                 return velo_rewards
 
@@ -5269,23 +5342,33 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return Decimal(0)
 
-    def _get_velo_token_address(self, chain: str) -> Optional[str]:
-        """Get the VELO token address for the specified chain from params."""
+    def _get_velo_token_address(
+        self, chain: str, position: Optional[Dict[str, Any]]
+    ) -> Optional[str]:
+        """Get the gauge reward token address for the chain, or for an Aero position."""
+        if position is not None and is_aero_position(position):
+            return self.params.aero_reward_token_contract_addresses.get(chain)
         velo_addresses = self.params.velo_token_contract_addresses
         return velo_addresses.get(chain)
 
-    def _get_velo_family_reward_symbol(self, chain: str) -> str:
-        """Return the LP-gauge reward token symbol for the chain.
-
-        Aerodrome on Base distributes AERO; Velodrome on Optimism and Mode
-        distributes VELO. ``_get_velo_token_address`` already returns the
-        correct contract per chain, but a few sites still need the symbol
-        for UI labels and CoinGecko price lookups.
-
-        :param chain: chain name used to pick the reward token symbol.
-        :return: ``"AERO"`` on Base, ``"VELO"`` on every other chain.
-        """
+    def _get_velo_family_reward_symbol(
+        self, chain: str, position: Optional[Dict[str, Any]]
+    ) -> str:
+        """Return the gauge reward token symbol for the chain, or for an Aero position."""
+        if position is not None and is_aero_position(position):
+            return "AERO" if chain == Chain.BASE.value else "xAERO"
         return "AERO" if chain == Chain.BASE.value else "VELO"
+
+    def _fetch_velo_family_reward_price(
+        self, chain: str, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Fetch the USD price of the gauge reward token a position earns."""
+        if is_aero_position(position):
+            return (yield from self._fetch_aero_price())
+        coin_id = self.get_coin_id_from_symbol(
+            self._get_velo_family_reward_symbol(chain, None), chain
+        )
+        return (yield from self._fetch_coin_price(coin_id))
 
     def _validate_velodrome_v2_pool_addresses(self) -> Generator[None, None, None]:
         """Validate Velodrome v2 pool addresses for all positions."""
@@ -5410,6 +5493,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             == self.params.airdrop_contract_address.lower()
         )
 
+    @staticmethod
+    def _format_roi(roi: Optional[float], decimals: int) -> str:
+        """Render an ROI percentage for the performance metrics.
+
+        :param roi: the ROI percentage, or ``None``.
+        :param decimals: number of decimal places to render.
+        :return: the display string.
+        """
+        if roi is None:
+            return ROI_UNAVAILABLE
+        return f"{float(roi):.{decimals}f}%"
+
     def _update_agent_performance_metrics(self):
         """Update agent performance metrics with portfolio balance and ROI."""
         try:
@@ -5418,31 +5513,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Get portfolio balance and ROI from current portfolio data
             portfolio_balance = 0.0
-            total_roi_percentage = 0.0
-            partial_roi_percentage = 0.0
+            total_roi: Optional[float] = None
+            partial_roi: Optional[float] = None
 
             if self.portfolio_data:
                 # Use portfolio_value instead of total_value_usd
                 portfolio_balance = float(
                     self.portfolio_data.get("portfolio_value", 0.0)
                 )
+                total_roi = self.portfolio_data.get("total_roi")
+                partial_roi = self.portfolio_data.get("partial_roi")
 
-                # Use pre-calculated ROI percentages from portfolio data.
-                # ``total_roi`` / ``partial_roi`` are present in the dict but
-                # may be ``None`` (e.g. when the withdrawal fetch failed and
-                # ``_create_portfolio_data`` skipped the ROI recompute).
-                # ``dict.get(k, default)`` only returns the default when the
-                # key is absent, so ``None`` would otherwise reach
-                # ``float(None)`` and raise ``TypeError`` — silently breaking
-                # this whole update inside the surrounding try/except.
-                raw_total_roi = self.portfolio_data.get("total_roi")
-                total_roi_percentage = (
-                    float(raw_total_roi) if raw_total_roi is not None else 0.0
-                )
-                raw_partial_roi = self.portfolio_data.get("partial_roi")
-                partial_roi_percentage = (
-                    float(raw_partial_roi) if raw_partial_roi is not None else 0.0
-                )
+            total_roi_text = self._format_roi(total_roi, decimals=2)
+            partial_roi_text = self._format_roi(partial_roi, decimals=1)
 
             # Update metrics
             self.agent_performance["metrics"] = [
@@ -5455,8 +5538,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 {
                     "name": "Total ROI",
                     "is_primary": False,
-                    "description": f"Total return on investment including staking rewards. Partial ROI (trading only): <b>{partial_roi_percentage:.1f}%</b>",
-                    "value": f"{total_roi_percentage:.2f}%",
+                    "description": f"Total return on investment including staking rewards. Partial ROI (trading only): <b>{partial_roi_text}</b>",
+                    "value": total_roi_text,
                 },
             ]
 
@@ -5465,7 +5548,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.store_agent_performance()
 
             self.context.logger.info(
-                f"Updated agent performance: Balance=${portfolio_balance:.2f}, Total ROI={total_roi_percentage:.1f}%, Partial ROI={partial_roi_percentage:.1f}%"
+                f"Updated agent performance: Balance=${portfolio_balance:.2f}, Total ROI={total_roi_text}, Partial ROI={partial_roi_text}"
             )
 
         except Exception as e:

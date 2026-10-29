@@ -55,7 +55,6 @@ from packages.valory.customs.velodrome_pools_search.velodrome_pools_search impor
     get_token_decimals,
     read_aero_pool_state,
     run,
-    set_cached_price,
     sharpe_ratio_from_daily_returns,
 )
 
@@ -730,8 +729,27 @@ def _live_pool(kind: str = "stable", **extra: Any) -> Dict[str, Any]:
 class TestGetOpportunitiesForAero:
     """Tests for get_opportunities_for_aero."""
 
-    def _run(self, pools: Any, price: Optional[float] = 0.7, **kwargs: Any) -> Any:
+    def _run(
+        self,
+        pools: Any,
+        price: Optional[float] = 0.7,
+        coingecko_prices: Optional[Dict[str, float]] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Run the search; given CoinGecko prices, the real IL score fetches the histories."""
         metrics = {"apr": 12.0, "tvl": 50_000.0, "daily_returns": [0.001, 0.002]}
+        if coingecko_prices is None:
+            il_score = patch(
+                f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.01
+            )
+        else:
+            client = MagicMock()
+            client.get_coin_market_chart_range_by_id.side_effect = (
+                lambda id, **_: {  # pylint: disable=redefined-builtin
+                    "prices": [[0, 0.9], [1, coingecko_prices[id]]]
+                }
+            )
+            il_score = patch(f"{MODULE}.CoinGeckoAPI", return_value=client)
         with (
             patch(f"{MODULE}.get_aero_pools", return_value=pools),
             patch(f"{MODULE}.get_aero_price_usd", return_value=price),
@@ -741,9 +759,9 @@ class TestGetOpportunitiesForAero:
                 f"{MODULE}.calculate_tick_lower_and_upper_velodrome",
                 return_value=[{"tick_lower": -1, "tick_upper": 1, "allocation": 1.0}],
             ),
-            patch(
-                f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.01
-            ),
+            patch(f"{MODULE}.is_pro_api_key", return_value=False),
+            patch(f"{MODULE}.time.sleep"),
+            il_score,
         ):
             return get_opportunities_for_aero(
                 [],
@@ -783,19 +801,6 @@ class TestGetOpportunitiesForAero:
         assert cl["is_cl_pool"] is True
         assert cl["tick_bands"][0]["tick_lower"] == -1
 
-    @staticmethod
-    def _price_cache(msusd_price: float) -> Dict[str, Any]:
-        """Return a price cache holding the histories the IL risk score fetched."""
-        cache: Dict[str, Any] = {}
-        for coin_id, price in (
-            ("usd-coin", 1.0),
-            ("electronic-usd", 0.999),
-            ("metronome-synth-usd", msusd_price),
-        ):
-            history = {"prices": [[0, 1.0], [1, price]]}
-            set_cached_price(coin_id, 90, history, cache)
-        return cache
-
     def _msusd_and_eusd_pools(self, msusd_price: float, **kwargs: Any) -> List[str]:
         msusd_pool = _live_pool(
             id=_address(3),
@@ -807,7 +812,12 @@ class TestGetOpportunitiesForAero:
         )
         opportunities = self._run(
             [_live_pool(), msusd_pool],
-            price_cache=self._price_cache(msusd_price),
+            coingecko_prices={
+                "usd-coin": 1.0,
+                "electronic-usd": 0.999,
+                "metronome-synth-usd": msusd_price,
+            },
+            price_cache={},
             **kwargs,
         )
         return [opportunity["pool_address"] for opportunity in opportunities]

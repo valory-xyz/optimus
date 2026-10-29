@@ -1774,7 +1774,7 @@ class TestGetSafeBalancesFromSafeApi:
         return b
 
     def test_stale_payload_amounts_refreshed_onchain(self) -> None:
-        """A stale payload carries the live amounts, not the cached ones."""
+        """A stale payload's cached amounts are replaced by the live on-chain ones."""
         b = self._stale_usdt_b()
         b._get_native_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
         b._get_token_balance = _make_gen(1705125)  # type: ignore[assignment,method-assign]

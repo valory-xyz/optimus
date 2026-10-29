@@ -3314,7 +3314,7 @@ AERO_REFERENCE_POSITION_USD = 1000.0
 AERO_POOL_CACHE_PREFIX = "aero_pools"
 AERO_POOL_CACHE_TTL = 30 * SECONDS_PER_DAY
 AERO_PRICE_CACHE_PREFIX = "aero_spot"
-# Pool tokens are valued at $1, so a token priced further below that is not entered.
+# Pool tokens are valued at $1, so a pool holding one priced further below is skipped.
 DEFAULT_MAX_STABLE_DEPEG = 0.02
 AERO_IL_PRICE_DAYS = 90
 WAD = 10**18

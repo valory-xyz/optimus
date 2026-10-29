@@ -1518,6 +1518,38 @@ class TestGetSafeBalancesFromSafeApi:
         assert len(result) == 1
         assert result[0]["asset_symbol"] == "VELO"
 
+    def test_reward_token_listed_by_safe_api_is_not_duplicated(self) -> None:
+        """A reward token SafeApi lists keeps one entry; an unlisted one is added."""
+        velo = "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db"
+        olas = "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"
+        b = _make_optimism_b()
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (
+                True,
+                [
+                    {
+                        "tokenAddress": velo,
+                        "token": {"symbol": "VELO"},
+                        "balance": "100",
+                        "fiatBalance": "0.95",
+                        "fiatConversion": "0.0095",
+                    }
+                ],
+            )
+        )
+        b._fetch_reward_balances = _make_gen(  # type: ignore[assignment,method-assign]
+            [
+                {"asset_symbol": "VELO", "address": velo.lower(), "balance": 100},
+                {"asset_symbol": "OLAS", "address": olas, "balance": 7},
+            ]
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        assert [(r["asset_symbol"], r["balance"]) for r in result] == [
+            ("VELO", 100),
+            ("OLAS", 7),
+        ]
+        assert result[0]["fiat_balance"] == "0.95"
+
     def test_api_failure_falls_back_to_cache(self) -> None:
         """API fails - fall back to KV-cached balances."""
         cached_data = [

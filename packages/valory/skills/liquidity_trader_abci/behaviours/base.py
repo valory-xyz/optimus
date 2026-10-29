@@ -926,10 +926,17 @@ class LiquidityTraderBaseBehaviour(
             chain, safe_address, balances
         )
 
-        # Add separate reward token balance fetch
+        # Add separate reward token balance fetch. A reward token SafeApi
+        # already listed keeps its SafeApi entry, which carries the fiat fields.
         reward_balances = yield from self._fetch_reward_balances(chain)
-        if reward_balances:
-            balances.extend(reward_balances)
+        already_have = {
+            (b.get("address") or "").lower() for b in balances if b.get("address")
+        }
+        balances.extend(
+            reward
+            for reward in reward_balances
+            if (reward.get("address") or "").lower() not in already_have
+        )
 
         self.context.logger.info(
             f"Retrieved {len(balances)} token balances from SafeApi"

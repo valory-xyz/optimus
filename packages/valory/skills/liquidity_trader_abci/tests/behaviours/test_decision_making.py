@@ -926,6 +926,50 @@ class TestPostExecuteExitPool:
         action = {"pool_address": "0xNONE", "description": "Withdrawal: exit pool"}
         _exhaust(b._post_execute_exit_pool([action], 0))
 
+    def test_closed_rows_and_other_chains_keep_their_exit(self):
+        """Only the open row on the action's chain is closed by this exit."""
+        b = _make_behaviour()
+        b.synchronized_data.final_tx_hash = "0xexit"
+        closed = {
+            "pool_address": "0xPOOL",
+            "chain": "optimism",
+            "status": PositionStatus.CLOSED.value,
+            "exit_tx_hash": "0xold",
+            "exit_timestamp": 500,
+        }
+        other_chain = {
+            "pool_address": "0xPOOL",
+            "chain": "mode",
+            "status": PositionStatus.OPEN.value,
+        }
+        b.current_positions = [
+            dict(closed),
+            dict(other_chain),
+            {
+                "pool_address": "0xPOOL",
+                "chain": "optimism",
+                "status": PositionStatus.OPEN.value,
+            },
+        ]
+        b.store_current_positions = MagicMock()
+        b._get_current_timestamp = MagicMock(return_value=2000)
+        b._record_tip_performance = MagicMock()
+        b._record_pool_exited = _make_gen_method(None)
+        b.sleep = _make_gen_method(None)
+
+        action = {
+            "pool_address": "0xPOOL",
+            "chain": "optimism",
+            "dex_type": "UniswapV3",
+        }
+        _exhaust(b._post_execute_exit_pool([action], 0))
+
+        assert b.current_positions[0] == closed
+        assert b.current_positions[1] == other_chain
+        assert b.current_positions[2]["status"] == PositionStatus.CLOSED.value
+        assert b.current_positions[2]["exit_tx_hash"] == "0xexit"
+        b._record_tip_performance.assert_called_once_with(b.current_positions[2])
+
     def test_non_matching_pool(self):
         """Test non matching pool."""
         b = _make_behaviour()
@@ -1626,6 +1670,26 @@ class TestPostExecuteStakeLpTokens:
         b._post_execute_stake_lp_tokens([action], 0)
         assert b.current_positions[0]["staked"] is True
 
+    def test_settled_stake_resets_restake_attempts(self):
+        """A settled stake gives a later re-stake of the position a fresh budget."""
+        b = _make_behaviour()
+        b.synchronized_data.final_tx_hash = "0xstake"
+        b._get_current_timestamp = MagicMock(return_value=3000)
+        b.current_positions = [
+            {
+                "pool_address": "0xPOOL",
+                "chain": "optimism",
+                "status": PositionStatus.OPEN.value,
+                "restake_attempts": 2,
+                "restake_attempted_at": 2000,
+            },
+        ]
+        b.store_current_positions = MagicMock()
+        action = {"pool_address": "0xPOOL", "chain": "optimism", "is_cl_pool": False}
+        b._post_execute_stake_lp_tokens([action], 0)
+        assert "restake_attempts" not in b.current_positions[0]
+        assert "restake_attempted_at" not in b.current_positions[0]
+
     def test_cl_pool(self):
         """Test cl pool."""
         b = _make_behaviour()
@@ -1666,6 +1730,7 @@ class TestPostExecuteUnstakeLpTokens:
             {
                 "pool_address": "0xPOOL",
                 "chain": "optimism",
+                "status": PositionStatus.OPEN.value,
                 "staked": True,
                 "staked_cl_pool": True,
             },
@@ -1682,7 +1747,12 @@ class TestPostExecuteUnstakeLpTokens:
         b.synchronized_data.final_tx_hash = "0xunstake"
         b._get_current_timestamp = MagicMock(return_value=4000)
         b.current_positions = [
-            {"pool_address": "0xPOOL", "chain": "optimism", "staked": True},
+            {
+                "pool_address": "0xPOOL",
+                "chain": "optimism",
+                "status": PositionStatus.OPEN.value,
+                "staked": True,
+            },
         ]
         b.store_current_positions = MagicMock()
         action = {"pool_address": "0xPOOL", "chain": "optimism"}
@@ -4706,6 +4776,17 @@ class TestFetchRoutes:
         result = _exhaust(b.fetch_routes([], self._base_action()))
         assert result is None
 
+    def test_amount_rounding_to_zero_is_not_sent(self):
+        """An 18-decimal balance that rounds down to 0 wei never reaches LiFi."""
+        b = _make_behaviour()
+        b._read_investing_paused = _make_gen_method(False)
+        b._get_balance = MagicMock(return_value=999)
+        b._get_token_decimals = _make_gen_method(18)
+        b.get_http_response = MagicMock()
+        result = _exhaust(b.fetch_routes(self._positions(), self._base_action()))
+        assert result is None
+        b.get_http_response.assert_not_called()
+
     def test_success(self):
         """Test success."""
         b = _make_behaviour()
@@ -6776,14 +6857,32 @@ class TestPostExecuteUnstakeLpTokensLoop:
         b._get_current_timestamp = MagicMock(return_value=4000)
         b.current_positions = [
             {"pool_address": "0xOTHER", "chain": "optimism", "staked": True},
-            {"pool_address": "0xPOOL", "chain": "mode", "staked": True},
-            {"pool_address": "0xPOOL", "chain": "optimism", "staked": True},
+            {
+                "pool_address": "0xPOOL",
+                "chain": "mode",
+                "status": PositionStatus.OPEN.value,
+                "staked": True,
+            },
+            {
+                "pool_address": "0xPOOL",
+                "chain": "optimism",
+                "status": PositionStatus.CLOSED.value,
+                "staked": True,
+            },
+            {
+                "pool_address": "0xPOOL",
+                "chain": "optimism",
+                "status": PositionStatus.OPEN.value,
+                "staked": True,
+            },
         ]
         b.store_current_positions = MagicMock()
         action = {"pool_address": "0xPOOL", "chain": "optimism"}
         b._post_execute_unstake_lp_tokens([action], 0)
-        assert b.current_positions[2]["staked"] is False
+        assert b.current_positions[3]["staked"] is False
         assert b.current_positions[0]["staked"] is True
+        assert b.current_positions[1]["staked"] is True
+        assert b.current_positions[2]["staked"] is True
 
     def test_no_matching_position(self):
         """Test no matching position."""
@@ -7296,8 +7395,12 @@ class TestPoolExitedEvent:
             **extra,
         }
 
-    def _exit(self, b) -> List[dict]:
-        action = {"pool_address": "0xPOOL", "dex_type": DexType.VELODROME.value}
+    def _exit(self, b, chain: str = "optimism") -> List[dict]:
+        action = {
+            "pool_address": "0xPOOL",
+            "chain": chain,
+            "dex_type": DexType.VELODROME.value,
+        }
         _exhaust(b._post_execute_exit_pool([action], 0))
         return _feed_events(b.params.store_path)
 
@@ -7462,7 +7565,7 @@ class TestPoolExitedEvent:
     def test_without_safe_address(self, tmp_path: Path) -> None:
         """A chain with no Safe gives no result."""
         b = self._behaviour(tmp_path, [self._position(chain="base")], {"logs": []})
-        assert _fields(self._exit(b)[0])["Result"] == "Not available"
+        assert _fields(self._exit(b, chain="base")[0])["Result"] == "Not available"
         b.get_transaction_receipt.assert_not_called()
 
 
@@ -7687,7 +7790,11 @@ class TestFeedFailuresDoNotStopTheAgent:
             {"logs": [{**_transfer_log(TOKEN0, SAFE, 1), "data": "0xzz"}]},
         )
         b._convert_amounts_to_usd = _make_gen_method(1.0)
-        action = {"pool_address": "0xPOOL", "dex_type": DexType.VELODROME.value}
+        action = {
+            "pool_address": "0xPOOL",
+            "chain": "optimism",
+            "dex_type": DexType.VELODROME.value,
+        }
         _exhaust(b._post_execute_exit_pool([action], 0))
         assert _feed_events(tmp_path) == []
         assert b.current_positions[0]["status"] == PositionStatus.CLOSED.value

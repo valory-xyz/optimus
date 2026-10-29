@@ -61,6 +61,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
+    round_down_swap_amount,
 )
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
@@ -69,12 +70,21 @@ from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    is_aero_position,
+)
 from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
 
 MIN_SWAP_VALUE_USD = 0.5
+# An unroutable token is retried this often, so it cannot hold every cycle.
+SWEEP_RETRY_COOLDOWN_SECONDS = 6 * 3600
+# Stake attempts per Aero position before the cycle stops waiting on it, and how
+# long it waits before trying again, so a transient failure cannot strand a stake.
+MAX_AERO_RESTAKE_ATTEMPTS = 3
+AERO_RESTAKE_RETRY_COOLDOWN_SECONDS = 6 * 3600
 
 
 STRATEGY_BACKOFF_KV_KEY = "strategy_backoff_state"
@@ -120,11 +130,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.set_done()
                 return
 
-            # Check minimum hold period
-            # Check if no current positions and uninvested ETH, prepare swap to USDC
+            legacy_exit_actions = (
+                yield from self._prepare_legacy_velodrome_exit_actions()
+            )
+            if legacy_exit_actions is not None:
+                if legacy_exit_actions:
+                    # Reset the backoff so the next cycle evaluates Aero pools.
+                    yield from self._restore_strategy_state()
+                    self._update_strategy_backoff(legacy_exit_actions)
+                    yield from self._persist_strategy_state()
+                # Nothing new is entered while a legacy position is still open.
+                yield from self.send_actions(legacy_exit_actions)
+                return
+
+            restake_actions = yield from self._prepare_aero_restake_actions()
+            if restake_actions:
+                yield from self.send_actions(restake_actions)
+                return
+
             actions = yield from self.check_and_prepare_non_whitelisted_swaps()
             if actions:
                 yield from self.send_actions(actions)
+                return
 
             (
                 should_proceed,
@@ -174,6 +201,152 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Send final actions
             yield from self.send_actions(actions)
+
+    def _prepare_legacy_velodrome_exit_actions(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Build exit actions for open legacy Velodrome-family positions, whose gauges no longer earn."""
+        legacy_positions = [
+            position
+            for position in self.current_positions
+            if position.get("status") == PositionStatus.OPEN.value
+            and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
+            and not is_aero_position(position)
+        ]
+        if not legacy_positions:
+            return None
+
+        self.context.logger.info(
+            f"Exiting {len(legacy_positions)} legacy Velodrome/Aerodrome position(s)"
+        )
+        pool = self.pools.get(DexType.VELODROME.value)
+        actions: List[Dict[str, Any]] = []
+        exiting: List[Dict[str, Any]] = []
+        for position in legacy_positions:
+            if position.get("is_cl_pool"):
+                # A legacy CL gauge's withdraw pays out the emissions itself.
+                unstake_action = (
+                    yield from self._build_unstake_lp_tokens_action_verified(position)
+                )
+                if unstake_action:
+                    actions.append(unstake_action)
+                exiting.append(position)
+                continue
+
+            # A legacy v2 gauge's withdraw only accrues, so claim before it.
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            pending_rewards = yield from pool.read_pending_rewards(
+                self, lp_token=pool_address, user_address=safe_address, chain=chain
+            )
+            if pending_rewards is None:
+                # Unstaking without the claim would leave the rewards behind.
+                self.context.logger.warning(
+                    f"Could not read the pending rewards of legacy pool "
+                    f"{pool_address}; retrying its exit next cycle"
+                )
+                continue
+            staked_balance = yield from pool.read_staked_balance(
+                self, lp_token=pool_address, user_address=safe_address, chain=chain
+            )
+            if staked_balance is None:
+                # Exiting without the unstake would find no LP tokens in the Safe.
+                self.context.logger.warning(
+                    f"Could not read the staked balance of legacy pool "
+                    f"{pool_address}; retrying its exit next cycle"
+                )
+                continue
+            if pending_rewards:
+                claim_action = self._build_claim_staking_rewards_action(position)
+                if claim_action:
+                    actions.append(claim_action)
+            if staked_balance:
+                unstake_action = self._build_unstake_lp_tokens_action(position)
+                if unstake_action:
+                    actions.append(unstake_action)
+            exiting.append(position)
+
+        actions.extend(
+            self._prepare_exit_pool_actions(exiting, purpose="Aero migration")
+        )
+        return actions
+
+    def _prepare_aero_restake_actions(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Build stake actions for open Aero positions whose stake did not settle, as they earn nothing unstaked."""
+        pool = self.pools.get(DexType.VELODROME.value)
+        actions: List[Dict[str, Any]] = []
+        for position in self.current_positions:
+            gauge_address = position.get("gauge_address")
+            if (
+                position.get("status") != PositionStatus.OPEN.value
+                or not is_aero_position(position)
+                or not gauge_address
+                or position.get("staked")
+            ):
+                continue
+
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            needs_stake: Optional[bool] = None
+            if position.get("is_cl_pool"):
+                token_ids = self._position_token_ids(position)
+                staked_ids, failed = yield from self._filter_staked_token_ids(
+                    pool, safe_address, token_ids, chain, gauge_address
+                )
+                if not failed:
+                    needs_stake = len(staked_ids) < len(token_ids)
+            else:
+                staked_balance = yield from pool.read_staked_balance(
+                    self,
+                    lp_token=pool_address,
+                    user_address=safe_address,
+                    chain=chain,
+                    gauge_address=gauge_address,
+                )
+                lp_balance = yield from self._get_token_balance(
+                    chain, safe_address, pool_address
+                )
+                if staked_balance is not None and lp_balance is not None:
+                    needs_stake = staked_balance == 0 and lp_balance > 0
+
+            if needs_stake is None:
+                self.context.logger.warning(
+                    f"Could not read the stake of Aero pool {pool_address} in gauge "
+                    f"{gauge_address}; checking it again next cycle"
+                )
+                continue
+            if not needs_stake:
+                continue
+
+            attempts = position.get("restake_attempts", 0)
+            now = self._get_current_timestamp()
+            if attempts >= MAX_AERO_RESTAKE_ATTEMPTS:
+                attempted_at = position.get("restake_attempted_at", 0)
+                if now - attempted_at < AERO_RESTAKE_RETRY_COOLDOWN_SECONDS:
+                    self.context.logger.warning(
+                        f"Aero pool {pool_address} is still not staked in gauge "
+                        f"{gauge_address} after {attempts} attempts; retrying after "
+                        f"{AERO_RESTAKE_RETRY_COOLDOWN_SECONDS}s"
+                    )
+                    continue
+                attempts = 0
+
+            self.context.logger.info(
+                f"Aero pool {pool_address} is open but not staked in gauge "
+                f"{gauge_address}; staking it"
+            )
+            stake_action = self._build_stake_lp_tokens_action(position)
+            if stake_action:
+                position["restake_attempts"] = attempts + 1
+                position["restake_attempted_at"] = now
+                actions.append(stake_action)
+        if actions:
+            self.store_current_positions()
+        return actions
 
     def send_actions(self, actions: Optional[List[Any]] = None) -> Generator:
         """Send actions and complete the round."""
@@ -923,7 +1096,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         if hasattr(
                             self, "_get_velo_token_address"
                         ):  # pragma: no branch
-                            velo_token_address = self._get_velo_token_address(chain)
+                            velo_token_address = self._get_velo_token_address(
+                                chain, position
+                            )
                             if velo_token_address:
                                 result[velo_token_address] = float(velo_rewards)
                                 self.context.logger.info(
@@ -1486,20 +1661,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def check_and_prepare_non_whitelisted_swaps(
         self,
-    ) -> Any:
-        """Check all funds in safe and swap non-whitelisted assets to USDC if value > $5."""
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Build a USDC swap for one non-whitelisted token worth at least MIN_SWAP_VALUE_USD."""
         try:
-            actions = []
             target_chain = self.params.target_investment_chains[0]
-            usdc_address = self._get_usdc_address(target_chain)
-
-            if not usdc_address:
+            if not self._get_usdc_address(target_chain):
                 self.context.logger.warning(
                     f"Could not get USDC address for {target_chain}"
                 )
                 return []
 
-            # Get all positions to check assets in safe
+            now = time_module.time()
+            attempts = self.shared_state.sweep_attempt_timestamps
+            for key in [
+                k
+                for k, attempted_at in attempts.items()
+                if now - attempted_at >= SWEEP_RETRY_COOLDOWN_SECONDS
+            ]:
+                del attempts[key]
+
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
                 whitelisted_tokens = [
@@ -1523,7 +1703,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     ):
                         continue
 
-                    self.context.logger.info("Preparing swap action to USDC.")
+                    # One swap per cycle, so an unroutable token costs only its
+                    # own cycle until its cooldown ends.
+                    attempt_key = f"{chain}:{asset_address}"
+                    if attempt_key in attempts:
+                        continue
 
                     # Use base class method to build swap action
                     swap_action = self._build_swap_to_usdc_action(
@@ -1533,25 +1717,57 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         funds_percentage=1.0,  # Use all available balance
                         description=f"Swap non-whitelisted {asset_symbol} to USDC",
                     )
-
-                    if swap_action:
-                        actions.append(swap_action)
-                        self.context.logger.info(
-                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
-                            f"{asset_symbol} -> USDC"
-                        )
-                    else:
+                    if not swap_action:
                         self.context.logger.error(
                             f"Failed to create swap action for {asset_symbol}"
                         )
+                        continue
 
-            return actions
+                    value_usd = yield from self._get_sweep_value_usd(
+                        chain, asset_address, balance  # type: ignore[arg-type]
+                    )
+                    if value_usd is None:
+                        self.context.logger.warning(
+                            f"Could not value {asset_symbol} on {chain}; "
+                            f"retrying it after the sweep cooldown"
+                        )
+                        attempts[attempt_key] = now
+                        continue
+                    if value_usd < MIN_SWAP_VALUE_USD:
+                        self.context.logger.info(
+                            f"Not sweeping {asset_symbol} on {chain}: worth "
+                            f"${value_usd:.4f}, below ${MIN_SWAP_VALUE_USD}"
+                        )
+                        continue
+
+                    attempts[attempt_key] = now
+                    self.context.logger.info(
+                        f"Prepared {asset_symbol} to USDC swap on {chain}"
+                    )
+                    return [swap_action]
+
+            return []
 
         except Exception as e:
             self.context.logger.error(
                 f"Error in check_and_prepare_non_whitelisted_swaps: {str(e)}"
             )
             return []
+
+    def _get_sweep_value_usd(
+        self, chain: str, token_address: str, balance: int
+    ) -> Generator[None, None, Optional[float]]:
+        """Return the USD value of the part of a balance a swap would send, or None when unknown."""
+        decimals = yield from self._get_token_decimals(chain, token_address)
+        if decimals is None:
+            return None
+        amount = round_down_swap_amount(balance, decimals)
+        if amount <= 0:
+            return 0.0
+        price = yield from self._fetch_token_price(token_address, chain)
+        if not price:
+            return None
+        return amount / 10**decimals * price
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
@@ -2403,7 +2619,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # ==================== POSITION EXIT WITH STAKING ====================
         if self.position_to_exit:
             # Step 1: Claim staking rewards before exit (if position has staking)
-            if self._has_staking_metadata(self.position_to_exit):
+            is_staked = yield from self._is_position_staked(self.position_to_exit)
+            if is_staked:
                 # Step 2: Unstake LP tokens before exit.
                 unstake_action = (
                     yield from self._build_unstake_lp_tokens_action_verified(
@@ -3525,6 +3742,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "description": f"Stake LP tokens for {pool_address}",
                 }
 
+            if opportunity.get("gauge_address"):
+                stake_action["gauge_address"] = opportunity["gauge_address"]
+            if opportunity.get("protocol"):
+                stake_action["protocol"] = opportunity["protocol"]
+
             self.context.logger.info(f"Created stake LP tokens action: {stake_action}")
             return stake_action
 
@@ -3576,6 +3798,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Add gauge address if available
             if gauge_address:
                 claim_action["gauge_address"] = gauge_address
+            if position.get("protocol"):
+                claim_action["protocol"] = position["protocol"]
 
             self.context.logger.info(
                 f"Created claim staking rewards action: {claim_action}"
@@ -3591,8 +3815,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_gauge_address_for_position(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[str]]:
-        """Get gauge address for a position using voter contract."""
+        """Get gauge address for a position, from the position or the legacy voter."""
         try:
+            if position.get("gauge_address"):
+                return position["gauge_address"]
+
             chain = position.get("chain")
             pool_address = position.get("pool_address")
 
@@ -3643,6 +3870,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Only add staking for Velodrome pools
         if dex_type not in VELODROME_FAMILY_DEX_TYPES:
             return False
+
+        # Aero opportunities carry their activated gauge.
+        if is_aero_position(opportunity):
+            return bool(opportunity.get("gauge_address"))
 
         # Check if chain has voter contract configured
         chain = opportunity.get("chain")
@@ -3890,6 +4121,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "No cached enter pool action found, cannot reconstruct"
                 )
                 return None
+            if (
+                chain in self.params.aero_metarouter_contract_addresses
+                and not is_aero_position(cached_enter_action)
+            ):
+                self.context.logger.info(
+                    f"Cached CL opportunity on {chain} is a legacy pool; not reusing it"
+                )
+                return None
 
             # Get current token balances
             safe_address = self.params.safe_contract_addresses.get(chain)
@@ -3966,6 +4205,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 ),
                 "is_cl_pool": True,
             }
+            for key in ("protocol", "gauge_address"):
+                if cached_enter_action.get(key):
+                    temp_opportunity[key] = cached_enter_action[key]
 
             if self._should_add_staking_actions(temp_opportunity):
                 stake_action = self._build_stake_lp_tokens_action(temp_opportunity)

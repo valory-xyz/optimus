@@ -1,0 +1,23 @@
+name: aero_cl_gauge_factory
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the Aero CL gauge factory's penalty configuration.
+license: Apache-2.0
+aea_version: '>=2.0.0, <3.0.0'
+fingerprint:
+  __init__.py: bafybeifjpplp6i346pzcwfz5dv5ccj2qcfllqs6akhzvjdmbbzr3l3bjmi
+  build/contract_interface.json: bafybeiaaz7tdugvjvv4hlq2agn6lmev32tecwqtvpoohhtk4d4u5rowama
+  contract.py: bafybeiacmlbbftbx7z6p2dpqsddw7ujtfzlcckq2pol5edtquswh5gvhmm
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeib7v5j6ulyl47wodwdri5b3nfvgnld27zqqu24i45da2574pp36bu
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: AeroCLGaugeFactoryContract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==2.2.9
+  web3:
+    version: <8,>=7.0.0

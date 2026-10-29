@@ -10726,6 +10726,12 @@ SAMPLE_WITHDRAWALS = Decimal("16.02")
 # (0 + 16.02) / 17 - 1 = -5.7647..., rounded to two decimals.
 SAMPLE_ROI_AFTER_WITHDRAWAL = -5.76
 STALE_ROI = 99.0
+# Two days before the fixed test clock: expired for the TTL, but still a
+# timestamp written by a successful fetch rather than the post-tx reset.
+TEST_NOW_TS = 1704067200
+EXPIRED_WITHDRAWALS_TS = str(TEST_NOW_TS - 2 * 24 * 3600)
+# ``_invalidate_caches_after_tx`` writes this after every settled tx.
+RESET_WITHDRAWALS_TS = "0"
 PREVIOUS_SNAPSHOT: Dict[str, Any] = {
     "portfolio_value": 0.0,
     "total_roi": SAMPLE_ROI_AFTER_WITHDRAWAL,
@@ -10837,11 +10843,19 @@ class TestChainWithdrawalValueCachedFallback:
     """When the live fetch fails, the persisted cumulative total is served."""
 
     @staticmethod
-    def _wire(obj: Any, kv_state: Dict[str, str]) -> Dict[str, str]:
+    def _wire(
+        obj: Any,
+        kv_state: Dict[str, str],
+        withdrawals_ts: str = EXPIRED_WITHDRAWALS_TS,
+    ) -> Dict[str, str]:
         """Point one Optimism Safe at a failing fetcher over the given kv state."""
+        kv_state = {
+            "last_withdrawals_calculated_timestamp_optimism": withdrawals_ts,
+            **kv_state,
+        }
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        obj._get_current_timestamp = lambda: 1704067200
+        obj._get_current_timestamp = lambda: TEST_NOW_TS
         obj._track_erc20_transfers_optimism = _gen_return(None)
 
         def fake_read_kv(keys, **kwargs):  # type: ignore[no-untyped-def]
@@ -10893,6 +10907,28 @@ class TestChainWithdrawalValueCachedFallback:
         assert _drive(obj.calculate_withdrawals_value()) is None
         assert writes == {}
 
+    @pytest.mark.parametrize(
+        "withdrawals_ts",
+        [
+            pytest.param(RESET_WITHDRAWALS_TS, id="reset by a settled tx"),
+            pytest.param("", id="empty"),
+            pytest.param("not-a-number", id="unparseable"),
+        ],
+    )
+    def test_cached_total_is_not_served_once_a_tx_reset_the_timestamp(
+        self, withdrawals_ts: str
+    ) -> None:
+        """A total persisted before the last settled tx is not served as a fallback."""
+        obj = _mk()
+        writes = self._wire(
+            obj,
+            {"total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS)},
+            withdrawals_ts=withdrawals_ts,
+        )
+
+        assert _drive(obj.calculate_withdrawals_value()) is None
+        assert writes == {}
+
 
 class TestUserShareValuesRoiAcrossWithdrawalsOutage:
     """End-to-end: the real withdrawals fetch feeds the real portfolio builder.
@@ -10907,7 +10943,7 @@ class TestUserShareValuesRoiAcrossWithdrawalsOutage:
         """Set up an empty Safe funded with ``SAMPLE_INITIAL_INVESTMENT``."""
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        obj._get_current_timestamp = lambda: 1704067200
+        obj._get_current_timestamp = lambda: TEST_NOW_TS
         obj.current_positions = []
         obj.store_current_positions = MagicMock()
         obj._calculate_safe_balances_value = _gen_return(Decimal("0"))
@@ -10944,7 +10980,10 @@ class TestUserShareValuesRoiAcrossWithdrawalsOutage:
         obj.portfolio_data = {**PREVIOUS_SNAPSHOT, "total_roi": STALE_ROI}
         self._wire(
             obj,
-            kv_state={"total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS)},
+            kv_state={
+                "last_withdrawals_calculated_timestamp_optimism": EXPIRED_WITHDRAWALS_TS,
+                "total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS),
+            },
             transfers=None,
         )
 
@@ -10952,6 +10991,34 @@ class TestUserShareValuesRoiAcrossWithdrawalsOutage:
 
         assert obj.portfolio_data["total_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
         assert obj.portfolio_data["value_in_withdrawals"] == float(SAMPLE_WITHDRAWALS)
+
+    def test_fetch_failure_after_a_settled_tx_keeps_previous_roi(self) -> None:
+        """Outage right after a settled tx: the previous ROI is kept.
+
+        The cached total predates the tx, so recomputing from it would
+        pair a post-tx portfolio value with pre-tx withdrawals.
+        """
+        obj = _mk()
+        obj.portfolio_data = {
+            **PREVIOUS_SNAPSHOT,
+            "total_roi": STALE_ROI,
+            "partial_roi": STALE_ROI,
+            "value_in_withdrawals": 0.0,
+        }
+        self._wire(
+            obj,
+            kv_state={
+                "last_withdrawals_calculated_timestamp_optimism": RESET_WITHDRAWALS_TS,
+                "total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS),
+            },
+            transfers=None,
+        )
+
+        _drive(obj.calculate_user_share_values())
+
+        assert obj.portfolio_data["total_roi"] == STALE_ROI
+        assert obj.portfolio_data["partial_roi"] == STALE_ROI
+        assert obj.portfolio_data["value_in_withdrawals"] == 0.0
 
     def test_empty_safe_with_no_outflows_computes_roi(self) -> None:
         """A live fetch that finds no outgoing transfers yields a computed ROI.

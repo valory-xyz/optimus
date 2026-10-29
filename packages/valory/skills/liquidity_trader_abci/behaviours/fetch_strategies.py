@@ -357,13 +357,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Time since last update: {time_since_update} seconds"
                 )
 
-                if not (time_since_update >= one_day_in_seconds):
+                if time_since_update >= one_day_in_seconds:
                     self.context.logger.info("Tracking whitelisted assets")
                     yield from self._track_whitelisted_assets()
                     # Store current timestamp as last updated
                     self.context.logger.info("Updating last whitelist update timestamp")
                     yield from self._write_kv(
-                        {"last_whitelisted_updated": current_time}
+                        {"last_whitelisted_updated": str(current_time)}
                     )
 
                 # Check if we need to recalculate the portfolio

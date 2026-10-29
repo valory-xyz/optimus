@@ -289,6 +289,65 @@ class TestFetchStrategiesWithdrawalGate:
         obj.store_portfolio_data.assert_called_once()
 
 
+class TestDailyWhitelistTrackingGate:
+    """The allowlist price-drop filter runs at most once per day."""
+
+    NOW = 1793232000
+
+    def _run(self, kv: Dict[str, str]) -> Any:
+        """Drive async_act with *kv* as the stored keys; return the behaviour."""
+        obj = _mk()
+        obj.context.benchmark_tool.measure.return_value = (
+            TestFetchStrategiesWithdrawalGate._mk_benchmark()
+        )
+        obj.context.agent_address = "0xagent"
+        obj.current_positions = []
+        writes: List[Dict[str, str]] = []
+
+        def fake_write_kv(data):
+            writes.append(data)
+            yield
+
+        sd = MagicMock(period_count=1)
+        with patch.object(
+            type(obj), "synchronized_data", new_callable=PropertyMock, return_value=sd
+        ):
+            with patch.object(
+                type(obj), "shared_state", new_callable=PropertyMock
+            ) as mock_ss:
+                mock_ss.return_value = MagicMock()
+                TestFetchStrategiesWithdrawalGate._wire_common_path(obj)
+                obj._read_kv = _gen_return(kv)
+                obj._write_kv = fake_write_kv
+                obj._get_current_timestamp = lambda: self.NOW
+                obj._track_whitelisted_assets = MagicMock(side_effect=_gen_none)
+                obj.store_portfolio_data = MagicMock()
+                obj._read_investing_paused = _gen_return(True)
+                obj.send_a2a_transaction = _gen_none
+
+                _drive(obj.async_act())
+
+        obj.writes = writes
+        return obj
+
+    def test_runs_and_records_time_when_never_run(self) -> None:
+        """A missing timestamp runs the filter and stores the run time."""
+        obj = self._run({})
+        obj._track_whitelisted_assets.assert_called_once()
+        assert {"last_whitelisted_updated": str(self.NOW)} in obj.writes
+
+    def test_runs_when_last_run_is_a_day_old(self) -> None:
+        """A run at least a day old is due again."""
+        obj = self._run({"last_whitelisted_updated": str(self.NOW - 24 * 60 * 60)})
+        obj._track_whitelisted_assets.assert_called_once()
+
+    def test_skips_when_last_run_is_recent(self) -> None:
+        """A run less than a day ago is not repeated."""
+        obj = self._run({"last_whitelisted_updated": str(self.NOW - 60)})
+        obj._track_whitelisted_assets.assert_not_called()
+        assert not any("last_whitelisted_updated" in w for w in obj.writes)
+
+
 class TestIsTimeUpdateDue:
     """TestIsTimeUpdateDue."""
 

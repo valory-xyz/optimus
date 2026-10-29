@@ -42,6 +42,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy i
     MIN_SWAP_VALUE_USD,
     STRATEGY_BACKOFF_KV_KEY,
     STRATEGY_PRICE_CACHE_KV_KEY,
+    SWEEP_RETRY_COOLDOWN_SECONDS,
 )
 
 
@@ -84,6 +85,7 @@ def _mk(**overrides):
     shared_state.consecutive_no_action_count = 0
     shared_state.last_strategy_evaluation_time = 0.0
     shared_state.strategy_coingecko_price_cache = {}
+    shared_state.sweep_attempt_timestamps = {}
     ctx.state = shared_state
 
     obj.__dict__.update(
@@ -928,18 +930,37 @@ class TestSendActions:
 
 
 class TestCheckAndPrepareNonWhitelistedSwaps:
-    """Tests for check_and_prepare_non_whitelisted_swaps.
-
-    Note: Despite the Generator type annotation, this method has no yield
-    statements, so it returns a value directly (not a generator).
-    """
+    """Tests for check_and_prepare_non_whitelisted_swaps."""
 
     def _call(self, b):
-        """Call the method, handling both generator and non-generator returns."""
-        result = b.check_and_prepare_non_whitelisted_swaps()
-        if hasattr(result, "send"):
-            return _drive(result)
-        return result
+        """Run the sweep to completion."""
+        return _drive(b.check_and_prepare_non_whitelisted_swaps())
+
+    @staticmethod
+    def _held(b, *tokens):
+        """Make the Safe hold each (address, balance), valued at $10 unless stubbed."""
+        b._get_usdc_address = MagicMock(return_value="0xusdc")
+        b._build_swap_to_usdc_action = MagicMock(
+            side_effect=lambda **kw: {"from_token": kw["from_token_address"]}
+        )
+        if "_get_sweep_value_usd" not in b.__dict__:
+            b._get_sweep_value_usd = MagicMock(side_effect=_gen_return(10.0))
+        synced_mock = MagicMock()
+        synced_mock.positions = [
+            {
+                "chain": "optimism",
+                "assets": [
+                    {"address": address, "asset_symbol": address, "balance": balance}
+                    for address, balance in tokens
+                ],
+            }
+        ]
+        return patch.object(
+            type(b),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced_mock,
+        )
 
     def test_no_usdc_address(self):
         """Test no usdc address."""
@@ -1030,6 +1051,7 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
         ]
         swap_action = {"action": "swap", "token": "NW"}
         b._build_swap_to_usdc_action = MagicMock(return_value=swap_action)
+        b._get_sweep_value_usd = MagicMock(side_effect=_gen_return(MIN_SWAP_VALUE_USD))
         with patch.object(
             type(b),
             "synchronized_data",
@@ -1039,6 +1061,59 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
             result = self._call(b)
         assert len(result) == 1
         assert result[0] == swap_action
+        b._get_sweep_value_usd.assert_called_once_with(
+            "optimism", "0xnotwhitelisted", 100
+        )
+
+    def test_dust_below_the_floor_is_not_swept(self):
+        """A token worth less than MIN_SWAP_VALUE_USD is left in the Safe."""
+        b = _mk()
+        b._get_sweep_value_usd = MagicMock(
+            side_effect=_gen_return(MIN_SWAP_VALUE_USD - 0.01)
+        )
+        with self._held(b, ("0xaero", 117 * 10**12)):
+            assert self._call(b) == []
+        assert b.shared_state.sweep_attempt_timestamps == {}
+
+    def test_rounded_to_zero_amount_is_not_swept(self):
+        """An 18-decimal balance that rounds down to 0 wei is not swept or priced."""
+        b = _mk()
+        b._get_token_decimals = MagicMock(side_effect=_gen_return(18))
+        b._fetch_token_price = MagicMock(side_effect=_gen_return(10**18))
+        b._get_sweep_value_usd = b._get_sweep_value_usd  # keep the real valuation
+        with self._held(b, ("0xaero", 999)):
+            assert self._call(b) == []
+        b._fetch_token_price.assert_not_called()
+
+    def test_one_token_per_cycle_then_each_waits_its_cooldown(self):
+        """Each cycle sweeps one token not tried within the cooldown."""
+        b = _mk()
+        with self._held(b, ("0xaero", 10**18), ("0xvelo", 10**18)):
+            assert self._call(b) == [{"from_token": "0xaero"}]
+            assert self._call(b) == [{"from_token": "0xvelo"}]
+            assert self._call(b) == []
+        assert set(b.shared_state.sweep_attempt_timestamps) == {
+            "optimism:0xaero",
+            "optimism:0xvelo",
+        }
+
+    def test_token_is_retried_once_its_cooldown_ends(self):
+        """A token whose sweep did not clear it is swept again after the cooldown."""
+        b = _mk()
+        b.shared_state.sweep_attempt_timestamps = {
+            "optimism:0xaero": time.time() - SWEEP_RETRY_COOLDOWN_SECONDS
+        }
+        with self._held(b, ("0xaero", 10**18)):
+            assert self._call(b) == [{"from_token": "0xaero"}]
+
+    def test_unvalued_token_waits_its_cooldown(self):
+        """A token that cannot be valued is not swept and is not re-read every cycle."""
+        b = _mk()
+        b._get_sweep_value_usd = MagicMock(side_effect=_gen_return(None))
+        with self._held(b, ("0xspam", 10**18)):
+            assert self._call(b) == []
+            assert self._call(b) == []
+        b._get_sweep_value_usd.assert_called_once()
 
     def test_swap_action_fails(self):
         """Test swap action fails."""
@@ -1103,6 +1178,27 @@ class TestCheckAndPrepareNonWhitelistedSwaps:
             result = self._call(b)
         assert result == []
         b._build_swap_to_usdc_action.assert_not_called()
+
+
+class TestGetSweepValueUsd:
+    """Tests for _get_sweep_value_usd."""
+
+    def _value(self, decimals, price, balance=2 * 10**18 + 999):
+        b = _mk()
+        b._get_token_decimals = MagicMock(side_effect=_gen_return(decimals))
+        b._fetch_token_price = MagicMock(side_effect=_gen_return(price))
+        return _drive(b._get_sweep_value_usd("optimism", "0xaero", balance))
+
+    def test_values_the_rounded_amount(self):
+        """The value is that of the amount the swap would send."""
+        assert self._value(18, 3.0) == 6.0
+        assert self._value(6, 1.0, balance=1_500_000) == 1.5
+
+    def test_unknown_decimals_or_price_is_none(self):
+        """Without decimals or a price the token cannot be valued."""
+        assert self._value(None, 3.0) is None
+        assert self._value(18, None) is None
+        assert self._value(18, 0) is None
 
 
 class TestCalculateAggregateTokenRatios:
@@ -2676,7 +2772,7 @@ class TestAsyncAct:
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = MagicMock(
-            return_value=[{"action": "swap"}]
+            side_effect=_gen_return([{"action": "swap"}])
         )
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
@@ -2689,7 +2785,9 @@ class TestAsyncAct:
         """With nothing to sweep the cycle goes on to the TiP gate."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
         b._apply_tip_filters_to_exit_decisions = MagicMock(
@@ -2706,6 +2804,7 @@ class TestAsyncAct:
         b._get_usdc_address = MagicMock(return_value="0xusdc")
         swap = {"action": "FindBridgeRoute", "from_token": "0xnotwhitelisted"}
         b._build_swap_to_usdc_action = MagicMock(return_value=swap)
+        b._get_sweep_value_usd = MagicMock(side_effect=_gen_return(10.0))
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
         b._apply_tip_filters_to_exit_decisions = MagicMock(
@@ -2729,11 +2828,47 @@ class TestAsyncAct:
             _drive(b.async_act(), sends=[None] * 15)
         assert calls == [[swap]]
 
+    def test_failed_sweep_does_not_stop_the_next_strategy_evaluation(self):
+        """A token still held after its sweep is left alone and the next cycle evaluates."""
+        b = _mk()
+        b._read_investing_paused = _gen_return(False)
+        b._get_usdc_address = MagicMock(return_value="0xusdc")
+        swap = {"action": "FindBridgeRoute", "from_token": "0xunroutable"}
+        b._build_swap_to_usdc_action = MagicMock(return_value=swap)
+        b._get_sweep_value_usd = MagicMock(side_effect=_gen_return(10.0))
+        send_actions, calls = self._make_send_actions()
+        b.send_actions = send_actions
+        b._apply_tip_filters_to_exit_decisions = MagicMock(
+            side_effect=_gen_return((False, []))
+        )
+        synced_mock = MagicMock()
+        synced_mock.positions = [
+            {
+                "chain": "optimism",
+                "assets": [
+                    {"address": "0xunroutable", "asset_symbol": "U", "balance": 10**18}
+                ],
+            }
+        ]
+        with patch.object(
+            type(b),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced_mock,
+        ):
+            _drive(b.async_act(), sends=[None] * 15)
+            b._apply_tip_filters_to_exit_decisions.assert_not_called()
+            _drive(b.async_act(), sends=[None] * 15)
+        assert calls == [[swap], None]
+        b._apply_tip_filters_to_exit_decisions.assert_called_once()
+
     def test_tip_filters_block(self):
         """Test tip filters block."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         b._apply_tip_filters_to_exit_decisions = _gen_return((False, []))
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
@@ -2744,7 +2879,9 @@ class TestAsyncAct:
         """Test no funds."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         b._apply_tip_filters_to_exit_decisions = _gen_return((True, []))
         b.check_funds = MagicMock(return_value=False)
         send_actions, calls = self._make_send_actions()
@@ -2756,7 +2893,9 @@ class TestAsyncAct:
         """Test cached opportunity used."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         b._apply_tip_filters_to_exit_decisions = _gen_return(
             (True, [{"status": "open"}])
         )
@@ -2773,7 +2912,9 @@ class TestAsyncAct:
         """Test normal flow no cache."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         b._apply_tip_filters_to_exit_decisions = _gen_return((True, []))
         b.check_funds = MagicMock(return_value=True)
         b._check_and_use_cached_cl_opportunity = _gen_return(None)
@@ -6922,7 +7063,9 @@ class TestAsyncActBackoff:
         """Test backoff causes early return."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         b._apply_tip_filters_to_exit_decisions = _gen_return((True, []))
         b.check_funds = MagicMock(return_value=True)
         # Set backoff state: 1 consecutive failure, just happened
@@ -7201,7 +7344,9 @@ class TestStrategyStatePersistence:
 
     def _flow(self, b):
         b._read_investing_paused = _gen_return(False)
-        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(
+            side_effect=_gen_return([])
+        )
         b._apply_tip_filters_to_exit_decisions = _gen_return((True, []))
         b.check_funds = MagicMock(return_value=True)
         b._check_and_use_cached_cl_opportunity = _gen_return(None)

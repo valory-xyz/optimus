@@ -184,6 +184,8 @@ class SharedState(BaseSharedState):
         # Shared price cache passed to strategies via kwargs
         self.strategy_coingecko_price_cache: Dict[str, Any] = {}
         self.strategy_state_restored: bool = False
+        # When each "<chain>:<token>" was last given to the non-whitelisted sweep.
+        self.sweep_attempt_timestamps: Dict[str, float] = {}
         # Per-endpoint circuit breakers for external dependencies.
         self._endpoint_breakers: Dict[str, EndpointCircuitBreaker] = {}
         self._endpoint_breakers_lock = threading.Lock()

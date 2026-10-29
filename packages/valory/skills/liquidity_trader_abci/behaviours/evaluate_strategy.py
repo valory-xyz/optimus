@@ -61,6 +61,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
+    round_down_swap_amount,
 )
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
@@ -78,6 +79,8 @@ from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy impor
 )
 
 MIN_SWAP_VALUE_USD = 0.5
+# An unroutable token is retried this often, so it cannot hold every cycle.
+SWEEP_RETRY_COOLDOWN_SECONDS = 6 * 3600
 
 
 STRATEGY_BACKOFF_KV_KEY = "strategy_backoff_state"
@@ -141,9 +144,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.send_actions(restake_actions)
                 return
 
-            # Check minimum hold period
-            # Check if no current positions and uninvested ETH, prepare swap to USDC
-            actions = self.check_and_prepare_non_whitelisted_swaps()
+            actions = yield from self.check_and_prepare_non_whitelisted_swaps()
             if actions:
                 yield from self.send_actions(actions)
                 return
@@ -1639,20 +1640,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def check_and_prepare_non_whitelisted_swaps(
         self,
-    ) -> Any:
-        """Check all funds in safe and swap non-whitelisted assets to USDC if value > $5."""
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Build a USDC swap for one non-whitelisted token worth at least MIN_SWAP_VALUE_USD."""
         try:
-            actions = []
             target_chain = self.params.target_investment_chains[0]
-            usdc_address = self._get_usdc_address(target_chain)
-
-            if not usdc_address:
+            if not self._get_usdc_address(target_chain):
                 self.context.logger.warning(
                     f"Could not get USDC address for {target_chain}"
                 )
                 return []
 
-            # Get all positions to check assets in safe
+            now = time_module.time()
+            attempts = self.shared_state.sweep_attempt_timestamps
+            for key in [
+                k
+                for k, attempted_at in attempts.items()
+                if now - attempted_at >= SWEEP_RETRY_COOLDOWN_SECONDS
+            ]:
+                del attempts[key]
+
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
                 whitelisted_tokens = [
@@ -1676,7 +1682,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     ):
                         continue
 
-                    self.context.logger.info("Preparing swap action to USDC.")
+                    # One swap per cycle, so an unroutable token costs only its
+                    # own cycle until its cooldown ends.
+                    attempt_key = f"{chain}:{asset_address}"
+                    if attempt_key in attempts:
+                        continue
 
                     # Use base class method to build swap action
                     swap_action = self._build_swap_to_usdc_action(
@@ -1686,25 +1696,57 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         funds_percentage=1.0,  # Use all available balance
                         description=f"Swap non-whitelisted {asset_symbol} to USDC",
                     )
-
-                    if swap_action:
-                        actions.append(swap_action)
-                        self.context.logger.info(
-                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
-                            f"{asset_symbol} -> USDC"
-                        )
-                    else:
+                    if not swap_action:
                         self.context.logger.error(
                             f"Failed to create swap action for {asset_symbol}"
                         )
+                        continue
 
-            return actions
+                    value_usd = yield from self._get_sweep_value_usd(
+                        chain, asset_address, balance  # type: ignore[arg-type]
+                    )
+                    if value_usd is None:
+                        self.context.logger.warning(
+                            f"Could not value {asset_symbol} on {chain}; "
+                            f"retrying it after the sweep cooldown"
+                        )
+                        attempts[attempt_key] = now
+                        continue
+                    if value_usd < MIN_SWAP_VALUE_USD:
+                        self.context.logger.info(
+                            f"Not sweeping {asset_symbol} on {chain}: worth "
+                            f"${value_usd:.4f}, below ${MIN_SWAP_VALUE_USD}"
+                        )
+                        continue
+
+                    attempts[attempt_key] = now
+                    self.context.logger.info(
+                        f"Prepared {asset_symbol} to USDC swap on {chain}"
+                    )
+                    return [swap_action]
+
+            return []
 
         except Exception as e:
             self.context.logger.error(
                 f"Error in check_and_prepare_non_whitelisted_swaps: {str(e)}"
             )
             return []
+
+    def _get_sweep_value_usd(
+        self, chain: str, token_address: str, balance: int
+    ) -> Generator[None, None, Optional[float]]:
+        """Return the USD value of the part of a balance a swap would send, or None when unknown."""
+        decimals = yield from self._get_token_decimals(chain, token_address)
+        if decimals is None:
+            return None
+        amount = round_down_swap_amount(balance, decimals)
+        if amount <= 0:
+            return 0.0
+        price = yield from self._fetch_token_price(token_address, chain)
+        if not price:
+            return None
+        return amount / 10**decimals * price
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""

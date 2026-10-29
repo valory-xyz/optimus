@@ -117,6 +117,8 @@ SAFE_TRANSFERS_PAGE_LIMIT = 100
 # a different cadence.
 INITIAL_INVESTMENT_CACHE_TTL_SECONDS = 30 * 60
 WITHDRAWAL_CACHE_TTL_SECONDS = 30 * 60
+# Shown in place of an ROI percentage that has never been computed.
+ROI_UNAVAILABLE = "N/A"
 
 
 def _transfer_unique_id(transfer: Dict[str, Any]) -> str:
@@ -1090,8 +1092,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :param staking_rewards_value: USD value of accrued staking rewards.
         :param airdrop_rewards_value: USD value of airdropped rewards.
         :param withdrawals_value: USD value of cumulative outflows, or
-            ``None`` when the fetcher failed and the caller should skip
-            ROI math to avoid treating a transient blip as zero.
+            ``None`` when the fetcher failed; the ROI figures of the
+            previous snapshot are then carried forward unchanged rather
+            than recomputed against zero withdrawals.
         :param initial_investment: USD value of initial funding inflows.
         :param volume: USD value of all positions ever opened.
         :param allocations: List of open allocations.
@@ -1112,6 +1115,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Convert to percentage by multiplying by 100
             total_roi = None
             partial_roi = None
+            value_in_withdrawals = (
+                float(withdrawals_value) if withdrawals_value is not None else None
+            )
             if (
                 initial_investment is not None
                 and initial_investment > 0
@@ -1146,9 +1152,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     total_roi = None
                     partial_roi = None
             elif withdrawals_value is None:
+                # ``self.portfolio_data`` still holds the previous snapshot
+                # at this point; its ROI stays on display until a fresh
+                # withdrawals total lets the recompute run again.
+                previous = self.portfolio_data or {}
+                total_roi = previous.get("total_roi")
+                partial_roi = previous.get("partial_roi")
+                value_in_withdrawals = previous.get("value_in_withdrawals")
                 self.context.logger.info(
-                    "ROI not calculated - withdrawals fetch failed this cycle; "
-                    "preserving last-known ROI by skipping the recompute."
+                    "ROI not recalculated - withdrawals fetch failed this cycle; "
+                    f"carrying forward last-known Total ROI={total_roi}, "
+                    f"Partial ROI={partial_roi}, Withdrawals={value_in_withdrawals}"
                 )
             else:
                 self.context.logger.info(
@@ -1226,9 +1240,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "portfolio_value": float(total_portfolio_value),
                 "value_in_pools": float(total_pools_value),
                 "value_in_safe": float(total_safe_value),
-                "value_in_withdrawals": (
-                    float(withdrawals_value) if withdrawals_value is not None else None
-                ),
+                "value_in_withdrawals": value_in_withdrawals,
                 "initial_investment": (
                     float(initial_investment)
                     if initial_investment is not None
@@ -2570,11 +2582,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[Decimal]]:
         """Compute withdrawals for one chain.
 
-        ``None`` signals a transient fetcher failure that the aggregator
-        must treat as "do not skew the total." A determined zero (no
-        outgoing transfers, unsupported chain, missing safe) is returned
-        as ``Decimal(0)`` so a configured but-quiet chain does not poison
-        the multi-chain total.
+        ``None`` signals a transient fetcher failure with no persisted
+        total to fall back on; the aggregator must treat it as "do not
+        skew the total." A determined zero (no outgoing transfers,
+        unsupported chain, missing safe) is returned as ``Decimal(0)`` so
+        a configured but-quiet chain does not poison the multi-chain
+        total.
 
         :param chain: chain name from ``target_investment_chains``.
         :yield: None.
@@ -2637,19 +2650,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # this fallback into a spurious cache hit.
                     age_seconds = -1
                 if 0 <= age_seconds < WITHDRAWAL_CACHE_TTL_SECONDS:
-                    cached = yield from self._read_kv(keys=(total_key,))
-                    cached_val = cached.get(total_key) if cached else None
-                    if cached_val is not None:
-                        try:
-                            self.context.logger.info(
-                                f"{chain} withdrawal cache hit ({age_seconds}s "
-                                f"old, ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
-                            )
-                            return Decimal(str(cached_val))
-                        except (InvalidOperation, ValueError, TypeError):
-                            self.context.logger.warning(
-                                "Failed to parse cached withdrawal value; recomputing"
-                            )
+                    cached_total = yield from self._read_cached_withdrawals_total(chain)
+                    if cached_total is not None:
+                        self.context.logger.info(
+                            f"{chain} withdrawal cache hit ({age_seconds}s "
+                            f"old, ttl {WITHDRAWAL_CACHE_TTL_SECONDS}s)"
+                        )
+                        return cached_total
 
             all_erc20_transfers = yield from self._track_erc20_transfers_optimism(
                 safe_address,
@@ -2658,14 +2665,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             if all_erc20_transfers is None:
                 # ``None`` signals fetcher failure (exception or
-                # mid-pagination error). Skip the kv cache write so a
-                # transient blip doesn't pin ``withdrawal=0`` until the
-                # next TTL boundary, and surface ``None`` to the aggregator.
+                # mid-pagination error). The kv cache is left untouched so
+                # the next cycle retries instead of pinning a stale total
+                # until the TTL boundary; the last persisted cumulative
+                # total is served meanwhile, since outflows only accrue and
+                # a slightly stale total beats an unknown one.
+                cached_total = yield from self._read_cached_withdrawals_total(chain)
+                if cached_total is None:
+                    self.context.logger.warning(
+                        f"Failed to fetch {chain} ERC20 transfers and no cached "
+                        "total is available; returning None so the aggregator "
+                        "preserves last-known ROI"
+                    )
+                    return None
                 self.context.logger.warning(
-                    f"Failed to fetch {chain} ERC20 transfers; returning None "
-                    "without caching so the aggregator preserves last-known ROI"
+                    f"Failed to fetch {chain} ERC20 transfers; using the cached "
+                    f"cumulative withdrawals total ${cached_total} until the "
+                    "fetch recovers"
                 )
-                return None
+                return cached_total
             outgoing_erc20_transfers = all_erc20_transfers.get("outgoing", {})
             self.context.logger.info(
                 f"Outgoing {chain} ERC20 transfers: {outgoing_erc20_transfers}"
@@ -2694,6 +2712,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             "returning 0 (withdrawal accounting is missing for this chain)"
         )
         return Decimal(0)
+
+    def _read_cached_withdrawals_total(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Decimal]]:
+        """Read the persisted cumulative withdrawals total for ``chain``.
+
+        :param chain: chain name from ``target_investment_chains``.
+        :yield: None.
+        :return: the cached total, or ``None`` when it was never written
+            or does not parse as a number.
+        """
+        total_key = total_withdrawals_kv_key(chain)
+        cached = yield from self._read_kv(keys=(total_key,))
+        cached_val = cached.get(total_key) if cached else None
+        if cached_val is None:
+            return None
+        try:
+            return Decimal(str(cached_val))
+        except (InvalidOperation, ValueError, TypeError):
+            self.context.logger.warning(
+                f"Unparseable {total_key} {cached_val!r}; ignoring cached total"
+            )
+            return None
 
     def _track_and_calculate_withdrawal_value_mode(
         self,
@@ -5410,6 +5451,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             == self.params.airdrop_contract_address.lower()
         )
 
+    @staticmethod
+    def _format_roi(roi: Optional[float], decimals: int) -> str:
+        """Render an ROI percentage for the performance metrics.
+
+        :param roi: the ROI percentage, or ``None`` when it has never been
+            computed, which renders as ``ROI_UNAVAILABLE`` rather than as
+            a zero return.
+        :param decimals: number of decimal places to render.
+        :return: the display string.
+        """
+        if roi is None:
+            return ROI_UNAVAILABLE
+        return f"{float(roi):.{decimals}f}%"
+
     def _update_agent_performance_metrics(self):
         """Update agent performance metrics with portfolio balance and ROI."""
         try:
@@ -5418,31 +5473,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Get portfolio balance and ROI from current portfolio data
             portfolio_balance = 0.0
-            total_roi_percentage = 0.0
-            partial_roi_percentage = 0.0
+            total_roi: Optional[float] = None
+            partial_roi: Optional[float] = None
 
             if self.portfolio_data:
                 # Use portfolio_value instead of total_value_usd
                 portfolio_balance = float(
                     self.portfolio_data.get("portfolio_value", 0.0)
                 )
+                # ``total_roi`` / ``partial_roi`` are ``None`` until the
+                # first successful ROI computation.
+                total_roi = self.portfolio_data.get("total_roi")
+                partial_roi = self.portfolio_data.get("partial_roi")
 
-                # Use pre-calculated ROI percentages from portfolio data.
-                # ``total_roi`` / ``partial_roi`` are present in the dict but
-                # may be ``None`` (e.g. when the withdrawal fetch failed and
-                # ``_create_portfolio_data`` skipped the ROI recompute).
-                # ``dict.get(k, default)`` only returns the default when the
-                # key is absent, so ``None`` would otherwise reach
-                # ``float(None)`` and raise ``TypeError`` — silently breaking
-                # this whole update inside the surrounding try/except.
-                raw_total_roi = self.portfolio_data.get("total_roi")
-                total_roi_percentage = (
-                    float(raw_total_roi) if raw_total_roi is not None else 0.0
-                )
-                raw_partial_roi = self.portfolio_data.get("partial_roi")
-                partial_roi_percentage = (
-                    float(raw_partial_roi) if raw_partial_roi is not None else 0.0
-                )
+            total_roi_text = self._format_roi(total_roi, decimals=2)
+            partial_roi_text = self._format_roi(partial_roi, decimals=1)
 
             # Update metrics
             self.agent_performance["metrics"] = [
@@ -5455,8 +5500,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 {
                     "name": "Total ROI",
                     "is_primary": False,
-                    "description": f"Total return on investment including staking rewards. Partial ROI (trading only): <b>{partial_roi_percentage:.1f}%</b>",
-                    "value": f"{total_roi_percentage:.2f}%",
+                    "description": f"Total return on investment including staking rewards. Partial ROI (trading only): <b>{partial_roi_text}</b>",
+                    "value": total_roi_text,
                 },
             ]
 
@@ -5465,7 +5510,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.store_agent_performance()
 
             self.context.logger.info(
-                f"Updated agent performance: Balance=${portfolio_balance:.2f}, Total ROI={total_roi_percentage:.1f}%, Partial ROI={partial_roi_percentage:.1f}%"
+                f"Updated agent performance: Balance=${portfolio_balance:.2f}, Total ROI={total_roi_text}, Partial ROI={partial_roi_text}"
             )
 
         except Exception as e:

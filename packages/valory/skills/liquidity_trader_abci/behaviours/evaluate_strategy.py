@@ -143,9 +143,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check minimum hold period
             # Check if no current positions and uninvested ETH, prepare swap to USDC
-            actions = yield from self.check_and_prepare_non_whitelisted_swaps()
+            actions = self.check_and_prepare_non_whitelisted_swaps()
             if actions:
                 yield from self.send_actions(actions)
+                return
 
             (
                 should_proceed,

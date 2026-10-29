@@ -358,7 +358,7 @@ class TestAsyncActAeroRestake:
         b._read_investing_paused = _gen_return(False)
         b._prepare_legacy_velodrome_exit_actions = _gen_return(None)
         b._prepare_aero_restake_actions = _gen_return(restake_actions)
-        b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
+        b.check_and_prepare_non_whitelisted_swaps = MagicMock(return_value=[])
         b._apply_tip_filters_to_exit_decisions = MagicMock(
             side_effect=_gen_return((False, []))
         )

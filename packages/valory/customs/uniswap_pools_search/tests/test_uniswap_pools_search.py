@@ -1160,7 +1160,7 @@ class TestCalculateMetrics:
     """Tests for calculate_metrics function."""
 
     @patch(
-        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data"
     )
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
@@ -1169,12 +1169,12 @@ class TestCalculateMetrics:
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.calculate_il_risk_score"
     )
     def test_successful(
-        self, mock_il: MagicMock, mock_sharpe: MagicMock, mock_liquidity: MagicMock
+        self, mock_il: MagicMock, mock_sharpe: MagicMock, mock_fetch: MagicMock
     ) -> None:
         """Test successful metrics calculation."""
         mock_il.return_value = -0.05
         mock_sharpe.return_value = 1.5
-        mock_liquidity.return_value = (100, 5000)
+        mock_fetch.return_value = None
         position = {
             "token0_symbol": "TK0",
             "token1_symbol": "TK1",
@@ -1192,17 +1192,15 @@ class TestCalculateMetrics:
         assert result["il_risk_score"] == -0.05  # type: ignore[index]
 
     @patch(
-        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.assess_pool_liquidity"
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.fetch_pool_data"
     )
     @patch(
         "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.get_uniswap_pool_sharpe_ratio"
     )
-    def test_no_token_ids(
-        self, mock_sharpe: MagicMock, mock_liquidity: MagicMock
-    ) -> None:
+    def test_no_token_ids(self, mock_sharpe: MagicMock, mock_fetch: MagicMock) -> None:
         """Test when token IDs are not found."""
         mock_sharpe.return_value = 1.5
-        mock_liquidity.return_value = (100, 5000)
+        mock_fetch.return_value = None
         position = {
             "token0_symbol": "UNKNOWN0",
             "token1_symbol": "UNKNOWN1",
@@ -1211,6 +1209,70 @@ class TestCalculateMetrics:
         }
         result = calculate_metrics(position, "key", {"optimism": "url"}, {}, None, None)
         assert result["il_risk_score"] is None  # type: ignore[index]
+
+
+class TestCalculateMetricsLiveApr:
+    """The metrics of a held pool carry the APR its opportunity would have."""
+
+    POSITION = {
+        "token0_symbol": "UNKNOWN0",
+        "token1_symbol": "UNKNOWN1",
+        "chain": "optimism",
+        "pool_address": "0x1",
+    }
+    POOL_DATA = {
+        "feeTier": "500",
+        "volumeUSD": "2000000",
+        "totalValueLockedUSD": "1000000",
+        "totalValueLockedToken0": "500000",
+        "totalValueLockedToken1": "500000",
+    }
+
+    def _metrics(self, pool_data: Any) -> Any:
+        with patch.object(
+            uni_mod, "fetch_pool_data", return_value=pool_data
+        ) as mock_fetch, patch.object(
+            uni_mod, "get_uniswap_pool_sharpe_ratio", return_value=1.5
+        ):
+            result = calculate_metrics(
+                dict(self.POSITION), "key", {"optimism": "url"}, {}, None, None
+            )
+        mock_fetch.assert_called_once_with("0x1", "url")
+        return result
+
+    def test_apr_matches_the_opportunity_apr(self) -> None:
+        """The pool is priced by the formula the opportunity filter uses."""
+        result = self._metrics(dict(self.POOL_DATA))
+        assert result["apr"] == calculate_apr(2000000, 1000000, 500 / 1000000)
+        [filtered] = get_filtered_pools_for_uniswap(
+            [{**self.POOL_DATA, "id": "0x" + "12" * 20, "chain": "optimism"}],
+            [],
+            {"optimism": {}},
+            max_apr_threshold=float("inf"),
+            min_tvl_threshold=0,
+        )
+        assert result["apr"] == filtered["apr"]
+        assert result["depth_score"] > 0
+
+    def test_unreadable_pool_leaves_apr_out(self) -> None:
+        """A pool the subgraph cannot return gives no APR rather than a zero."""
+        result = self._metrics(None)
+        assert "apr" not in result
+        assert np.isnan(result["depth_score"])
+
+    @patch(
+        "packages.valory.customs.uniswap_pools_search.uniswap_pools_search.requests.post"
+    )
+    def test_pool_query_reads_the_apr_fields(self, mock_post: MagicMock) -> None:
+        """The single-pool query asks for the fields the APR is computed from."""
+        mock_post.return_value = MagicMock(
+            status_code=200, json=MagicMock(return_value={"data": {"pool": {}}})
+        )
+        fetch_pool_data("0x1", "https://api.example.com")
+        query = mock_post.call_args.kwargs["json"]["query"]
+        assert "feeTier" in query
+        assert "volumeUSD" in query
+        assert "totalValueLockedUSD" in query
 
 
 class TestRun:

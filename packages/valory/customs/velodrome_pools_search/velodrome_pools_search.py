@@ -3376,6 +3376,52 @@ def get_opportunities_for_velodrome(
     return top_pools
 
 
+def get_velodrome_pool_apr(
+    pool_id: str,
+    chain_id: int,
+    coingecko_api_key: str,
+    x402_session: Optional[Any] = None,
+    x402_proxy: Optional[Any] = None,
+    price_cache: Optional[Dict[str, Any]] = None,
+    price_cache_ttl: int = 1800,
+) -> Optional[float]:
+    """
+    Get the live APR of a held pool, priced the way an opportunity is.
+
+    Args:
+        pool_id: Address of the pool
+        chain_id: Chain ID of the pool
+        coingecko_api_key: API key for CoinGecko
+        x402_session: Optional x402 session for CoinGecko
+        x402_proxy: Optional x402 proxy URL for CoinGecko
+        price_cache: The shared price cache
+        price_cache_ttl: How long a cached price is reused, in seconds
+
+    Returns:
+        The APR as a percentage, or None if the pool cannot be read
+    """
+    pools = get_velodrome_pools(chain_id)
+    if isinstance(pools, dict):
+        logger.error(f"No live APR for pool {pool_id}: {pools.get('error')}")
+        return None
+
+    pool = next(
+        (p for p in pools if str(p.get("id", "")).lower() == pool_id.lower()), None
+    )
+    if pool is None:
+        logger.warning(f"No live APR for pool {pool_id}: not listed by Sugar")
+        return None
+
+    return calculate_position_details_for_velodrome(
+        pool["sugar_data"],
+        coingecko_api_key,
+        x402_session,
+        x402_proxy,
+        price_cache=price_cache,
+        price_cache_ttl=price_cache_ttl,
+    ).get("apr")
+
+
 def calculate_metrics(
     position: Dict[str, Any],
     coingecko_api_key: str,
@@ -3454,13 +3500,27 @@ def calculate_metrics(
             pool_id, chain.upper()
         )
 
-        # Return calculated metrics
-        return {
+        metrics = {
             "il_risk_score": il_risk_score,
             "sharpe_ratio": sharpe_ratio,
             "depth_score": depth_score,
             "max_position_size": max_position_size,
         }
+
+        # An unreadable APR is left out, so the position keeps its last one
+        apr = get_velodrome_pool_apr(
+            pool_id,
+            chain_id,
+            coingecko_api_key,
+            x402_session=x402_session,
+            x402_proxy=x402_proxy,
+            price_cache=price_cache,
+            price_cache_ttl=price_cache_ttl,
+        )
+        if apr is not None:
+            metrics["apr"] = apr
+
+        return metrics
     except Exception as e:
         logger.error(
             f"Error calculating metrics for position {position.get('pool_address')}: {str(e)}"

@@ -1581,6 +1581,30 @@ def get_opportunities_for_balancer(
     return valid_investment_pools
 
 
+def get_balancer_pool_apr(
+    pool_id: str, chain: str, graphql_endpoint: str
+) -> Optional[float]:
+    """Get the live APR of a held pool, priced the way an opportunity is."""
+    query = """
+    query ($id: String!, $chain: GqlChain!) {
+      poolGetPool(id: $id, chain: $chain) {
+        dynamicData {
+          aprItems {
+            type
+            apr
+          }
+        }
+      }
+    }
+    """
+    data = run_query(query, graphql_endpoint, {"id": pool_id, "chain": chain.upper()})
+    pool = data.get("poolGetPool")
+    if "error" in data or not pool:
+        logger.warning(f"No live APR for pool {pool_id}: {data.get('error')}")
+        return None
+    return get_total_apr(pool) * 100
+
+
 def calculate_metrics(
     position: Dict[str, Any],
     coingecko_api_key: str,
@@ -1589,6 +1613,7 @@ def calculate_metrics(
     x402_proxy: Optional[str] = None,
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
+    graphql_endpoint: Optional[str] = None,
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
     """Calculate metrics."""
@@ -1637,12 +1662,22 @@ def calculate_metrics(
         position["pool_id"], position["chain"].upper()
     )
 
-    return {
+    metrics = {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
         "depth_score": depth_score,
         "max_position_size": max_position_size,
     }
+
+    # An unreadable APR is left out, so the position keeps its last one
+    if graphql_endpoint:
+        apr = get_balancer_pool_apr(
+            position["pool_id"], position["chain"], graphql_endpoint
+        )
+        if apr is not None:
+            metrics["apr"] = apr
+
+    return metrics
 
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:

@@ -357,13 +357,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Time since last update: {time_since_update} seconds"
                 )
 
-                if not (time_since_update >= one_day_in_seconds):
+                if time_since_update >= one_day_in_seconds:
                     self.context.logger.info("Tracking whitelisted assets")
                     yield from self._track_whitelisted_assets()
                     # Store current timestamp as last updated
                     self.context.logger.info("Updating last whitelist update timestamp")
                     yield from self._write_kv(
-                        {"last_whitelisted_updated": current_time}
+                        {"last_whitelisted_updated": str(current_time)}
                     )
 
                 # Check if we need to recalculate the portfolio
@@ -3718,7 +3718,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict]:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
-        self.funding_events = self.read_funding_events()
+        self.read_funding_events()
         if self.funding_events:
             existing_mode_data = self.funding_events.get("mode", {})
         else:
@@ -3828,7 +3828,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         chain_label = chain.capitalize()
 
         # Load existing unified data from kv_store
-        self.funding_events = self.read_funding_events()
+        self.read_funding_events()
         if self.funding_events:
             raw_chain_data = self.funding_events.get(chain, {})
             existing_chain_data, dropped = _drop_legacy_transfer_entries(raw_chain_data)
@@ -4852,7 +4852,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         withdrawals_key = f"{chain}_withdrawals"
         try:
             if not self.funding_events:
-                self.funding_events = self.read_funding_events() or {}
+                self.read_funding_events()
             existing_outgoing = self.funding_events.get(withdrawals_key, {})
 
             if not safe_address:

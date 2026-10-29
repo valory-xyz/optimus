@@ -1670,6 +1670,26 @@ class TestPostExecuteStakeLpTokens:
         b._post_execute_stake_lp_tokens([action], 0)
         assert b.current_positions[0]["staked"] is True
 
+    def test_settled_stake_resets_restake_attempts(self):
+        """A settled stake gives a later re-stake of the position a fresh budget."""
+        b = _make_behaviour()
+        b.synchronized_data.final_tx_hash = "0xstake"
+        b._get_current_timestamp = MagicMock(return_value=3000)
+        b.current_positions = [
+            {
+                "pool_address": "0xPOOL",
+                "chain": "optimism",
+                "status": PositionStatus.OPEN.value,
+                "restake_attempts": 2,
+                "restake_attempted_at": 2000,
+            },
+        ]
+        b.store_current_positions = MagicMock()
+        action = {"pool_address": "0xPOOL", "chain": "optimism", "is_cl_pool": False}
+        b._post_execute_stake_lp_tokens([action], 0)
+        assert "restake_attempts" not in b.current_positions[0]
+        assert "restake_attempted_at" not in b.current_positions[0]
+
     def test_cl_pool(self):
         """Test cl pool."""
         b = _make_behaviour()

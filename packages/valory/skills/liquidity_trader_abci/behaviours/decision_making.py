@@ -4713,6 +4713,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["staked"] = True
                 position["staking_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["staking_timestamp"] = int(self._get_current_timestamp())
+                position.pop("restake_attempts", None)
+                position.pop("restake_attempted_at", None)
 
                 # For CL pools, we might want to store additional metadata
                 if is_cl_pool:

@@ -25,6 +25,7 @@ from unittest.mock import MagicMock
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
 from packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy import (
+    AERO_RESTAKE_RETRY_COOLDOWN_SECONDS,
     MAX_AERO_RESTAKE_ATTEMPTS,
     STRATEGY_BACKOFF_KV_KEY,
 )
@@ -340,18 +341,29 @@ class TestPrepareAeroRestakeActions:
         b._build_stake_lp_tokens_action = MagicMock(return_value=None)
         assert _drive(b._prepare_aero_restake_actions()) == []
 
-    def test_restake_stops_after_max_attempts(self):
-        """A stake that never settles is retried MAX_AERO_RESTAKE_ATTEMPTS times, then left."""
+    def test_restake_pauses_after_max_attempts_until_the_cooldown(self):
+        """A stake that never settles is retried MAX_AERO_RESTAKE_ATTEMPTS times, then after the cooldown."""
         position = _aero(False)
         b = self._mk(position)
+        b._get_current_timestamp = MagicMock(return_value=1000)
 
         for attempt in range(1, MAX_AERO_RESTAKE_ATTEMPTS + 1):
             assert len(_drive(b._prepare_aero_restake_actions())) == 1
             assert position["restake_attempts"] == attempt
         assert b.store_current_positions.call_count == MAX_AERO_RESTAKE_ATTEMPTS
+        assert position["restake_attempted_at"] == 1000
 
+        b._get_current_timestamp.return_value = (
+            1000 + AERO_RESTAKE_RETRY_COOLDOWN_SECONDS - 1
+        )
         assert _drive(b._prepare_aero_restake_actions()) == []
         assert position["restake_attempts"] == MAX_AERO_RESTAKE_ATTEMPTS
+
+        b._get_current_timestamp.return_value = (
+            1000 + AERO_RESTAKE_RETRY_COOLDOWN_SECONDS
+        )
+        assert len(_drive(b._prepare_aero_restake_actions())) == 1
+        assert position["restake_attempts"] == 1
 
     def test_v2_unreadable_balances_wait(self):
         """When either balance cannot be read the position is checked next cycle."""
@@ -400,7 +412,11 @@ class TestAsyncActAeroRestake:
     def test_failing_restake_stops_blocking_the_cycle(self):
         """Once a position's stake attempts run out the cycle reaches the TiP gate."""
         b = self._mk([])
-        position = _aero(False, restake_attempts=MAX_AERO_RESTAKE_ATTEMPTS)
+        position = _aero(
+            False,
+            restake_attempts=MAX_AERO_RESTAKE_ATTEMPTS,
+            restake_attempted_at=int(time.time()),
+        )
         b.current_positions = [position]
         b.pools = {"velodrome": _pool(0, 0)}
         b._get_token_balance = MagicMock(side_effect=_gen_return(10))

@@ -81,8 +81,10 @@ from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy impor
 MIN_SWAP_VALUE_USD = 0.5
 # An unroutable token is retried this often, so it cannot hold every cycle.
 SWEEP_RETRY_COOLDOWN_SECONDS = 6 * 3600
-# Stake attempts per Aero position before the cycle stops waiting on it.
+# Stake attempts per Aero position before the cycle stops waiting on it, and how
+# long it waits before trying again, so a transient failure cannot strand a stake.
 MAX_AERO_RESTAKE_ATTEMPTS = 3
+AERO_RESTAKE_RETRY_COOLDOWN_SECONDS = 6 * 3600
 
 
 STRATEGY_BACKOFF_KV_KEY = "strategy_backoff_state"
@@ -321,12 +323,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             attempts = position.get("restake_attempts", 0)
+            now = self._get_current_timestamp()
             if attempts >= MAX_AERO_RESTAKE_ATTEMPTS:
-                self.context.logger.warning(
-                    f"Aero pool {pool_address} is still not staked in gauge "
-                    f"{gauge_address} after {attempts} attempts; no longer staking it"
-                )
-                continue
+                attempted_at = position.get("restake_attempted_at", 0)
+                if now - attempted_at < AERO_RESTAKE_RETRY_COOLDOWN_SECONDS:
+                    self.context.logger.warning(
+                        f"Aero pool {pool_address} is still not staked in gauge "
+                        f"{gauge_address} after {attempts} attempts; retrying after "
+                        f"{AERO_RESTAKE_RETRY_COOLDOWN_SECONDS}s"
+                    )
+                    continue
+                attempts = 0
 
             self.context.logger.info(
                 f"Aero pool {pool_address} is open but not staked in gauge "
@@ -335,6 +342,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             stake_action = self._build_stake_lp_tokens_action(position)
             if stake_action:
                 position["restake_attempts"] = attempts + 1
+                position["restake_attempted_at"] = now
                 actions.append(stake_action)
         if actions:
             self.store_current_positions()

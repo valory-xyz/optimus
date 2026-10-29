@@ -67,6 +67,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     withdrawals_ts_kv_key,
 )
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    AERO_PROTOCOL,
     is_aero_position,
 )
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
@@ -1052,9 +1053,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 DexType.BALANCER.value: "balancerPool",
             }
 
+            # Aero positions share the Velodrome-family dex_type but are
+            # reported as their own protocol so the UI can tell them apart.
+            if position is not None and is_aero_position(position):
+                allocation_type = AERO_PROTOCOL
+            else:
+                allocation_type = dex_type_mapping.get(dex_type, dex_type)
+
             allocation = {
                 "chain": chain,
-                "type": dex_type_mapping.get(dex_type, dex_type),
+                "type": allocation_type,
                 "id": pool_id,
                 "assets": assets,
                 "apr": round(float(apr), 2),
@@ -1355,7 +1363,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Added {reward_symbol} rewards to position: {velo_rewards}"
                     )
 
-        details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
+        protocol_name = "Aero" if is_aero_position(position) else "Velodrome"
+        details = f"{protocol_name} " + (
+            "CL Pool" if position.get("is_cl_pool") else "Pool"
+        )
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
             position.get("token1"): position.get("token1_symbol"),

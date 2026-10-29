@@ -23,6 +23,7 @@ import json
 import logging
 import math
 import random
+import re
 import time
 import types
 from abc import ABC
@@ -2832,6 +2833,8 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, Optional[Dict]]:
         """Query subgraph for service rewards using service query"""
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
+        # Gateway URLs embed an API key; keep it out of the logs.
+        logged_endpoint = re.sub(r"/api/[^/]+/", "/api/<redacted>/", str(endpoint))
         service_id = self.params.on_chain_service_id
 
         query = {"query": f"""
@@ -2871,12 +2874,14 @@ class LiquidityTraderBaseBehaviour(
                 return service_data
             else:
                 self.context.logger.warning(
-                    f"No service data found for service ID {service_id}"
+                    f"No service data found for service ID {service_id} "
+                    f"at {logged_endpoint}"
                 )
                 return None
 
         self.context.logger.error(
-            f"Failed to query subgraph: {response.status_code} - {response.body}"  # type: ignore[str-bytes-safe]
+            f"Failed to query subgraph at {logged_endpoint}: "
+            f"{response.status_code} - {response.body}"  # type: ignore[str-bytes-safe]
         )
         return None
 
@@ -2894,6 +2899,11 @@ class LiquidityTraderBaseBehaviour(
 
         # Query service data directly using simple GraphQL query
         service_data = yield from self.query_service_rewards(chain)
+
+        # Record the attempt, not only a success, so a subgraph that can't
+        # serve the service is queried once per interval instead of every period.
+        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
+        yield from self._write_kv({update_key: str(int(self._get_current_timestamp()))})
 
         if not service_data:
             self.context.logger.info(f"No service data found for {chain}")
@@ -2922,10 +2932,6 @@ class LiquidityTraderBaseBehaviour(
                 f"(Block: {service_data.get('blockNumber', 'N/A')}, "
                 f"Timestamp: {service_data.get('blockTimestamp', 'N/A')})"
             )
-
-        # Mark as updated
-        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
-        yield from self._write_kv({update_key: str(int(self._get_current_timestamp()))})
 
         self.context.logger.info(f"Completed reward update for {chain}")
 

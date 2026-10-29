@@ -25,7 +25,7 @@ import json
 import os
 import tempfile
 import time
-from typing import Any, Generator, Optional
+from typing import Any, Dict, Generator, List, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -4233,6 +4233,24 @@ class TestQueryServiceRewards:
         assert result is None
         b.context.logger.error.assert_called()
 
+    def test_not_found_logs_endpoint_without_api_key(self) -> None:
+        """A subgraph that is gone is logged with its endpoint, minus the API key."""
+        b = _make_behaviour()
+        b.params.staking_subgraph_endpoints = {
+            "optimism": "https://gateway.thegraph.com/api/s3cr3t/subgraphs/id/2fe1"
+        }
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.body = json.dumps({"message": "Not found"}).encode("utf-8")
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        result = _exhaust(b.query_service_rewards("optimism"))
+        assert result is None
+        warning = b.context.logger.warning.call_args[0][0]
+        assert (
+            "https://gateway.thegraph.com/api/<redacted>/subgraphs/id/2fe1" in warning
+        )
+        assert "s3cr3t" not in warning
+
     def test_data_null_response(self) -> None:
         """Test query_service_rewards when data is null in response."""
         b = _make_behaviour()
@@ -4253,12 +4271,23 @@ class TestUpdateAccumulatedRewardsForChain:
         b.should_update_rewards_from_subgraph = _make_gen(False)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
 
-    def test_no_service_data(self) -> None:
-        """Test no service data."""
+    def test_no_service_data_records_attempt(self) -> None:
+        """A query that finds nothing still records the attempt, so the next period skips it."""
         b = _make_behaviour()
         b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
         b.query_service_rewards = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_current_timestamp = MagicMock(return_value=1793232000)  # type: ignore[method-assign]
+        writes: List[Dict[str, str]] = []
+
+        def fake_write_kv(data: Dict[str, str]) -> Generator[None, None, bool]:
+            """Record the write."""
+            writes.append(data)
+            yield
+            return True
+
+        b._write_kv = fake_write_kv  # type: ignore[assignment,method-assign]
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        assert writes == [{"last_reward_update_optimism": "1793232000"}]
 
     def test_success(self) -> None:
         """Test success."""

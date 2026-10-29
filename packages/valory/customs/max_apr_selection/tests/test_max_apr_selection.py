@@ -428,6 +428,44 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert "reasoning" in result
 
+    def test_current_position_with_unknown_metrics_is_exited(self) -> None:
+        """A held position whose metrics could not be read is still reasoned about."""
+        opps = [
+            self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.01, apr=30.0),
+        ]
+        current_pos = self._make_opportunity(
+            sharpe=1.0, depth=50.0, il_risk=-0.3, apr=0.0
+        )
+        current_pos.update(sharpe_ratio=None, depth_score=None, il_risk_score=None)
+        result = apply_risk_thresholds_and_select_optimal_strategy(
+            opps, composite_score_threshold=0.0, current_positions=[current_pos]
+        )
+        assert result["position_to_exit"] is current_pos
+        assert len(result["optimal_strategies"]) == 1
+        assert "risk-adjusted returns unknown, market liquidity unknown" in (
+            result["reasoning"]
+        )
+        assert "higher risk-adjusted returns" not in result["reasoning"]
+        assert "offers ." not in result["reasoning"]
+        assert "chosen on its composite score and APR" in result["reasoning"]
+
+    def test_current_position_with_unknown_metrics_is_kept(self) -> None:
+        """Without a better opportunity, unknown metrics are reported as unknown."""
+        opps = [
+            self._make_opportunity(sharpe=0.5, depth=10.0, il_risk=-0.1, apr=5.0),
+        ]
+        current_pos = self._make_opportunity(
+            sharpe=3.0, depth=100.0, il_risk=-0.1, apr=20.0
+        )
+        current_pos.update(sharpe_ratio=None, depth_score=None)
+        result = apply_risk_thresholds_and_select_optimal_strategy(
+            opps, composite_score_threshold=999.0, current_positions=[current_pos]
+        )
+        assert result["optimal_strategies"] == []
+        assert "risk-adjusted returns unknown, market liquidity unknown" in (
+            result["reasoning"]
+        )
+
     def test_top_opp_il_risk_none_in_comparison(self) -> None:
         """Test metrics comparison when top opp il_risk_score is None."""
         opp = self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.01, apr=30.0)

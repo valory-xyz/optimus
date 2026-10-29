@@ -111,6 +111,20 @@ def get_max_values(pools: Any) -> Any:
     }
 
 
+def format_metric(value: Any) -> str:
+    """Format a risk metric for the reasoning, which is None when not read."""
+    return f"{value:.2f}" if isinstance(value, (int, float)) else "unknown"
+
+
+def exceeds(value: Any, other: Any) -> bool:
+    """Return whether a risk metric exceeds another, False if either is unknown."""
+    return (
+        isinstance(value, (int, float))
+        and isinstance(other, (int, float))
+        and value > other
+    )
+
+
 def il_risk_descriptor(il_score: Any) -> Any:
     """Map the IL risk score to a qualitative descriptor."""
     # Handle None values
@@ -269,8 +283,8 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
                 reasoning.append(
                     f"Currently invested in {exit_pool.get('dex_type', 'unknown')} pool {exit_pool.get('pool_address', 'unknown')} "
-                    f"with metrics: risk-adjusted returns {exit_pool.get('sharpe_ratio', 0):.2f}, "
-                    f"market liquidity {exit_pool.get('depth_score', 0):.2f}, "
+                    f"with metrics: risk-adjusted returns {format_metric(exit_pool.get('sharpe_ratio', 0))}, "
+                    f"market liquidity {format_metric(exit_pool.get('depth_score', 0))}, "
                     f"impermanent loss risk is {il_risk_exit}."
                 )
 
@@ -278,9 +292,13 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
             # Determine which metric is getting it over the line
             metrics_improved = []
-            if top_opp.get("sharpe_ratio", 0) > position_to_exit.get("sharpe_ratio", 0):
+            if exceeds(
+                top_opp.get("sharpe_ratio", 0), position_to_exit.get("sharpe_ratio", 0)
+            ):
                 metrics_improved.append("higher risk-adjusted returns")
-            if top_opp.get("depth_score", 0) > position_to_exit.get("depth_score", 0):
+            if exceeds(
+                top_opp.get("depth_score", 0), position_to_exit.get("depth_score", 0)
+            ):
                 metrics_improved.append("better market liquidity")
 
             # Safe comparison for il_risk_score that handles None values
@@ -293,13 +311,20 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             ):
                 metrics_improved.append("lower impermanent loss risk")
 
-            reasoning.append(
+            found = (
                 f"Found opportunity in {top_opp.get('dex_type', 'unknown')} pool {top_opp.get('pool_address', 'unknown')} "
                 f"with expected APR of {top_opp.get('apr', 0):.2f}%. "
-                f"The new pool offers {', '.join(metrics_improved)}. "
-                f"While not all metrics are improved, the improvement in "
-                f"{' and '.join(metrics_improved)} makes it more desirable."
             )
+            if metrics_improved:
+                reasoning.append(
+                    found + f"The new pool offers {', '.join(metrics_improved)}. "
+                    f"While not all metrics are improved, the improvement in "
+                    f"{' and '.join(metrics_improved)} makes it more desirable."
+                )
+            else:
+                reasoning.append(
+                    found + "The new pool is chosen on its composite score and APR."
+                )
         else:
             logs.append(
                 f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}"
@@ -309,8 +334,8 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
             reasoning.append(
                 "Current position remains optimal. Current metrics: "
-                f"risk-adjusted returns {current_pool.get('sharpe_ratio', 0):.2f}, "
-                f"market liquidity {current_pool.get('depth_score', 0):.2f}, "
+                f"risk-adjusted returns {format_metric(current_pool.get('sharpe_ratio', 0))}, "
+                f"market liquidity {format_metric(current_pool.get('depth_score', 0))}, "
                 f"impermanent loss risk is {il_risk_current}. "
                 "No better opportunities found at this time."
             )

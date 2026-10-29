@@ -120,10 +120,26 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.set_done()
                 return
 
+            # Check minimum hold period
             # Check if no current positions and uninvested ETH, prepare swap to USDC
             actions = yield from self.check_and_prepare_non_whitelisted_swaps()
             if actions:
                 yield from self.send_actions(actions)
+
+            # The trailing stop-loss compares each open position's live APR
+            # with its entry APR, so the APRs are refreshed first.
+            yield from self.update_position_metrics()
+
+            (
+                should_proceed,
+                positions_eligible_for_exit,
+            ) = yield from self._apply_tip_filters_to_exit_decisions()
+            if not should_proceed:
+                yield from self.send_actions()
+                return
+
+            if positions_eligible_for_exit:
+                self.positions_eligible_for_exit = positions_eligible_for_exit
 
             # Check for funds
             are_funds_available = self.check_funds()
@@ -150,7 +166,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 actions = cached_opportunity_result
             else:
                 # No valid cache, proceed with normal flow
-                actions = yield from self._evaluate_strategy()
+                # Fetch trading opportunities
+                yield from self.fetch_all_trading_opportunities()
+
+                # Execute strategy and prepare actions
+                actions = yield from self.prepare_strategy_actions()
 
             # Track backoff state based on whether we produced actionable results
             self._update_strategy_backoff(actions)
@@ -158,32 +178,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Send final actions
             yield from self.send_actions(actions)
-
-    def _evaluate_strategy(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Filter the open positions by TiP and prepare the actions.
-
-        The trailing stop-loss reads each open position's live APR, and the
-        opportunity-cost exit compares it with the best opportunity, so both
-        are refreshed before the TiP filters run.
-
-        :yields: None for async-style operation.
-        :return: the actions, empty when TiP blocks every open position.
-        """
-        yield from self.update_position_metrics()
-        yield from self.fetch_all_trading_opportunities()
-
-        (
-            should_proceed,
-            positions_eligible_for_exit,
-        ) = yield from self._apply_tip_filters_to_exit_decisions()
-        if not should_proceed:
-            return []
-
-        if positions_eligible_for_exit:
-            self.positions_eligible_for_exit = positions_eligible_for_exit
-
-        actions = yield from self.prepare_strategy_actions()
-        return actions
 
     def send_actions(self, actions: Optional[List[Any]] = None) -> Generator:
         """Send actions and complete the round."""
@@ -1462,6 +1456,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not open_positions:
             return
 
+        # After a restart the strategies are not loaded yet.
+        yield from self.download_strategies()
         current_timestamp = self._get_current_timestamp()
         for position in open_positions:
             dex_type = position.get("dex_type")
@@ -1771,22 +1767,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def _open_pool_addresses(self) -> List[str]:
-        """Return the pool addresses of all open positions, checksummed.
-
-        The opportunity search runs before the TiP filters, so it excludes
-        every open position rather than only those eligible for exit.
-
-        :return: the checksummed pool addresses.
-        """
-        return [
-            to_checksum_address(pos.get("pool_address"))
-            for pos in self.current_positions
-            if pos.get("status") == PositionStatus.OPEN.value
-            and pos.get("pool_address")
-            and len(pos.get("pool_address", "")) == 42
-        ]
-
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities using asyncio for concurrency."""
         # A new list, not a cleared one: the class-level default is shared
@@ -1811,7 +1791,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.available_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": self._open_pool_addresses(),
+                    "current_positions": (
+                        [
+                            to_checksum_address(pos.get("pool_address"))
+                            for pos in self.positions_eligible_for_exit
+                            if pos.get("status") == PositionStatus.OPEN.value
+                            and pos.get("pool_address")
+                            and len(pos.get("pool_address", "")) == 42
+                        ]
+                        if self.positions_eligible_for_exit
+                        else []
+                    ),
                     "coingecko_api_key": self.coingecko.api_key,
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
@@ -1934,7 +1924,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "apr_threshold": self.params.apr_threshold,
                 "protocols": self.params.available_protocols,
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                "current_positions": self._open_pool_addresses(),
+                "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
                 "x402_session": self._paid_session_or_none(),
@@ -1943,8 +1933,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if self.coingecko.use_x402
                     else None
                 ),
-                # The live APR is read from the same RPCs and price cache
-                # as the opportunities it is compared with.
+                # The live APR is read with the same RPCs and price cache
+                # as the opportunity search.
                 "price_cache_ttl": self.params.strategy_price_cache_ttl,
                 "price_cache": self.shared_state.strategy_coingecko_price_cache,
                 "chain_to_rpc": {

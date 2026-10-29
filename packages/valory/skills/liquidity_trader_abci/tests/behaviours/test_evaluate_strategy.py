@@ -28,7 +28,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
-from eth_utils import to_checksum_address
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
@@ -2721,101 +2720,44 @@ class TestAsyncAct:
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([{"action": "swap"}])
-        b.check_funds = MagicMock(return_value=False)
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
+        b._apply_tip_filters_to_exit_decisions = _gen_return((False, []))
         _drive(b.async_act(), sends=[None] * 15)
-        # send_actions called twice: once with swap actions, once with no actions (no funds)
+        # send_actions called twice: once with swap actions, once with no actions (tip block)
         assert len(calls) == 2
 
-    def _evaluation(self, b, tip_result, order):
-        """Stub the steps of an evaluation, recording the order they run in."""
-
-        def _step(name, value=None):
-            def _inner(*a, **kw):
-                order.append(name)
-                yield
-                return value
-
-            return _inner
-
+    def test_tip_filters_block(self):
+        """Test tip filters block."""
+        b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
-        b.check_funds = MagicMock(return_value=True)
-        b._read_kv = _gen_return({})
-        b._write_kv = _gen_return(True)
-        b._check_and_use_cached_cl_opportunity = _gen_return(None)
-        b.update_position_metrics = _step("update_position_metrics")
-        b.fetch_all_trading_opportunities = _step("fetch_all_trading_opportunities")
-        b._apply_tip_filters_to_exit_decisions = _step(
-            "_apply_tip_filters_to_exit_decisions", tip_result
-        )
-        b.prepare_strategy_actions = _step(
-            "prepare_strategy_actions", [{"action": "enter"}]
-        )
-
-    def test_tip_filters_read_refreshed_positions_and_opportunities(self):
-        """Live APRs and opportunities are read before the TiP filters need them."""
-        b = _mk()
-        order = []
-        eligible = [{"status": "open", "pool_address": "0xpool"}]
-        self._evaluation(b, (True, eligible), order)
+        b._apply_tip_filters_to_exit_decisions = _gen_return((False, []))
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
-        _drive(b.async_act(), sends=[None] * 20)
-        assert order == [
-            "update_position_metrics",
-            "fetch_all_trading_opportunities",
-            "_apply_tip_filters_to_exit_decisions",
-            "prepare_strategy_actions",
-        ]
-        assert b.positions_eligible_for_exit == eligible
-        assert calls == [[{"action": "enter"}]]
-
-    def test_tip_filters_block(self):
-        """A blocked evaluation sends no actions and counts toward the backoff."""
-        b = _mk()
-        order = []
-        self._evaluation(b, (False, []), order)
-        send_actions, calls = self._make_send_actions()
-        b.send_actions = send_actions
-        _drive(b.async_act(), sends=[None] * 20)
-        assert "prepare_strategy_actions" not in order
-        assert calls == [[]]
-        assert b.shared_state.consecutive_no_action_count == 1
-
-    def test_backoff_skips_the_tip_filters(self):
-        """In backoff, neither the strategies nor the TiP filters run."""
-        b = _mk()
-        order = []
-        self._evaluation(b, (True, []), order)
-        b.shared_state.consecutive_no_action_count = 1
-        b.shared_state.last_strategy_evaluation_time = time.time()
-        send_actions, calls = self._make_send_actions()
-        b.send_actions = send_actions
-        _drive(b.async_act(), sends=[None] * 20)
-        assert order == []
-        assert calls == [None]
+        _drive(b.async_act(), sends=[None] * 10)
+        assert len(calls) == 1  # send_actions() with no args
 
     def test_no_funds(self):
         """Test no funds."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
-        b._apply_tip_filters_to_exit_decisions = MagicMock()
+        b._apply_tip_filters_to_exit_decisions = _gen_return((True, []))
         b.check_funds = MagicMock(return_value=False)
         send_actions, calls = self._make_send_actions()
         b.send_actions = send_actions
         _drive(b.async_act(), sends=[None] * 10)
         assert len(calls) == 1
-        b._apply_tip_filters_to_exit_decisions.assert_not_called()
 
     def test_cached_opportunity_used(self):
         """Test cached opportunity used."""
         b = _mk()
         b._read_investing_paused = _gen_return(False)
         b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
-        b._apply_tip_filters_to_exit_decisions = MagicMock()
+        b._apply_tip_filters_to_exit_decisions = _gen_return(
+            (True, [{"status": "open"}])
+        )
         b.check_funds = MagicMock(return_value=True)
         b._check_and_use_cached_cl_opportunity = _gen_return([{"action": "cached"}])
         b._write_kv = _gen_return(True)
@@ -2824,7 +2766,6 @@ class TestAsyncAct:
         _drive(b.async_act(), sends=[None] * 10)
         assert len(calls) == 1
         assert calls[0] == [{"action": "cached"}]
-        b._apply_tip_filters_to_exit_decisions.assert_not_called()
 
     def test_normal_flow_no_cache(self):
         """Test normal flow no cache."""
@@ -2843,9 +2784,46 @@ class TestAsyncAct:
         assert len(calls) == 1
         assert calls[0] == [{"action": "enter"}]
 
+    def test_live_aprs_are_refreshed_before_the_tip_filters(self):
+        """The TiP filters read refreshed APRs; the search runs only past them."""
+        b = _mk()
+        order = []
+
+        def _step(name, value=None):
+            def _inner(*a, **kw):
+                order.append(name)
+                yield
+                return value
+
+            return _inner
+
+        b._read_investing_paused = _gen_return(False)
+        b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
+        b.check_funds = MagicMock(return_value=True)
+        b._check_and_use_cached_cl_opportunity = _gen_return(None)
+        b._write_kv = _gen_return(True)
+        b.update_position_metrics = _step("update_position_metrics")
+        b._apply_tip_filters_to_exit_decisions = _step(
+            "_apply_tip_filters_to_exit_decisions", (True, [])
+        )
+        b.fetch_all_trading_opportunities = _step("fetch_all_trading_opportunities")
+        b.prepare_strategy_actions = _step(
+            "prepare_strategy_actions", [{"action": "enter"}]
+        )
+        send_actions, calls = self._make_send_actions()
+        b.send_actions = send_actions
+        _drive(b.async_act(), sends=[None] * 20)
+        assert order == [
+            "update_position_metrics",
+            "_apply_tip_filters_to_exit_decisions",
+            "fetch_all_trading_opportunities",
+            "prepare_strategy_actions",
+        ]
+        assert calls == [[{"action": "enter"}]]
+
 
 class TestExitChecksThroughAsyncAct:
-    """The APR-based TiP exits fire from async_act with a live strategy run.
+    """The trailing stop-loss fires from async_act with a live strategy run.
 
     The pool strategy and the real max_apr_selection hyper strategy are
     exec'd from source as in production, and the pool strategy runs off the
@@ -2979,28 +2957,53 @@ def run(**kwargs):
         assert b.position_to_exit is position
         assert calls == [[{"action": "ExitPool"}]]
 
-    def test_opportunity_cost(self):
-        """A live APR below S * the best opportunity APR makes the position eligible."""
-        b, calls = self._behaviour(entry_apr=10.0, live_apr=5.0, opportunity_apr=20.0)
+    def test_trailing_stop_loss_on_the_first_evaluation_after_a_restart(self):
+        """Strategies still to download are loaded before the live APR is read."""
+        b, calls = self._behaviour(entry_apr=20.0, live_apr=0.0, opportunity_apr=6.0)
+        loaded = b.shared_state.strategies_executables
+        b.shared_state.strategies_executables = {}
+        b.shared_state.strategy_to_filehash = {name: "hash" for name in loaded}
+
+        def download_next_strategy():
+            name = next(iter(b.shared_state.strategy_to_filehash))
+            del b.shared_state.strategy_to_filehash[name]
+            b.shared_state.strategies_executables[name] = loaded[name]
+
+        b.download_next_strategy = download_next_strategy
+        b.sleep = _gen_none
         self._run(b.async_act())
-        position = b.current_positions[0]
-        assert position["apr"] == 5.0
+        assert b.current_positions[0]["apr"] == 0.0
         [reason] = self._exit_reasons(b)
-        assert "Opportunity cost check" in reason
-        hyper_kwargs = b.execute_strategy.call_args.kwargs
-        assert hyper_kwargs["current_positions"] == [position]
-        assert [o["apr"] for o in hyper_kwargs["trading_opportunities"]] == [20.0]
-        assert b.position_to_exit is position
+        assert "Trailing stop-loss triggered" in reason
         assert calls == [[{"action": "ExitPool"}]]
 
+    def test_opportunity_cost_exit_stays_inactive(self):
+        """Opportunities, even an earlier period's, are unknown to the TiP filters."""
+        # An earlier period, before the position was entered, searched.
+        earlier, _ = self._behaviour(entry_apr=10.0, live_apr=9.0, opportunity_apr=50.0)
+        earlier.current_positions = []
+        earlier.check_funds = MagicMock(return_value=True)
+        b, calls = self._behaviour(entry_apr=10.0, live_apr=9.0, opportunity_apr=50.0)
+        for behaviour in (earlier, b):
+            del behaviour.__dict__["trading_opportunities"]
+        try:
+            self._run(earlier.async_act())
+            assert [o["apr"] for o in earlier.trading_opportunities] == [50.0]
+            self._run(b.async_act())
+        finally:
+            EvaluateStrategyBehaviour.trading_opportunities = []
+        assert self._exit_reasons(b) == []
+        assert b.current_positions[0]["apr"] == 9.0
+        assert calls == [None]
+
     def test_healthy_position_stays_blocked(self):
-        """A live APR close to entry and to the best opportunity keeps the position."""
+        """A live APR close to the entry APR keeps the position."""
         b, calls = self._behaviour(entry_apr=10.0, live_apr=9.0, opportunity_apr=12.0)
         self._run(b.async_act())
         assert b.current_positions[0]["apr"] == 9.0
         assert self._exit_reasons(b) == []
         b.execute_strategy.assert_not_called()
-        assert calls == [[]]
+        assert calls == [None]
 
 
 class TestCalculateVelodromeTokenRatios:
@@ -4781,19 +4784,7 @@ class TestFetchAllTradingOpportunities:
 
 
 class TestOpportunitySearchInputs:
-    """The opportunity search runs before the TiP filters, so it can feed them."""
-
-    OPEN_A = "0x" + "ab" * 20
-    OPEN_B = "0x" + "cd" * 20
-
-    def _positions(self):
-        return [
-            {"status": PositionStatus.OPEN.value, "pool_address": self.OPEN_A},
-            {"status": PositionStatus.OPEN.value, "pool_address": self.OPEN_B},
-            {"status": PositionStatus.CLOSED.value, "pool_address": "0x" + "ef" * 20},
-            {"status": PositionStatus.OPEN.value, "pool_id": "balancer-id"},
-            {"status": PositionStatus.OPEN.value, "pool_address": "0xshort"},
-        ]
+    """The opportunity search keeps its inputs and results to its own run."""
 
     def _fetch(self, b, result):
         from concurrent.futures import Future
@@ -4814,18 +4805,6 @@ class TestOpportunitySearchInputs:
             with patch("asyncio.ensure_future", return_value=f):
                 _drive(b.fetch_all_trading_opportunities(), sends=[None] * 10)
         return b._run_all_strategies.call_args.args[0]
-
-    def test_excludes_every_open_position(self):
-        """Held pools are excluded even before any is known to be eligible for exit."""
-        b = _mk()
-        b.params.strategies_kwargs = {}
-        b.current_positions = self._positions()
-        b.positions_eligible_for_exit = []
-        [(_, kwargs)] = self._fetch(b, [{"result": []}])
-        assert kwargs["current_positions"] == [
-            to_checksum_address(self.OPEN_A),
-            to_checksum_address(self.OPEN_B),
-        ]
 
     def test_leaves_the_configured_strategy_kwargs_alone(self):
         """The run's kwargs are a copy, so the metrics run cannot leak into them."""
@@ -4860,15 +4839,14 @@ class TestMetricsRunInputs:
         f.set_result(value)
         return f
 
-    def test_shares_rpcs_price_cache_and_exclusions(self):
-        """Same RPCs, price cache and held pools as the search; params untouched."""
+    def test_shares_rpcs_and_price_cache(self):
+        """Same RPCs and price cache as the search; the params are untouched."""
         b = _mk()
         b.context.coingecko.use_x402 = False
         b.params.strategies_kwargs = {"strategy_a": {"graphql_endpoint": "url"}}
         b.params.optimism_ledger_rpc = "https://optimism.rpc"
         b.params.base_ledger_rpc = "https://base.rpc"
-        open_pool = "0x" + "ab" * 20
-        position = {"status": PositionStatus.OPEN.value, "pool_address": open_pool}
+        position = {"status": PositionStatus.OPEN.value, "pool_address": "0xpool"}
         b.current_positions = [position]
         b._async_execute_strategy = MagicMock()
         with patch(
@@ -4881,7 +4859,6 @@ class TestMetricsRunInputs:
         assert kwargs["get_metrics"] is True
         assert kwargs["position"] is position
         assert kwargs["graphql_endpoint"] == "url"
-        assert kwargs["current_positions"] == [to_checksum_address(open_pool)]
         assert kwargs["price_cache"] is b.shared_state.strategy_coingecko_price_cache
         assert kwargs["price_cache_ttl"] == b.params.strategy_price_cache_ttl
         assert kwargs["chain_to_rpc"] == {

@@ -157,6 +157,14 @@ def initial_value_ts_kv_key(chain: str) -> str:
     return f"last_initial_value_calculated_timestamp_{chain}"
 
 
+def round_down_swap_amount(amount: int, decimals: int) -> int:
+    """Round a swap amount down to what LiFi is sent for a token of these decimals."""
+    if decimals == ERC20_DECIMALS:
+        factor = SWAP_AMOUNT_ROUND_FACTOR_18_DECIMALS
+        return (amount // factor) * factor
+    return amount
+
+
 RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
@@ -167,6 +175,8 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
+# 18-decimal swap amounts go to LiFi rounded down to a multiple of this.
+SWAP_AMOUNT_ROUND_FACTOR_18_DECIMALS = 1000
 PORTFOLIO_UPDATE_INTERVAL = 3600 * 1  # 2hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
 # Initial available amount for ETH (0.005 ETH)

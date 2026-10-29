@@ -64,6 +64,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     VELODROME_FAMILY_DEX_TYPES,
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
+    round_down_swap_amount,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
     TRANSFER_EVENT_SIGNATURE,
@@ -2893,17 +2894,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Optional[List[Any]]]:
         """Get transaction data for route from LiFi API"""
-
-        def round_down_amount(amount: int, decimals: int) -> int:
-            """Round down the amount to the nearest round_factor to avoid API rounding issues."""
-            if decimals == 18:
-                # For tokens like ETH/WETH with 18 decimals, round to nearest 1000 wei
-                round_factor = 1000
-                rounded_amount = (amount // round_factor) * round_factor
-                return rounded_amount
-            else:
-                return amount
-
         slippage = self.params.slippage_for_swap
         investing_paused = yield from self._read_investing_paused()
         if investing_paused:
@@ -2966,19 +2956,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"Available balance: {available_amount} | Amount to swap: {amount} {from_token_symbol}"
         )
+        token_decimals = ERC20_DECIMALS
+        if amount > 0 and from_token_address != ZERO_ADDRESS:
+            token_decimals = yield from self._get_token_decimals(
+                from_chain, from_token_address
+            )
+
+        amount = round_down_swap_amount(amount, token_decimals)
         if amount <= 0:
             self.context.logger.error(
                 f"Not enough balance for {from_token_symbol} on chain {from_chain}"
             )
             return None
-
-        token_decimals = ERC20_DECIMALS
-        if from_token_address != ZERO_ADDRESS:
-            token_decimals = yield from self._get_token_decimals(
-                from_chain, from_token_address
-            )
-
-        amount = round_down_amount(amount, token_decimals)
         # TO:DO - Add logic to maintain a list of blacklisted bridges
         params = {
             "fromAddress": from_address,

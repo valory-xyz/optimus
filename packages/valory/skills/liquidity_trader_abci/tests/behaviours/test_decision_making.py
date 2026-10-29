@@ -4756,6 +4756,17 @@ class TestFetchRoutes:
         result = _exhaust(b.fetch_routes([], self._base_action()))
         assert result is None
 
+    def test_amount_rounding_to_zero_is_not_sent(self):
+        """An 18-decimal balance that rounds down to 0 wei never reaches LiFi."""
+        b = _make_behaviour()
+        b._read_investing_paused = _make_gen_method(False)
+        b._get_balance = MagicMock(return_value=999)
+        b._get_token_decimals = _make_gen_method(18)
+        b.get_http_response = MagicMock()
+        result = _exhaust(b.fetch_routes(self._positions(), self._base_action()))
+        assert result is None
+        b.get_http_response.assert_not_called()
+
     def test_success(self):
         """Test success."""
         b = _make_behaviour()

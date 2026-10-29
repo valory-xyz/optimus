@@ -1518,6 +1518,38 @@ class TestGetSafeBalancesFromSafeApi:
         assert len(result) == 1
         assert result[0]["asset_symbol"] == "VELO"
 
+    def test_reward_token_listed_by_safe_api_is_not_duplicated(self) -> None:
+        """A reward token SafeApi lists keeps one entry; an unlisted one is added."""
+        velo = "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db"
+        olas = "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"
+        b = _make_optimism_b()
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (
+                True,
+                [
+                    {
+                        "tokenAddress": velo,
+                        "token": {"symbol": "VELO"},
+                        "balance": "100",
+                        "fiatBalance": "0.95",
+                        "fiatConversion": "0.0095",
+                    }
+                ],
+            )
+        )
+        b._fetch_reward_balances = _make_gen(  # type: ignore[assignment,method-assign]
+            [
+                {"asset_symbol": "VELO", "address": velo.lower(), "balance": 100},
+                {"asset_symbol": "OLAS", "address": olas, "balance": 7},
+            ]
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        assert [(r["asset_symbol"], r["balance"]) for r in result] == [
+            ("VELO", 100),
+            ("OLAS", 7),
+        ]
+        assert result[0]["fiat_balance"] == "0.95"
+
     def test_api_failure_falls_back_to_cache(self) -> None:
         """API fails - fall back to KV-cached balances."""
         cached_data = [
@@ -1529,6 +1561,8 @@ class TestGetSafeBalancesFromSafeApi:
             },
         ]
         b = _make_optimism_b()
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
         b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached_data)})  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
@@ -1695,6 +1729,7 @@ class TestGetSafeBalancesFromSafeApi:
         )
 
         b = _make_optimism_b()
+        b._get_native_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
         now = 1_700_000_000
         cached = [{"tokenAddress": None, "balance": "55"}]
         b._get_current_timestamp = lambda: now  # type: ignore[assignment,method-assign]
@@ -1712,6 +1747,86 @@ class TestGetSafeBalancesFromSafeApi:
         result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
         eths = [r for r in result if r["asset_symbol"] == "ETH"]
         assert eths and eths[0]["balance"] == 55
+
+    def _stale_usdt_b(self) -> Any:
+        """Behaviour whose SafeApi fails over a stale ETH + USDT payload.
+
+        :return: behaviour instance serving the stale payload.
+        """
+        cached = [
+            {
+                "tokenAddress": None,
+                "balance": "1000",
+                "fiatBalance": "3.0",
+                "fiatConversion": "3000.0",
+            },
+            {
+                "tokenAddress": "0x" + "cc" * 20,
+                "token": {"symbol": "USDT"},
+                "balance": "4764504",
+                "fiatBalance": "4.764504",
+                "fiatConversion": "1.0",
+            },
+        ]
+        b = _make_optimism_b()
+        b._fetch_safe_balances_with_pagination = _make_gen((False, []))  # type: ignore[assignment,method-assign]
+        b._read_kv = _make_gen({"safe_balances_optimism": json.dumps(cached)})  # type: ignore[assignment,method-assign]
+        return b
+
+    def test_stale_payload_amounts_refreshed_onchain(self) -> None:
+        """A stale payload's cached amounts are replaced by the live on-chain ones."""
+        b = self._stale_usdt_b()
+        b._get_native_balance = _make_gen(1000)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(1705125)  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        eth, usdt = result
+        assert eth["balance"] == 1000
+        assert eth["fiat_balance"] == "3.0"
+        assert usdt["balance"] == 1705125
+        assert usdt["fiat_balance"] is None
+        assert usdt["fiat_conversion"] == "1.0"
+
+    def test_stale_payload_keeps_cached_amount_when_onchain_read_fails(
+        self,
+    ) -> None:
+        """A failed on-chain read keeps the cached amount and its USD value."""
+        b = self._stale_usdt_b()
+
+        def raising_native_balance(chain: Any, account: Any) -> Any:
+            yield
+            raise RuntimeError("rpc down")
+
+        b._get_native_balance = raising_native_balance  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(None)  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        eth, usdt = result
+        assert eth["balance"] == 1000
+        assert eth["fiat_balance"] == "3.0"
+        assert usdt["balance"] == 4764504
+        assert usdt["fiat_balance"] == "4.764504"
+
+    def test_fresh_safeapi_payload_not_reread_onchain(self) -> None:
+        """A successful SafeApi response is served as returned."""
+        b = _make_optimism_b()
+        b._get_native_balance = _make_gen(1)  # type: ignore[assignment,method-assign]
+        b._get_token_balance = _make_gen(1)  # type: ignore[assignment,method-assign]
+        b._fetch_safe_balances_with_pagination = _make_gen(  # type: ignore[assignment,method-assign]
+            (
+                True,
+                [
+                    {"tokenAddress": None, "balance": "1000", "fiatBalance": "3.0"},
+                    {
+                        "tokenAddress": "0x" + "cc" * 20,
+                        "token": {"symbol": "USDT"},
+                        "balance": "4764504",
+                        "fiatBalance": "4.764504",
+                    },
+                ],
+            )
+        )
+        result = _exhaust(b._get_safe_balances_from_safe_api("optimism"))
+        assert [r["balance"] for r in result] == [1000, 4764504]
+        assert [r["fiat_balance"] for r in result] == ["3.0", "4.764504"]
 
     def test_backstop_integrates_when_safeapi_partial(self) -> None:
         """End-to-end backstop integration when SafeApi returns partial data.

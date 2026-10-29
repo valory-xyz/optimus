@@ -41,7 +41,6 @@ from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
-from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
@@ -65,12 +64,16 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     VELODROME_FAMILY_DEX_TYPES,
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
+    round_down_swap_amount,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
     TRANSFER_EVENT_SIGNATURE,
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    is_aero_position,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import Event
 from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
     DecisionMakingRound,
@@ -96,6 +99,31 @@ from packages.valory.skills.liquidity_trader_abci.utils.feed import (
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
+
+# Aero gauges call their tape through a relay that fails open under a gas cap,
+# so a bare estimate can land below what the gauge call needs.
+AERO_GAUGE_GAS_MULTIPLIER = 1.3
+
+# Aero's position manager appends tickLower and tickUpper to IncreaseLiquidity;
+# both layouts start with (liquidity, amount0, amount1).
+INCREASE_LIQUIDITY_DATA_TYPES = {
+    to_hex(keccak(text="IncreaseLiquidity(uint256,uint128,uint256,uint256)"))[2:]: [
+        "uint128",
+        "uint256",
+        "uint256",
+    ],
+    to_hex(
+        keccak(text="IncreaseLiquidity(uint256,uint128,uint256,uint256,int24,int24)")
+    )[2:]: ["uint128", "uint256", "uint256", "int24", "int24"],
+}
+
+
+def _increase_liquidity_data_types(log: Dict[str, Any]) -> Optional[List[str]]:
+    """Return the data layout of an IncreaseLiquidity log, or None for any other log."""
+    topics = log.get("topics", [])
+    if not topics:
+        return None
+    return INCREASE_LIQUIDITY_DATA_TYPES.get(topics[0][2:])
 
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
@@ -517,6 +545,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "is_stable",
             "is_cl_pool",
             "advertised_apr",
+            "protocol",
+            "gauge_address",
         ]
 
         # Create the current_position dictionary with only the desired information
@@ -729,38 +759,38 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         is_cl_pool = action.get("is_cl_pool", False)
         dex_type = action.get("dex_type")
+        # Closed rows for the same pool keep the exit they were closed by.
         exited = [
             position
             for position in self.current_positions
             if position.get("pool_address") == pool_address
+            and position.get("chain") == action.get("chain")
             and position.get("status") == PositionStatus.OPEN.value
         ]
 
-        # Find all positions with the matching pool address and update their status
-        for position in self.current_positions:
-            if position.get("pool_address") == pool_address:
-                position["status"] = PositionStatus.CLOSED.value
-                position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
-                position["exit_timestamp"] = int(self._get_current_timestamp())
+        for position in exited:
+            position["status"] = PositionStatus.CLOSED.value
+            position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
+            position["exit_timestamp"] = int(self._get_current_timestamp())
 
-                # Record TiP performance metrics
-                self._record_tip_performance(position)
+            # Record TiP performance metrics
+            self._record_tip_performance(position)
 
-                # For Velodrome CL pools, log all the positions that were exited
-                if (
-                    dex_type in VELODROME_FAMILY_DEX_TYPES
-                    and is_cl_pool
-                    and "positions" in position
-                ):
-                    position_ids = [
-                        pos["token_id"] for pos in position.get("positions", [])
-                    ]
-                    self.context.logger.info(
-                        f"Closed Velodrome CL pool with {len(position_ids)} positions. "
-                        f"Token IDs: {position_ids}"
-                    )
-                else:
-                    self.context.logger.info(f"Closing position: {position}")
+            # For Velodrome CL pools, log all the positions that were exited
+            if (
+                dex_type in VELODROME_FAMILY_DEX_TYPES
+                and is_cl_pool
+                and "positions" in position
+            ):
+                position_ids = [
+                    pos["token_id"] for pos in position.get("positions", [])
+                ]
+                self.context.logger.info(
+                    f"Closed Velodrome CL pool with {len(position_ids)} positions. "
+                    f"Token IDs: {position_ids}"
+                )
+            else:
+                self.context.logger.info(f"Closing position: {position}")
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
@@ -1881,6 +1911,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if tick_ranges:
                 kwargs["tick_ranges"] = tick_ranges
                 self.context.logger.info(f"Added tick_ranges to kwargs: {tick_ranges}")
+            if action.get("protocol"):
+                kwargs["protocol"] = action["protocol"]
+                kwargs["pool_factory"] = action.get("pool_factory")
 
             # Log final kwargs before passing to pool.enter
             self.context.logger.info(f"Final kwargs for pool.enter: {kwargs}")
@@ -2059,6 +2092,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if dex_type in VELODROME_FAMILY_DEX_TYPES:
             exit_pool_kwargs["is_stable"] = is_stable
             exit_pool_kwargs["is_cl_pool"] = is_cl_pool
+            exit_pool_kwargs["protocol"] = action.get("protocol")
 
             # For Velodrome CL pools, we need to handle multiple positions
             if is_cl_pool:
@@ -2860,17 +2894,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Optional[List[Any]]]:
         """Get transaction data for route from LiFi API"""
-
-        def round_down_amount(amount: int, decimals: int) -> int:
-            """Round down the amount to the nearest round_factor to avoid API rounding issues."""
-            if decimals == 18:
-                # For tokens like ETH/WETH with 18 decimals, round to nearest 1000 wei
-                round_factor = 1000
-                rounded_amount = (amount // round_factor) * round_factor
-                return rounded_amount
-            else:
-                return amount
-
         slippage = self.params.slippage_for_swap
         investing_paused = yield from self._read_investing_paused()
         if investing_paused:
@@ -2933,19 +2956,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"Available balance: {available_amount} | Amount to swap: {amount} {from_token_symbol}"
         )
+        token_decimals = ERC20_DECIMALS
+        if amount > 0 and from_token_address != ZERO_ADDRESS:
+            token_decimals = yield from self._get_token_decimals(
+                from_chain, from_token_address
+            )
+
+        amount = round_down_swap_amount(amount, token_decimals)
         if amount <= 0:
             self.context.logger.error(
                 f"Not enough balance for {from_token_symbol} on chain {from_chain}"
             )
             return None
-
-        token_decimals = ERC20_DECIMALS
-        if from_token_address != ZERO_ADDRESS:
-            token_decimals = yield from self._get_token_decimals(
-                from_chain, from_token_address
-            )
-
-        amount = round_down_amount(amount, token_decimals)
         # TO:DO - Add logic to maintain a list of blacklisted bridges
         params = {
             "fromAddress": from_address,
@@ -3096,20 +3118,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        # Define the event signature and calculate its hash
-        event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
-        event_signature_hash = keccak(text=event_signature)
-        event_signature_hex = to_hex(event_signature_hash)[2:]
-
-        # Extract logs from the response
-        logs = response.get("logs", [])
-
         # Find all logs that match the IncreaseLiquidity event
         matching_logs = [
             log
-            for log in logs
-            if log.get("topics", [])
-            and log.get("topics", [])[0][2:] == event_signature_hex
+            for log in response.get("logs", [])
+            if _increase_liquidity_data_types(log)
         ]
 
         if not matching_logs:
@@ -3160,7 +3173,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 data_bytes = bytes.fromhex(data_hex[2:])
-                decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+                decoded_data = decode(_increase_liquidity_data_types(log), data_bytes)
                 liquidity = decoded_data[0]
                 amount0 = decoded_data[1]
                 amount1 = decoded_data[2]
@@ -3203,20 +3216,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None, None, None, None, None
 
-        # Define the event signature and calculate its hash
-        event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
-        event_signature_hash = keccak(text=event_signature)
-        event_signature_hex = to_hex(event_signature_hash)[2:]
-
-        # Extract logs from the response
-        logs = response.get("logs", [])
-
         # Find the log that matches the IncreaseLiquidity event
         log = next(
             (
                 log
-                for log in logs
-                if log.get("topics", [])[0][2:] == event_signature_hex
+                for log in response.get("logs", [])
+                if _increase_liquidity_data_types(log)
             ),
             None,
         )
@@ -3243,7 +3248,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None, None, None, None
 
             data_bytes = bytes.fromhex(data_hex[2:])
-            decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+            decoded_data = decode(_increase_liquidity_data_types(log), data_bytes)
             liquidity = decoded_data[0]
             amount0 = decoded_data[1]
             amount1 = decoded_data[2]
@@ -3275,29 +3280,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error decoding data from mint event: {e}")
             return None, None, None, None, None
-
-    def get_block(
-        self,
-        block_number: Optional[str] = None,
-        **kwargs: Any,
-    ) -> Generator[None, None, Optional[Dict]]:
-        """Get block data from the ledger API."""
-        block_identifier = block_number if block_number is not None else "latest"
-
-        ledger_api_response = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
-            ledger_callable="get_block",
-            block_identifier=block_identifier,
-            **kwargs,
-        )
-        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
-            self.context.logger.error(
-                f"Failed to fetch block {block_identifier}: {ledger_api_response}"
-            )
-            return None
-
-        block = ledger_api_response.state.body
-        return block
 
     def _get_data_from_join_pool_tx_receipt(
         self, tx_hash: str, chain: str
@@ -4112,6 +4094,50 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error renaming entry costs key: {e}")
 
+    def _get_gauge_gas_limit(
+        self,
+        action: Dict[str, Any],
+        safe_address: str,
+        to_address: str,
+        data: bytes,
+        operation: int,
+    ) -> Generator[None, None, int]:
+        """Get the gas limit for a gauge Safe tx; 0 leaves it to settlement's estimate."""
+        if not is_aero_position(action):
+            return 0
+
+        agent_address = self.context.agent_address
+        # Pre-validated signature (v=1): the Safe accepts it when its owner sends the tx.
+        signature = agent_address[2:].lower().rjust(64, "0") + "0" * 64 + "01"
+        estimate = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction",
+            data_key="gas",
+            sender_address=agent_address,
+            owners=(agent_address,),
+            to_address=to_address,
+            value=ETHER_VALUE,
+            data=data,
+            signatures_by_owner={agent_address: signature},
+            operation=operation,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=action.get("chain"),
+        )
+        if not estimate:
+            self.context.logger.warning(
+                "Could not estimate gas for the Aero gauge tx; "
+                "leaving the gas limit to transaction settlement"
+            )
+            return 0
+
+        gas_limit = int(estimate * AERO_GAUGE_GAS_MULTIPLIER)
+        self.context.logger.info(
+            f"Aero gauge tx gas limit: {gas_limit} (estimate {estimate})"
+        )
+        return gas_limit
+
     def get_stake_lp_tokens_tx_hash(
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
@@ -4172,7 +4198,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            self, pool_address, chain=chain
+                            self,
+                            pool_address,
+                            chain=chain,
+                            gauge_address=matching_position.get("gauge_address"),
                         )
 
                 if not token_ids or not gauge_address:
@@ -4187,6 +4216,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     gauge_address=gauge_address,
                     chain=chain,
                     safe_address=safe_address,
+                    protocol=action.get("protocol"),
                 )
             else:
                 # For regular pools, get LP token balance to stake
@@ -4205,6 +4235,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     amount=lp_balance,
                     chain=chain,
                     safe_address=safe_address,
+                    gauge_address=action.get("gauge_address"),
                 )
 
             if result is None:
@@ -4258,6 +4289,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Hash of the Safe staking transaction: {safe_tx_hash}"
             )
 
+            gas_limit = yield from self._get_gauge_gas_limit(
+                action, safe_address, contract_address, tx_hash, operation
+            )
+
             payload_string = hash_payload_to_hex(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
@@ -4265,6 +4300,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 operation=operation,
                 to_address=contract_address,
                 data=tx_hash,
+                gas_limit=gas_limit,
             )
 
             self.context.logger.info(
@@ -4337,7 +4373,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            self, pool_address, chain=chain
+                            self,
+                            pool_address,
+                            chain=chain,
+                            gauge_address=matching_position.get("gauge_address"),
                         )
 
                 if not token_ids or not gauge_address:
@@ -4352,11 +4391,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     gauge_address=gauge_address,
                     chain=chain,
                     safe_address=safe_address,
+                    protocol=action.get("protocol"),
                 )
             else:
                 # For regular pools, get staked balance
                 staked_balance = yield from pool.get_staked_balance(
-                    self, lp_token=pool_address, user_address=safe_address, chain=chain
+                    self,
+                    lp_token=pool_address,
+                    user_address=safe_address,
+                    chain=chain,
+                    gauge_address=action.get("gauge_address"),
                 )
 
                 if not staked_balance or staked_balance <= 0:
@@ -4371,6 +4415,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     amount=staked_balance,
                     chain=chain,
                     safe_address=safe_address,
+                    gauge_address=action.get("gauge_address"),
+                    protocol=action.get("protocol"),
                 )
 
             if not result or result.get("error"):
@@ -4423,6 +4469,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Hash of the Safe unstaking transaction: {safe_tx_hash}"
             )
 
+            gas_limit = yield from self._get_gauge_gas_limit(
+                action, safe_address, contract_address, tx_hash, operation
+            )
+
             payload_string = hash_payload_to_hex(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
@@ -4430,6 +4480,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 operation=operation,
                 to_address=contract_address,
                 data=tx_hash,
+                gas_limit=gas_limit,
             )
 
             self.context.logger.info(
@@ -4504,7 +4555,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address from pool if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            self, pool_address, chain=chain
+                            self,
+                            pool_address,
+                            chain=chain,
+                            gauge_address=matching_position.get("gauge_address"),
                         )
 
                 if not token_ids or not gauge_address:
@@ -4547,11 +4601,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     token_ids=token_ids,
                     chain=chain,
                     safe_address=safe_address,
+                    protocol=action.get("protocol"),
                 )
             else:
                 # For regular pools
                 result = yield from pool.claim_rewards(
-                    self, lp_token=pool_address, chain=chain, safe_address=safe_address
+                    self,
+                    lp_token=pool_address,
+                    chain=chain,
+                    safe_address=safe_address,
+                    gauge_address=action.get("gauge_address"),
+                    protocol=action.get("protocol"),
                 )
 
             if not result or result.get("error"):
@@ -4604,6 +4664,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Hash of the Safe reward claiming transaction: {safe_tx_hash}"
             )
 
+            gas_limit = yield from self._get_gauge_gas_limit(
+                action, safe_address, contract_address, tx_hash, operation
+            )
+
             payload_string = hash_payload_to_hex(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
@@ -4611,6 +4675,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 operation=operation,
                 to_address=contract_address,
                 data=tx_hash,
+                gas_limit=gas_limit,
             )
 
             self.context.logger.info(
@@ -4648,6 +4713,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["staked"] = True
                 position["staking_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["staking_timestamp"] = int(self._get_current_timestamp())
+                position.pop("restake_attempts", None)
+                position.pop("restake_attempted_at", None)
 
                 # For CL pools, we might want to store additional metadata
                 if is_cl_pool:
@@ -4675,6 +4742,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if (
                 position.get("pool_address") == pool_address
                 and position.get("chain") == chain
+                and position.get("status") == PositionStatus.OPEN.value
             ):
                 # Remove staking metadata from position
                 position["staked"] = False

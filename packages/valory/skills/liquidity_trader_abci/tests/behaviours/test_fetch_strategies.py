@@ -8295,6 +8295,35 @@ class TestFundingEventsFileRoundTrip:
 
         assert self._on_disk(obj) == {"base": self.INCOMING, "base_withdrawals": {}}
 
+    def test_mode_fetch_keeps_other_keys(self, tmp_path):
+        """A Mode fetch adds its new date and keeps every other key."""
+        mode_row = {"transfer_id": "tid-mode-old", "type": "token", "amount": 2.0}
+        obj = self._obj(
+            tmp_path,
+            {
+                "mode": {"2026-06-20": [mode_row]},
+                "optimism": self.INCOMING,
+                "optimism_withdrawals": self.WITHDRAWALS,
+            },
+        )
+        new_row = {"transfer_id": "tid-mode-new", "type": "token", "amount": 1.0}
+
+        def token_transfers(address, end_datetime, all_transfers_by_date, fetch_all):
+            """Stub token fetcher that adds one new date and succeeds."""
+            all_transfers_by_date["2026-10-28"].append(new_row)
+            yield
+            return True
+
+        obj._fetch_token_transfers_mode = token_transfers
+        obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
+        _drive(obj._fetch_all_transfers_until_date_mode("0xA", "2026-10-28", False))
+
+        assert self._on_disk(obj) == {
+            "mode": {"2026-06-20": [mode_row], "2026-10-28": [new_row]},
+            "optimism": self.INCOMING,
+            "optimism_withdrawals": self.WITHDRAWALS,
+        }
+
 
 class TestErc20OptimismWithdrawalCache:
     """Withdrawal fetcher persistence and early-stop (PR 1.1 + 1.2)."""

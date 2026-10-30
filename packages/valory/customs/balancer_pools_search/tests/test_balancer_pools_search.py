@@ -2764,10 +2764,25 @@ class TestCalculateMetricsLiveApr:
         return result, mock_query
 
     def test_apr_matches_the_opportunity_apr(self) -> None:
-        """The pool's APR items are summed the way the opportunity search sums them."""
-        pool = {"dynamicData": {"aprItems": self.APR_ITEMS}}
+        """The live APR equals the APR the opportunity search gives the same pool."""
+        pool = {
+            "id": self.POSITION["pool_id"],
+            "address": self.POSITION["pool_id"][:42],
+            "chain": "OPTIMISM",
+            "type": "WEIGHTED",
+            "poolTokens": [
+                {"address": "0xt0", "symbol": "TK0"},
+                {"address": "0xt1", "symbol": "TK1"},
+            ],
+            "dynamicData": {"aprItems": self.APR_ITEMS, "totalLiquidity": "50000"},
+        }
+        with patch.object(bal_mod, "get_pool_token_prices", return_value={}):
+            (opportunity,) = format_pool_data(
+                get_filtered_pools_for_balancer([dict(pool)], [], {"optimism": {}}),
+                "key",
+            )
         result, mock_query = self._metrics({"poolGetPool": pool})
-        assert result["apr"] == pytest.approx(get_total_apr(pool) * 100)
+        assert result["apr"] == pytest.approx(opportunity["apr"])
         assert result["apr"] == pytest.approx(1.21)
         query, endpoint, variables = mock_query.call_args.args
         assert "poolGetPool(id: $id, chain: $chain)" in query
@@ -2783,6 +2798,14 @@ class TestCalculateMetricsLiveApr:
     def test_no_pool_leaves_apr_out(self) -> None:
         """An empty answer gives no APR."""
         result, _ = self._metrics({})
+        assert "apr" not in result
+
+    @pytest.mark.parametrize(
+        "dynamic_data", [{"aprItems": []}, {"aprItems": None}, {}, None]
+    )
+    def test_no_apr_items_leaves_apr_out(self, dynamic_data: Any) -> None:
+        """A pool without APR items gives no APR rather than a zero."""
+        result, _ = self._metrics({"poolGetPool": {"dynamicData": dynamic_data}})
         assert "apr" not in result
 
 

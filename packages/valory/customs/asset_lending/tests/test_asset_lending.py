@@ -862,7 +862,7 @@ class TestCalculateMetrics:
             "apy": {"total": 0.0425},
             "asset": {"symbol": "WETH", "address": "0x42"},
             "whitelistedSilos": [],
-            "tvl": 1000,
+            "tvl": 50_000,
         }
         other = {**held, "address": "0x" + "22" * 20, "apy": {"total": 0.5}}
         position = {
@@ -872,10 +872,10 @@ class TestCalculateMetrics:
         }
         with patch.object(al_module, "fetch_aggregators", return_value=[other, held]):
             result = calculate_metrics(position, "key")
+        (filtered,) = filter_aggregators(["mode"], [dict(held)], "0x42", [])
         formatted = format_aggregator(
             {
-                **held,
-                "total_apr": held["apy"]["total"],
+                **filtered,
                 "il_risk_score": None,
                 "sharpe_ratio": None,
                 "depth_score": None,
@@ -908,6 +908,27 @@ class TestCalculateMetrics:
             result = calculate_metrics(position, "key")
         assert "apr" not in result  # type: ignore[operator]
         assert result["sharpe_ratio"] == 1.5  # type: ignore[index]
+
+    @pytest.mark.parametrize(
+        "apy", [{}, None, {"total": None}, {"total": "0.04"}], ids=str
+    )
+    def test_listed_aggregator_without_total_apy_leaves_apr_out(self, apy: Any) -> None:
+        """A listed aggregator without a numeric apy.total gives no APR rather than a zero."""
+        position = {"token0_symbol": "WETH", "whitelistedSilos": [], "pool_address": "0x1"}
+        listed = {"address": "0x1", "apy": apy}
+        with patch.object(
+            al_module, "fetch_aggregators", return_value=[listed]
+        ), patch.object(
+            al_module, "calculate_il_risk_score_for_silos", return_value=-0.05
+        ), patch.object(
+            al_module, "fetch_historical_data", return_value=[{"timestamp": 1}]
+        ), patch.object(
+            al_module, "get_sharpe_ratio_for_address", return_value=1.5
+        ), patch.object(
+            al_module, "analyze_vault_liquidity", return_value=(100, 5000)
+        ):
+            result = calculate_metrics(position, "key")
+        assert "apr" not in result  # type: ignore[operator]
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_historical_data")
     @patch(

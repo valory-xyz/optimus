@@ -1602,6 +1602,9 @@ def get_balancer_pool_apr(
     if "error" in data or not pool:
         logger.warning(f"No live APR for pool {pool_id}: {data.get('error')}")
         return None
+    if not (pool.get("dynamicData") or {}).get("aprItems"):
+        logger.warning(f"No live APR for pool {pool_id}: no aprItems")
+        return None
     return get_total_apr(pool) * 100
 
 

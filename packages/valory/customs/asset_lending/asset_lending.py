@@ -749,7 +749,11 @@ def get_aggregator_apr(address: str) -> Optional[float]:
     if aggregator is None:
         logger.warning(f"No live APR for aggregator {address}: not listed")
         return None
-    return aggregator.get("apy", {}).get("total", 0) * PERCENT_CONVERSION
+    total = (aggregator.get("apy") or {}).get("total")
+    if not isinstance(total, (int, float)):
+        logger.warning(f"No live APR for aggregator {address}: no apy.total")
+        return None
+    return total * PERCENT_CONVERSION
 
 
 def calculate_metrics(

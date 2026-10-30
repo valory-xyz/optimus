@@ -2084,62 +2084,66 @@ class TestWhitelistInvariants:
     These assertions pin the exact membership and the investable-vs-held split.
     """
 
-    # Lowercased; symbols in comments for reviewer legibility.
     OPTIMISM_INVESTABLE = {
-        "0x0b2c639c533813f4aa9d7837caf62653d097ff85",  # USDC (native)
-        "0x01bff41798a0bcf287b996046ca68b395dbc1071",  # USDT0
-        "0x7f5c764cbc14f9669b88837ca1490cca17c31607",  # USDC.e
-        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",  # USDT (bridged)
+        "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",
+        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
+        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
+        "0x4f13a96ec5c4cf34e442b46bbd98a0791f20edc3": "USDS",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     }
     BASE_INVESTABLE = {
-        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",  # USDC (native)
-        "0x03569cc076654f82679c4ba2124d64774781b01d",  # BOLD
-        "0xe5020a6d073a794b6e7f05678707de47986fb0b6",  # frxUSD
-        "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4",  # eUSD
-        "0xeb466342c4d449bc9f53a865d5cb90586f405215",  # axlUSDC
-        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",  # USDT (bridged)
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
+        "0x820c137fa70c8691f0e44dc420a5e53c168921dc": "USDS",
+        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     }
-    OUSDT = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
-    SDAI = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
-    MSUSD = "0x526728dbc96689597f85ae4cd716d4f7fccbae9d"
-    BASE_USDT = "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+    OPTIMISM_LEGACY = {
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
+    }
+    BASE_LEGACY = {
+        "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
+        "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
+        "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
+    }
 
     def test_optimism_investable_set_is_exact(self) -> None:
-        """Optimism investable whitelist is exactly the curated four."""
-        assert {a.lower() for a in WHITELISTED_ASSETS["optimism"]} == (
-            self.OPTIMISM_INVESTABLE
-        )
+        """Optimism investable whitelist is exactly the curated six."""
+        assert WHITELISTED_ASSETS["optimism"] == self.OPTIMISM_INVESTABLE
 
     def test_base_investable_set_is_exact(self) -> None:
         """Base investable whitelist is exactly the curated six."""
-        assert {a.lower() for a in WHITELISTED_ASSETS["base"]} == self.BASE_INVESTABLE
+        assert WHITELISTED_ASSETS["base"] == self.BASE_INVESTABLE
 
-    def test_base_usdt_carries_its_onchain_symbol(self) -> None:
-        """The new Base entry maps to the symbol the token reports on-chain."""
-        assert WHITELISTED_ASSETS["base"][self.BASE_USDT] == "USDT"
+    def test_optimism_legacy_set_is_exact(self) -> None:
+        """Optimism legacy-held entries are exactly the retired tokens."""
+        assert LEGACY_HELD_ASSETS["optimism"] == self.OPTIMISM_LEGACY
+
+    def test_base_legacy_set_is_exact(self) -> None:
+        """Base legacy-held entries are exactly the retired tokens."""
+        assert LEGACY_HELD_ASSETS["base"] == self.BASE_LEGACY
+
+    @pytest.mark.parametrize("chain", ["optimism", "base"])
+    def test_whitelist_keys_are_lowercase(self, chain: str) -> None:
+        """Keys are lowercase, which is the form the pool filter looks tokens up in."""
+        assert all(a == a.lower() for a in WHITELISTED_ASSETS[chain])
 
     @pytest.mark.parametrize(
-        "chain, address",
-        [("optimism", OUSDT), ("optimism", SDAI), ("base", MSUSD)],
+        "chain, legacy",
+        [("optimism", OPTIMISM_LEGACY), ("base", BASE_LEGACY)],
     )
-    def test_retired_asset_is_not_investable(self, chain: str, address: str) -> None:
-        """A retired asset is excluded from the investable whitelist."""
-        assert address not in {a.lower() for a in WHITELISTED_ASSETS[chain]}
+    def test_retired_assets_stay_in_held_set(self, chain: str, legacy: dict) -> None:
+        """Retired assets stay detectable, priceable and sweepable."""
+        assert legacy.items() <= HELD_ASSETS[chain].items()
 
-    @pytest.mark.parametrize(
-        "chain, address, symbol",
-        [
-            ("optimism", OUSDT, "oUSDT"),
-            ("optimism", SDAI, "sDAI"),
-            ("base", MSUSD, "msUSD"),
-        ],
-    )
-    def test_retired_asset_remains_in_held_set(
-        self, chain: str, address: str, symbol: str
-    ) -> None:
-        """A retired asset stays in the held/sweep set so existing holdings convert."""
-        assert HELD_ASSETS[chain][address] == symbol
-        assert LEGACY_HELD_ASSETS[chain][address] == symbol
+    def test_musd_is_not_held_or_investable_on_base(self) -> None:
+        """MUSD is neither investable nor tracked on Base."""
+        assert "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186" not in HELD_ASSETS["base"]
 
     def test_legacy_held_assets_never_overlap_investable(self) -> None:
         """An asset is either investable or legacy-held, never both."""
@@ -2160,6 +2164,25 @@ class TestWhitelistInvariants:
         # COIN_ID_MAPPING; a missing or None id makes a token invisible to both.
         for symbol in HELD_ASSETS[chain].values():
             assert COIN_ID_MAPPING[chain].get(symbol.lower()), symbol
+
+    @pytest.mark.parametrize(
+        "chain, symbol, coin_id",
+        [
+            ("optimism", "BOLD", "liquity-bold-2"),
+            ("optimism", "DAI", "makerdao-optimism-bridged-dai-optimism"),
+            ("optimism", "USDS", "usds"),
+            ("base", "BOLD", "liquity-bold-2"),
+            ("base", "DAI", "l2-standard-bridged-dai-base"),
+            ("base", "USDS", "usds"),
+            ("base", "USDe", "ethena-usde"),
+        ],
+    )
+    def test_listed_stable_resolves_to_its_coin_id(
+        self, chain: str, symbol: str, coin_id: str
+    ) -> None:
+        """A listed stable resolves to its CoinGecko id from its whitelist symbol."""
+        assert symbol in WHITELISTED_ASSETS[chain].values()
+        assert COIN_ID_MAPPING[chain][symbol.lower()] == coin_id
 
 
 class TestGetModeBalances:

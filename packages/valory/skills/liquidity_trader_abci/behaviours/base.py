@@ -332,18 +332,20 @@ WHITELISTED_ASSETS = {
     "optimism": {
         # Optimism tokens - stablecoins
         "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",
-        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
-        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
         "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
+        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
+        "0x4f13a96ec5c4cf34e442b46bbd98a0791f20edc3": "USDS",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     },
     "base": {
         # Base tokens - stablecoins
         "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
-        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
-        "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
-        "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
-        "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
         "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
+        "0x820c137fa70c8691f0e44dc420a5e53c168921dc": "USDS",
+        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     },
 }
 
@@ -354,16 +356,20 @@ WHITELISTED_ASSETS = {
 # withdraw sweep-to-USDC fallback, and (c) priceable via COIN_ID_MAPPING. Drop
 # an entry here once on-chain balances for it have reached zero.
 LEGACY_HELD_ASSETS: Dict[str, Dict[str, str]] = {
-    # oUSDT and sDAI were removed from the Optimism investable whitelist, but
-    # existing optimus agents may still hold them.
+    # Removed from the Optimism investable whitelist, but existing optimus
+    # agents may still hold them.
     "optimism": {
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
     },
-    # msUSD was removed from the Base investable whitelist, but existing basius
-    # agents may still hold it.
+    # Removed from the Base investable whitelist, but existing basius agents may
+    # still hold them.
     "base": {
         "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
+        "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
+        "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
     },
 }
 
@@ -408,9 +414,10 @@ COIN_ID_MAPPING = {
         "dola": "dola-usd",
         "lusd": "liquity-usd",
         "dai": "makerdao-optimism-bridged-dai-optimism",
-        "bold": "liquity-bold",
+        "bold": "liquity-bold-2",
         "frax": "frax",
         "sdai": "savings-dai",
+        "usds": "usds",
         "usd+": "overnight-fi-usd-optimism",
         "ousdt": "openusdt",
         "usdglo": "glo-dollar",
@@ -432,6 +439,8 @@ COIN_ID_MAPPING = {
         "usr": "resolv-usr",
         "usdz": "anzen-usdz",
         "bold": "liquity-bold-2",
+        "dai": "l2-standard-bridged-dai-base",
+        "usds": "usds",
     },
 }
 

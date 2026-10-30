@@ -128,8 +128,7 @@ def exceeds(value: Any, other: Any) -> bool:
 
 def il_risk_descriptor(il_score: Any) -> Any:
     """Map the IL risk score to a qualitative descriptor."""
-    # Handle None values
-    if il_score is None:
+    if not is_known(il_score):
         return "Unknown"
 
     if il_score < -0.5:

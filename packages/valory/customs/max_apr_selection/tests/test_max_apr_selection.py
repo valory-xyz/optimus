@@ -195,6 +195,10 @@ class TestIlRiskDescriptor:
         """Test with None value."""
         assert il_risk_descriptor(None) == "Unknown"
 
+    def test_nan_value(self) -> None:
+        """Test with a NaN value, a score that was not read."""
+        assert il_risk_descriptor(math.nan) == "Unknown"
+
     def test_high_risk(self) -> None:
         """Test high risk (< -0.5)."""
         assert il_risk_descriptor(-0.8) == "High"
@@ -463,6 +467,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         assert "risk-adjusted returns unknown, market liquidity unknown" in (
             result["reasoning"]
         )
+        assert "impermanent loss risk is Unknown" in result["reasoning"]
         assert "higher risk-adjusted returns" not in result["reasoning"]
         assert "better market liquidity" not in result["reasoning"]
         assert "lower impermanent loss risk" not in result["reasoning"]
@@ -478,7 +483,9 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         current_pos = self._make_opportunity(
             sharpe=3.0, depth=100.0, il_risk=-0.1, apr=20.0
         )
-        self._set_unknown(current_pos, unknown, "sharpe_ratio", "depth_score")
+        self._set_unknown(
+            current_pos, unknown, "sharpe_ratio", "depth_score", "il_risk_score"
+        )
         result = apply_risk_thresholds_and_select_optimal_strategy(
             opps, composite_score_threshold=999.0, current_positions=[current_pos]
         )
@@ -486,6 +493,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         assert "risk-adjusted returns unknown, market liquidity unknown" in (
             result["reasoning"]
         )
+        assert "impermanent loss risk is Unknown" in result["reasoning"]
 
     def test_top_opp_il_risk_none_in_comparison(self) -> None:
         """Test metrics comparison when top opp il_risk_score is None."""

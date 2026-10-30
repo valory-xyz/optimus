@@ -2098,13 +2098,11 @@ class TestWhitelistInvariants:
         "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4",  # eUSD
         "0xeb466342c4d449bc9f53a865d5cb90586f405215",  # axlUSDC
         "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",  # USDT (bridged)
-        "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186",  # MUSD (Mezo)
     }
     OUSDT = "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"
     SDAI = "0x2218a117083f5b482b0bb821d27056ba9c04b1d3"
     MSUSD = "0x526728dbc96689597f85ae4cd716d4f7fccbae9d"
     BASE_USDT = "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
-    BASE_MUSD = "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186"
 
     def test_optimism_investable_set_is_exact(self) -> None:
         """Optimism investable whitelist is exactly the curated four."""
@@ -2113,13 +2111,12 @@ class TestWhitelistInvariants:
         )
 
     def test_base_investable_set_is_exact(self) -> None:
-        """Base investable whitelist is exactly the curated seven."""
+        """Base investable whitelist is exactly the curated six."""
         assert {a.lower() for a in WHITELISTED_ASSETS["base"]} == self.BASE_INVESTABLE
 
-    def test_base_usdt_and_musd_carry_their_onchain_symbols(self) -> None:
-        """The new Base entries map to the symbols the tokens report on-chain."""
+    def test_base_usdt_carries_its_onchain_symbol(self) -> None:
+        """The new Base entry maps to the symbol the token reports on-chain."""
         assert WHITELISTED_ASSETS["base"][self.BASE_USDT] == "USDT"
-        assert WHITELISTED_ASSETS["base"][self.BASE_MUSD] == "MUSD"
 
     @pytest.mark.parametrize(
         "chain, address",

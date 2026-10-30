@@ -344,7 +344,6 @@ WHITELISTED_ASSETS = {
         "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
         "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
         "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
-        "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186": "MUSD",
     },
 }
 

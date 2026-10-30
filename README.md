@@ -68,7 +68,7 @@ A typical successful operation cycle for Optimus follows a predictable pattern t
 The primary entry point for each trading cycle, responsible for gathering all information needed for informed trading decisions. This round:
 - Retrieves available trading strategies/protocols selected by the user via Chat UI
 - Performs comprehensive portfolio updates by recalculating current position values and performance metrics
-- Filters whitelisted assets based on recent price changes (removes assets with >5% price drops in 24 hours). For assets that have the **Stable** metadata tag AND as denominated by their stable asset, also supplied as a metadata entity.
+- Restricts trading to the fixed per-chain allowlist in the `WHITELISTED_ASSETS` constant
 - Manages funding events and tracks initial investment values
 - Calculates user portfolio including initially invested funds, current holdings, and allocations
 - Displays portfolio information in the agent profile for transparency

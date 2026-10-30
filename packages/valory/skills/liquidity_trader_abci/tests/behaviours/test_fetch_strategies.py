@@ -55,7 +55,6 @@ def _mk():
     obj.current_positions = []
     obj.portfolio_data = {}
     obj.assets = {}
-    obj.whitelisted_assets = {}
     obj.funding_events = {}
     obj.agent_performance = {}
     obj.initial_investment_values_per_pool = {}

@@ -57,7 +57,7 @@ fingerprint:
   composition.py: bafybeib5va5o4opqtbn5acx5ruj7e3rmim5sbuvql2ypurdo6vhbqeqe5i
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeie7rrrmdeadlvfgvz5trfijgqxh535ikigyjlebninnn4goce4h7y
-  handlers.py: bafybeiakh4pdejavpmny2ojih73yfyene5m6jmrh4qibiy2zjc5mdt6hgq
+  handlers.py: bafybeicgtvsmwk5xedogdw6vtjqt7knqz56e63dhxm2bcmitoemskaleru
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -156,7 +156,7 @@ fingerprint:
   tests/test_composition.py: bafybeibdcool6op45ukjsc3lh6wrbbo6wpsvcanqqyogpx6orbtwdx3yrq
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeiexl5vjwpsnh7wg6l7o3a4ujcavnbigfqebwocktagwzydr324lay
+  tests/test_handlers.py: bafybeicc6eauzbbfl2mgfonhkl7r5aaojcxxvbc7kj22pca5mxdggusiie
   tests/test_models.py: bafybeiashcolhjijpi7deibstjm35dgv3cajqwet577yl2vovvvgfzja7y
   tests/test_prompts.py: bafybeifmcxnaoxjz62yqdie45xmqtjlysufglyucpmdvluwayppsyo27ay
 fingerprint_ignore_patterns: []
@@ -174,7 +174,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
-- valory/liquidity_trader_abci:0.1.0:bafybeidikydf35oh2vuom4qilsthcdsqbpnj2wa5dhvcz26yia6iersg4i
+- valory/liquidity_trader_abci:0.1.0:bafybeia7l2i7glm257ob6dmrs6hs33zmjfw6ajek2qhqx7ko7mqihr4ee4
 - valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
 - valory/funds_manager:0.1.0:bafybeiakhryfscssc474efrnpqevn7icn22f72jok65gkwxsercik4pthu
 behaviours:

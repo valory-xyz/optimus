@@ -347,6 +347,24 @@ class TestFormatting:
                 {"token0_symbol": "USDC", "dex_type": "aerodrome"},
                 "USDC on Aerodrome",
             ),
+            (
+                {
+                    "token0_symbol": "WETH",
+                    "token1_symbol": "USDC",
+                    "dex_type": "velodrome",
+                    "protocol": "aero",
+                },
+                "WETH/USDC on Aero",
+            ),
+            (
+                {"token0_symbol": "USDC", "dex_type": "aerodrome", "protocol": "aero"},
+                "USDC on Aero",
+            ),
+            (
+                {"token0_symbol": "USDC", "dex_type": "aerodrome", "protocol": "x"},
+                "USDC on Aerodrome",
+            ),
+            ({"pool_address": "0xP", "protocol": "aero"}, "0xP on Aero"),
             ({"pool_address": "0xP", "dex_type": "newDex"}, "0xP on newDex"),
             ({"token0_symbol": "A", "token1_symbol": "B"}, "A/B"),
             ({}, "Unknown pool"),

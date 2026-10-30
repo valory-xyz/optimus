@@ -428,7 +428,23 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         )
         assert "reasoning" in result
 
-    def test_current_position_with_unknown_metrics_is_exited(self) -> None:
+    UNKNOWN = pytest.mark.parametrize(
+        "unknown", [None, math.nan, "absent"], ids=["none", "nan", "absent"]
+    )
+
+    @staticmethod
+    def _set_unknown(position: Dict[str, Any], unknown: Any, *keys: str) -> None:
+        """Mark metrics as not read: None, NaN, or no key at all."""
+        for key in keys:
+            if unknown == "absent":
+                del position[key]
+            else:
+                position[key] = unknown
+
+    @UNKNOWN
+    def test_current_position_with_unknown_metrics_is_exited(
+        self, unknown: Any
+    ) -> None:
         """A held position whose metrics could not be read is still reasoned about."""
         opps = [
             self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.01, apr=30.0),
@@ -436,7 +452,9 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         current_pos = self._make_opportunity(
             sharpe=1.0, depth=50.0, il_risk=-0.3, apr=0.0
         )
-        current_pos.update(sharpe_ratio=None, depth_score=None, il_risk_score=None)
+        self._set_unknown(
+            current_pos, unknown, "sharpe_ratio", "depth_score", "il_risk_score"
+        )
         result = apply_risk_thresholds_and_select_optimal_strategy(
             opps, composite_score_threshold=0.0, current_positions=[current_pos]
         )
@@ -446,10 +464,13 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
             result["reasoning"]
         )
         assert "higher risk-adjusted returns" not in result["reasoning"]
+        assert "better market liquidity" not in result["reasoning"]
+        assert "lower impermanent loss risk" not in result["reasoning"]
         assert "offers ." not in result["reasoning"]
         assert "chosen on its composite score and APR" in result["reasoning"]
 
-    def test_current_position_with_unknown_metrics_is_kept(self) -> None:
+    @UNKNOWN
+    def test_current_position_with_unknown_metrics_is_kept(self, unknown: Any) -> None:
         """Without a better opportunity, unknown metrics are reported as unknown."""
         opps = [
             self._make_opportunity(sharpe=0.5, depth=10.0, il_risk=-0.1, apr=5.0),
@@ -457,7 +478,7 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
         current_pos = self._make_opportunity(
             sharpe=3.0, depth=100.0, il_risk=-0.1, apr=20.0
         )
-        current_pos.update(sharpe_ratio=None, depth_score=None)
+        self._set_unknown(current_pos, unknown, "sharpe_ratio", "depth_score")
         result = apply_risk_thresholds_and_select_optimal_strategy(
             opps, composite_score_threshold=999.0, current_positions=[current_pos]
         )

@@ -34,6 +34,10 @@ from logging import Logger
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    is_aero_position,
+)
+
 FEED_FILE = "feed.jsonl"
 
 KIND_EVENT = "event"
@@ -59,6 +63,9 @@ _DEX_NAMES = {
     "velodrome": "Velodrome",
     "aerodrome": "Aerodrome",
 }
+# Aero positions keep a Velodrome-family ``dex_type``; the protocol marker
+# names them.
+AERO_NAME = "Aero"
 
 Field = Dict[str, str]
 FeedEntry = Dict[str, Any]
@@ -139,6 +146,8 @@ def pool_name(position: Mapping[str, Any]) -> str:
         if symbol
     ]
     tokens = "/".join(symbols) or str(position.get("pool_address") or "Unknown pool")
+    if is_aero_position(position):
+        return f"{tokens} on {AERO_NAME}"
     dex_type = position.get("dex_type")
     dex = _DEX_NAMES.get(str(dex_type), dex_type)
     return f"{tokens} on {dex}" if dex else tokens

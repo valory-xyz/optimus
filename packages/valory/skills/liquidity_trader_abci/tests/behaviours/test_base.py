@@ -2090,7 +2090,6 @@ class TestWhitelistInvariants:
         "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
         "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
         "0x4f13a96ec5c4cf34e442b46bbd98a0791f20edc3": "USDS",
-        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     }
     BASE_INVESTABLE = {
         "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
@@ -2098,26 +2097,27 @@ class TestWhitelistInvariants:
         "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
         "0x820c137fa70c8691f0e44dc420a5e53c168921dc": "USDS",
         "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
-        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     }
     OPTIMISM_LEGACY = {
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
         "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     }
     BASE_LEGACY = {
         "0x526728dbc96689597f85ae4cd716d4f7fccbae9d": "msUSD",
         "0xe5020a6d073a794b6e7f05678707de47986fb0b6": "frxUSD",
         "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4": "eUSD",
         "0xeb466342c4d449bc9f53a865d5cb90586f405215": "axlUSDC",
+        "0x03569cc076654f82679c4ba2124d64774781b01d": "BOLD",
     }
 
     def test_optimism_investable_set_is_exact(self) -> None:
-        """Optimism investable whitelist is exactly the curated six."""
+        """Optimism investable whitelist is exactly the curated five."""
         assert WHITELISTED_ASSETS["optimism"] == self.OPTIMISM_INVESTABLE
 
     def test_base_investable_set_is_exact(self) -> None:
-        """Base investable whitelist is exactly the curated six."""
+        """Base investable whitelist is exactly the curated five."""
         assert WHITELISTED_ASSETS["base"] == self.BASE_INVESTABLE
 
     def test_optimism_legacy_set_is_exact(self) -> None:
@@ -2177,11 +2177,11 @@ class TestWhitelistInvariants:
             ("base", "USDe", "ethena-usde"),
         ],
     )
-    def test_listed_stable_resolves_to_its_coin_id(
+    def test_held_stable_resolves_to_its_coin_id(
         self, chain: str, symbol: str, coin_id: str
     ) -> None:
-        """A listed stable resolves to its CoinGecko id from its whitelist symbol."""
-        assert symbol in WHITELISTED_ASSETS[chain].values()
+        """A held stable resolves to its CoinGecko id from its held symbol."""
+        assert symbol in HELD_ASSETS[chain].values()
         assert COIN_ID_MAPPING[chain][symbol.lower()] == coin_id
 
 

@@ -4455,7 +4455,9 @@ class TestUpdateAccumulatedRewardsForChain:
         b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
         writes = self._capture_writes(b)
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
-        rewards_key = f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        rewards_key = (
+            f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        )
         assert writes == [
             {"last_reward_update_optimism": "1793232000"},
             {rewards_key: "500"},
@@ -4469,7 +4471,9 @@ class TestUpdateAccumulatedRewardsForChain:
         b.query_service_rewards = _make_gen({"olasRewardsEarned": "not_a_number"})  # type: ignore[assignment,method-assign]
         writes = self._capture_writes(b)
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
-        rewards_key = f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        rewards_key = (
+            f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        )
         assert writes[-1] == {rewards_key: "0"}
 
     def test_failed_writes_are_logged(self) -> None:

@@ -2904,8 +2904,10 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, Optional[Dict]]:
         """Query subgraph for service rewards using service query.
 
-        Returns the service data, ``{}`` if the subgraph answered without the
-        service, or ``None`` if it gave no answer (an error or a bad response).
+        :param chain: the chain whose staking subgraph to query.
+        :yield: None
+        :return: the service data, ``{}`` if the subgraph answered without the
+            service, or ``None`` if it gave no answer (an error or a bad response).
         """
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
         # Gateway URLs embed an API key; keep it out of the logs.

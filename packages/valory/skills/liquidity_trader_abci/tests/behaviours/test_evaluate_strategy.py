@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import numpy as np
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -532,7 +533,7 @@ class TestUpdatePositionMetrics:
         assert position["last_metrics_update"] == now
 
     def test_no_strategy_for_dex_type(self):
-        """Test no strategy for dex type."""
+        """A position without a strategy is not refreshed, and nothing is stored."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -548,28 +549,46 @@ class TestUpdatePositionMetrics:
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
         b.get_returns_metrics_for_opportunity.assert_not_called()
-        b.store_current_positions.assert_called_once()
+        b.store_current_positions.assert_not_called()
 
-    def test_metrics_update_interval_not_reached(self):
-        """Test metrics update interval not reached."""
+    @pytest.mark.parametrize(
+        "age, refreshed",
+        [
+            (100, False),
+            (METRICS_UPDATE_INTERVAL - 1, False),
+            (METRICS_UPDATE_INTERVAL, True),
+            (METRICS_UPDATE_INTERVAL + 100, True),
+        ],
+    )
+    def test_metrics_update_interval(self, age, refreshed):
+        """A position is refreshed once its last refresh is METRICS_UPDATE_INTERVAL old."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
-        b.current_positions = [
-            {
-                "status": PositionStatus.OPEN.value,
-                "dex_type": "velodrome",
-                "last_metrics_update": now - 100,  # recent update
-                "pool_address": "0xpool",
-            }
-        ]
-        b.get_returns_metrics_for_opportunity = MagicMock()
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "last_metrics_update": now - age,
+            "pool_address": "0xpool",
+        }
+        b.current_positions = [position]
+        b.download_strategies = MagicMock(side_effect=_gen_return(None))
+        b.get_returns_metrics_for_opportunity = MagicMock(
+            side_effect=_gen_return({"apr": 4.0})
+        )
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
-        b.get_returns_metrics_for_opportunity.assert_not_called()
+        assert b.get_returns_metrics_for_opportunity.called is refreshed
+        assert b.download_strategies.called is refreshed
+        assert b.store_current_positions.called is refreshed
+        assert position["last_metrics_update"] == (now if refreshed else now - age)
 
     def test_metrics_without_apr_keep_the_last_apr(self):
-        """Metrics with no live APR keep the stored one and say so."""
+        """Metrics with no live APR keep the stored one and say so.
+
+        The attempt still counts as the refresh, so the APR is read again at
+        the next interval, not every period.
+        """
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -590,23 +609,117 @@ class TestUpdatePositionMetrics:
         warnings = [c.args[0] for c in b.context.logger.warning.call_args_list]
         assert any("No live APR for position 0xpool" in w for w in warnings)
 
-    def test_metrics_update_returns_none(self):
-        """A failed read leaves the position and its timestamp untouched."""
+    def test_failed_read_is_retried_at_the_next_interval(self):
+        """A failed read counts as the refresh, so it is not retried every period."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
-        pos = {
+        position = {
             "status": PositionStatus.OPEN.value,
             "dex_type": "velodrome",
             "last_metrics_update": 0,
             "pool_address": "0xpool",
+            "apr": 12.5,
         }
-        b.current_positions = [pos]
-        b.get_returns_metrics_for_opportunity = _gen_return(None)
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = MagicMock(side_effect=_gen_return(None))
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
-        assert "apr" not in pos
-        assert pos["last_metrics_update"] == 0
+        assert position["apr"] == 12.5
+        assert position["last_metrics_update"] == now
+        b.store_current_positions.assert_called_once()
+
+        _drive(b.update_position_metrics())
+        b.get_returns_metrics_for_opportunity.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "unread", [None, math.nan, math.inf, "4.0"], ids=["none", "nan", "inf", "str"]
+    )
+    def test_only_finite_metrics_are_stored(self, unread):
+        """An unread metric keeps its last value, so a degraded read cannot zero it."""
+        b = _mk()
+        now = int(time.time())
+        b._get_current_timestamp = lambda: now
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "apr": 12.5,
+            "sharpe_ratio": 1.1,
+            "depth_score": 80.0,
+            "il_risk_score": -0.1,
+            "max_position_size": 5000.0,
+        }
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = _gen_return(
+            {
+                "apr": unread,
+                "sharpe_ratio": unread,
+                "depth_score": 95.0,
+                "il_risk_score": unread,
+                "max_position_size": unread,
+                "status": "closed",
+            }
+        )
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert position == {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "apr": 12.5,
+            "sharpe_ratio": 1.1,
+            "depth_score": 95.0,
+            "il_risk_score": -0.1,
+            "max_position_size": 5000.0,
+            "last_metrics_update": now,
+        }
+        warnings = [c.args[0] for c in b.context.logger.warning.call_args_list]
+        assert any("No live APR for position 0xpool" in w for w in warnings)
+
+    def test_metrics_are_stored_as_floats(self):
+        """Numbers of any numeric type are stored as JSON-safe floats."""
+        b = _mk()
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+        }
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = _gen_return(
+            {"apr": np.float64(0.0), "sharpe_ratio": 10}
+        )
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert type(position["apr"]) is float and position["apr"] == 0.0
+        assert type(position["sharpe_ratio"]) is float
+        json.dumps(position)
+
+    def test_error_is_logged_and_the_tip_filters_still_run(self):
+        """A refresh that raises is logged, the attempt is stored, and nothing is raised."""
+        b = _mk()
+        now = int(time.time())
+        b._get_current_timestamp = lambda: now
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "apr": 12.5,
+        }
+        b.current_positions = [position]
+
+        def fail(*_):
+            raise RuntimeError("boom")
+            yield  # pylint: disable=unreachable
+
+        b.get_returns_metrics_for_opportunity = fail
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert position["apr"] == 12.5
+        assert position["last_metrics_update"] == now
+        b.store_current_positions.assert_called_once()
+        errors = [c.args[0] for c in b.context.logger.error.call_args_list]
+        assert "Error updating position metrics: boom" in errors
 
 
 class TestCheckTipExitConditions:

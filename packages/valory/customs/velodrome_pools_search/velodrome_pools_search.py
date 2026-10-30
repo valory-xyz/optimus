@@ -3689,9 +3689,12 @@ def _emission_metrics(
     value_index: int,
     time_index: int,
 ) -> Dict[str, Any]:
-    """Return APR, TVL and daily returns of gauge emissions, given the return per reward."""
+    """Return APR, TVL and daily returns of gauge emissions, given the return per reward.
+
+    The APR is None, not 0, when the position or the emission rate cannot be priced.
+    """
     if return_per_reward is None:
-        return {"apr": 0.0, "tvl": tvl, "daily_returns": []}
+        return {"apr": None, "tvl": tvl, "daily_returns": []}
 
     def to_return(rate_per_second: float, seconds: int) -> float:
         return rate_per_second * seconds / WAD * return_per_reward
@@ -3702,7 +3705,9 @@ def _emission_metrics(
         if observed
         else None
     )
-    apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate and rate > 0 else 0.0
+    apr: Optional[float] = None
+    if rate is not None:
+        apr = to_return(rate, SECONDS_PER_YEAR) * 100 if rate > 0 else 0.0
     daily_returns = [
         to_return(daily_rate, SECONDS_PER_DAY)
         for daily_rate in _emission_rates(pool, value_index, time_index)
@@ -3723,7 +3728,7 @@ def aero_v2_pool_metrics(
     :param pool: the pool with its live reads (reserves, supply, stake, tapes).
     :param aero_price: the AERO price in USD.
     :param position_usd: the position size the APR is quoted for.
-    :return: ``apr`` (percent), ``tvl`` and ``daily_returns``.
+    :return: ``apr`` (percent, None when unpriced), ``tvl`` and ``daily_returns``.
     """
     reserve0, reserve1 = pool["reserves"]
     tvl = _amount_usd(reserve0, pool["decimals0"]) + _amount_usd(
@@ -3753,7 +3758,7 @@ def aero_cl_pool_metrics(
     :param aero_price: the AERO price in USD.
     :param tick_bands: the bands the position would be split into.
     :param position_usd: the position size the APR is quoted for.
-    :return: ``apr`` (percent), ``tvl`` and ``daily_returns``.
+    :return: ``apr`` (percent, None when unpriced), ``tvl`` and ``daily_returns``.
     """
     tvl = _amount_usd(pool["balance0"], pool["decimals0"]) + _amount_usd(
         pool["balance1"], pool["decimals1"]
@@ -3801,7 +3806,8 @@ def read_aero_pool_state(
 
     :param w3: web3 connection to the chain.
     :param chain_id: the pools' chain.
-    :param pools: the pools, each with ``id``, ``kind`` and ``gauge``.
+    :param pools: the pools, each with ``id``, ``kind`` and ``gauge``. Each gets
+        ``gauge_activated``, which is None when the read failed.
     :return: the pools with an activated gauge and every read, updated in place.
     """
     addresses = AERO_CONTRACT_ADDRESSES[chain_id]
@@ -3817,11 +3823,9 @@ def read_aero_pool_state(
             for pool in pools
         ],
     )
-    live = [
-        pool
-        for pool, result in zip(pools, activated)
-        if result is not None and result[0]
-    ]
+    for pool, result in zip(pools, activated):
+        pool["gauge_activated"] = None if result is None else bool(result[0])
+    live = [pool for pool in pools if pool["gauge_activated"]]
 
     pool_calls: List[List[AeroCall]] = []
     for pool in live:
@@ -4050,8 +4054,9 @@ def get_opportunities_for_aero(
             price_cache_ttl,
         )
 
+    # A pool whose emissions cannot be priced has no APR to rank it by.
     candidates = apply_composite_pre_filter(
-        pools,
+        [pool for pool in pools if pool["apr"] is not None],
         top_n=top_n,
         apr_weight=kwargs.get("apr_weight", 0.7),
         tvl_weight=kwargs.get("tvl_weight", 0.3),
@@ -4196,7 +4201,7 @@ def calculate_aero_metrics(
     price_cache: Optional[Dict[str, Any]] = None,
     price_cache_ttl: int = 1800,
 ) -> Optional[Dict[str, Any]]:
-    """Return the risk metrics of a held Aero position.
+    """Return the live APR and risk metrics of a held Aero position.
 
     :param position: the stored position, with ``gauge_address``.
     :param coingecko_api_key: CoinGecko API key.
@@ -4205,7 +4210,8 @@ def calculate_aero_metrics(
     :param x402_proxy: optional x402 proxy URL.
     :param price_cache: the shared price cache.
     :param price_cache_ttl: how long a price is reused, in seconds.
-    :return: the metrics, or None when the pool cannot be read.
+    :return: the metrics, or None when the pool cannot be read. The APR is
+        left out when it cannot be priced, and is 0 when the gauge is deactivated.
     """
     chain_name = position.get("chain", "").lower()
     chain_id = next(
@@ -4242,6 +4248,10 @@ def calculate_aero_metrics(
         decimals[pool["token1"]],
     )
     readable = read_aero_pool_state(w3, chain_id, [pool])
+    if pool["gauge_activated"] is False:
+        # A deactivated gauge pays no emissions, so the position earns none.
+        logger.warning(f"The gauge of held Aero pool {pool['id']} is deactivated")
+        return {"apr": 0.0}
     aero_price = get_aero_price_usd(
         coingecko_api_key, x402_session, x402_proxy, price_cache, price_cache_ttl
     )
@@ -4261,7 +4271,7 @@ def calculate_aero_metrics(
     depth_score, max_position_size = aero_depth_metrics(
         pool["tvl"], aero_daily_volume_usd(pool)
     )
-    return {
+    metrics = {
         "il_risk_score": _aero_il_risk_score(
             pool,
             coingecko_api_key,
@@ -4275,6 +4285,9 @@ def calculate_aero_metrics(
         "depth_score": depth_score,
         "max_position_size": max_position_size,
     }
+    if pool["apr"] is not None:
+        metrics["apr"] = pool["apr"]
+    return metrics
 
 
 def get_opportunities_for_velodrome(

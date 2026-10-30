@@ -406,9 +406,14 @@ class TestV2Metrics:
         assert metrics["apr"] == pytest.approx(0.5e-4 * 365 * 100 * share, rel=1e-6)
 
     def test_empty_pool(self) -> None:
-        """A pool without supply earns no APR."""
+        """A pool without supply cannot be priced, so it has no APR rather than 0."""
         metrics = aero_v2_pool_metrics(_v2_pool(total_supply=0), aero_price=0.5)
-        assert metrics["apr"] == 0.0
+        assert metrics["apr"] is None
+
+    def test_no_gauge_tape(self) -> None:
+        """A gauge tape with no observations gives no APR rather than 0."""
+        metrics = aero_v2_pool_metrics(_v2_pool(gauge_observations=[]), 0.5)
+        assert metrics["apr"] is None
 
     def test_no_emissions(self) -> None:
         """A tape that has not grown gives 0 APR."""
@@ -483,9 +488,9 @@ class TestClMetrics:
         assert metrics["apr"] == pytest.approx(10 * 365 / 1000 * 100 / 2)
 
     def test_out_of_range_bands(self) -> None:
-        """Bands away from the price earn nothing."""
+        """Bands away from the price cannot be priced, so they give no APR rather than 0."""
         bands = [{"tick_lower": 5, "tick_upper": 10, "allocation": 1.0}]
-        assert aero_cl_pool_metrics(_cl_pool(), 1.0, bands)["apr"] == 0.0
+        assert aero_cl_pool_metrics(_cl_pool(), 1.0, bands)["apr"] is None
 
     def test_no_emissions(self) -> None:
         """A tape that has not grown gives 0 APR."""
@@ -592,10 +597,12 @@ class TestReadAeroPoolState:
     def test_reads_activated_pools(self) -> None:
         """Pools whose gauge is not activated are dropped before the live reads."""
         multicall = _Multicall(_state_answers())
+        requested = self._pools()
         with patch(f"{MODULE}.aero_multicall", multicall):
-            pools = read_aero_pool_state(MagicMock(), BASE_CHAIN_ID, self._pools())
+            pools = read_aero_pool_state(MagicMock(), BASE_CHAIN_ID, requested)
 
         assert [pool["id"] for pool in pools] == [_address(1), _address(2)]
+        assert [pool["gauge_activated"] for pool in requested] == [True, True, False]
         v2, cl = pools
         assert v2["reserves"] == (10, 20)
         assert v2["total_supply"] == 30
@@ -617,6 +624,15 @@ class TestReadAeroPoolState:
             for _, sig, args in multicall.calls
             if sig == "observe(address,uint48[])"
         )
+
+    def test_unreadable_activation(self) -> None:
+        """A failed activation read drops the pool and records the activation as unknown."""
+        answers = _state_answers()
+        answers["isActivated(address)"] = None
+        requested = self._pools()
+        with patch(f"{MODULE}.aero_multicall", _Multicall(answers)):
+            assert read_aero_pool_state(MagicMock(), BASE_CHAIN_ID, requested) == []
+        assert [pool["gauge_activated"] for pool in requested] == [None, None, None]
 
     def test_unreadable_pools_dropped(self) -> None:
         """A pool whose state cannot be read is left out; a missing pool tape is kept as None."""
@@ -734,6 +750,7 @@ class TestGetOpportunitiesForAero:
         pools: Any,
         price: Optional[float] = 0.7,
         coingecko_prices: Optional[Dict[str, float]] = None,
+        cl_metrics: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
         """Run the search; given CoinGecko prices, the real IL score fetches the histories."""
@@ -754,7 +771,7 @@ class TestGetOpportunitiesForAero:
             patch(f"{MODULE}.get_aero_pools", return_value=pools),
             patch(f"{MODULE}.get_aero_price_usd", return_value=price),
             patch(f"{MODULE}.aero_v2_pool_metrics", return_value=metrics),
-            patch(f"{MODULE}.aero_cl_pool_metrics", return_value=metrics),
+            patch(f"{MODULE}.aero_cl_pool_metrics", return_value=cl_metrics or metrics),
             patch(
                 f"{MODULE}.calculate_tick_lower_and_upper_velodrome",
                 return_value=[{"tick_lower": -1, "tick_upper": 1, "allocation": 1.0}],
@@ -800,6 +817,14 @@ class TestGetOpportunitiesForAero:
         assert "tick_bands" not in v2
         assert cl["is_cl_pool"] is True
         assert cl["tick_bands"][0]["tick_lower"] == -1
+
+    def test_unpriced_pool_is_not_offered(self) -> None:
+        """A pool whose emissions cannot be priced has no APR to rank it by."""
+        unpriced = {"apr": None, "tvl": 50_000.0, "daily_returns": []}
+        (opportunity,) = self._run(
+            [_live_pool(), _live_pool("cl", id=_address(2))], cl_metrics=unpriced
+        )
+        assert opportunity["pool_address"] == _address(1)
 
     def _msusd_and_eusd_pools(self, msusd_price: float, **kwargs: Any) -> List[str]:
         msusd_pool = _live_pool(
@@ -883,29 +908,46 @@ class TestCalculateAeroMetrics:
         }
 
     def _metrics(
-        self, position: Dict[str, Any], readable: bool = True, decimals: Any = None
+        self,
+        position: Dict[str, Any],
+        readable: bool = True,
+        decimals: Any = None,
+        tick_bands: Any = None,
+        activated: Optional[bool] = True,
+        live_state: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        state = MagicMock(
-            side_effect=lambda w3, chain_id, pools: pools if readable else []
-        )
+        """Read a position's metrics; given its pool's live state, the pool metrics run for real."""
+
+        def read_state(w3: Any, chain_id: int, pools: Any) -> Any:
+            for pool in pools:
+                pool["gauge_activated"] = activated
+                pool.update(live_state or {})
+            return pools if readable and activated else []
+
+        def pool_metrics(real: Any) -> Dict[str, Any]:
+            if live_state is not None:
+                return {"wraps": real}
+            return {
+                "return_value": {"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]}
+            }
+
         with (
             patch(f"{MODULE}.get_web3_connection"),
             patch(
                 f"{MODULE}.get_token_decimals",
                 return_value=decimals if decimals is not None else {USDC: 6, EUSD: 18},
             ),
-            patch(f"{MODULE}.read_aero_pool_state", state),
+            patch(f"{MODULE}.read_aero_pool_state", side_effect=read_state),
             patch(f"{MODULE}.get_aero_price_usd", return_value=0.7),
             patch(
-                f"{MODULE}.aero_v2_pool_metrics",
-                return_value={"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]},
+                f"{MODULE}.aero_v2_pool_metrics", **pool_metrics(aero_v2_pool_metrics)
             ) as v2,
             patch(
-                f"{MODULE}.aero_cl_pool_metrics",
-                return_value={"apr": 1.0, "tvl": 100.0, "daily_returns": [0.1, 0.2]},
+                f"{MODULE}.aero_cl_pool_metrics", **pool_metrics(aero_cl_pool_metrics)
             ) as cl,
             patch(
-                f"{MODULE}.calculate_tick_lower_and_upper_velodrome", return_value=None
+                f"{MODULE}.calculate_tick_lower_and_upper_velodrome",
+                return_value=tick_bands,
             ),
             patch(
                 f"{MODULE}.calculate_velodrome_il_risk_score_multi", return_value=0.02
@@ -921,6 +963,7 @@ class TestCalculateAeroMetrics:
     def test_v2(self) -> None:
         """A held stable position is valued from its pool's tapes."""
         result, v2, _ = self._metrics(self._position())
+        assert result["apr"] == 1.0
         assert result["il_risk_score"] == 0.02
         assert result["sharpe_ratio"] == 10
         assert result["depth_score"] is None
@@ -930,14 +973,70 @@ class TestCalculateAeroMetrics:
 
     def test_cl(self) -> None:
         """A held CL position is valued from its gauge's credited emissions."""
-        result, _, cl = self._metrics(self._position(is_cl_pool=True))
-        assert result is not None
+        bands = [{"tick_lower": -10, "tick_upper": 10, "allocation": 1.0}]
+        result, _, cl = self._metrics(self._position(is_cl_pool=True), tick_bands=bands)
+        assert result["apr"] == 1.0
+        assert cl.call_args.args[2] == bands
+
+    def test_cl_without_tick_bands_has_no_apr(self) -> None:
+        """Unpriced tick bands give no live APR rather than an APR of 0."""
+        result, _, cl = self._metrics(
+            self._position(is_cl_pool=True), live_state=_cl_pool()
+        )
         assert cl.call_args.args[2] == []
+        assert "apr" not in result
+        assert result["il_risk_score"] == 0.02
+
+    def test_cl_with_out_of_range_tick_bands_has_no_apr(self) -> None:
+        """Tick bands the price is outside of give no live APR rather than an APR of 0."""
+        bands = [{"tick_lower": 5, "tick_upper": 10, "allocation": 1.0}]
+        result, _, cl = self._metrics(
+            self._position(is_cl_pool=True), tick_bands=bands, live_state=_cl_pool()
+        )
+        assert cl.call_args.args[2] == bands
+        assert "apr" not in result
+        assert result["il_risk_score"] == 0.02
+
+    def test_v2_with_flat_gauge_tape_has_zero_apr(self) -> None:
+        """A held v2 pool whose gauge stopped paying reports an APR of 0, not no APR."""
+        flat = _v2_pool(
+            gauge_observations=[(10**14, SECONDS_PER_DAY), (10**14, 0)],
+            gauge_daily_observations=[
+                (10**14, 0),
+                (10**14, SECONDS_PER_DAY),
+                (10**14, 2 * SECONDS_PER_DAY),
+            ],
+        )
+        result, _, _ = self._metrics(self._position(), live_state=flat)
+        assert result["apr"] == 0.0
+
+    def test_cl_with_flat_gauge_tape_has_zero_apr(self) -> None:
+        """A held CL pool whose gauge stopped crediting reports an APR of 0, not no APR."""
+        bands = [{"tick_lower": -10, "tick_upper": 10, "allocation": 1.0}]
+        flat = _cl_pool(
+            gauge_observations=[(0, 10 * WAD, SECONDS_PER_DAY), (0, 10 * WAD, 0)],
+            gauge_daily_observations=[
+                (0, 10 * WAD, 0),
+                (0, 10 * WAD, SECONDS_PER_DAY),
+                (0, 10 * WAD, 2 * SECONDS_PER_DAY),
+            ],
+        )
+        result, _, _ = self._metrics(
+            self._position(is_cl_pool=True), tick_bands=bands, live_state=flat
+        )
+        assert result["apr"] == 0.0
+
+    def test_deactivated_gauge_earns_nothing(self) -> None:
+        """A held pool whose gauge is deactivated earns no emissions: its live APR is 0."""
+        result, v2, _ = self._metrics(self._position(), activated=False)
+        assert result == {"apr": 0.0}
+        v2.assert_not_called()
 
     def test_unreadable(self) -> None:
-        """Missing decimals, state or position data give no metrics."""
+        """Missing decimals, state, activation or position data give no metrics."""
         assert self._metrics(self._position(), decimals={USDC: 6})[0] is None
         assert self._metrics(self._position(), readable=False)[0] is None
+        assert self._metrics(self._position(), activated=None)[0] is None
         assert self._metrics(self._position(gauge_address=None))[0] is None
         assert self._metrics(self._position(chain="mode"))[0] is None
 

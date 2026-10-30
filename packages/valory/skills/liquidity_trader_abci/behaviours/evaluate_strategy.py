@@ -85,6 +85,14 @@ SWEEP_RETRY_COOLDOWN_SECONDS = 6 * 3600
 # long it waits before trying again, so a transient failure cannot strand a stake.
 MAX_AERO_RESTAKE_ATTEMPTS = 3
 AERO_RESTAKE_RETRY_COOLDOWN_SECONDS = 6 * 3600
+# The metrics a strategy's get_metrics run reports for a held position.
+POSITION_METRICS = (
+    "apr",
+    "il_risk_score",
+    "sharpe_ratio",
+    "depth_score",
+    "max_position_size",
+)
 
 
 STRATEGY_BACKOFF_KV_KEY = "strategy_backoff_state"
@@ -152,6 +160,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if actions:
                 yield from self.send_actions(actions)
                 return
+
+            # The trailing stop-loss compares each open position's live APR
+            # with its entry APR, so the APRs are refreshed first.
+            yield from self.update_position_metrics()
 
             (
                 should_proceed,
@@ -946,7 +958,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # 3. After 12 days, check new TiP conditions in order:
             #    a. Trailing stop-loss
             #    b. Position value check
-            #    c. Opportunity cost check
+            #    c. Opportunity cost check (inactive, see 3c)
             #    d. Cost recovery (traditional)
 
             # Get entry APR with backward compatibility
@@ -1005,6 +1017,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         )
 
             # 3c. Check opportunity cost: Position Yield < SVby (only after min time)
+            # Inactive: trading_opportunities is only filled by the opportunity
+            # search, which runs after the TiP filters, so Vby is None here.
             vby = self._get_best_available_opportunity_yield()
             if vby is not None:
                 if current_yield_per_day < (S * vby):
@@ -1331,7 +1345,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get effective yield of the best available opportunity (Vby) with SMA
 
         Applies short look-back SMA to advertised yields to dampen transient spikes.
-        This implements the opportunity cost check.
+        It feeds the opportunity cost check, which is inactive: during the TiP
+        filters, trading_opportunities is still empty.
 
         :return: Effective daily yield as decimal, or None if unavailable.
         :rtype: Optional[float]
@@ -1397,7 +1412,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     if can_exit:
                         eligible_for_exit.append(position)
-                        # Log exit conditions (trailing stop-loss, opportunity cost, etc.)
+                        # Log the exit condition that was met
                         self.context.logger.info(
                             f"Position {position.get('pool_address', 'unknown')} eligible for exit: {reason}"
                         )
@@ -1618,44 +1633,66 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return kept
 
     def update_position_metrics(self) -> Generator[None, None, None]:
-        """Update metrics for all open positions."""
-        if not self.positions_eligible_for_exit:
-            return
+        """Refresh the metrics, including the live APR, of the open positions.
 
+        A position is refreshed once per METRICS_UPDATE_INTERVAL, and a failed
+        read counts as a refresh: a source that is down is retried at the next
+        interval, not every period, and the TiP checks keep the stored APR
+        until then. Only finite values of POSITION_METRICS are stored, so a
+        metric that was not read keeps its last value.
+
+        :yield: the strategy download and strategy run requests.
+        """
         current_timestamp = self._get_current_timestamp()
-        open_positions = [
-            pos
-            for pos in self.positions_eligible_for_exit
-            if pos.get("status") == PositionStatus.OPEN.value
-        ]
-
-        for position in open_positions:
+        due = []
+        for position in self.current_positions:
+            if position.get("status") != PositionStatus.OPEN.value:
+                continue
             dex_type = position.get("dex_type")
             strategy = self.params.dex_type_to_strategy.get(dex_type)
-
             if not strategy:
                 self.context.logger.error(f"No strategy found for dex type {dex_type}")
                 continue
 
-            last_metrics_update = position.get("last_metrics_update", 0)
+            last_metrics_update = position.get("last_metrics_update") or 0
             time_since_update = current_timestamp - last_metrics_update
-
-            if time_since_update >= METRICS_UPDATE_INTERVAL:
-                self.context.logger.info(
-                    f"Recalculating metrics for position {position.get('pool_address')} - "
-                    f"last update was {time_since_update / 3600:.2f} hours ago"
-                )
-                metrics = yield from self.get_returns_metrics_for_opportunity(
-                    position, strategy
-                )
-                if metrics:
-                    metrics["last_metrics_update"] = current_timestamp
-                    position.update(metrics)
-            else:
+            if time_since_update < METRICS_UPDATE_INTERVAL:
                 self.context.logger.info(
                     f"Skipping metrics calculation for position {position.get('pool_address')} - "
                     f"last update was {time_since_update / 3600:.2f} hours ago"
                 )
+                continue
+            self.context.logger.info(
+                f"Recalculating metrics for position {position.get('pool_address')} - "
+                f"last update was {time_since_update / 3600:.2f} hours ago"
+            )
+            due.append((position, strategy))
+        if not due:
+            return
+
+        try:
+            # After a restart the strategies are not loaded yet.
+            yield from self.download_strategies()
+            for position, strategy in due:
+                position["last_metrics_update"] = current_timestamp
+                metrics = yield from self.get_returns_metrics_for_opportunity(
+                    position, strategy
+                )
+                read = {
+                    key: float(value)
+                    for key, value in (metrics or {}).items()
+                    if key in POSITION_METRICS
+                    and isinstance(value, (int, float))
+                    and math.isfinite(value)
+                }
+                if "apr" not in read:
+                    self.context.logger.warning(
+                        f"No live APR for position {position.get('pool_address')}; "
+                        f"the TiP exit checks keep APR {position.get('apr')}"
+                    )
+                position.update(read)
+        except Exception as e:
+            self.context.logger.error(f"Error updating position metrics: {e}")
 
         self.store_current_positions()
 
@@ -1975,7 +2012,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities using asyncio for concurrency."""
-        self.trading_opportunities.clear()
+        # Per instance: the class attribute is only a default.
+        self.trading_opportunities = []
         yield from self.download_strategies()
         strategies = self.synchronized_data.selected_protocols.copy()
 
@@ -1986,15 +2024,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategy_kwargs_list = []
         for next_strategy in strategies:
             self.context.logger.info(f"Preparing strategy: {next_strategy}")
-            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
-                next_strategy, {}
-            )
+            kwargs = self._strategy_kwargs(next_strategy)
             kwargs.update(
                 {
                     "strategy": next_strategy,
-                    "chains": self.params.target_investment_chains,
-                    "protocols": self.params.available_protocols,
-                    "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                     "current_positions": (
                         [
                             to_checksum_address(pos.get("pool_address"))
@@ -2006,22 +2039,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         if self.positions_eligible_for_exit
                         else []
                     ),
-                    "coingecko_api_key": self.coingecko.api_key,
-                    "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
-                    "coin_id_mapping": COIN_ID_MAPPING,
-                    "x402_session": self._paid_session_or_none(),
-                    "x402_proxy": (
-                        self.coingecko.paid_proxy_base_url
-                        if self.coingecko.use_x402
-                        else None
-                    ),
-                    "price_cache_ttl": self.params.strategy_price_cache_ttl,
-                    "price_cache": self.shared_state.strategy_coingecko_price_cache,
-                    "chain_to_rpc": {
-                        "base": self.params.base_ledger_rpc,
-                        "optimism": self.params.optimism_ledger_rpc,
-                    },
                 }
             )
             strategy_kwargs_list.append((next_strategy, kwargs))
@@ -2093,6 +2111,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Ensure we don't lose the error state
             self.trading_opportunities = []
 
+    def _strategy_kwargs(self, strategy: str) -> Dict[str, Any]:
+        """Return the kwargs of every run of a strategy: its configured ones and the shared data sources."""
+        return {
+            **self.params.strategies_kwargs.get(strategy, {}),
+            "chains": self.params.target_investment_chains,
+            "protocols": self.params.available_protocols,
+            "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+            "coingecko_api_key": self.coingecko.api_key,
+            "whitelisted_assets": WHITELISTED_ASSETS,
+            "coin_id_mapping": COIN_ID_MAPPING,
+            "x402_session": self._paid_session_or_none(),
+            "x402_proxy": (
+                self.coingecko.paid_proxy_base_url if self.coingecko.use_x402 else None
+            ),
+            "price_cache_ttl": self.params.strategy_price_cache_ttl,
+            "price_cache": self.shared_state.strategy_coingecko_price_cache,
+            "chain_to_rpc": {
+                "base": self.params.base_ledger_rpc,
+                "optimism": self.params.optimism_ledger_rpc,
+            },
+        }
+
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""
         if self._inflight_strategy_req is not None:
@@ -2117,26 +2157,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get and update metrics for the current pool ."""
 
-        kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
-
+        kwargs = self._strategy_kwargs(strategy)
         kwargs.update(
             {
                 "get_metrics": True,
                 "position": position,
-                "coingecko_api_key": self.coingecko.api_key,
-                "chains": self.params.target_investment_chains,
                 "apr_threshold": self.params.apr_threshold,
-                "protocols": self.params.available_protocols,
-                "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                 "current_positions": self.positions_eligible_for_exit,
-                "whitelisted_assets": WHITELISTED_ASSETS,
-                "coin_id_mapping": COIN_ID_MAPPING,
-                "x402_session": self._paid_session_or_none(),
-                "x402_proxy": (
-                    self.coingecko.paid_proxy_base_url
-                    if self.coingecko.use_x402
-                    else None
-                ),
             }
         )
 

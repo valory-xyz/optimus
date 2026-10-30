@@ -2732,6 +2732,83 @@ class TestCalculateMetrics:
         assert result["il_risk_score"] is None
 
 
+class TestCalculateMetricsLiveApr:
+    """The metrics of a held pool carry the APR its opportunity would have."""
+
+    POSITION = {
+        "pool_id": "0x870c0af8a1af0b58b4b0bd31ce4fe72864ae45be",
+        "chain": "optimism",
+        "token_count": 0,
+    }
+    APR_ITEMS = [
+        {"type": "IB_YIELD", "apr": 0.0086},
+        {"type": "MERKL", "apr": 0.0232},
+        {"type": "SWAP_FEE_24H", "apr": 0.0021},
+        {"type": "STAKING", "apr": 0.01},
+    ]
+
+    def _metrics(self, query_result: Any) -> Any:
+        with patch.object(
+            bal_mod, "run_query", return_value=query_result
+        ) as mock_query, patch.object(
+            bal_mod, "get_balancer_pool_sharpe_ratio", return_value=1.5
+        ), patch.object(
+            bal_mod, "analyze_pool_liquidity", return_value=(100, 5000)
+        ):
+            result = calculate_metrics(
+                dict(self.POSITION),
+                "key",
+                {},
+                graphql_endpoint="https://api-v3.balancer.fi/",
+            )
+        return result, mock_query
+
+    def test_apr_matches_the_opportunity_apr(self) -> None:
+        """The live APR equals the APR the opportunity search gives the same pool."""
+        pool = {
+            "id": self.POSITION["pool_id"],
+            "address": self.POSITION["pool_id"][:42],
+            "chain": "OPTIMISM",
+            "type": "WEIGHTED",
+            "poolTokens": [
+                {"address": "0xt0", "symbol": "TK0"},
+                {"address": "0xt1", "symbol": "TK1"},
+            ],
+            "dynamicData": {"aprItems": self.APR_ITEMS, "totalLiquidity": "50000"},
+        }
+        with patch.object(bal_mod, "get_pool_token_prices", return_value={}):
+            (opportunity,) = format_pool_data(
+                get_filtered_pools_for_balancer([dict(pool)], [], {"optimism": {}}),
+                "key",
+            )
+        result, mock_query = self._metrics({"poolGetPool": pool})
+        assert result["apr"] == pytest.approx(opportunity["apr"])
+        assert result["apr"] == pytest.approx(1.21)
+        query, endpoint, variables = mock_query.call_args.args
+        assert "poolGetPool(id: $id, chain: $chain)" in query
+        assert endpoint == "https://api-v3.balancer.fi/"
+        assert variables == {"id": self.POSITION["pool_id"], "chain": "OPTIMISM"}
+
+    def test_query_error_leaves_apr_out(self) -> None:
+        """A pool the API cannot return gives no APR rather than a zero."""
+        result, _ = self._metrics({"error": "GraphQL Errors: Pool with id does not exist"})
+        assert "apr" not in result
+        assert result["sharpe_ratio"] == 1.5
+
+    def test_no_pool_leaves_apr_out(self) -> None:
+        """An empty answer gives no APR."""
+        result, _ = self._metrics({})
+        assert "apr" not in result
+
+    @pytest.mark.parametrize(
+        "dynamic_data", [{"aprItems": []}, {"aprItems": None}, {}, None]
+    )
+    def test_no_apr_items_leaves_apr_out(self, dynamic_data: Any) -> None:
+        """A pool without APR items gives no APR rather than a zero."""
+        result, _ = self._metrics({"poolGetPool": {"dynamicData": dynamic_data}})
+        assert "apr" not in result
+
+
 class TestRun:
     """Tests for the run function."""
 

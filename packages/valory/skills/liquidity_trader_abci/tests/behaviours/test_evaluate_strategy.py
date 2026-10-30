@@ -20,15 +20,20 @@
 
 """Comprehensive unit tests for evaluate_strategy behaviour."""
 
+import asyncio
 import json
 import math
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import numpy as np
 import pytest
+from eth_utils import to_checksum_address
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
+    COIN_ID_MAPPING,
     DexType,
     METRICS_UPDATE_INTERVAL,
     PositionStatus,
@@ -471,32 +476,70 @@ class TestCheckFunds:
 class TestUpdatePositionMetrics:
     """Tests for update_position_metrics."""
 
-    def test_no_eligible_positions(self):
-        """Test no eligible positions."""
+    def test_no_open_positions(self):
+        """Without open positions nothing is read or stored."""
         b = _mk()
-        b.positions_eligible_for_exit = []
+        b.current_positions = [{"status": PositionStatus.CLOSED.value}]
+        b.positions_eligible_for_exit = [
+            {"status": PositionStatus.OPEN.value, "dex_type": "velodrome"}
+        ]
+        b.get_returns_metrics_for_opportunity = MagicMock()
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
+        b.get_returns_metrics_for_opportunity.assert_not_called()
         b.store_current_positions.assert_not_called()
 
-    def test_skips_closed_positions(self):
-        """Test skips closed positions."""
+    def test_refreshes_open_positions_before_the_tip_filters(self):
+        """Open positions are refreshed before any is known to be eligible for exit."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
-        b.positions_eligible_for_exit = [
-            {"status": PositionStatus.CLOSED.value, "dex_type": "velodrome"}
-        ]
+        closed = {"status": PositionStatus.CLOSED.value, "dex_type": "velodrome"}
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "apr": 20.0,
+        }
+        b.current_positions = [closed, position]
+        b.positions_eligible_for_exit = []
+        b.get_returns_metrics_for_opportunity = MagicMock(
+            side_effect=_gen_return({"apr": 4.0})
+        )
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
+        b.get_returns_metrics_for_opportunity.assert_called_once_with(
+            position, "strategy_a"
+        )
+        assert position["apr"] == 4.0
+        assert position["last_metrics_update"] == now
+        assert "apr" not in closed
         b.store_current_positions.assert_called_once()
 
-    def test_no_strategy_for_dex_type(self):
-        """Test no strategy for dex type."""
+    def test_null_last_metrics_update_is_never_updated(self):
+        """A stored ``null`` timestamp counts as never updated."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
-        b.positions_eligible_for_exit = [
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "last_metrics_update": None,
+        }
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = _gen_return({"apr": 4.0})
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert position["apr"] == 4.0
+        assert position["last_metrics_update"] == now
+
+    def test_no_strategy_for_dex_type(self):
+        """A position without a strategy is not refreshed, and nothing is stored."""
+        b = _mk()
+        now = int(time.time())
+        b._get_current_timestamp = lambda: now
+        b.current_positions = [
             {
                 "status": PositionStatus.OPEN.value,
                 "dex_type": "unknown_dex",
@@ -504,30 +547,50 @@ class TestUpdatePositionMetrics:
             }
         ]
         b.params.dex_type_to_strategy = {}
-        b.store_current_positions = MagicMock()
-        _drive(b.update_position_metrics())
-        b.store_current_positions.assert_called_once()
-
-    def test_metrics_update_interval_not_reached(self):
-        """Test metrics update interval not reached."""
-        b = _mk()
-        now = int(time.time())
-        b._get_current_timestamp = lambda: now
-        b.positions_eligible_for_exit = [
-            {
-                "status": PositionStatus.OPEN.value,
-                "dex_type": "velodrome",
-                "last_metrics_update": now - 100,  # recent update
-                "pool_address": "0xpool",
-            }
-        ]
         b.get_returns_metrics_for_opportunity = MagicMock()
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
         b.get_returns_metrics_for_opportunity.assert_not_called()
+        b.store_current_positions.assert_not_called()
 
-    def test_metrics_update_interval_reached(self):
-        """Test metrics update interval reached: position gets new metrics + timestamp."""
+    @pytest.mark.parametrize(
+        "age, refreshed",
+        [
+            (100, False),
+            (METRICS_UPDATE_INTERVAL - 1, False),
+            (METRICS_UPDATE_INTERVAL, True),
+            (METRICS_UPDATE_INTERVAL + 100, True),
+        ],
+    )
+    def test_metrics_update_interval(self, age, refreshed):
+        """A position is refreshed once its last refresh is METRICS_UPDATE_INTERVAL old."""
+        b = _mk()
+        now = int(time.time())
+        b._get_current_timestamp = lambda: now
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "last_metrics_update": now - age,
+            "pool_address": "0xpool",
+        }
+        b.current_positions = [position]
+        b.download_strategies = MagicMock(side_effect=_gen_return(None))
+        b.get_returns_metrics_for_opportunity = MagicMock(
+            side_effect=_gen_return({"apr": 4.0})
+        )
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert b.get_returns_metrics_for_opportunity.called is refreshed
+        assert b.download_strategies.called is refreshed
+        assert b.store_current_positions.called is refreshed
+        assert position["last_metrics_update"] == (now if refreshed else now - age)
+
+    def test_metrics_without_apr_keep_the_last_apr(self):
+        """Metrics with no live APR keep the stored one and say so.
+
+        The attempt still counts as the refresh, so the APR is read again at
+        the next interval, not every period.
+        """
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -536,33 +599,131 @@ class TestUpdatePositionMetrics:
             "dex_type": "velodrome",
             "last_metrics_update": now - METRICS_UPDATE_INTERVAL - 100,
             "pool_address": "0xpool",
+            "apr": 12.5,
         }
-        b.positions_eligible_for_exit = [position]
-        b.get_returns_metrics_for_opportunity = _gen_return({"apr": 10.0})
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = _gen_return({"sharpe_ratio": 1.2})
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
-        b.store_current_positions.assert_called_once()
-        # Production logic: returned metrics merged in and timestamp refreshed.
-        assert position["apr"] == 10.0
+        assert position["apr"] == 12.5
+        assert position["sharpe_ratio"] == 1.2
         assert position["last_metrics_update"] == now
+        warnings = [c.args[0] for c in b.context.logger.warning.call_args_list]
+        assert any("No live APR for position 0xpool" in w for w in warnings)
 
-    def test_metrics_update_returns_none(self):
-        """Test metrics update returns none."""
+    def test_failed_read_is_retried_at_the_next_interval(self):
+        """A failed read counts as the refresh, so it is not retried every period."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
-        pos = {
+        position = {
             "status": PositionStatus.OPEN.value,
             "dex_type": "velodrome",
             "last_metrics_update": 0,
             "pool_address": "0xpool",
+            "apr": 12.5,
         }
-        b.positions_eligible_for_exit = [pos]
-        b.get_returns_metrics_for_opportunity = _gen_return(None)
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = MagicMock(side_effect=_gen_return(None))
         b.store_current_positions = MagicMock()
         _drive(b.update_position_metrics())
-        # Position should not be updated
-        assert "apr" not in pos
+        assert position["apr"] == 12.5
+        assert position["last_metrics_update"] == now
+        b.store_current_positions.assert_called_once()
+
+        _drive(b.update_position_metrics())
+        b.get_returns_metrics_for_opportunity.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "unread", [None, math.nan, math.inf, "4.0"], ids=["none", "nan", "inf", "str"]
+    )
+    def test_only_finite_metrics_are_stored(self, unread):
+        """Only finite values of the metric keys are stored; an unread one keeps its last value."""
+        b = _mk()
+        now = int(time.time())
+        b._get_current_timestamp = lambda: now
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "entry_apr": 20.0,
+            "apr": 12.5,
+            "sharpe_ratio": 1.1,
+            "depth_score": 80.0,
+            "il_risk_score": -0.1,
+            "max_position_size": 5000.0,
+        }
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = _gen_return(
+            {
+                "apr": unread,
+                "sharpe_ratio": unread,
+                "depth_score": 95.0,
+                "il_risk_score": unread,
+                "max_position_size": unread,
+                "entry_apr": 99.0,
+            }
+        )
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert position == {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "entry_apr": 20.0,
+            "apr": 12.5,
+            "sharpe_ratio": 1.1,
+            "depth_score": 95.0,
+            "il_risk_score": -0.1,
+            "max_position_size": 5000.0,
+            "last_metrics_update": now,
+        }
+        warnings = [c.args[0] for c in b.context.logger.warning.call_args_list]
+        assert any("No live APR for position 0xpool" in w for w in warnings)
+
+    def test_metrics_are_stored_as_floats(self):
+        """Numbers of any numeric type are stored as JSON-safe floats."""
+        b = _mk()
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+        }
+        b.current_positions = [position]
+        b.get_returns_metrics_for_opportunity = _gen_return(
+            {"apr": np.float64(0.0), "sharpe_ratio": 10}
+        )
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert type(position["apr"]) is float and position["apr"] == 0.0
+        assert type(position["sharpe_ratio"]) is float
+        json.dumps(position)
+
+    def test_error_is_logged_and_the_tip_filters_still_run(self):
+        """A refresh that raises is logged, the attempt is stored, and nothing is raised."""
+        b = _mk()
+        now = int(time.time())
+        b._get_current_timestamp = lambda: now
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "apr": 12.5,
+        }
+        b.current_positions = [position]
+
+        def fail(*_):
+            raise RuntimeError("boom")
+            yield  # pylint: disable=unreachable
+
+        b.get_returns_metrics_for_opportunity = fail
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert position["apr"] == 12.5
+        assert position["last_metrics_update"] == now
+        b.store_current_positions.assert_called_once()
+        errors = [c.args[0] for c in b.context.logger.error.call_args_list]
+        assert "Error updating position metrics: boom" in errors
 
 
 class TestCheckTipExitConditions:
@@ -2927,6 +3088,230 @@ class TestAsyncAct:
         assert len(calls) == 1
         assert calls[0] == [{"action": "enter"}]
 
+    def test_live_aprs_are_refreshed_before_the_tip_filters(self):
+        """The TiP filters read refreshed APRs; the search runs only past them."""
+        b = _mk()
+        order = []
+
+        def _step(name, value=None):
+            def _inner(*a, **kw):
+                order.append(name)
+                yield
+                return value
+
+            return _inner
+
+        b._read_investing_paused = _gen_return(False)
+        b.check_and_prepare_non_whitelisted_swaps = _gen_return([])
+        b.check_funds = MagicMock(return_value=True)
+        b._check_and_use_cached_cl_opportunity = _gen_return(None)
+        b._write_kv = _gen_return(True)
+        b.update_position_metrics = _step("update_position_metrics")
+        b._apply_tip_filters_to_exit_decisions = _step(
+            "_apply_tip_filters_to_exit_decisions", (True, [])
+        )
+        b.fetch_all_trading_opportunities = _step("fetch_all_trading_opportunities")
+        b.prepare_strategy_actions = _step(
+            "prepare_strategy_actions", [{"action": "enter"}]
+        )
+        send_actions, calls = self._make_send_actions()
+        b.send_actions = send_actions
+        _drive(b.async_act(), sends=[None] * 20)
+        assert order == [
+            "update_position_metrics",
+            "_apply_tip_filters_to_exit_decisions",
+            "fetch_all_trading_opportunities",
+            "prepare_strategy_actions",
+        ]
+        assert calls == [[{"action": "enter"}]]
+
+
+class TestExitChecksThroughAsyncAct:
+    """The trailing stop-loss fires from async_act with a live strategy run.
+
+    The pool strategy and the real max_apr_selection hyper strategy are
+    exec'd from source as in production, and the pool strategy runs off the
+    FSM thread. Only consensus, the KV store, token decimals, SMA prices and
+    the transaction builder are stubbed.
+    """
+
+    # Like a live read of a held pool too quiet for risk metrics: the APR is
+    # read, the risk metrics are not.
+    STRATEGY = """
+def run(**kwargs):
+    if kwargs.get("get_metrics"):
+        return {
+            "apr": LIVE_APR,
+            "sharpe_ratio": None,
+            "depth_score": None,
+            "il_risk_score": None,
+            "max_position_size": None,
+        }
+    return {"result": OPPORTUNITIES, "error": []}
+"""
+    POOL = "0x" + "ab" * 20
+    HYPER_STRATEGY = (
+        Path(__file__).parents[4]
+        / "customs"
+        / "max_apr_selection"
+        / "max_apr_selection.py"
+    )
+
+    def _behaviour(self, entry_apr, live_apr, opportunity_apr):
+        b = _mk(
+            params={
+                "stoploss_threshold_multiplier": 0.43,
+                "strategies_kwargs": {},
+                "selected_hyper_strategy": "max_apr_selection",
+                "max_pools": 1,
+            },
+            synced={"selected_protocols": ["strategy_a"]},
+        )
+        opportunity = {
+            "pool_address": "0x" + "cd" * 20,
+            "apr": opportunity_apr,
+            "sharpe_ratio": 1.5,
+            "depth_score": 50.0,
+            "il_risk_score": -0.01,
+        }
+        source = self.STRATEGY.replace("LIVE_APR", repr(live_apr)).replace(
+            "OPPORTUNITIES", repr([opportunity])
+        )
+        b.shared_state.strategies_executables = {
+            "strategy_a": (source, "run"),
+            "max_apr_selection": (self.HYPER_STRATEGY.read_text(), "run"),
+        }
+        b.context.coingecko.use_x402 = False
+        b.current_positions = [
+            {
+                "status": PositionStatus.OPEN.value,
+                "dex_type": "velodrome",
+                "protocol": "aero",
+                "gauge_address": "0x" + "9a" * 20,
+                "staked": True,
+                "chain": "optimism",
+                "pool_address": self.POOL,
+                "token0": "0x" + "01" * 20,
+                "token1": "0x" + "02" * 20,
+                "apr": entry_apr,
+                "entry_apr": entry_apr,
+                "last_metrics_update": None,
+                "enter_timestamp": int(time.time()) - 14 * 24 * 3600,
+                "min_hold_days": 10.0,
+                "entry_cost": 1.0,
+                "cost_recovered": False,
+                "yield_usd": 0.5,
+                "amount0": 50 * 10**6,
+                "amount1": 50 * 10**6,
+                "current_token_balances": {
+                    "0x" + "01" * 20: 50.0,
+                    "0x" + "02" * 20: 50.0,
+                },
+            }
+        ]
+        b._read_investing_paused = _gen_return(False)
+        b._read_kv = _gen_return({})
+        b._write_kv = _gen_return(True)
+        b.store_current_positions = MagicMock()
+        b._get_token_decimals = _gen_return(6)
+        b._fetch_token_prices_sma = _gen_return(1.0)
+        b.execute_strategy = MagicMock(side_effect=b.execute_strategy)
+        b.get_order_of_transactions = _gen_return([{"action": "ExitPool"}])
+        calls = []
+
+        def send_actions(actions=None):
+            calls.append(actions)
+            yield
+
+        b.send_actions = send_actions
+        return b, calls
+
+    @staticmethod
+    def _run(gen):
+        """Step the behaviour inside an event loop, like the agent does."""
+
+        async def _drive_async():
+            while True:
+                try:
+                    next(gen)
+                except StopIteration as stop:
+                    return stop.value
+                await asyncio.sleep(0)
+
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_drive_async())
+        finally:
+            loop.close()
+
+    def _exit_reasons(self, b):
+        return [
+            c.args[0]
+            for c in b.context.logger.info.call_args_list
+            if "eligible for exit" in c.args[0]
+        ]
+
+    def test_trailing_stop_loss(self):
+        """A live APR below S * entry APR makes the position eligible for exit."""
+        b, calls = self._behaviour(entry_apr=20.0, live_apr=0.0, opportunity_apr=6.0)
+        self._run(b.async_act())
+        position = b.current_positions[0]
+        assert position["apr"] == 0.0
+        [reason] = self._exit_reasons(b)
+        assert "Trailing stop-loss triggered" in reason
+        hyper_kwargs = b.execute_strategy.call_args.kwargs
+        assert hyper_kwargs["current_positions"] == [position]
+        assert b.position_to_exit is position
+        assert calls == [[{"action": "ExitPool"}]]
+
+    def test_trailing_stop_loss_on_the_first_evaluation_after_a_restart(self):
+        """Strategies still to download are loaded before the live APR is read."""
+        b, calls = self._behaviour(entry_apr=20.0, live_apr=0.0, opportunity_apr=6.0)
+        loaded = b.shared_state.strategies_executables
+        b.shared_state.strategies_executables = {}
+        b.shared_state.strategy_to_filehash = {name: "hash" for name in loaded}
+
+        def download_next_strategy():
+            name = next(iter(b.shared_state.strategy_to_filehash))
+            del b.shared_state.strategy_to_filehash[name]
+            b.shared_state.strategies_executables[name] = loaded[name]
+
+        b.download_next_strategy = download_next_strategy
+        b.sleep = _gen_none
+        self._run(b.async_act())
+        assert b.current_positions[0]["apr"] == 0.0
+        [reason] = self._exit_reasons(b)
+        assert "Trailing stop-loss triggered" in reason
+        assert calls == [[{"action": "ExitPool"}]]
+
+    def test_opportunity_cost_exit_stays_inactive(self):
+        """Opportunities, even an earlier period's, are unknown to the TiP filters."""
+        # An earlier period, before the position was entered, searched.
+        earlier, _ = self._behaviour(entry_apr=10.0, live_apr=9.0, opportunity_apr=50.0)
+        earlier.current_positions = []
+        earlier.check_funds = MagicMock(return_value=True)
+        b, calls = self._behaviour(entry_apr=10.0, live_apr=9.0, opportunity_apr=50.0)
+        for behaviour in (earlier, b):
+            del behaviour.__dict__["trading_opportunities"]
+        try:
+            self._run(earlier.async_act())
+            assert [o["apr"] for o in earlier.trading_opportunities] == [50.0]
+            self._run(b.async_act())
+        finally:
+            EvaluateStrategyBehaviour.trading_opportunities = []
+        assert self._exit_reasons(b) == []
+        assert b.current_positions[0]["apr"] == 9.0
+        assert calls == [None]
+
+    def test_healthy_position_stays_blocked(self):
+        """A live APR close to the entry APR keeps the position."""
+        b, calls = self._behaviour(entry_apr=10.0, live_apr=9.0, opportunity_apr=12.0)
+        self._run(b.async_act())
+        assert b.current_positions[0]["apr"] == 9.0
+        assert self._exit_reasons(b) == []
+        b.execute_strategy.assert_not_called()
+        assert calls == [None]
+
 
 class TestCalculateVelodromeTokenRatios:
     """Tests for calculate_velodrome_token_ratios."""
@@ -4703,6 +5088,169 @@ class TestFetchAllTradingOpportunities:
             with patch("asyncio.ensure_future", return_value=f):
                 _drive(b.fetch_all_trading_opportunities(), sends=[None] * 10)
         assert b.trading_opportunities == []
+
+
+class TestOpportunitySearchInputs:
+    """The opportunity search keeps its inputs and results to its own run."""
+
+    def _fetch(self, b, result):
+        from concurrent.futures import Future
+
+        b.download_strategies = _gen_none
+        b.context.coingecko.use_x402 = False
+        b._run_all_strategies = MagicMock()
+        f = Future()
+        f.set_result(result)
+        synced = MagicMock()
+        synced.selected_protocols = ["strat_a"]
+        with patch.object(
+            type(b),
+            "synchronized_data",
+            new_callable=PropertyMock,
+            return_value=synced,
+        ):
+            with patch("asyncio.ensure_future", return_value=f):
+                _drive(b.fetch_all_trading_opportunities(), sends=[None] * 10)
+        return b._run_all_strategies.call_args.args[0]
+
+    def test_leaves_the_configured_strategy_kwargs_alone(self):
+        """The run's kwargs are a copy, so the metrics run cannot leak into them."""
+        b = _mk()
+        b.params.strategies_kwargs = {"strat_a": {"graphql_endpoint": "url"}}
+        [(_, kwargs)] = self._fetch(b, [{"result": []}])
+        assert kwargs["graphql_endpoint"] == "url"
+        assert b.params.strategies_kwargs == {"strat_a": {"graphql_endpoint": "url"}}
+
+    def test_searches_without_metrics_and_skips_held_pools(self):
+        """The search asks for opportunities, not metrics, and skips the pools it holds."""
+        b = _mk()
+        b.params.strategies_kwargs = {}
+        held = "0x" + "ab" * 20
+        b.positions_eligible_for_exit = [
+            {"status": PositionStatus.OPEN.value, "pool_address": held},
+            {"status": PositionStatus.CLOSED.value, "pool_address": "0x" + "cd" * 20},
+            {"status": PositionStatus.OPEN.value, "pool_address": "0x1"},
+        ]
+        [(strategy, kwargs)] = self._fetch(b, [{"result": []}])
+        assert strategy == kwargs["strategy"] == "strat_a"
+        assert kwargs["get_metrics"] is False
+        assert kwargs["current_positions"] == [to_checksum_address(held)]
+
+    def test_a_new_instance_does_not_see_earlier_opportunities(self):
+        """Opportunities belong to the instance that fetched them."""
+        first, second = _mk(), _mk()
+        for b in (first, second):
+            b.params.strategies_kwargs = {}
+            del b.__dict__["trading_opportunities"]
+        try:
+            self._fetch(first, [{"result": [{"pool_address": "0x1", "apr": 10}]}])
+            assert len(first.trading_opportunities) == 1
+            assert second.trading_opportunities == []
+        finally:
+            EvaluateStrategyBehaviour.trading_opportunities = []
+
+
+class TestMetricsRunInputs:
+    """The metrics run reads the live APR the way the opportunity search does."""
+
+    @staticmethod
+    def _done_future(value):
+        from concurrent.futures import Future
+
+        f = Future()
+        f.set_result(value)
+        return f
+
+    def test_shares_rpcs_and_price_cache(self):
+        """Same RPCs and price cache as the search; the params are untouched.
+
+        The run also gets the position, the APR threshold, and the positions
+        eligible for exit.
+        """
+        b = _mk()
+        b.context.coingecko.use_x402 = False
+        b.params.strategies_kwargs = {"strategy_a": {"graphql_endpoint": "url"}}
+        b.params.optimism_ledger_rpc = "https://optimism.rpc"
+        b.params.base_ledger_rpc = "https://base.rpc"
+        b.params.apr_threshold = 5
+        position = {"status": PositionStatus.OPEN.value, "pool_address": "0xpool"}
+        b.current_positions = [position]
+        b.positions_eligible_for_exit = [position]
+        b._async_execute_strategy = MagicMock()
+        with patch(
+            "asyncio.ensure_future", return_value=self._done_future({"apr": 1.0})
+        ):
+            _drive(b.get_returns_metrics_for_opportunity(position, "strategy_a"))
+        call = b._async_execute_strategy.call_args
+        assert call.args[0] == "strategy_a"
+        kwargs = call.kwargs
+        assert kwargs["get_metrics"] is True
+        assert kwargs["position"] is position
+        assert kwargs["apr_threshold"] == 5
+        assert kwargs["current_positions"] is b.positions_eligible_for_exit
+        assert "strategy" not in kwargs
+        assert kwargs["graphql_endpoint"] == "url"
+        assert kwargs["price_cache"] is b.shared_state.strategy_coingecko_price_cache
+        assert kwargs["price_cache_ttl"] == b.params.strategy_price_cache_ttl
+        assert kwargs["chain_to_rpc"] == {
+            "base": "https://base.rpc",
+            "optimism": "https://optimism.rpc",
+        }
+        assert b.params.strategies_kwargs == {"strategy_a": {"graphql_endpoint": "url"}}
+
+
+class TestStrategyKwargs:
+    """Both strategy runs share each data source, taken from where it is configured."""
+
+    SOURCES = {
+        "chains": lambda b: b.params.target_investment_chains,
+        "protocols": lambda b: b.params.available_protocols,
+        "chain_to_chain_id_mapping": lambda b: b.params.chain_to_chain_id_mapping,
+        "coingecko_api_key": lambda b: b.context.coingecko.api_key,
+        "whitelisted_assets": lambda b: WHITELISTED_ASSETS,
+        "coin_id_mapping": lambda b: COIN_ID_MAPPING,
+        "x402_session": lambda b: b._paid_session_or_none.return_value,
+        "x402_proxy": lambda b: b.context.coingecko.paid_proxy_base_url,
+        "price_cache_ttl": lambda b: b.params.strategy_price_cache_ttl,
+        "price_cache": lambda b: b.shared_state.strategy_coingecko_price_cache,
+        "chain_to_rpc": lambda b: {
+            "base": b.params.base_ledger_rpc,
+            "optimism": b.params.optimism_ledger_rpc,
+        },
+    }
+
+    @staticmethod
+    def _behaviour(use_x402=True):
+        b = _mk()
+        b.params.strategies_kwargs = {}
+        b.params.target_investment_chains = ["base"]
+        b.params.available_protocols = ["velodrome"]
+        b.params.chain_to_chain_id_mapping = {"base": 8453}
+        b.params.strategy_price_cache_ttl = 900
+        b.params.base_ledger_rpc = "https://base.rpc"
+        b.params.optimism_ledger_rpc = "https://optimism.rpc"
+        b.context.coingecko.api_key = "coingecko-key"
+        b.context.coingecko.use_x402 = use_x402
+        b.context.coingecko.paid_proxy_base_url = "https://proxy"
+        b._paid_session_or_none = MagicMock()
+        return b
+
+    @pytest.mark.parametrize("key", sorted(SOURCES))
+    def test_shared_key_comes_from_its_source(self, key):
+        """Each shared key carries the value of its source."""
+        b = self._behaviour()
+        assert b._strategy_kwargs("strat_a")[key] == self.SOURCES[key](b)
+
+    def test_has_only_the_shared_keys(self):
+        """The cases above cover every shared key."""
+        assert self._behaviour()._strategy_kwargs("strat_a").keys() == (
+            self.SOURCES.keys()
+        )
+
+    def test_unpaid_runs_have_no_proxy(self):
+        """Without x402 the strategies call CoinGecko directly."""
+        kwargs = self._behaviour(use_x402=False)._strategy_kwargs("strat_a")
+        assert kwargs["x402_proxy"] is None
 
 
 class TestBuildBridgeSwapActionsBranches:

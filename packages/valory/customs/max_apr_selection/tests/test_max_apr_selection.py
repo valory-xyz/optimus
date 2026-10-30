@@ -195,6 +195,10 @@ class TestIlRiskDescriptor:
         """Test with None value."""
         assert il_risk_descriptor(None) == "Unknown"
 
+    def test_nan_value(self) -> None:
+        """Test with a NaN value, a score that was not read."""
+        assert il_risk_descriptor(math.nan) == "Unknown"
+
     def test_high_risk(self) -> None:
         """Test high risk (< -0.5)."""
         assert il_risk_descriptor(-0.8) == "High"
@@ -427,6 +431,69 @@ class TestApplyRiskThresholdsAndSelectOptimalStrategy:
             opps, composite_score_threshold=0.0, current_positions=[current_pos]
         )
         assert "reasoning" in result
+
+    UNKNOWN = pytest.mark.parametrize(
+        "unknown", [None, math.nan, "absent"], ids=["none", "nan", "absent"]
+    )
+
+    @staticmethod
+    def _set_unknown(position: Dict[str, Any], unknown: Any, *keys: str) -> None:
+        """Mark metrics as not read: None, NaN, or no key at all."""
+        for key in keys:
+            if unknown == "absent":
+                del position[key]
+            else:
+                position[key] = unknown
+
+    @UNKNOWN
+    def test_current_position_with_unknown_metrics_is_exited(
+        self, unknown: Any
+    ) -> None:
+        """A held position whose metrics could not be read is still reasoned about."""
+        opps = [
+            self._make_opportunity(sharpe=5.0, depth=200.0, il_risk=-0.01, apr=30.0),
+        ]
+        current_pos = self._make_opportunity(
+            sharpe=1.0, depth=50.0, il_risk=-0.3, apr=0.0
+        )
+        self._set_unknown(
+            current_pos, unknown, "sharpe_ratio", "depth_score", "il_risk_score"
+        )
+        result = apply_risk_thresholds_and_select_optimal_strategy(
+            opps, composite_score_threshold=0.0, current_positions=[current_pos]
+        )
+        assert result["position_to_exit"] is current_pos
+        assert len(result["optimal_strategies"]) == 1
+        assert "risk-adjusted returns unknown, market liquidity unknown" in (
+            result["reasoning"]
+        )
+        assert "impermanent loss risk is Unknown" in result["reasoning"]
+        assert "higher risk-adjusted returns" not in result["reasoning"]
+        assert "better market liquidity" not in result["reasoning"]
+        assert "lower impermanent loss risk" not in result["reasoning"]
+        assert "offers ." not in result["reasoning"]
+        assert "chosen on its composite score and APR" in result["reasoning"]
+
+    @UNKNOWN
+    def test_current_position_with_unknown_metrics_is_kept(self, unknown: Any) -> None:
+        """Without a better opportunity, unknown metrics are reported as unknown."""
+        opps = [
+            self._make_opportunity(sharpe=0.5, depth=10.0, il_risk=-0.1, apr=5.0),
+        ]
+        current_pos = self._make_opportunity(
+            sharpe=3.0, depth=100.0, il_risk=-0.1, apr=20.0
+        )
+        self._set_unknown(
+            current_pos, unknown, "sharpe_ratio", "depth_score", "il_risk_score"
+        )
+        result = apply_risk_thresholds_and_select_optimal_strategy(
+            opps, composite_score_threshold=999.0, current_positions=[current_pos]
+        )
+        assert result["optimal_strategies"] == []
+        assert "risk-adjusted returns unknown, market liquidity unknown" in (
+            result["reasoning"]
+        )
+        assert "impermanent loss risk is Unknown" in result["reasoning"]
 
     def test_top_opp_il_risk_none_in_comparison(self) -> None:
         """Test metrics comparison when top opp il_risk_score is None."""

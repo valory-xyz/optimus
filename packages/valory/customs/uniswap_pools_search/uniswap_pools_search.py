@@ -239,6 +239,15 @@ def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
     )
 
 
+def get_pool_apr(pool: Dict[str, Any]) -> float:
+    """Get the APR of a pool from its subgraph fields."""
+    return calculate_apr(
+        float(pool["volumeUSD"]),
+        float(pool["totalValueLockedUSD"]),
+        float(pool["feeTier"]) / FEE_RATE_DIVISOR,
+    )
+
+
 def standardize_metrics(
     pools: Any, apr_weight: Any = 0.7, tvl_weight: Any = 0.3
 ) -> Any:
@@ -374,10 +383,8 @@ def get_filtered_pools_for_uniswap(
 
     qualifying_pools = []
     for pool in pools:
-        fee_rate = float(pool["feeTier"]) / FEE_RATE_DIVISOR
         tvl = float(pool["totalValueLockedUSD"])
-        daily_volume = float(pool["volumeUSD"])
-        apr = calculate_apr(daily_volume, tvl, fee_rate)
+        apr = get_pool_apr(pool)
         pool["apr"] = apr
         pool["tvl"] = tvl
 
@@ -664,6 +671,8 @@ def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]
         {{
           pool(id: "{pool_id.lower()}") {{
             id
+            feeTier
+            volumeUSD
             token0 {{
               id
               symbol
@@ -894,16 +903,25 @@ def calculate_metrics(
     sharpe_ratio = get_uniswap_pool_sharpe_ratio(
         position["pool_address"], graphql_endpoint
     )
-    depth_score, max_position_size = assess_pool_liquidity(
-        position["pool_address"], graphql_endpoint
+    pool_data = fetch_pool_data(position["pool_address"], graphql_endpoint)
+    depth_score, max_position_size = (
+        calculate_metrics_liquidity_risk(pool_data)
+        if pool_data is not None
+        else (float("nan"), float("nan"))
     )
 
-    return {
+    metrics = {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
         "depth_score": depth_score,
         "max_position_size": max_position_size,
     }
+
+    # An unreadable APR is left out, so the position keeps its last one
+    if pool_data is not None:
+        metrics["apr"] = get_pool_apr(pool_data)
+
+    return metrics
 
 
 def run(*_args: Any, **kwargs: Any) -> Dict[str, Union[bool, str, List[str]]]:

@@ -736,6 +736,26 @@ def get_best_opportunities(
     return formatted_results
 
 
+def get_aggregator_apr(address: str) -> Optional[float]:
+    """Get the live APR of a held aggregator, priced the way an opportunity is."""
+    aggregator = next(
+        (
+            aggregator
+            for aggregator in fetch_aggregators()
+            if str(aggregator.get("address", "")).lower() == address.lower()
+        ),
+        None,
+    )
+    if aggregator is None:
+        logger.warning(f"No live APR for aggregator {address}: not listed")
+        return None
+    total = (aggregator.get("apy") or {}).get("total")
+    if not isinstance(total, (int, float)):
+        logger.warning(f"No live APR for aggregator {address}: no apy.total")
+        return None
+    return total * PERCENT_CONVERSION
+
+
 def calculate_metrics(
     position: Dict[str, Any], coingecko_api_key: str, **kwargs: Any
 ) -> Optional[Dict[str, Any]]:
@@ -763,6 +783,11 @@ def calculate_metrics(
         "max_position_size": max_position_size,
         "depth_score": depth_score,
     }
+
+    # An unreadable APR is left out, so the position keeps its last one
+    apr = get_aggregator_apr(position["pool_address"])
+    if apr is not None:
+        metrics["apr"] = apr
     logger.info(f"Calculated metrics: {metrics}")
     return metrics
 

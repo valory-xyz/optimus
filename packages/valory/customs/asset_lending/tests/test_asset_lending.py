@@ -834,8 +834,101 @@ class TestCalculateMetrics:
             "whitelistedSilos": [],
             "pool_address": "0x1",
         }
-        result = calculate_metrics(position, "key")
+        with patch.object(al_module, "fetch_aggregators", return_value=[]):
+            result = calculate_metrics(position, "key")
         assert result["il_risk_score"] == -0.05  # type: ignore[index]
+
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity",
+        return_value=(100, 5000),
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address",
+        return_value=1.5,
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.fetch_historical_data",
+        return_value=[{"timestamp": 1}],
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos",
+        return_value=-0.05,
+    )
+    def test_live_apr_matches_the_opportunity_apr(self, *_: MagicMock) -> None:
+        """The held aggregator is priced the way the opportunity search prices it."""
+        held = {
+            "address": "0xAbC0000000000000000000000000000000000001",
+            "chainName": "mode",
+            "apy": {"total": 0.0425},
+            "asset": {"symbol": "WETH", "address": "0x42"},
+            "whitelistedSilos": [],
+            "tvl": 50_000,
+        }
+        other = {**held, "address": "0x" + "22" * 20, "apy": {"total": 0.5}}
+        position = {
+            "token0_symbol": "WETH",
+            "whitelistedSilos": [],
+            "pool_address": held["address"].lower(),
+        }
+        with patch.object(al_module, "fetch_aggregators", return_value=[other, held]):
+            result = calculate_metrics(position, "key")
+        (filtered,) = filter_aggregators(["mode"], [dict(held)], "0x42", [])
+        formatted = format_aggregator(
+            {
+                **filtered,
+                "il_risk_score": None,
+                "sharpe_ratio": None,
+                "depth_score": None,
+                "max_position_size": None,
+                "type": "lending",
+            }
+        )
+        assert result["apr"] == formatted["apr"] == pytest.approx(4.25)  # type: ignore[index]
+
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.analyze_vault_liquidity",
+        return_value=(100, 5000),
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.get_sharpe_ratio_for_address",
+        return_value=1.5,
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.fetch_historical_data",
+        return_value=[{"timestamp": 1}],
+    )
+    @patch(
+        "packages.valory.customs.asset_lending.asset_lending.calculate_il_risk_score_for_silos",
+        return_value=-0.05,
+    )
+    def test_unlisted_aggregator_leaves_apr_out(self, *_: MagicMock) -> None:
+        """An aggregator the API no longer lists gives no APR rather than a zero."""
+        position = {"token0_symbol": "WETH", "whitelistedSilos": [], "pool_address": "0x1"}
+        with patch.object(al_module, "fetch_aggregators", return_value=[]):
+            result = calculate_metrics(position, "key")
+        assert "apr" not in result  # type: ignore[operator]
+        assert result["sharpe_ratio"] == 1.5  # type: ignore[index]
+
+    @pytest.mark.parametrize(
+        "apy", [{}, None, {"total": None}, {"total": "0.04"}], ids=str
+    )
+    def test_listed_aggregator_without_total_apy_leaves_apr_out(self, apy: Any) -> None:
+        """A listed aggregator without a numeric apy.total gives no APR rather than a zero."""
+        position = {"token0_symbol": "WETH", "whitelistedSilos": [], "pool_address": "0x1"}
+        listed = {"address": "0x1", "apy": apy}
+        with patch.object(
+            al_module, "fetch_aggregators", return_value=[listed]
+        ), patch.object(
+            al_module, "calculate_il_risk_score_for_silos", return_value=-0.05
+        ), patch.object(
+            al_module, "fetch_historical_data", return_value=[{"timestamp": 1}]
+        ), patch.object(
+            al_module, "get_sharpe_ratio_for_address", return_value=1.5
+        ), patch.object(
+            al_module, "analyze_vault_liquidity", return_value=(100, 5000)
+        ):
+            result = calculate_metrics(position, "key")
+        assert "apr" not in result  # type: ignore[operator]
 
     @patch("packages.valory.customs.asset_lending.asset_lending.fetch_historical_data")
     @patch(

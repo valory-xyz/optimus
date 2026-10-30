@@ -347,9 +347,11 @@ class TestAbiIntegrity:
     ABI_FILE = "contract_interface.json"
     EXPECTED_FUNCTIONS = [
         "balanceOf",
+        "claimEmissions",
         "deposit",
         "earned",
         "getReward",
+        "isPenaltyActive",
         "totalSupply",
         "withdraw",
     ]
@@ -367,3 +369,55 @@ class TestAbiIntegrity:
         abi_funcs = self._load_abi_function_names()
         missing = [f for f in self.EXPECTED_FUNCTIONS if f not in abi_funcs]
         assert not missing, f"Functions missing from ABI: {missing}"
+
+
+class TestClaimEmissions:
+    """Tests for the claim_emissions method."""
+
+    def test_claim_emissions_encodes_checksummed_account_and_recipient(self) -> None:
+        """Test that claim_emissions encodes claimEmissions(account, recipient)."""
+        mock_ledger_api = MagicMock()
+        mock_ledger_api.api.to_checksum_address.side_effect = lambda a: a.upper()
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.encode_abi.return_value = "0xc1a1"
+
+        with patch.object(
+            VelodromeGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeGaugeContract.claim_emissions(
+                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT, MOCK_ADDRESS
+            )
+
+        assert result == {"tx_hash": bytes.fromhex("c1a1")}
+        mock_contract_instance.encode_abi.assert_called_once_with(
+            "claimEmissions", args=(MOCK_ACCOUNT.upper(), MOCK_ADDRESS.upper())
+        )
+
+
+class TestIsPenaltyActive:
+    """Tests for the is_penalty_active method."""
+
+    def test_is_penalty_active_returns_gauge_answer(self) -> None:
+        """Test that is_penalty_active returns isPenaltyActive(account)."""
+        mock_ledger_api = MagicMock()
+        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.isPenaltyActive.return_value.call.return_value = (
+            True
+        )
+
+        with patch.object(
+            VelodromeGaugeContract,
+            "get_instance",
+            return_value=mock_contract_instance,
+        ):
+            result = VelodromeGaugeContract.is_penalty_active(
+                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
+            )
+
+        assert result == {"is_penalty_active": True}
+        mock_contract_instance.functions.isPenaltyActive.assert_called_once_with(
+            MOCK_CHECKSUMMED_ACCOUNT
+        )

@@ -65,6 +65,7 @@ from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
 )
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     VelodromePoolBehaviour,
+    is_aero_position,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     StakingState,
@@ -157,6 +158,14 @@ def initial_value_ts_kv_key(chain: str) -> str:
     return f"last_initial_value_calculated_timestamp_{chain}"
 
 
+def round_down_swap_amount(amount: int, decimals: int) -> int:
+    """Round a swap amount down to what LiFi is sent for a token of these decimals."""
+    if decimals == ERC20_DECIMALS:
+        factor = SWAP_AMOUNT_ROUND_FACTOR_18_DECIMALS
+        return (amount // factor) * factor
+    return amount
+
+
 RATE_LIMIT_BACKOFF_JITTER_SECONDS = 2
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
@@ -167,6 +176,8 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
+# 18-decimal swap amounts go to LiFi rounded down to a multiple of this.
+SWAP_AMOUNT_ROUND_FACTOR_18_DECIMALS = 1000
 PORTFOLIO_UPDATE_INTERVAL = 3600 * 1  # 2hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
 # Initial available amount for ETH (0.005 ETH)
@@ -430,10 +441,12 @@ REWARD_TOKEN_ADDRESSES = {
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
         "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "VELO",  # VELO on Optimism
+        "0xbdEaeA5205d16f34Cb40038052d91235D87B4C54": "xAERO",  # Aero emissions on Optimism
     },
     "base": {
         "0x54330d28ca3357F294334BDC454a032e7f353416": "OLAS",  # OLAS on Base
-        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # AERO on Base
+        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # legacy Aerodrome AERO
+        "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee": "AERO",  # Aero emissions on Base
     },
 }
 
@@ -747,7 +760,8 @@ class LiquidityTraderBaseBehaviour(
         via ``_invalidate_caches_after_tx``. On a cache miss, hits
         SafeApi, persists the result, then returns it. On API failure
         with no usable cache, falls back to the persisted cached
-        payload if there is one. The on-chain backstop in
+        payload if there is one, with each amount refreshed on-chain
+        where the read succeeds. The on-chain backstop in
         ``_supplement_with_onchain_whitelisted_balances`` runs
         unconditionally after this stage as a supplement: it covers
         whitelisted tokens that SafeApi may omit even on a successful
@@ -789,6 +803,7 @@ class LiquidityTraderBaseBehaviour(
                 cache_age = SAFE_BALANCES_CACHE_TTL_SECONDS
 
         cached_payload = cached_blob.get(balances_key)
+        served_stale = False
         use_cache = (
             cache_age is not None
             and 0 <= cache_age < SAFE_BALANCES_CACHE_TTL_SECONDS
@@ -844,6 +859,7 @@ class LiquidityTraderBaseBehaviour(
                             "SafeApi failed, using stale cached balances"
                         )
                         all_balances = json.loads(cached_payload)
+                        served_stale = True
                     except (json.JSONDecodeError, TypeError):
                         all_balances = []
                 else:
@@ -906,6 +922,11 @@ class LiquidityTraderBaseBehaviour(
                         }
                     )
 
+        if served_stale:
+            yield from self._refresh_stale_balances_onchain(
+                chain, safe_address, balances
+            )
+
         # On-chain backstop for held ERC20s and native ETH. Catches the case
         # where SafeApi is unavailable (e.g. monthly quota exceeded) or returns
         # an incomplete trusted-token list. Covers every entry in
@@ -916,10 +937,17 @@ class LiquidityTraderBaseBehaviour(
             chain, safe_address, balances
         )
 
-        # Add separate reward token balance fetch
+        # Add separate reward token balance fetch. A reward token SafeApi
+        # already listed keeps its SafeApi entry, which carries the fiat fields.
         reward_balances = yield from self._fetch_reward_balances(chain)
-        if reward_balances:
-            balances.extend(reward_balances)
+        already_have = {
+            (b.get("address") or "").lower() for b in balances if b.get("address")
+        }
+        balances.extend(
+            reward
+            for reward in reward_balances
+            if (reward.get("address") or "").lower() not in already_have
+        )
 
         self.context.logger.info(
             f"Retrieved {len(balances)} token balances from SafeApi"
@@ -1516,6 +1544,29 @@ class LiquidityTraderBaseBehaviour(
                 f"Failed to update agent performance timestamp: {str(e)}"
             )
 
+    def get_block(
+        self,
+        block_number: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get block data from the ledger API."""
+        block_identifier = block_number if block_number is not None else "latest"
+
+        ledger_api_response = yield from self.get_ledger_api_response(
+            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
+            ledger_callable="get_block",
+            block_identifier=block_identifier,
+            **kwargs,
+        )
+        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
+            self.context.logger.error(
+                f"Failed to fetch block {block_identifier}: {ledger_api_response}"
+            )
+            return None
+
+        block = ledger_api_response.state.body
+        return block
+
     def _get_native_balance(
         self, chain: str, account: str
     ) -> Generator[None, None, Optional[int]]:
@@ -1889,10 +1940,30 @@ class LiquidityTraderBaseBehaviour(
         self.service_staking_state = StakingState(service_staking_state)
         return
 
+    def _is_xaero(self, token_address: Optional[str], chain: str) -> bool:
+        """Return whether the token is xAERO, which is held and never swapped."""
+        if chain == Chain.BASE.value or not token_address:
+            return False
+        xaero_address = self.params.aero_reward_token_contract_addresses.get(chain)
+        return bool(xaero_address) and token_address.lower() == xaero_address.lower()
+
+    def _fetch_aero_price(self) -> Generator[None, None, Optional[float]]:
+        """Fetch the price of Aero's AERO on Base."""
+        aero_address = self.params.aero_reward_token_contract_addresses.get(
+            Chain.BASE.value
+        )
+        if not aero_address:
+            return None
+        return (yield from self._fetch_token_price(aero_address, Chain.BASE.value))
+
     def _fetch_token_price(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
         """Fetch the price for a specific token, with in-memory caching."""
+        if self._is_xaero(token_address, chain):
+            # xAERO has no CoinGecko listing; it redeems 1:1 for Base AERO.
+            return (yield from self._fetch_aero_price())
+
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
@@ -3078,6 +3149,9 @@ class LiquidityTraderBaseBehaviour(
             "is_cl_pool": is_cl_pool,
         }
 
+        if position.get("protocol"):
+            exit_pool_action["protocol"] = position["protocol"]
+
         # Add assets if provided
         if tokens:
             exit_pool_action["assets"] = [token.get("token") for token in tokens]
@@ -3153,6 +3227,10 @@ class LiquidityTraderBaseBehaviour(
                 self.context.logger.info(
                     "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
                 )
+                return None
+
+            if self._is_xaero(from_token_address, chain):
+                self.context.logger.info("Skipping xAERO during withdrawal")
                 return None
 
             swap_action = {
@@ -3317,11 +3395,66 @@ class LiquidityTraderBaseBehaviour(
 
     def _has_staking_metadata(self, position: Dict[str, Any]) -> bool:
         """Check if position has staking metadata."""
+        if is_aero_position(position):
+            # Aero positions store their gauge whether or not they are staked.
+            return bool(position.get("staked"))
         return bool(
             position.get("gauge_address")
             or position.get("staked")
             or position.get("staked_amount", 0) > 0
         )
+
+    def _is_position_staked(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, bool]:
+        """Return whether the position may be staked, reading its Aero gauge when the stored flag says not."""
+        if self._has_staking_metadata(position):
+            return True
+        chain = position.get("chain")
+        pool_address = position.get("pool_address")
+        gauge_address = position.get("gauge_address")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        if not is_aero_position(position) or not gauge_address or not safe_address:
+            return False
+
+        # A restart between the stake tx and storing staked=True leaves the flag unset.
+        pool = self.pools.get(DexType.VELODROME.value)
+        if position.get("is_cl_pool"):
+            staked_ids, failed = yield from self._filter_staked_token_ids(
+                pool,
+                safe_address,
+                self._position_token_ids(position),
+                chain,
+                gauge_address,
+            )
+            staked = None if failed else bool(staked_ids)
+        else:
+            balance = yield from pool.read_staked_balance(
+                self,
+                lp_token=pool_address,
+                user_address=safe_address,
+                chain=chain,
+                gauge_address=gauge_address,
+            )
+            staked = None if balance is None else balance > 0
+
+        if staked is None:
+            self.context.logger.warning(
+                f"Could not read the stake of Aero pool {pool_address} in gauge "
+                f"{gauge_address}; trusting the stored flag"
+            )
+            return False
+        return staked
+
+    @staticmethod
+    def _position_token_ids(position: Dict[str, Any]) -> List[int]:
+        """Return the CL token IDs a position holds."""
+        token_ids = [
+            p["token_id"] for p in position.get("positions", []) if "token_id" in p
+        ]
+        if not token_ids and position.get("token_id") is not None:
+            token_ids = [position["token_id"]]
+        return token_ids
 
     def _build_unstake_lp_tokens_action(
         self, position: Dict[str, Any]
@@ -3391,6 +3524,8 @@ class LiquidityTraderBaseBehaviour(
             # Add gauge address if available
             if gauge_address:
                 unstake_action["gauge_address"] = gauge_address
+            if position.get("protocol"):
+                unstake_action["protocol"] = position["protocol"]
 
             self.context.logger.info(
                 f"Created unstake LP tokens action: {unstake_action}"
@@ -3487,11 +3622,7 @@ class LiquidityTraderBaseBehaviour(
             return self._build_unstake_lp_tokens_action(position)
 
         positions_data = position.get("positions", [])
-        token_ids = [p["token_id"] for p in positions_data if "token_id" in p]
-        if not token_ids:
-            token_id = position.get("token_id")
-            if token_id is not None:
-                token_ids = [token_id]
+        token_ids = self._position_token_ids(position)
         if not token_ids:
             self._log_verification_fallback(
                 "unstake", "no_token_ids", pool_address, chain
@@ -3561,6 +3692,103 @@ class LiquidityTraderBaseBehaviour(
             filtered_position.pop("token_id", None)
         filtered_position["gauge_address"] = gauge_address
         return self._build_unstake_lp_tokens_action(filtered_position)
+
+    def _prepare_unstaking_actions(
+        self, positions: List[Dict[str, Any]]
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """
+        Prepare unstaking actions in standard action format.
+
+        :param positions: current positions
+        :yield: while awaiting on-chain stake-state verification
+        :return: list of unstaking positions actions in standard format
+        """
+        actions = []
+
+        self.context.logger.info("Preparing unstaking actions")
+        self.context.logger.info(f"Positions data: {positions}")
+
+        for i, position in enumerate(positions):
+            self.context.logger.info(f"Processing position {i + 1}: {position}")
+            status = position.get("status")
+
+            if status == PositionStatus.OPEN.value:
+                is_staked = yield from self._is_position_staked(position)
+                if is_staked:
+                    unstake_action = (
+                        yield from self._build_unstake_lp_tokens_action_verified(
+                            position
+                        )
+                    )
+                    if unstake_action:
+                        actions.append(unstake_action)
+                        self.context.logger.info(
+                            "Added unstake LP tokens action before exit"
+                        )
+
+        self.context.logger.info(f"Unstaking actions prepared: {actions}")
+        return actions
+
+    def _prepare_exit_pool_actions(
+        self, positions: List[Dict[str, Any]], purpose: str = "withdrawal"
+    ) -> List[Dict[str, Any]]:
+        """
+        Prepare exit pool actions in standard action format.
+
+        :param positions: current positions
+        :param purpose: why the pools are exited, used in the action description
+        :return: list of exit pool actions in standard format
+        """
+        actions = []
+
+        self.context.logger.info(
+            f"Preparing exit actions for {len(positions)} positions"
+        )
+        self.context.logger.info(f"Positions type: {type(positions)}")
+        self.context.logger.info(f"Positions data: {positions}")
+
+        for i, position in enumerate(positions):
+            self.context.logger.info(f"Processing position {i + 1}: {position}")
+            self.context.logger.info(f"Position {i + 1} keys: {list(position.keys())}")
+            status = position.get("status")
+            self.context.logger.info(
+                f"Position {i + 1} status: {status} (type: {type(status)})"
+            )
+
+            if status == "OPEN" or status == "open":
+                self.context.logger.info(f"Creating exit action for position {i + 1}")
+
+                action = self._build_exit_pool_action_base(position)
+                if action:
+                    action["description"] = (
+                        f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for {purpose}"
+                    )
+
+                    action["assets"] = [
+                        position.get("token0"),
+                        position.get("token1"),
+                    ]
+
+                    if position.get("pool_fee") is not None:
+                        action["pool_fee"] = position.get("pool_fee")
+                    if position.get("tick_spacing") is not None:
+                        action["tick_spacing"] = position.get("tick_spacing")
+                    if position.get("tick_ranges") is not None:
+                        action["tick_ranges"] = position.get("tick_ranges")
+
+                    self.context.logger.info(f"Created exit action: {action}")
+                    actions.append(action)
+                else:
+                    self.context.logger.error(
+                        f"Failed to create exit action for position {i + 1}"
+                    )
+            else:
+                self.context.logger.info(
+                    f"Skipping position {i + 1} with status: {status}"
+                )
+
+        self.context.logger.info(f"Total exit actions prepared: {len(actions)}")
+        return actions
 
     def _update_airdrop_rewards(
         self, new_amount: int, chain: str, tx_hash: str = None  # type: ignore[assignment]
@@ -3685,6 +3913,52 @@ class LiquidityTraderBaseBehaviour(
                 f"Error fetching reward balances for {chain}: {str(e)}"
             )
             return reward_balances
+
+    def _refresh_stale_balances_onchain(
+        self,
+        chain: str,
+        safe_address: str,
+        balances: List[Dict[str, Any]],
+    ) -> Generator[None, None, None]:
+        """Overwrite stale cached amounts in ``balances`` with on-chain reads.
+
+        The stale SafeApi payload sizes swaps and transfers, so an amount
+        that no longer matches the Safe builds a tx that reverts. An entry
+        keeps its cached amount when the read fails. An entry whose amount
+        changed loses ``fiat_balance`` so its USD value is recomputed from
+        the fresh amount.
+
+        :param chain: the chain to read on-chain balances from.
+        :param safe_address: the Safe contract address to read balances for.
+        :param balances: parsed balance entries to refresh in place.
+        :yield: None, for async-style generator progression.
+        """
+        for entry in balances:
+            address = entry["address"]
+            try:
+                if entry["asset_type"] == "native":
+                    onchain_balance = yield from self._get_native_balance(
+                        chain, safe_address
+                    )
+                else:
+                    onchain_balance = yield from self._get_token_balance(
+                        chain, safe_address, address
+                    )
+            except Exception as e:
+                self.context.logger.warning(
+                    f"Error refreshing stale balance of {address} on {chain}: "
+                    f"{str(e)}; keeping the cached amount"
+                )
+                continue
+            if onchain_balance is None:
+                self.context.logger.warning(
+                    f"On-chain read of {address} on {chain} returned None; "
+                    "keeping the stale cached amount"
+                )
+                continue
+            if int(onchain_balance) != entry["balance"]:
+                entry["balance"] = int(onchain_balance)
+                entry["fiat_balance"] = None
 
     def _supplement_with_onchain_whitelisted_balances(
         self,

@@ -113,6 +113,42 @@ class VelodromeGaugeContract(Contract):
         )
 
     @classmethod
+    def claim_emissions(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+        recipient: str,
+    ) -> JSONLike:
+        """Prepare encoded tx for claiming emissions from an Aero gauge."""
+        _logger.debug(f"Preparing claimEmissions transaction for account: {account}")
+
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "claimEmissions",
+            (
+                ledger_api.api.to_checksum_address(account),
+                ledger_api.api.to_checksum_address(recipient),
+            ),
+        )
+
+    @classmethod
+    def is_penalty_active(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+    ) -> JSONLike:
+        """Check whether unstaking now would forfeit the account's Aero emissions."""
+        checksumed_account = ledger_api.api.to_checksum_address(account)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        is_active = contract_instance.functions.isPenaltyActive(
+            checksumed_account
+        ).call()
+        return dict(is_penalty_active=is_active)
+
+    @classmethod
     def earned(
         cls,
         ledger_api: EthereumApi,

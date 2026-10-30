@@ -39,6 +39,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
     CONTRACT_CHECK_CACHE_PREFIX,
     FetchStrategiesBehaviour,
+    ROI_UNAVAILABLE,
     TRANSFER_EVENT_SIGNATURE,
     ZERO_ADDRESS_PADDED,
 )
@@ -611,14 +612,14 @@ class TestGetVeloTokenAddress:
         obj = _mk()
 
         obj.params.velo_token_contract_addresses = {"optimism": "0xVELO"}
-        assert obj._get_velo_token_address("optimism") == "0xVELO"
+        assert obj._get_velo_token_address("optimism", None) == "0xVELO"
 
     def test_not_found(self):
         """Test not found."""
         obj = _mk()
 
         obj.params.velo_token_contract_addresses = {}
-        assert obj._get_velo_token_address("mode") is None
+        assert obj._get_velo_token_address("mode", None) is None
 
 
 class TestIsAirdropTransfer:
@@ -955,6 +956,53 @@ class TestUpdateAgentPerformanceMetrics:
         obj = _mk()
         obj.read_agent_performance = MagicMock(side_effect=RuntimeError("boom"))
         obj._update_agent_performance_metrics()  # no crash
+
+    @staticmethod
+    def _roi_metric(obj: Any) -> Dict[str, Any]:
+        """Run the metrics update and return the Total ROI metric."""
+        obj.read_agent_performance = MagicMock()
+        obj.update_agent_performance_timestamp = MagicMock()
+        obj.store_agent_performance = MagicMock()
+        obj._update_agent_performance_metrics()
+        (metric,) = [
+            m for m in obj.agent_performance["metrics"] if m["name"] == "Total ROI"
+        ]
+        return metric
+
+    @pytest.mark.parametrize(
+        "portfolio_data",
+        [
+            pytest.param(
+                {"portfolio_value": 0.0, "total_roi": None, "partial_roi": None},
+                id="roi keys present but never computed",
+            ),
+            pytest.param({"portfolio_value": 0.0}, id="roi keys absent"),
+            pytest.param({}, id="no portfolio at all"),
+        ],
+    )
+    def test_unknown_roi_is_rendered_as_unavailable_not_zero(
+        self, portfolio_data: Dict[str, Any]
+    ) -> None:
+        """An ROI that was never computed must not be displayed as a 0.00% return."""
+        obj = _mk()
+        obj.portfolio_data = portfolio_data
+        metric = self._roi_metric(obj)
+        assert metric["value"] == ROI_UNAVAILABLE
+        assert "0.0" not in metric["value"]
+        assert f"<b>{ROI_UNAVAILABLE}</b>" in metric["description"]
+        assert "0.0%" not in metric["description"]
+
+    def test_negative_roi_is_rendered_with_its_sign(self) -> None:
+        """A computed (here negative) ROI is rendered as-is, not clamped or zeroed."""
+        obj = _mk()
+        obj.portfolio_data = {
+            "portfolio_value": 0.0,
+            "total_roi": -5.76,
+            "partial_roi": -5.76,
+        }
+        metric = self._roi_metric(obj)
+        assert metric["value"] == "-5.76%"
+        assert "<b>-5.8%</b>" in metric["description"]
 
 
 class TestHandleBalancerPosition:
@@ -2228,7 +2276,7 @@ class TestCalculateCorrectedYield:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         obj.get_coin_id_from_symbol = lambda s, c: "velodrome-finance"
         obj._fetch_coin_price = _gen_return(0.5)
         pos = {
@@ -4673,7 +4721,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         pos = {
             "token0": "0xT0",
             "token1": "0xT1",
@@ -4707,7 +4755,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         obj.get_coin_id_from_symbol = lambda s, c: "velodrome-finance"
         obj._fetch_coin_price = _gen_return(None)
         pos = {
@@ -4737,7 +4785,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         pos = {
             "token0": "0xT0",
             "token1": "0xT1",
@@ -4765,7 +4813,7 @@ class TestCalculateCorrectedYieldVeloBranches:
             return 18
 
         obj._get_token_decimals = fake_dec
-        obj._get_velo_token_address = lambda c: "0xVELO"
+        obj._get_velo_token_address = lambda c, position=None: "0xVELO"
         pos = {
             "token0": "0xT0",
             "token1": "0xT1",
@@ -8567,8 +8615,8 @@ class TestCalculateWithdrawalsValueTtlCache:
         assert "total_withdrawals_optimism" in writes
         assert "last_withdrawals_calculated_timestamp_optimism" in writes
 
-    def test_fetcher_failure_skips_kv_write(self):
-        """Fetcher returning None must skip the kv TTL cache write."""
+    def test_fetcher_failure_serves_cached_total_and_skips_kv_write(self):
+        """Fetcher returning None serves the cached total without a kv write."""
         from datetime import timedelta
 
         obj = _mk()
@@ -8597,10 +8645,10 @@ class TestCalculateWithdrawalsValueTtlCache:
         obj._get_current_timestamp = lambda: 1704067200
 
         result = _drive(obj.calculate_withdrawals_value())
-        # Aggregator surfaces None for any chain whose fetcher fails so the
-        # caller preserves the last-known ROI rather than treating the
-        # transient blip as zero withdrawals.
-        assert result is None
+        # The expired cached total is still the best-known cumulative
+        # figure, so it is served rather than treating the transient blip
+        # as zero withdrawals.
+        assert result == Decimal("5.0")
         # Critical: no kv write on failure so the next cycle retries.
         assert writes == {}
 
@@ -10224,17 +10272,17 @@ class TestGetVeloFamilyRewardSymbol:
     def test_base_returns_aero(self):
         """Aerodrome on Base distributes AERO."""
         obj = _mk()
-        assert obj._get_velo_family_reward_symbol(Chain.BASE.value) == "AERO"
+        assert obj._get_velo_family_reward_symbol(Chain.BASE.value, None) == "AERO"
 
     def test_optimism_returns_velo(self):
         """Velodrome on Optimism distributes VELO."""
         obj = _mk()
-        assert obj._get_velo_family_reward_symbol(Chain.OPTIMISM.value) == "VELO"
+        assert obj._get_velo_family_reward_symbol(Chain.OPTIMISM.value, None) == "VELO"
 
     def test_mode_returns_velo(self):
         """Velodrome on Mode distributes VELO."""
         obj = _mk()
-        assert obj._get_velo_family_reward_symbol(Chain.MODE.value) == "VELO"
+        assert obj._get_velo_family_reward_symbol(Chain.MODE.value, None) == "VELO"
 
 
 class TestShouldIncludeTransferOptimismChain:
@@ -10791,38 +10839,319 @@ class TestCalculateWithdrawalsValueMultiChainSum:
         assert _drive(obj.calculate_withdrawals_value()) is None
 
 
-class TestCreatePortfolioDataSkipsRoiWhenWithdrawalsNone:
-    """When withdrawals can't be fetched, ROI must be skipped, not zeroed."""
+SAMPLE_INITIAL_INVESTMENT = 17.0
+SAMPLE_WITHDRAWALS = Decimal("16.02")
+# (0 + 16.02) / 17 - 1 = -5.7647..., rounded to two decimals.
+SAMPLE_ROI_AFTER_WITHDRAWAL = -5.76
+STALE_ROI = 99.0
+# Two days before the fixed test clock: expired for the TTL, but still a
+# timestamp written by a successful fetch rather than the post-tx reset.
+TEST_NOW_TS = 1704067200
+EXPIRED_WITHDRAWALS_TS = str(TEST_NOW_TS - 2 * 24 * 3600)
+# ``_invalidate_caches_after_tx`` writes this after every settled tx.
+RESET_WITHDRAWALS_TS = "0"
+PREVIOUS_SNAPSHOT: Dict[str, Any] = {
+    "portfolio_value": 0.0,
+    "total_roi": SAMPLE_ROI_AFTER_WITHDRAWAL,
+    "partial_roi": SAMPLE_ROI_AFTER_WITHDRAWAL,
+    "value_in_withdrawals": float(SAMPLE_WITHDRAWALS),
+}
 
-    def test_withdrawals_none_yields_roi_none(self):
-        """A None withdrawals_value leaves total_roi and partial_roi at None.
 
-        Without this branch, the ROI math would treat the missing
-        withdrawals as ``Decimal(0)`` and overstate the cycle's Total
-        ROI by the amount of any pending withdrawals.
+def _build_portfolio(obj: Any, withdrawals_value: Any, **overrides: Any) -> Dict:
+    """Run the real portfolio builder with an empty Safe and no positions."""
+    obj.params.target_investment_chains = ["optimism"]
+    obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+    obj._get_current_timestamp = lambda: 1000
+    kwargs: Dict[str, Any] = dict(
+        total_pools_value=Decimal("0"),
+        total_safe_value=Decimal("0"),
+        staking_rewards_value=Decimal("0"),
+        airdrop_rewards_value=Decimal("0"),
+        withdrawals_value=withdrawals_value,
+        initial_investment=SAMPLE_INITIAL_INVESTMENT,
+        volume=0.0,
+        allocations=[],
+        portfolio_breakdown=[],
+    )
+    kwargs.update(overrides)
+    result = obj._create_portfolio_data(**kwargs)
+    assert result is not None
+    return result
+
+
+class TestCreatePortfolioDataRoiWhenWithdrawalsNone:
+    """A failed withdrawals fetch keeps the last-known ROI on display."""
+
+    def test_previous_roi_is_carried_forward(self) -> None:
+        """The previous snapshot's ROI figures survive a cycle with no withdrawals data.
+
+        Writing ``None`` here is what turned a transient fetch failure into
+        a displayed 0.00% return.
         """
         obj = _mk()
-        obj.params.target_investment_chains = ["optimism"]
-        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-        obj._get_current_timestamp = lambda: 1000
+        obj.portfolio_data = dict(PREVIOUS_SNAPSHOT)
 
-        result = obj._create_portfolio_data(
-            Decimal("100"),  # total_pools_value
-            Decimal("50"),  # total_safe_value
-            Decimal("5"),  # staking_rewards_value
-            Decimal("2"),  # airdrop_rewards_value
-            None,  # withdrawals_value — fetch failed this cycle
-            200.0,  # initial_investment
-            300.0,  # volume
-            [],
-            [],
-        )
-        assert result is not None
+        result = _build_portfolio(obj, withdrawals_value=None)
+
+        assert result["total_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+        assert result["partial_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+        assert result["value_in_withdrawals"] == float(SAMPLE_WITHDRAWALS)
+
+    def test_previous_roi_is_carried_forward_even_without_investment(self) -> None:
+        """Carry-forward does not depend on the initial investment being known."""
+        obj = _mk()
+        obj.portfolio_data = dict(PREVIOUS_SNAPSHOT)
+
+        result = _build_portfolio(obj, withdrawals_value=None, initial_investment=None)
+
+        assert result["total_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+        assert result["partial_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+
+    @pytest.mark.parametrize(
+        "previous",
+        [
+            pytest.param({}, id="no previous snapshot"),
+            pytest.param(
+                {"portfolio_value": 1.0, "total_roi": None, "partial_roi": None},
+                id="previous snapshot never had an ROI",
+            ),
+        ],
+    )
+    def test_no_previous_roi_stays_none(self, previous: Dict[str, Any]) -> None:
+        """With nothing to carry forward, the ROI fields are None, never zero."""
+        obj = _mk()
+        obj.portfolio_data = previous
+
+        result = _build_portfolio(obj, withdrawals_value=None)
+
         assert result["total_roi"] is None
         assert result["partial_roi"] is None
-        # ``value_in_withdrawals`` is serialised as None so downstream
-        # consumers can distinguish "no withdrawals fetched" from "0".
         assert result["value_in_withdrawals"] is None
+
+    def test_fresh_withdrawals_replace_previous_roi(self) -> None:
+        """A successful fetch recomputes the ROI instead of keeping the old one."""
+        obj = _mk()
+        obj.portfolio_data = {**PREVIOUS_SNAPSHOT, "total_roi": STALE_ROI}
+
+        result = _build_portfolio(obj, withdrawals_value=SAMPLE_WITHDRAWALS)
+
+        assert result["total_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+        assert result["partial_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+        assert result["value_in_withdrawals"] == float(SAMPLE_WITHDRAWALS)
+
+    def test_zero_withdrawals_recompute_rather_than_carry_forward(self) -> None:
+        """``Decimal(0)`` is a determined value and must drive a fresh computation.
+
+        An empty Safe that never withdrew anything has an ROI of -100%;
+        confusing that zero with a failed fetch would freeze the stale
+        figure on screen forever.
+        """
+        obj = _mk()
+        obj.portfolio_data = {**PREVIOUS_SNAPSHOT, "total_roi": STALE_ROI}
+
+        result = _build_portfolio(obj, withdrawals_value=Decimal("0"))
+
+        assert result["total_roi"] == -100.0
+        assert result["partial_roi"] == -100.0
+        assert result["value_in_withdrawals"] == 0.0
+
+
+class TestChainWithdrawalValueCachedFallback:
+    """When the live fetch fails, the persisted cumulative total is served."""
+
+    @staticmethod
+    def _wire(
+        obj: Any,
+        kv_state: Dict[str, str],
+        withdrawals_ts: str = EXPIRED_WITHDRAWALS_TS,
+    ) -> Dict[str, str]:
+        """Point one Optimism Safe at a failing fetcher over the given kv state."""
+        kv_state = {
+            "last_withdrawals_calculated_timestamp_optimism": withdrawals_ts,
+            **kv_state,
+        }
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj._get_current_timestamp = lambda: TEST_NOW_TS
+        obj._track_erc20_transfers_optimism = _gen_return(None)
+
+        def fake_read_kv(keys, **kwargs):  # type: ignore[no-untyped-def]
+            yield
+            return {key: kv_state.get(key) for key in keys}
+
+        writes: Dict[str, str] = {}
+
+        def fake_write_kv(data):  # type: ignore[no-untyped-def]
+            writes.update(data)
+            yield
+            return True
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = fake_write_kv
+        return writes
+
+    def test_cached_total_is_served_without_refreshing_the_cache(self) -> None:
+        """The stale total is returned and the kv timestamp is not touched."""
+        obj = _mk()
+        writes = self._wire(
+            obj, {"total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS)}
+        )
+
+        assert _drive(obj.calculate_withdrawals_value()) == SAMPLE_WITHDRAWALS
+        assert writes == {}
+
+    def test_cached_zero_is_a_value_not_a_miss(self) -> None:
+        """A persisted ``0`` total is served as zero, not treated as missing."""
+        obj = _mk()
+        self._wire(obj, {"total_withdrawals_optimism": "0"})
+
+        assert _drive(obj.calculate_withdrawals_value()) == Decimal("0")
+
+    @pytest.mark.parametrize(
+        "kv_state",
+        [
+            pytest.param({}, id="never cached"),
+            pytest.param({"total_withdrawals_optimism": "garbage"}, id="unparseable"),
+        ],
+    )
+    def test_no_usable_cached_total_surfaces_none(
+        self, kv_state: Dict[str, str]
+    ) -> None:
+        """Without a usable cached total the failure propagates as None."""
+        obj = _mk()
+        writes = self._wire(obj, kv_state)
+
+        assert _drive(obj.calculate_withdrawals_value()) is None
+        assert writes == {}
+
+    @pytest.mark.parametrize(
+        "withdrawals_ts",
+        [
+            pytest.param(RESET_WITHDRAWALS_TS, id="reset by a settled tx"),
+            pytest.param("", id="empty"),
+            pytest.param("not-a-number", id="unparseable"),
+        ],
+    )
+    def test_cached_total_is_not_served_once_a_tx_reset_the_timestamp(
+        self, withdrawals_ts: str
+    ) -> None:
+        """A total persisted before the last settled tx is not served as a fallback."""
+        obj = _mk()
+        writes = self._wire(
+            obj,
+            {"total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS)},
+            withdrawals_ts=withdrawals_ts,
+        )
+
+        assert _drive(obj.calculate_withdrawals_value()) is None
+        assert writes == {}
+
+
+class TestUserShareValuesRoiAcrossWithdrawalsOutage:
+    """End-to-end: the real withdrawals fetch feeds the real portfolio builder.
+
+    Only the Safe transaction service (``_track_erc20_transfers_optimism``)
+    and the kv store are stubbed; aggregation, cache fallback and the ROI
+    arithmetic run for real.
+    """
+
+    @staticmethod
+    def _wire(obj: Any, kv_state: Dict[str, str], transfers: Any) -> None:
+        """Set up an empty Safe funded with ``SAMPLE_INITIAL_INVESTMENT``."""
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj._get_current_timestamp = lambda: TEST_NOW_TS
+        obj.current_positions = []
+        obj.store_current_positions = MagicMock()
+        obj._calculate_safe_balances_value = _gen_return(Decimal("0"))
+        obj.calculate_stakig_rewards_value = _gen_return(Decimal("0"))
+        obj.calculate_airdrop_rewards_value = _gen_return(Decimal("0"))
+        obj._update_portfolio_metrics = _gen_none
+        obj.calculate_initial_investment_value_from_funding_events = _gen_return(
+            SAMPLE_INITIAL_INVESTMENT
+        )
+        obj._calculate_total_volume = _gen_return(0.0)
+        obj._track_erc20_transfers_optimism = _gen_return(transfers)
+
+        def fake_read_kv(keys, **kwargs):  # type: ignore[no-untyped-def]
+            yield
+            return {key: kv_state.get(key) for key in keys}
+
+        obj._read_kv = fake_read_kv
+        obj._write_kv = _gen_return(True)
+
+    def test_fetch_failure_without_cache_keeps_previous_roi(self) -> None:
+        """Outage + no cached total: the previous cycle's ROI is kept."""
+        obj = _mk()
+        obj.portfolio_data = dict(PREVIOUS_SNAPSHOT)
+        self._wire(obj, kv_state={}, transfers=None)
+
+        _drive(obj.calculate_user_share_values())
+
+        assert obj.portfolio_data["total_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+        assert obj.portfolio_data["value_in_withdrawals"] == float(SAMPLE_WITHDRAWALS)
+
+    def test_fetch_failure_with_cache_recomputes_from_cached_total(self) -> None:
+        """Outage + cached total: ROI is recomputed from the cached withdrawals."""
+        obj = _mk()
+        obj.portfolio_data = {**PREVIOUS_SNAPSHOT, "total_roi": STALE_ROI}
+        self._wire(
+            obj,
+            kv_state={
+                "last_withdrawals_calculated_timestamp_optimism": EXPIRED_WITHDRAWALS_TS,
+                "total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS),
+            },
+            transfers=None,
+        )
+
+        _drive(obj.calculate_user_share_values())
+
+        assert obj.portfolio_data["total_roi"] == SAMPLE_ROI_AFTER_WITHDRAWAL
+        assert obj.portfolio_data["value_in_withdrawals"] == float(SAMPLE_WITHDRAWALS)
+
+    def test_fetch_failure_after_a_settled_tx_keeps_previous_roi(self) -> None:
+        """Outage right after a settled tx: the previous ROI is kept.
+
+        The cached total predates the tx, so recomputing from it would
+        pair a post-tx portfolio value with pre-tx withdrawals.
+        """
+        obj = _mk()
+        obj.portfolio_data = {
+            **PREVIOUS_SNAPSHOT,
+            "total_roi": STALE_ROI,
+            "partial_roi": STALE_ROI,
+            "value_in_withdrawals": 0.0,
+        }
+        self._wire(
+            obj,
+            kv_state={
+                "last_withdrawals_calculated_timestamp_optimism": RESET_WITHDRAWALS_TS,
+                "total_withdrawals_optimism": str(SAMPLE_WITHDRAWALS),
+            },
+            transfers=None,
+        )
+
+        _drive(obj.calculate_user_share_values())
+
+        assert obj.portfolio_data["total_roi"] == STALE_ROI
+        assert obj.portfolio_data["partial_roi"] == STALE_ROI
+        assert obj.portfolio_data["value_in_withdrawals"] == 0.0
+
+    def test_empty_safe_with_no_outflows_computes_roi(self) -> None:
+        """A live fetch that finds no outgoing transfers yields a computed ROI.
+
+        Zero withdrawals is a real answer: the stale figure must be
+        replaced, not carried forward as if the fetch had failed.
+        """
+        obj = _mk()
+        obj.portfolio_data = {**PREVIOUS_SNAPSHOT, "total_roi": STALE_ROI}
+        self._wire(obj, kv_state={}, transfers={"outgoing": {}})
+
+        _drive(obj.calculate_user_share_values())
+
+        assert obj.portfolio_data["total_roi"] == -100.0
+        assert obj.portfolio_data["value_in_withdrawals"] == 0.0
 
 
 class TestUpdatePositionPreservesYieldOnPriceMiss:

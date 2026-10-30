@@ -3773,7 +3773,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict]:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
-        self.funding_events = self.read_funding_events()
+        self.read_funding_events()
         if self.funding_events:
             existing_mode_data = self.funding_events.get("mode", {})
         else:
@@ -3883,7 +3883,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         chain_label = chain.capitalize()
 
         # Load existing unified data from kv_store
-        self.funding_events = self.read_funding_events()
+        self.read_funding_events()
         if self.funding_events:
             raw_chain_data = self.funding_events.get(chain, {})
             existing_chain_data, dropped = _drop_legacy_transfer_entries(raw_chain_data)
@@ -4907,7 +4907,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         withdrawals_key = f"{chain}_withdrawals"
         try:
             if not self.funding_events:
-                self.funding_events = self.read_funding_events() or {}
+                self.read_funding_events()
             existing_outgoing = self.funding_events.get(withdrawals_key, {})
 
             if not safe_address:

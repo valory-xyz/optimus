@@ -42,6 +42,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies im
     TRANSFER_EVENT_SIGNATURE,
     ZERO_ADDRESS_PADDED,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    AERO_PROTOCOL,
+)
 
 
 def _mk():
@@ -1114,6 +1117,40 @@ class TestHandleVelodromePosition:
         assert result[0]["0xVELO"] == Decimal("2.5")
         assert "CL Pool" in result[1]
         assert "VELO" in result[2].values()
+
+    @pytest.mark.parametrize(
+        "protocol, is_cl_pool, expected_details",
+        [
+            (AERO_PROTOCOL, True, "Aero CL Pool"),
+            (AERO_PROTOCOL, False, "Aero Pool"),
+            (None, True, "Velodrome CL Pool"),
+            (None, False, "Velodrome Pool"),
+            ("other", True, "Velodrome CL Pool"),
+        ],
+    )
+    def test_details_name_the_protocol(
+        self, protocol: Any, is_cl_pool: bool, expected_details: str
+    ) -> None:
+        """Aero positions are described as Aero; legacy ones as Velodrome."""
+        obj = _mk()
+        obj.params.safe_contract_addresses = {"base": "0xSafe"}
+        obj.params.velo_token_contract_addresses = {}
+        obj.params.aero_reward_token_contract_addresses = {}
+        position: Dict[str, Any] = {
+            "pool_address": "0xPool",
+            "token_id": 1,
+            "token0": "0xT0",
+            "token1": "0xT1",
+            "token0_symbol": "A",
+            "token1_symbol": "B",
+            "staked": False,
+            "is_cl_pool": is_cl_pool,
+        }
+        if protocol is not None:
+            position["protocol"] = protocol
+        obj.get_user_share_value_velodrome = _gen_return({"0xT0": Decimal(1)})
+        _, details, _ = _drive(obj._handle_velodrome_position(position, "base"))
+        assert details == expected_details
 
 
 class TestGetTickRanges:
@@ -3171,6 +3208,46 @@ class TestUpdateAllocationRatios:
         gen = obj._update_allocation_ratios(shares, Decimal(100), allocs)
         _drive(gen)
         assert "tick_ranges" in allocs[0]
+
+    @pytest.mark.parametrize(
+        "dex_type, protocol, expected_type",
+        [
+            ("velodrome", AERO_PROTOCOL, "aero"),
+            ("aerodrome", AERO_PROTOCOL, "aero"),
+            ("velodrome", None, "velodrome"),
+            ("aerodrome", None, "aerodrome"),
+            ("velodrome", "other", "velodrome"),
+        ],
+    )
+    def test_allocation_type_names_the_protocol(
+        self, dex_type: str, protocol: Any, expected_type: str
+    ) -> None:
+        """Aero positions report type ``aero``; legacy ones keep their dex name."""
+        obj = _mk()
+        position: Dict[str, Any] = {"pool_address": "0xP", "dex_type": dex_type}
+        if protocol is not None:
+            position["protocol"] = protocol
+        obj.current_positions = [position]
+        obj._get_tick_ranges = _gen_return([])
+        shares = [
+            (Decimal(100), dex_type, "base", "0xP", ["WETH"], 5.0, "d", "0xSafe", {})
+        ]
+        allocs: List[Dict[str, Any]] = []
+        _drive(obj._update_allocation_ratios(shares, Decimal(100), allocs))
+        assert allocs[0]["type"] == expected_type
+
+    def test_allocation_type_without_matching_position_uses_dex_mapping(
+        self,
+    ) -> None:
+        """A share with no stored position falls back to the dex_type mapping."""
+        obj = _mk()
+        obj.current_positions = []
+        shares = [
+            (Decimal(100), "velodrome", "base", "0xP", ["WETH"], 5.0, "d", "0xSafe", {})
+        ]
+        allocs: List[Dict[str, Any]] = []
+        _drive(obj._update_allocation_ratios(shares, Decimal(100), allocs))
+        assert allocs[0]["type"] == "velodrome"
 
 
 class TestCalculatePositionAmounts:

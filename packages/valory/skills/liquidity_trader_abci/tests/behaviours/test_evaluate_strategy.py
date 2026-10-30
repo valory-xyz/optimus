@@ -29,9 +29,11 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import numpy as np
 import pytest
+from eth_utils import to_checksum_address
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
+    COIN_ID_MAPPING,
     DexType,
     METRICS_UPDATE_INTERVAL,
     PositionStatus,
@@ -636,7 +638,7 @@ class TestUpdatePositionMetrics:
         "unread", [None, math.nan, math.inf, "4.0"], ids=["none", "nan", "inf", "str"]
     )
     def test_only_finite_metrics_are_stored(self, unread):
-        """An unread metric keeps its last value, so a degraded read cannot zero it."""
+        """Only finite values of the metric keys are stored; an unread one keeps its last value."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -644,6 +646,7 @@ class TestUpdatePositionMetrics:
             "status": PositionStatus.OPEN.value,
             "dex_type": "velodrome",
             "pool_address": "0xpool",
+            "entry_apr": 20.0,
             "apr": 12.5,
             "sharpe_ratio": 1.1,
             "depth_score": 80.0,
@@ -658,7 +661,7 @@ class TestUpdatePositionMetrics:
                 "depth_score": 95.0,
                 "il_risk_score": unread,
                 "max_position_size": unread,
-                "status": "closed",
+                "entry_apr": 99.0,
             }
         )
         b.store_current_positions = MagicMock()
@@ -667,6 +670,7 @@ class TestUpdatePositionMetrics:
             "status": PositionStatus.OPEN.value,
             "dex_type": "velodrome",
             "pool_address": "0xpool",
+            "entry_apr": 20.0,
             "apr": 12.5,
             "sharpe_ratio": 1.1,
             "depth_score": 95.0,
@@ -5117,6 +5121,21 @@ class TestOpportunitySearchInputs:
         assert kwargs["graphql_endpoint"] == "url"
         assert b.params.strategies_kwargs == {"strat_a": {"graphql_endpoint": "url"}}
 
+    def test_searches_without_metrics_and_skips_held_pools(self):
+        """The search asks for opportunities, not metrics, and skips the pools it holds."""
+        b = _mk()
+        b.params.strategies_kwargs = {}
+        held = "0x" + "ab" * 20
+        b.positions_eligible_for_exit = [
+            {"status": PositionStatus.OPEN.value, "pool_address": held},
+            {"status": PositionStatus.CLOSED.value, "pool_address": "0x" + "cd" * 20},
+            {"status": PositionStatus.OPEN.value, "pool_address": "0x1"},
+        ]
+        [(strategy, kwargs)] = self._fetch(b, [{"result": []}])
+        assert strategy == kwargs["strategy"] == "strat_a"
+        assert kwargs["get_metrics"] is False
+        assert kwargs["current_positions"] == [to_checksum_address(held)]
+
     def test_a_new_instance_does_not_see_earlier_opportunities(self):
         """Opportunities belong to the instance that fetched them."""
         first, second = _mk(), _mk()
@@ -5143,14 +5162,20 @@ class TestMetricsRunInputs:
         return f
 
     def test_shares_rpcs_and_price_cache(self):
-        """Same RPCs and price cache as the search; the params are untouched."""
+        """Same RPCs and price cache as the search; the params are untouched.
+
+        The run also gets the position, the APR threshold, and the positions
+        eligible for exit.
+        """
         b = _mk()
         b.context.coingecko.use_x402 = False
         b.params.strategies_kwargs = {"strategy_a": {"graphql_endpoint": "url"}}
         b.params.optimism_ledger_rpc = "https://optimism.rpc"
         b.params.base_ledger_rpc = "https://base.rpc"
+        b.params.apr_threshold = 5
         position = {"status": PositionStatus.OPEN.value, "pool_address": "0xpool"}
         b.current_positions = [position]
+        b.positions_eligible_for_exit = [position]
         b._async_execute_strategy = MagicMock()
         with patch(
             "asyncio.ensure_future", return_value=self._done_future({"apr": 1.0})
@@ -5161,6 +5186,9 @@ class TestMetricsRunInputs:
         kwargs = call.kwargs
         assert kwargs["get_metrics"] is True
         assert kwargs["position"] is position
+        assert kwargs["apr_threshold"] == 5
+        assert kwargs["current_positions"] is b.positions_eligible_for_exit
+        assert "strategy" not in kwargs
         assert kwargs["graphql_endpoint"] == "url"
         assert kwargs["price_cache"] is b.shared_state.strategy_coingecko_price_cache
         assert kwargs["price_cache_ttl"] == b.params.strategy_price_cache_ttl
@@ -5169,6 +5197,60 @@ class TestMetricsRunInputs:
             "optimism": "https://optimism.rpc",
         }
         assert b.params.strategies_kwargs == {"strategy_a": {"graphql_endpoint": "url"}}
+
+
+class TestStrategyKwargs:
+    """Both strategy runs share each data source, taken from where it is configured."""
+
+    SOURCES = {
+        "chains": lambda b: b.params.target_investment_chains,
+        "protocols": lambda b: b.params.available_protocols,
+        "chain_to_chain_id_mapping": lambda b: b.params.chain_to_chain_id_mapping,
+        "coingecko_api_key": lambda b: b.context.coingecko.api_key,
+        "whitelisted_assets": lambda b: WHITELISTED_ASSETS,
+        "coin_id_mapping": lambda b: COIN_ID_MAPPING,
+        "x402_session": lambda b: b._paid_session_or_none.return_value,
+        "x402_proxy": lambda b: b.context.coingecko.paid_proxy_base_url,
+        "price_cache_ttl": lambda b: b.params.strategy_price_cache_ttl,
+        "price_cache": lambda b: b.shared_state.strategy_coingecko_price_cache,
+        "chain_to_rpc": lambda b: {
+            "base": b.params.base_ledger_rpc,
+            "optimism": b.params.optimism_ledger_rpc,
+        },
+    }
+
+    @staticmethod
+    def _behaviour(use_x402=True):
+        b = _mk()
+        b.params.strategies_kwargs = {}
+        b.params.target_investment_chains = ["base"]
+        b.params.available_protocols = ["velodrome"]
+        b.params.chain_to_chain_id_mapping = {"base": 8453}
+        b.params.strategy_price_cache_ttl = 900
+        b.params.base_ledger_rpc = "https://base.rpc"
+        b.params.optimism_ledger_rpc = "https://optimism.rpc"
+        b.context.coingecko.api_key = "coingecko-key"
+        b.context.coingecko.use_x402 = use_x402
+        b.context.coingecko.paid_proxy_base_url = "https://proxy"
+        b._paid_session_or_none = MagicMock()
+        return b
+
+    @pytest.mark.parametrize("key", sorted(SOURCES))
+    def test_shared_key_comes_from_its_source(self, key):
+        """Each shared key carries the value of its source."""
+        b = self._behaviour()
+        assert b._strategy_kwargs("strat_a")[key] == self.SOURCES[key](b)
+
+    def test_has_only_the_shared_keys(self):
+        """The cases above cover every shared key."""
+        assert self._behaviour()._strategy_kwargs("strat_a").keys() == (
+            self.SOURCES.keys()
+        )
+
+    def test_unpaid_runs_have_no_proxy(self):
+        """Without x402 the strategies call CoinGecko directly."""
+        kwargs = self._behaviour(use_x402=False)._strategy_kwargs("strat_a")
+        assert kwargs["x402_proxy"] is None
 
 
 class TestBuildBridgeSwapActionsBranches:

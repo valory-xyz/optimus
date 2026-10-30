@@ -997,6 +997,35 @@ class TestCalculateAeroMetrics:
         assert "apr" not in result
         assert result["il_risk_score"] == 0.02
 
+    def test_v2_with_flat_gauge_tape_has_zero_apr(self) -> None:
+        """A held v2 pool whose gauge stopped paying reports an APR of 0, not no APR."""
+        flat = _v2_pool(
+            gauge_observations=[(10**14, SECONDS_PER_DAY), (10**14, 0)],
+            gauge_daily_observations=[
+                (10**14, 0),
+                (10**14, SECONDS_PER_DAY),
+                (10**14, 2 * SECONDS_PER_DAY),
+            ],
+        )
+        result, _, _ = self._metrics(self._position(), live_state=flat)
+        assert result["apr"] == 0.0
+
+    def test_cl_with_flat_gauge_tape_has_zero_apr(self) -> None:
+        """A held CL pool whose gauge stopped crediting reports an APR of 0, not no APR."""
+        bands = [{"tick_lower": -10, "tick_upper": 10, "allocation": 1.0}]
+        flat = _cl_pool(
+            gauge_observations=[(0, 10 * WAD, SECONDS_PER_DAY), (0, 10 * WAD, 0)],
+            gauge_daily_observations=[
+                (0, 10 * WAD, 0),
+                (0, 10 * WAD, SECONDS_PER_DAY),
+                (0, 10 * WAD, 2 * SECONDS_PER_DAY),
+            ],
+        )
+        result, _, _ = self._metrics(
+            self._position(is_cl_pool=True), tick_bands=bands, live_state=flat
+        )
+        assert result["apr"] == 0.0
+
     def test_deactivated_gauge_earns_nothing(self) -> None:
         """A held pool whose gauge is deactivated earns no emissions: its live APR is 0."""
         result, v2, _ = self._metrics(self._position(), activated=False)

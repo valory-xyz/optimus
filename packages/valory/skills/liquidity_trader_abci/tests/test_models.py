@@ -925,6 +925,10 @@ class TestParams:
             assert params.allowed_chains == ["ethereum"]
             assert params.slippage_for_swap == 0.03
             assert params.x402_swap_slippage == 0.05
+            assert params.min_pool_entry_value_usd == 0.5
+            assert params.reconcile_log_window_blocks == 10000
+            assert params.reconcile_log_lookback_blocks == 302400
+            assert params.reconcile_log_min_window_blocks == 500
             assert params.strategy_price_cache_ttl == 43200
             assert params.stoploss_threshold_multiplier == 0.43
             assert params.min_investment_amount == 100

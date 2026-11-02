@@ -27,7 +27,18 @@ from abc import ABC
 from collections import defaultdict
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 import numpy as np
 from web3 import Web3
@@ -87,7 +98,7 @@ class AllocationStatus(Enum):
 AERO_PROTOCOL = "aero"
 
 
-def is_aero_position(position: Dict[str, Any]) -> bool:
+def is_aero_position(position: Mapping[str, Any]) -> bool:
     """Return True when the position or action was entered through Aero."""
     return position.get("protocol") == AERO_PROTOCOL
 

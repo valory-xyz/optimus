@@ -26,7 +26,7 @@ import tempfile
 import threading
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from unittest.mock import ANY, MagicMock, PropertyMock, patch
 
 import pytest
@@ -7931,6 +7931,22 @@ class TestChatConfigChange:
         chat.answer_strategy(**{"intent": "update", **fields})
         return dialogue
 
+    @pytest.mark.parametrize(
+        "names, expected",
+        [
+            (["balancerPool", "velodrome"], "Balancer, Aero"),
+            (["velodrome"], "Aero"),
+            (["uniswapV3", "sturdy"], "Uniswap V3, Sturdy"),
+            (["newDex"], "newDex"),
+            ([], "None"),
+        ],
+    )
+    def test_protocols_are_named_for_the_user(
+        self, names: List[str], expected: str
+    ) -> None:
+        """The velodrome strategy is shown as Aero; other names are unchanged."""
+        assert HttpHandler._protocols_text(names) == expected
+
     def test_a_change_is_only_proposed(self, chat: _Chat) -> None:
         """The reply asks for a confirm; nothing is written or recorded."""
         dialogue = self._propose(
@@ -7986,7 +8002,7 @@ class TestChatConfigChange:
             [
                 {"label": "Setting", "value": "Protocols"},
                 {"label": "Before", "value": "Balancer"},
-                {"label": "After", "value": "Balancer, Velodrome"},
+                {"label": "After", "value": "Balancer, Aero"},
             ],
             [
                 {"label": "Setting", "value": "Trading type"},
@@ -8357,7 +8373,7 @@ class TestChatConfigChange:
         )
         text = chat.response(dialogue)[1]["reply"]["text"]
         assert "sturdy is not available on optimism" in text
-        assert "Protocols from Balancer to Balancer, Velodrome" in text
+        assert "Protocols from Balancer to Balancer, Aero" in text
         assert chat.handler.chat_session.proposal.selected_protocols == [
             "balancer_pools_search",
             "velodrome_pools_search",

@@ -279,11 +279,13 @@ CHANGE_NOT_APPLIED = (
 CHANGE_APPLIED_REPLY_NOT_SAVED = (
     "Your change was applied, but the reply could not be saved."
 )
+# The velodrome strategy now invests through the merged Aero protocol, so it
+# is shown to the user as Aero; the strategy id and the key are unchanged.
 PROTOCOL_NAMES = {
     "balancerPool": "Balancer",
     "sturdy": "Sturdy",
     "uniswapV3": "Uniswap V3",
-    "velodrome": "Velodrome",
+    "velodrome": "Aero",
 }
 
 

@@ -2682,13 +2682,19 @@ class TestIsEntryBelowMinimum:
     ) -> None:
         """Amounts are priced and summed across both tokens."""
         b = self._make_b(price=1.0)
-        assert exhaust(b._is_entry_below_minimum("optimism", ["0xA", "0xB"], amounts)) is expected
+        assert (
+            exhaust(b._is_entry_below_minimum("optimism", ["0xA", "0xB"], amounts))
+            is expected
+        )
 
     @pytest.mark.parametrize("price, decimals", [(None, 6), (0, 6), (1.0, None)])
     def test_unpriceable_amount_returns_none(self, price: Any, decimals: Any) -> None:
         """An amount that cannot be priced blocks the entry."""
         b = self._make_b(price=price, decimals=decimals)
-        assert exhaust(b._is_entry_below_minimum("optimism", ["0xA", "0xB"], [1, 0])) is None
+        assert (
+            exhaust(b._is_entry_below_minimum("optimism", ["0xA", "0xB"], [1, 0]))
+            is None
+        )
 
     def test_zero_minimum_skips_pricing(self) -> None:
         """A floor of 0 disables the guard without any price read."""

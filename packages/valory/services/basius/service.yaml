@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeif63jpw7ds4ivnfk2ftiqf46673vvs6pcyzelrtehw5na5hsing5e
+agent: valory/basius:0.1.0:bafybeia5gd7z2dz5ar74nhqlzi6nyy22prqlxhga4mash4rm3u4fkiy34e
 number_of_agents: 1
 deployment:
   agent:
@@ -122,6 +122,10 @@ models:
       airdrop_started: ${AIRDROP_STARTED:bool:false}
       airdrop_contract_address: ${AIRDROP_CONTRACT_ADDRESS:str:""}
       slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:0.01}
+      min_pool_entry_value_usd: ${MIN_POOL_ENTRY_VALUE_USD:float:0.5}
+      reconcile_log_window_blocks: ${RECONCILE_LOG_WINDOW_BLOCKS:int:10000}
+      reconcile_log_lookback_blocks: ${RECONCILE_LOG_LOOKBACK_BLOCKS:int:302400}
+      reconcile_log_min_window_blocks: ${RECONCILE_LOG_MIN_WINDOW_BLOCKS:int:500}
       genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
       slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.005}
       x402_swap_slippage: ${X402_SWAP_SLIPPAGE:float:0.05}

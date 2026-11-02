@@ -370,6 +370,10 @@ models:
       genai_api_key: ${str:""}
       genai_model: ${str:gemini-2.5-flash}
       slippage_tolerance: ${float:0.01}
+      min_pool_entry_value_usd: ${float:0.5}
+      reconcile_log_window_blocks: ${int:10000}
+      reconcile_log_lookback_blocks: ${int:302400}
+      reconcile_log_min_window_blocks: ${int:500}
       airdrop_started: ${bool:false}
       airdrop_contract_address: ${str:""}
       use_x402: ${bool:true}

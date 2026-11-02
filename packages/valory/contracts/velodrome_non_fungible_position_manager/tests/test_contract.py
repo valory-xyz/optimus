@@ -643,6 +643,25 @@ class TestGetMintTxHashes:
         ]
         assert windows == [100, 50, 25]
 
+    def test_last_halving_is_clamped_to_the_minimum_window(self) -> None:
+        """A floor that halving skips over is still tried before giving up."""
+        get_logs = MagicMock(
+            side_effect=[
+                ValueError("range too large"),
+                ValueError("range too large"),
+                [self._log(3, b"\x03" * 32)],
+            ]
+        )
+
+        result = self._search(get_logs, [3], min_window_blocks=30)
+
+        assert result == {"tx_hashes": {3: "0x" + "03" * 32}}
+        windows = [
+            c.args[0]["toBlock"] - c.args[0]["fromBlock"] + 1
+            for c in get_logs.call_args_list
+        ]
+        assert windows == [100, 50, 30]
+
     def test_non_positive_windows_still_terminate(self) -> None:
         """A zero window or floor is treated as one block, so the search always ends."""
         get_logs = MagicMock(side_effect=ValueError("rpc down"))

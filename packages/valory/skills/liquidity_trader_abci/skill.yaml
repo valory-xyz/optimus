@@ -127,7 +127,7 @@ contracts:
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeibbjzhu6vzrliz5kbf27f76wulcr5ngebvbqtneybolko3myisw4q
 - valory/velodrome_router:0.1.0:bafybeifokp7em6ziibuftu7e77u3x72k7dfidrmmxnfisxuiwnh64px42q
 - valory/velodrome_cl_pool:0.1.0:bafybeibt2d7cseum6pnjiwmudadcspic4vbp2slr77f3d32uwyvx4v6ahq
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeihkyg4ko5rm2q7jkvnra4agwtjkzz63phbvqwupga22g2igaquot4
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeihjrbryxqyzgwhsrhb2djigappbqvinugqmheeq4tgf7rhova7wxy
 - valory/velodrome_pool:0.1.0:bafybeigpjgshmzw3b3na76jk7ps4xsdpbbrfekvf5fbdmkepugmekksrke
 - valory/velodrome_gauge:0.1.0:bafybeiehys5w47mznpuocwf5uzpjve6vyyzhachh3lvgina2xuvo4jyupi
 - valory/velodrome_voter:0.1.0:bafybeia4zguqn2dih6kswnlib6ssfvanisauz3clz5iafiz7xwrr6aglea

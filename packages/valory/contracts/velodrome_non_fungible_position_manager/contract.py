@@ -382,13 +382,14 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
                     }
                 )
             except Exception as e:  # pylint: disable=broad-except
-                if window // 2 < min_window_blocks:
+                next_window = max(window // 2, min_window_blocks)
+                if next_window == window:
                     _logger.warning(
                         f"eth_getLogs failed for blocks {low}-{high} at the "
                         f"smallest window; giving up the mint search: {e}"
                     )
                     break
-                window //= 2
+                window = next_window
                 continue
             for log in logs:
                 token_id = int.from_bytes(bytes(log["topics"][3]), "big")

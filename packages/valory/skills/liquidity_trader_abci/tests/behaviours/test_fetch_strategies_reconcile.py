@@ -490,7 +490,7 @@ class TestFileEntries:
         assert len(obj.current_positions) == 1
 
     def test_staked_entry_back_in_the_safe_is_unstaked(self) -> None:
-        """staked follows where the NFT was found."""
+        """The staked flag follows where the NFT was found."""
         chain = FakeChain()
         chain.nft(AERO_NPM, 1, 50)
         chain.owned[AERO_NPM] = [1]
@@ -620,7 +620,7 @@ class TestReadFailures:
         ]
 
     def test_gauge_staking_another_managers_nfts_is_ignored(self) -> None:
-        """NFTs in a gauge of an unconfigured manager are not adopted."""
+        """Staked NFTs of an unconfigured manager are not adopted."""
         chain = FakeChain()
         chain.gauge_nfts[GAUGE] = to_checksum_address("0x" + "ee" * 20)
         chain.staked[GAUGE] = [5]

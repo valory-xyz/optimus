@@ -3424,7 +3424,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         new_pools = sorted({nft["pool_address"] for nft in nfts} - set(pool_gauges))
         unminted_pools = sorted(
-            {nft["pool_address"] for nft in nfts if nft["token_id"] not in mint_data}
+            {
+                nft["pool_address"]
+                for nft in nfts
+                if (nft["manager"], nft["token_id"]) not in mint_data
+            }
         )
         last = yield from self._multicall(
             chain,
@@ -3451,10 +3455,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         groups: Dict[Tuple[str, Any], List[Dict[str, Any]]] = defaultdict(list)
         for nft in nfts:
-            mint = mint_data.get(nft["token_id"])
-            groups[
-                (nft["pool_address"], mint["tx_hash"] if mint else nft["token_id"])
-            ].append(nft)
+            key = (nft["manager"], nft["token_id"])
+            mint = mint_data.get(key)
+            groups[(nft["pool_address"], mint["tx_hash"] if mint else key)].append(nft)
 
         for group in groups.values():
             entry = yield from self._build_adopted_position(
@@ -3473,8 +3476,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _find_cl_mint_data(
         self, chain: str, safe_address: str, nfts: List[Dict[str, Any]]
-    ) -> Generator[None, None, Dict[int, Dict[str, Any]]]:
-        """Return the mint tx, amounts and time of each NFT whose mint is found, keyed by token id."""
+    ) -> Generator[None, None, Dict[Tuple[str, int], Dict[str, Any]]]:
+        """Return the mint tx, amounts and time of each NFT whose mint is found, keyed by (manager, token id)."""
         head = yield from self.get_block(chain_id=chain)
         if not head or head.get("number") is None:
             self.context.logger.warning(
@@ -3482,7 +3485,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return {}
 
-        tx_hashes: Dict[int, str] = {}
+        tx_hashes: Dict[Tuple[str, int], str] = {}
         by_manager: Dict[str, List[int]] = defaultdict(list)
         for nft in nfts:
             by_manager[nft["manager"]].append(nft["token_id"])
@@ -3501,22 +3504,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 lookback_blocks=self.params.reconcile_log_lookback_blocks,
                 chain_id=chain,
             )
-            tx_hashes.update({int(k): v for k, v in (found or {}).items()})
+            tx_hashes.update({(manager, int(k)): v for k, v in (found or {}).items()})
 
-        mint_data: Dict[int, Dict[str, Any]] = {}
-        for tx_hash in sorted(set(tx_hashes.values())):
+        mint_data: Dict[Tuple[str, int], Dict[str, Any]] = {}
+        for manager, tx_hash in sorted({(m, h) for (m, _), h in tx_hashes.items()}):
             positions = yield from self._get_all_positions_from_tx_receipt(
                 tx_hash, chain
             )
             for token_id, _, amount0, amount1, timestamp in positions or []:
-                if tx_hashes.get(token_id) == tx_hash:
-                    mint_data[token_id] = {
+                if tx_hashes.get((manager, token_id)) == tx_hash:
+                    mint_data[(manager, token_id)] = {
                         "tx_hash": tx_hash,
                         "amount0": amount0,
                         "amount1": amount1,
                         "timestamp": timestamp,
                     }
-        unfound = sorted({nft["token_id"] for nft in nfts} - set(mint_data))
+        unfound = sorted(
+            {(nft["manager"], nft["token_id"]) for nft in nfts} - set(mint_data)
+        )
         if unfound:
             self.context.logger.warning(
                 f"No mint found on {chain} for CL NFTs {unfound}; adopting them "
@@ -3529,7 +3534,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         chain: str,
         protocol: Optional[str],
         nfts: List[Dict[str, Any]],
-        mint_data: Dict[int, Dict[str, Any]],
+        mint_data: Dict[Tuple[str, int], Dict[str, Any]],
         gauge_address: Optional[str],
         sqrt_price_x96: Optional[int],
         cached: Optional[Dict[str, Any]],
@@ -3537,12 +3542,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Return a current_positions entry for CL NFTs minted in one tx, or for one NFT whose mint was not found."""
         first = nfts[0]
         pool_address = first["pool_address"]
-        mint = mint_data.get(first["token_id"])
+        mint = mint_data.get((first["manager"], first["token_id"]))
         bands = []
         for nft in nfts:
             if mint:
-                amount0 = mint_data[nft["token_id"]]["amount0"]
-                amount1 = mint_data[nft["token_id"]]["amount1"]
+                band_mint = mint_data[(nft["manager"], nft["token_id"])]
+                amount0, amount1 = band_mint["amount0"], band_mint["amount1"]
             else:
                 amount0, amount1 = get_amounts_for_liquidity(
                     sqrt_price_x96,

@@ -206,11 +206,13 @@ def _behaviour(chain: FakeChain, mints: Optional[Dict[int, str]] = None, **param
                 return None
             return chain.aggregate3(kwargs["calls"])
         if callable_ == "get_mint_tx_hashes":
-            return {
-                token_id: mints[token_id]
-                for token_id in kwargs["token_ids"]
-                if token_id in mints
-            }
+            manager = kwargs["contract_address"]
+            found = {}
+            for token_id in kwargs["token_ids"]:
+                tx_hash = mints.get((manager, token_id), mints.get(token_id))
+                if tx_hash:
+                    found[token_id] = tx_hash
+            return found
         if callable_ == "get_token_symbol":
             return {USDC: "USDC", USDT: "USDT"}[kwargs["contract_address"]]
         raise AssertionError(f"unexpected contract call {callable_}")
@@ -339,6 +341,34 @@ class TestAdoption:
         obj._convert_amounts_to_usd.assert_called_once_with(
             7_000_000, 4_060_000, USDC, USDT, CHAIN
         )
+
+    def test_same_token_id_on_both_managers_keeps_its_own_mint(self) -> None:
+        """Token IDs are per manager: equal IDs on Velodrome and Aero do not share mint data."""
+        velo_tx, aero_tx = "0x" + "11" * 32, "0x" + "22" * 32
+        chain = FakeChain()
+        chain.nft(VELO_NPM, 7, 10, pool_tokens=(USDC, USDT, 100))
+        chain.nft(AERO_NPM, 7, 20)
+        chain.owned = {VELO_NPM: [7], AERO_NPM: [7]}
+        chain.pools[(VELO_FACTORY, USDC, USDT, 100)] = OTHER_POOL
+        obj = _behaviour(chain, mints={(VELO_NPM, 7): velo_tx, (AERO_NPM, 7): aero_tx})
+        receipts = {
+            velo_tx: [(7, 10, 100, 200, 1_000)],
+            aero_tx: [(7, 20, 300, 400, 2_000)],
+        }
+        obj._get_all_positions_from_tx_receipt = MagicMock(
+            side_effect=lambda tx_hash, chain: _gen_return(receipts[tx_hash])()
+        )
+
+        _drive(obj.reconcile_positions())
+
+        adopted = {p["pool_address"]: p for p in obj.current_positions}
+        assert adopted[OTHER_POOL]["enter_tx_hash"] == velo_tx
+        assert (adopted[OTHER_POOL]["amount0"], adopted[OTHER_POOL]["amount1"]) == (
+            100,
+            200,
+        )
+        assert adopted[POOL]["enter_tx_hash"] == aero_tx
+        assert (adopted[POOL]["amount0"], adopted[POOL]["amount1"]) == (300, 400)
 
     def test_staked_nft_missing_from_the_file_is_adopted_as_staked(self) -> None:
         """An NFT found in a known pool's gauge is adopted with staked True."""

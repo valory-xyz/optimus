@@ -242,8 +242,7 @@ class TestFetchStrategiesWithdrawalGate:
                 mock_ss.return_value = MagicMock()
                 self._wire_common_path(obj)
                 obj._validate_velodrome_v2_pool_addresses = _gen_none
-                obj.update_position_amounts = _gen_none
-                obj.check_and_update_zero_liquidity_positions = MagicMock()
+                obj.reconcile_positions = _gen_none
                 obj.store_portfolio_data = MagicMock(
                     side_effect=lambda *a, **kw: call_order.append(
                         "store_portfolio_data"
@@ -1276,6 +1275,31 @@ class TestCalculatePositionValue:
 
 class TestUpdatePositionAmounts:
     """TestUpdatePositionAmounts."""
+
+    def test_skips_cl_positions_of_reconciled_chains(self):
+        """Velodrome CL positions on a reconciled chain are not re-read one by one."""
+        obj = _mk()
+        cl = {
+            "status": "open",
+            "dex_type": "velodrome",
+            "chain": "optimism",
+            "is_cl_pool": True,
+        }
+        v2 = {"status": "open", "dex_type": "velodrome", "chain": "optimism"}
+        other_chain_cl = dict(cl, chain="base")
+        obj.current_positions = [cl, v2, other_chain_cl]
+        obj.store_current_positions = MagicMock()
+        updated = []
+
+        def fake_update(position):
+            updated.append(position)
+            yield
+
+        obj._update_velodrome_position = fake_update
+
+        _drive(obj.update_position_amounts(skip_cl_chains=["optimism"]))
+
+        assert updated == [v2, other_chain_cl]
 
     def test_no_positions(self):
         """Test no positions."""
@@ -5570,8 +5594,7 @@ class TestAsyncAct:
             obj.params.initial_assets = {}
 
             obj._validate_velodrome_v2_pool_addresses = _gen_none
-            obj.update_position_amounts = _gen_none
-            obj.check_and_update_zero_liquidity_positions = MagicMock()
+            obj.reconcile_positions = MagicMock(side_effect=_gen_none)
             obj._detect_and_invalidate_on_inflow = _gen_none
             obj._read_kv = _gen_return({})
             obj._write_kv = _gen_none
@@ -5595,6 +5618,7 @@ class TestAsyncAct:
                 gen = obj.async_act()
                 _drive(gen)
                 obj.set_done.assert_called_once()
+                obj.reconcile_positions.assert_called_once_with()
 
     def test_invalid_last_updated_timestamp(self):
         """Cover the ValueError branch on int(last_updated)."""

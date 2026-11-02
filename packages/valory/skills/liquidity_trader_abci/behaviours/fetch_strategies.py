@@ -24,7 +24,7 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Context, Decimal, InvalidOperation, getcontext
-from typing import Any, Dict, Generator, List, Optional, Tuple, Type
+from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple, Type
 
 import requests
 from eth_utils import to_checksum_address
@@ -34,6 +34,7 @@ from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
 from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
+from packages.valory.contracts.multicall3.contract import Multicall3Contract
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
@@ -54,6 +55,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
+    MIN_TIME_IN_POSITION,
     OLAS_ADDRESSES,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
@@ -78,12 +80,33 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
     PostTxSettlementRound,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.multicall import (
+    MULTICALL3_ADDRESS,
+    Read,
+    decode_results,
+    encode_read,
+)
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
 )
 
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
+# positions(uint256) of the Velodrome/Aero CL position managers
+POSITIONS_OUTPUT_TYPES = [
+    "uint96",
+    "address",
+    "address",
+    "address",
+    "int24",
+    "int24",
+    "int24",
+    "uint128",
+    "uint256",
+    "uint256",
+    "uint128",
+    "uint128",
+]
 TRANSFER_EVENT_SIGNATURE = (
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 )
@@ -257,12 +280,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info("Validating Velodrome v2 pool addresses")
                     yield from self._validate_velodrome_v2_pool_addresses()
 
-                    self.context.logger.info("Updating position amounts for period 0")
-                    yield from self.update_position_amounts()
-                    self.context.logger.info(
-                        "Checking and updating zero liquidity positions"
-                    )
-                    self.check_and_update_zero_liquidity_positions()
+                    self.context.logger.info("Reconciling positions with the chain")
+                    yield from self.reconcile_positions()
 
                 self.context.logger.info(f"Current Positions: {self.current_positions}")
 
@@ -3065,6 +3084,541 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
         return pool_name
 
+    def reconcile_positions(self) -> Generator[None, None, None]:
+        """Rebuild Velodrome/Aero CL positions from what the Safe holds, then refresh the rest."""
+        reconciled_chains = []
+        cached_pools: Dict[str, Dict[str, Any]] = {}
+        for chain in self.params.target_investment_chains:
+            cached = yield from self._get_cached_cl_pool_data(chain)
+            if cached:
+                cached_pools[chain] = cached
+            reconciled = yield from self._reconcile_cl_positions(chain, cached)
+            if reconciled:
+                reconciled_chains.append(chain)
+
+        yield from self.update_position_amounts(skip_cl_chains=reconciled_chains)
+        self.check_and_update_zero_liquidity_positions()
+
+        for chain, cached in cached_pools.items():
+            if self._has_open_cl_position(chain, cached.get("pool_address")):
+                self.context.logger.info(
+                    f"Clearing the cached CL opportunity on {chain}: its pool "
+                    f"{cached.get('pool_address')} already has an open position"
+                )
+                yield from self._invalidate_cl_pool_cache(chain)
+
+    def _has_open_cl_position(self, chain: str, pool_address: Optional[str]) -> bool:
+        """Return whether an open CL position on ``chain`` is in ``pool_address``."""
+        return bool(pool_address) and any(
+            position.get("status") == PositionStatus.OPEN.value
+            and position.get("chain") == chain
+            and position.get("is_cl_pool")
+            and str(position.get("pool_address", "")).lower() == pool_address.lower()
+            for position in self.current_positions
+        )
+
+    def _cl_position_managers(self, chain: str) -> Dict[str, Optional[str]]:
+        """Return the CL position managers configured for ``chain``, mapped to their protocol."""
+        managers: Dict[str, Optional[str]] = {}
+        for protocol in (None, AERO_PROTOCOL):
+            address = self._get_position_manager_address(chain, protocol)
+            if address:
+                managers[to_checksum_address(address)] = protocol
+        return managers
+
+    def _multicall(
+        self, chain: str, reads: List[Read]
+    ) -> Generator[None, None, Optional[List[Tuple[Any, ...]]]]:
+        """Run ``reads`` in one Multicall3 call; None if the call or any read fails."""
+        if not reads:
+            return []
+        results = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=MULTICALL3_ADDRESS,
+            contract_public_id=Multicall3Contract.contract_id,
+            contract_callable="aggregate3",
+            data_key="results",
+            calls=[encode_read(read) for read in reads],
+            chain_id=chain,
+        )
+        if results is None:
+            return None
+        decoded = decode_results(reads, results)
+        if decoded is None:
+            self.context.logger.error(
+                f"A batched read failed on {chain}: "
+                f"{sorted({read.signature for read in reads})}"
+            )
+        return decoded
+
+    def _reconcile_cl_positions(
+        self, chain: str, cached: Optional[Dict[str, Any]]
+    ) -> Generator[None, None, bool]:
+        """Match the CL NFTs the Safe holds or staked on ``chain`` against current_positions."""
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        managers = self._cl_position_managers(chain)
+        if not safe_address or not managers:
+            return False
+        safe_address = to_checksum_address(safe_address)
+
+        entries = [
+            position
+            for position in self.current_positions
+            if position.get("chain") == chain
+            and position.get("dex_type") in VELODROME_FAMILY_DEX_TYPES
+            and position.get("is_cl_pool")
+        ]
+        known_pools = {
+            to_checksum_address(pool_address)
+            for pool_address in [p.get("pool_address") for p in entries]
+            + [(cached or {}).get("pool_address")]
+            if pool_address
+        }
+
+        holdings = yield from self._read_cl_holdings(
+            chain, safe_address, managers, sorted(known_pools)
+        )
+        if holdings is None:
+            self.context.logger.error(
+                f"Could not read the CL positions the Safe holds on {chain}; "
+                f"refreshing the stored positions instead"
+            )
+            return False
+        nfts, factories, pool_gauges = holdings
+
+        bands = {}
+        for entry in entries:
+            manager = self._get_position_manager_address(chain, entry.get("protocol"))
+            for band in entry.get("positions", []):
+                if manager and band.get("token_id") is not None:
+                    bands[(to_checksum_address(manager), band["token_id"])] = entry
+
+        for entry in entries:
+            self._apply_cl_holdings(chain, entry, nfts, pool_gauges)
+
+        missing = [
+            nft
+            for key, nft in nfts.items()
+            if key not in bands and nft["liquidity"] > 0
+        ]
+        if missing:
+            yield from self._adopt_cl_positions(
+                chain, safe_address, managers, factories, pool_gauges, missing, cached
+            )
+        return True
+
+    def _read_cl_holdings(
+        self,
+        chain: str,
+        safe_address: str,
+        managers: Dict[str, Optional[str]],
+        known_pools: List[str],
+    ) -> Generator[
+        None,
+        None,
+        Optional[
+            Tuple[
+                Dict[Tuple[str, int], Dict[str, Any]],
+                Dict[str, str],
+                Dict[str, Optional[str]],
+            ]
+        ],
+    ]:
+        """Read the CL NFTs the Safe holds, or staked in the gauges of ``known_pools``.
+
+        :param chain: the chain to read.
+        :param safe_address: the Safe.
+        :param managers: the position managers, mapped to their protocol.
+        :param known_pools: the pools whose gauges may hold the Safe's NFTs.
+        :yield: None
+        :return: the NFTs keyed by (manager, token_id), the factory of each
+            manager and the gauge of each known pool; None if any read failed.
+        """
+        manager_list = list(managers)
+        first = yield from self._multicall(
+            chain,
+            [
+                Read(m, "balanceOf(address)", (safe_address,), ["uint256"])
+                for m in manager_list
+            ]
+            + [Read(m, "factory()", (), ["address"]) for m in manager_list]
+            + [Read(pool, "gauge()", (), ["address"]) for pool in known_pools],
+        )
+        if first is None:
+            return None
+        balances = [result[0] for result in first[: len(manager_list)]]
+        factories = {
+            manager: to_checksum_address(result[0])
+            for manager, result in zip(
+                manager_list, first[len(manager_list) : 2 * len(manager_list)]
+            )
+        }
+        pool_gauges = {
+            pool: self._address_or_none(result[0])
+            for pool, result in zip(known_pools, first[2 * len(manager_list) :])
+        }
+        gauges = sorted({gauge for gauge in pool_gauges.values() if gauge})
+
+        owned = [
+            (manager, index)
+            for manager, balance in zip(manager_list, balances)
+            for index in range(balance)
+        ]
+        second = yield from self._multicall(
+            chain,
+            [
+                Read(
+                    manager,
+                    "tokenOfOwnerByIndex(address,uint256)",
+                    (safe_address, index),
+                    ["uint256"],
+                )
+                for manager, index in owned
+            ]
+            + [
+                Read(g, "stakedValues(address)", (safe_address,), ["uint256[]"])
+                for g in gauges
+            ]
+            + [Read(g, "nft()", (), ["address"]) for g in gauges],
+        )
+        if second is None:
+            return None
+        held = [
+            (manager, result[0], False, None)
+            for (manager, _), result in zip(owned, second[: len(owned)])
+        ]
+        gauge_pools = {gauge: pool for pool, gauge in pool_gauges.items() if gauge}
+        staked_results = second[len(owned) : len(owned) + len(gauges)]
+        nft_results = second[len(owned) + len(gauges) :]
+        for gauge, staked, nft in zip(gauges, staked_results, nft_results):
+            manager = to_checksum_address(nft[0])
+            if manager not in managers:
+                self.context.logger.warning(
+                    f"Gauge {gauge} on {chain} stakes NFTs of {manager}, which "
+                    f"is not a configured position manager; ignoring them"
+                )
+                continue
+            held.extend(
+                (manager, token_id, True, gauge_pools[gauge]) for token_id in staked[0]
+            )
+
+        third = yield from self._multicall(
+            chain,
+            [
+                Read(manager, "positions(uint256)", (token_id,), POSITIONS_OUTPUT_TYPES)
+                for manager, token_id, _, _ in held
+            ],
+        )
+        if third is None:
+            return None
+        nfts = {}
+        for (manager, token_id, staked, pool), position in zip(held, third):
+            nfts[(manager, token_id)] = {
+                "manager": manager,
+                "token_id": token_id,
+                "staked": staked,
+                "pool_address": pool,
+                "token0": to_checksum_address(position[2]),
+                "token1": to_checksum_address(position[3]),
+                "tick_spacing": position[4],
+                "tick_lower": position[5],
+                "tick_upper": position[6],
+                "liquidity": position[7],
+            }
+        return nfts, factories, pool_gauges
+
+    @staticmethod
+    def _address_or_none(address: str) -> Optional[str]:
+        """Return ``address`` checksummed, or None for the zero address."""
+        if int(address, 16) == 0:
+            return None
+        return to_checksum_address(address)
+
+    def _apply_cl_holdings(
+        self,
+        chain: str,
+        entry: Dict[str, Any],
+        nfts: Dict[Tuple[str, int], Dict[str, Any]],
+        pool_gauges: Dict[str, Optional[str]],
+    ) -> None:
+        """Refresh ``entry``'s bands from what the chain holds; a band held nowhere has no liquidity left."""
+        manager = self._get_position_manager_address(chain, entry.get("protocol"))
+        if not manager:
+            return
+        pool_address = entry.get("pool_address")
+        # A band absent from the Safe is gone only if its pool's gauge was read too.
+        gauge_read = (
+            bool(pool_address) and to_checksum_address(pool_address) in pool_gauges
+        )
+        found = []
+        for band in entry.get("positions", []):
+            if band.get("token_id") is None:
+                continue
+            nft = nfts.get((to_checksum_address(manager), band["token_id"]))
+            if nft is not None:
+                band["current_liquidity"] = nft["liquidity"]
+                found.append(nft)
+            elif gauge_read:
+                band["current_liquidity"] = 0
+        if not found:
+            return
+
+        staked = any(nft["staked"] for nft in found)
+        if entry.get("staked", False) != staked:
+            self.context.logger.info(
+                f"Position in {pool_address} on {chain} is "
+                f"{'staked' if staked else 'not staked'} on chain; updating it"
+            )
+            entry["staked"] = staked
+        if entry.get("status") != PositionStatus.OPEN.value and any(
+            nft["liquidity"] > 0 for nft in found
+        ):
+            self.context.logger.warning(
+                f"Closed position in {pool_address} on {chain} still holds "
+                f"liquidity on chain; reopening it"
+            )
+            entry["status"] = PositionStatus.OPEN.value
+
+    def _adopt_cl_positions(  # pylint: disable=too-many-arguments,too-many-locals
+        self,
+        chain: str,
+        safe_address: str,
+        managers: Dict[str, Optional[str]],
+        factories: Dict[str, str],
+        pool_gauges: Dict[str, Optional[str]],
+        nfts: List[Dict[str, Any]],
+        cached: Optional[Dict[str, Any]],
+    ) -> Generator[None, None, None]:
+        """Add open positions for CL NFTs with liquidity that current_positions does not hold."""
+        unpooled = [nft for nft in nfts if nft["pool_address"] is None]
+        pools = yield from self._multicall(
+            chain,
+            [
+                Read(
+                    factories[nft["manager"]],
+                    "getPool(address,address,int24)",
+                    (nft["token0"], nft["token1"], nft["tick_spacing"]),
+                    ["address"],
+                )
+                for nft in unpooled
+            ],
+        )
+        if pools is None:
+            self.context.logger.error(
+                f"Could not resolve the pools of untracked CL NFTs on {chain}; "
+                f"they stay untracked until the next start"
+            )
+            return
+        for nft, result in zip(unpooled, pools):
+            nft["pool_address"] = self._address_or_none(result[0])
+        unresolved = [nft["token_id"] for nft in nfts if nft["pool_address"] is None]
+        if unresolved:
+            self.context.logger.error(
+                f"No pool found on {chain} for CL NFTs {unresolved}; not adopting them"
+            )
+            nfts = [nft for nft in nfts if nft["pool_address"] is not None]
+            if not nfts:
+                return
+
+        mint_data = yield from self._find_cl_mint_data(chain, safe_address, nfts)
+
+        new_pools = sorted({nft["pool_address"] for nft in nfts} - set(pool_gauges))
+        unminted_pools = sorted(
+            {nft["pool_address"] for nft in nfts if nft["token_id"] not in mint_data}
+        )
+        last = yield from self._multicall(
+            chain,
+            [Read(pool, "gauge()", (), ["address"]) for pool in new_pools]
+            + [Read(pool, "slot0()", (), ["uint160"]) for pool in unminted_pools],
+        )
+        if last is None:
+            self.context.logger.error(
+                f"Could not read the gauges or prices of untracked CL pools on "
+                f"{chain}; they stay untracked until the next start"
+            )
+            return
+        gauges = dict(pool_gauges)
+        gauges.update(
+            {
+                pool: self._address_or_none(result[0])
+                for pool, result in zip(new_pools, last[: len(new_pools)])
+            }
+        )
+        sqrt_prices = {
+            pool: result[0]
+            for pool, result in zip(unminted_pools, last[len(new_pools) :])
+        }
+
+        groups: Dict[Tuple[str, Any], List[Dict[str, Any]]] = defaultdict(list)
+        for nft in nfts:
+            mint = mint_data.get(nft["token_id"])
+            groups[
+                (nft["pool_address"], mint["tx_hash"] if mint else nft["token_id"])
+            ].append(nft)
+
+        for group in groups.values():
+            entry = yield from self._build_adopted_position(
+                chain,
+                managers[group[0]["manager"]],
+                group,
+                mint_data,
+                gauges.get(group[0]["pool_address"]),
+                sqrt_prices.get(group[0]["pool_address"]),
+                cached,
+            )
+            self.current_positions.append(entry)
+            self.context.logger.info(
+                f"Adopted untracked CL position from chain: {entry}"
+            )
+
+    def _find_cl_mint_data(
+        self, chain: str, safe_address: str, nfts: List[Dict[str, Any]]
+    ) -> Generator[None, None, Dict[int, Dict[str, Any]]]:
+        """Return the mint tx, amounts and time of each NFT whose mint is found, keyed by token id."""
+        head = yield from self.get_block(chain_id=chain)
+        if not head or head.get("number") is None:
+            self.context.logger.warning(
+                f"Could not read the latest block on {chain}; adopting at current amounts"
+            )
+            return {}
+
+        tx_hashes: Dict[int, str] = {}
+        by_manager: Dict[str, List[int]] = defaultdict(list)
+        for nft in nfts:
+            by_manager[nft["manager"]].append(nft["token_id"])
+        for manager, token_ids in by_manager.items():
+            found = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=manager,
+                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                contract_callable="get_mint_tx_hashes",
+                data_key="tx_hashes",
+                owner=safe_address,
+                token_ids=token_ids,
+                to_block=head["number"],
+                window_blocks=self.params.reconcile_log_window_blocks,
+                min_window_blocks=self.params.reconcile_log_min_window_blocks,
+                lookback_blocks=self.params.reconcile_log_lookback_blocks,
+                chain_id=chain,
+            )
+            tx_hashes.update({int(k): v for k, v in (found or {}).items()})
+
+        mint_data: Dict[int, Dict[str, Any]] = {}
+        for tx_hash in sorted(set(tx_hashes.values())):
+            positions = yield from self._get_all_positions_from_tx_receipt(
+                tx_hash, chain
+            )
+            for token_id, _, amount0, amount1, timestamp in positions or []:
+                if tx_hashes.get(token_id) == tx_hash:
+                    mint_data[token_id] = {
+                        "tx_hash": tx_hash,
+                        "amount0": amount0,
+                        "amount1": amount1,
+                        "timestamp": timestamp,
+                    }
+        unfound = sorted({nft["token_id"] for nft in nfts} - set(mint_data))
+        if unfound:
+            self.context.logger.warning(
+                f"No mint found on {chain} for CL NFTs {unfound}; adopting them "
+                f"at current amounts"
+            )
+        return mint_data
+
+    def _build_adopted_position(  # pylint: disable=too-many-arguments
+        self,
+        chain: str,
+        protocol: Optional[str],
+        nfts: List[Dict[str, Any]],
+        mint_data: Dict[int, Dict[str, Any]],
+        gauge_address: Optional[str],
+        sqrt_price_x96: Optional[int],
+        cached: Optional[Dict[str, Any]],
+    ) -> Generator[None, None, Dict[str, Any]]:
+        """Return a current_positions entry for CL NFTs minted in one tx, or for one NFT whose mint was not found."""
+        first = nfts[0]
+        pool_address = first["pool_address"]
+        mint = mint_data.get(first["token_id"])
+        bands = []
+        for nft in nfts:
+            if mint:
+                amount0 = mint_data[nft["token_id"]]["amount0"]
+                amount1 = mint_data[nft["token_id"]]["amount1"]
+            else:
+                amount0, amount1 = get_amounts_for_liquidity(
+                    sqrt_price_x96,
+                    get_sqrt_ratio_at_tick(nft["tick_lower"]),
+                    get_sqrt_ratio_at_tick(nft["tick_upper"]),
+                    nft["liquidity"],
+                )
+            bands.append(
+                {
+                    "token_id": nft["token_id"],
+                    "liquidity": nft["liquidity"],
+                    "current_liquidity": nft["liquidity"],
+                    "amount0": amount0,
+                    "amount1": amount1,
+                }
+            )
+
+        cached_action = {}
+        if (
+            cached
+            and str(cached.get("pool_address", "")).lower() == pool_address.lower()
+        ):
+            cached_action = cached.get("enter_pool_action") or {}
+        token0, token1 = first["token0"], first["token1"]
+        token0_symbol = cached_action.get("token0_symbol")
+        if token0_symbol is None:
+            token0_symbol = yield from self._get_token_symbol(chain, token0)
+        token1_symbol = cached_action.get("token1_symbol")
+        if token1_symbol is None:
+            token1_symbol = yield from self._get_token_symbol(chain, token1)
+
+        entry: Dict[str, Any] = {
+            "chain": chain,
+            "pool_address": pool_address,
+            "pool_id": pool_address,
+            "dex_type": cached_action.get("dex_type")
+            or (
+                DexType.AERODROME.value if chain == "base" else DexType.VELODROME.value
+            ),
+            "token0": token0,
+            "token1": token1,
+            "token0_symbol": token0_symbol,
+            "token1_symbol": token1_symbol,
+            "is_cl_pool": True,
+            "gauge_address": gauge_address,
+            "staked": any(nft["staked"] for nft in nfts),
+            "status": PositionStatus.OPEN.value,
+            "enter_timestamp": (
+                mint["timestamp"] if mint else self._get_current_timestamp()
+            ),
+            "amount0": sum(band["amount0"] for band in bands),
+            "amount1": sum(band["amount1"] for band in bands),
+            "positions": bands,
+            "min_hold_days": MIN_TIME_IN_POSITION,
+            "cost_recovered": False,
+            "adopted": True,
+        }
+        if protocol:
+            entry["protocol"] = protocol
+        if cached_action.get("opportunity_apr"):
+            entry["entry_apr"] = cached_action["opportunity_apr"]
+
+        entry["entry_cost"] = 0.0
+        if mint:
+            entry["enter_tx_hash"] = mint["tx_hash"]
+            yield from self._accumulate_transaction_costs(mint["tx_hash"], entry)
+            yield from self._rename_entry_costs_key(entry)
+            accumulated_costs = yield from self._get_updated_entry_costs(
+                chain, pool_address, entry["enter_timestamp"]
+            )
+            entry["entry_cost"] = accumulated_costs * 2
+        entry["principal_usd"] = yield from self._convert_amounts_to_usd(
+            entry["amount0"], entry["amount1"], token0, token1, chain
+        )
+        return entry
+
     def check_and_update_zero_liquidity_positions(self) -> None:
         """Check for positions with zero liquidity and mark them as closed, and reopen closed positions that now have liquidity."""
         if not self.current_positions:
@@ -3111,8 +3665,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Store the updated positions
         self.store_current_positions()
 
-    def update_position_amounts(self) -> Generator[None, None, None]:
-        """Update the amounts of all open positions."""
+    def update_position_amounts(
+        self, skip_cl_chains: Sequence[str] = ()
+    ) -> Generator[None, None, None]:
+        """Update the amounts of all open positions, except Velodrome CL ones on ``skip_cl_chains``."""
         if not self.current_positions:
             self.context.logger.info("No positions to update.")
             return
@@ -3124,6 +3680,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             dex_type = position.get("dex_type")
             chain = position.get("chain")
+            if (
+                chain in skip_cl_chains
+                and dex_type in VELODROME_FAMILY_DEX_TYPES
+                and position.get("is_cl_pool")
+            ):
+                continue
 
             if not dex_type or not chain:
                 self.context.logger.warning(

@@ -210,6 +210,22 @@ class TestGetPoolTokens:
         assert result == {"tokens": [token0_addr, token1_addr]}
 
 
+class TestGetGauge:
+    """Tests for the get_gauge method."""
+
+    def test_returns_the_pool_gauge(self) -> None:
+        """The pool's gauge() is returned as is."""
+        mock_instance = MagicMock()
+        mock_instance.functions.gauge.return_value.call.return_value = "0xGauge"
+
+        with patch.object(
+            VelodromeCLPoolContract, "get_instance", return_value=mock_instance
+        ):
+            result = VelodromeCLPoolContract.get_gauge(MagicMock(), "0xPool")
+
+        assert result == {"gauge": "0xGauge"}
+
+
 class TestAbiIntegrity:
     """Verify that every function used in contract.py exists in the ABI."""
 
@@ -217,6 +233,7 @@ class TestAbiIntegrity:
     EXPECTED_FUNCTIONS = [
         "burn",
         "collect",
+        "gauge",
         "mint",
         "slot0",
         "tickSpacing",

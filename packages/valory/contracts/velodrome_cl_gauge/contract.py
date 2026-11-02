@@ -240,3 +240,16 @@ class VelodromeCLGaugeContract(Contract):
         total_supply = contract_instance.functions.totalSupply().call()
         _logger.debug(f"CL total supply: {total_supply}")
         return dict(total_supply=total_supply)
+
+    @classmethod
+    def staked_values(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+    ) -> JSONLike:
+        """Get the token IDs ``account`` has staked in the CL gauge."""
+        checksumed_account = ledger_api.api.to_checksum_address(account)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        token_ids = contract_instance.functions.stakedValues(checksumed_account).call()
+        return dict(token_ids=list(token_ids))

@@ -24,6 +24,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
+    TRANSFER_TOPIC,
     VelodromeNonFungiblePositionManagerContract,
 )
 
@@ -548,6 +549,108 @@ class TestGetAllTokenIdsForOwner:
             )
 
         assert result == {"token_ids": [10, 30], "count": 2}
+
+
+class TestGetMintTxHashes:
+    """Tests for get_mint_tx_hashes."""
+
+    SAFE = "0x7fe908a35C335df9AAeDAcC83230fb8a8e944080"
+
+    @staticmethod
+    def _log(token_id: int, tx_hash: bytes) -> dict:
+        return {
+            "topics": [b"", b"", b"", token_id.to_bytes(32, "big")],
+            "transactionHash": tx_hash,
+        }
+
+    def _search(self, get_logs: MagicMock, token_ids: list, **overrides: int) -> dict:
+        ledger_api = MagicMock()
+        ledger_api.api.to_checksum_address.side_effect = lambda address: address
+        ledger_api.api.eth.get_logs = get_logs
+        kwargs = dict(
+            to_block=1_000,
+            window_blocks=100,
+            min_window_blocks=25,
+            lookback_blocks=400,
+        )
+        kwargs.update(overrides)
+        return VelodromeNonFungiblePositionManagerContract.get_mint_tx_hashes(
+            ledger_api, MOCK_ADDRESS, self.SAFE, token_ids, **kwargs
+        )
+
+    def test_filters_on_mints_to_owner_of_every_id_in_one_query(self) -> None:
+        """One filter covers all ids: Transfer from 0x0 to the owner, ids OR-ed."""
+        get_logs = MagicMock(
+            return_value=[
+                self._log(57869, b"\x2a" * 32),
+                self._log(57870, b"\x2a" * 32),
+            ]
+        )
+
+        result = self._search(get_logs, [57870, 57869])
+
+        assert result == {
+            "tx_hashes": {57869: "0x" + "2a" * 32, 57870: "0x" + "2a" * 32}
+        }
+        (call,) = get_logs.call_args_list
+        log_filter = call.args[0]
+        assert (log_filter["fromBlock"], log_filter["toBlock"]) == (901, 1_000)
+        assert log_filter["topics"] == [
+            TRANSFER_TOPIC,
+            "0x" + "0" * 64,
+            "0x" + "0" * 24 + self.SAFE[2:].lower(),
+            ["0x" + format(57869, "064x"), "0x" + format(57870, "064x")],
+        ]
+
+    def test_walks_back_until_the_lookback_is_exhausted(self) -> None:
+        """Windows go back from to_block and stop at the lookback; unfound ids are absent."""
+        get_logs = MagicMock(side_effect=[[], [self._log(1, b"\x01" * 32)], [], []])
+
+        result = self._search(get_logs, [1, 2])
+
+        assert result == {"tx_hashes": {1: "0x" + "01" * 32}}
+        ranges = [
+            (c.args[0]["fromBlock"], c.args[0]["toBlock"])
+            for c in get_logs.call_args_list
+        ]
+        assert ranges == [(901, 1_000), (801, 900), (701, 800), (601, 700)]
+
+    def test_halves_a_rejected_window_and_retries_the_range(self) -> None:
+        """A rejected range is retried at half the window and the search goes on."""
+        get_logs = MagicMock(
+            side_effect=[ValueError("range too large"), [self._log(3, b"\x03" * 32)]]
+        )
+
+        result = self._search(get_logs, [3])
+
+        assert result == {"tx_hashes": {3: "0x" + "03" * 32}}
+        ranges = [
+            (c.args[0]["fromBlock"], c.args[0]["toBlock"])
+            for c in get_logs.call_args_list
+        ]
+        assert ranges == [(901, 1_000), (951, 1_000)]
+
+    def test_gives_up_below_the_minimum_window(self) -> None:
+        """Rejections stop once halving would go below the minimum window."""
+        get_logs = MagicMock(side_effect=ValueError("rpc down"))
+
+        result = self._search(get_logs, [3])
+
+        assert result == {"tx_hashes": {}}
+        windows = [
+            c.args[0]["toBlock"] - c.args[0]["fromBlock"] + 1
+            for c in get_logs.call_args_list
+        ]
+        assert windows == [100, 50, 25]
+
+    def test_lookback_never_goes_below_block_zero(self) -> None:
+        """A chain younger than the lookback is searched from genesis."""
+        get_logs = MagicMock(return_value=[])
+
+        self._search(get_logs, [3], to_block=50)
+
+        (call,) = get_logs.call_args_list
+        assert (call.args[0]["fromBlock"], call.args[0]["toBlock"]) == (0, 50)
 
 
 class TestAbiIntegrity:

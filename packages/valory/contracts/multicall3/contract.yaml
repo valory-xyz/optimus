@@ -1,0 +1,23 @@
+name: multicall3
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the Multicall3 aggregate3 read.
+license: Apache-2.0
+aea_version: '>=2.0.0, <3.0.0'
+fingerprint:
+  __init__.py: bafybeiavxdkvx77qrqof6ijkyuualh27hti7ldgnioeskkl22jmry5upli
+  build/contract_interface.json: bafybeiafy2ibkahrdss5ifzkdz4rkplysonsdbhejfrlhy5ro7uplgfz44
+  contract.py: bafybeicgylo25e2nfvybu72tbklthg34qq5ujymxxo5ivybdo3ofla5pt4
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_contract.py: bafybeia47cgjx77d75ocrohgauiekpuwxbnofkw67x7kb5qusngymtq3dy
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: Multicall3Contract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==2.2.9
+  web3:
+    version: <8,>=7.0.0

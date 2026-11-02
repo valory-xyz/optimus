@@ -643,6 +643,15 @@ class TestGetMintTxHashes:
         ]
         assert windows == [100, 50, 25]
 
+    def test_non_positive_windows_still_terminate(self) -> None:
+        """A zero window or floor is treated as one block, so the search always ends."""
+        get_logs = MagicMock(side_effect=ValueError("rpc down"))
+
+        result = self._search(get_logs, [3], window_blocks=0, min_window_blocks=0)
+
+        assert result == {"tx_hashes": {}}
+        assert get_logs.call_count == 1
+
     def test_lookback_never_goes_below_block_zero(self) -> None:
         """A chain younger than the lookback is searched from genesis."""
         get_logs = MagicMock(return_value=[])

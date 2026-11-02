@@ -367,7 +367,8 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         ]
         address = ledger_api.api.to_checksum_address(contract_address)
         lowest_block = max(0, to_block - lookback_blocks + 1)
-        window = window_blocks
+        min_window_blocks = max(min_window_blocks, 1)
+        window = max(window_blocks, min_window_blocks)
         high = to_block
         while remaining and high >= lowest_block:
             low = max(lowest_block, high - window + 1)

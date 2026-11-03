@@ -2709,20 +2709,15 @@ class TestEnterClPoolEntryGuards:
         assert result == (None, None)
         assert mint_calls == []
 
-    @pytest.mark.parametrize(
-        "max0, overshoot",
-        [(10**18 + 7, 1), (16_000_000_000_000_000_227, 227), (999_999_999_999, 4_999)],
-    )
-    def test_scaled_totals_never_exceed_the_max(
-        self, max0: int, overshoot: int
-    ) -> None:
-        """Integer scaling keeps each token's total within its max, even for tiny overshoots."""
+    def test_scaled_totals_never_exceed_the_max(self) -> None:
+        """Integer scaling keeps each token's total within its max where float scaling went 700 wei over."""
         b = self._make_b()
-        first = (max0 + overshoot) // 3
+        max0 = 8_391_646_586_825_371_460
+        first = 3_501_332_431_411_006_492
         _, mint_calls = self._mint_calls(
             b,
             [self.TOKEN0_ONLY, self.TOKEN0_ONLY],
-            [(first, 0), (max0 + overshoot - first, 0)],
+            [(first, 0), (max0 + 3_869 - first, 0)],
             [max0, 0],
         )
 

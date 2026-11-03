@@ -69,7 +69,7 @@ fingerprint:
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/pools/test_balancer.py: bafybeidj3dmmzkjc32dznwdqnuvdsvlwa27jsoazvjvvikbu57bhlze3qq
   tests/pools/test_uniswap.py: bafybeib5rnfzaya4an2t4odvca23ee5id7ejwbsjrfjnuy22jytg76b5qi
-  tests/pools/test_velodrome.py: bafybeigsjjdyza73rbu7eo3qjxt3mtikew3d3xnmywr7sr26zpcb2phw2y
+  tests/pools/test_velodrome.py: bafybeiav3jlbyy2ugotkoxopne46mwsdqofrbbj5hykxvjf32ca3kww5qu
   tests/pools/test_velodrome_aero.py: bafybeig6opgnpwmklxkeak7ydewiryoytijhyqptu64ubnsitmjjdo6dae
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/states/test_agent_top_up.py: bafybeigifox4xpeldejkey3tmze7vyzt6fnocz3odhs3nheke42q3i55yi

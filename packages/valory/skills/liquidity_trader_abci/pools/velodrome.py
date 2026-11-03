@@ -1146,9 +1146,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             total_allocated_0 > max_amounts_in[0]
             or total_allocated_1 > max_amounts_in[1]
         ):
-            # Scale each band only by the over-max tokens it needs; a band
-            # that doesn't use a short token isn't scaled by it. Exact
-            # fractions keep each token's scaled total within its max.
+            # Exact fractions keep each token's scaled total within its max.
             token_scale_factors = [
                 (
                     Fraction(max_amounts_in[i], total)
@@ -1174,9 +1172,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 position["amount0_desired"] = int(desired[0] * band_factor)
                 position["amount1_desired"] = int(desired[1] * band_factor)
 
-        # A mint with zero liquidity reverts the whole multisend, so a band
-        # left without a token it needs, or with too little to mint any
-        # liquidity, is dropped.
+        # A zero-liquidity mint reverts the whole multisend.
         bands = []
         for position, desired in zip(tick_ranges[0], needed):
             scaled = (position["amount0_desired"], position["amount1_desired"])

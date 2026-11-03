@@ -504,7 +504,7 @@ class TestAdoption:
         assert adopted["gauge_address"] == OTHER_GAUGE
 
     def test_empty_nfts_are_not_adopted(self) -> None:
-        """Exited positions keep their NFT; zero liquidity is filtered without a skip list."""
+        """Exited positions keep their NFT, which is not adopted."""
         chain = FakeChain()
         chain.nft(AERO_NPM, 57869, 0)
         chain.owned[AERO_NPM] = [57869]

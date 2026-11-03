@@ -3355,7 +3355,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         nfts: Dict[Tuple[str, int], Dict[str, Any]],
         pool_gauges: Dict[str, Optional[str]],
     ) -> None:
-        """Refresh ``entry``'s bands from what the chain holds; a band held nowhere has no liquidity left."""
+        """Refresh ``entry``'s bands from the NFTs found on chain."""
         manager = self._get_position_manager_address(chain, entry.get("protocol"))
         if not manager:
             return

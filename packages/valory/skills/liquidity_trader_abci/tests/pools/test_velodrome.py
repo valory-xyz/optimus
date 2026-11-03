@@ -2668,7 +2668,7 @@ class TestEnterClPoolEntryGuards:
         assert self._amounts(mint_calls) == [(450, 0), (300, 500)]
 
     def test_band_scaled_to_zero_of_a_needed_token_is_not_minted(self) -> None:
-        """A band left without a token it needs would revert the multisend, so only the other band is minted."""
+        """Only the other band is minted."""
         b = self._make_b()
         result, mint_calls = self._mint_calls(
             b,
@@ -2710,7 +2710,7 @@ class TestEnterClPoolEntryGuards:
         assert mint_calls == []
 
     def test_scaled_totals_never_exceed_the_max(self) -> None:
-        """Integer scaling keeps each token's total within its max where float scaling went 700 wei over."""
+        """Integer scaling keeps each token's total within its max."""
         b = self._make_b()
         max0 = 8_391_646_586_825_371_460
         first = 3_501_332_431_411_006_492

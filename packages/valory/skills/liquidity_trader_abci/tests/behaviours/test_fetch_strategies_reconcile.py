@@ -179,7 +179,12 @@ class FakeChain:
         return results
 
 
-def _behaviour(chain: FakeChain, mints: Optional[Dict[int, str]] = None, **params: Any):
+def _behaviour(
+    chain: FakeChain,
+    mints: Optional[Dict[Any, str]] = None,
+    search_complete: bool = True,
+    **params: Any,
+):
     """Return a FetchStrategiesBehaviour reading ``chain``."""
     obj = _mk()
     obj.params.target_investment_chains = [CHAIN]
@@ -212,7 +217,7 @@ def _behaviour(chain: FakeChain, mints: Optional[Dict[int, str]] = None, **param
                 tx_hash = mints.get((manager, token_id), mints.get(token_id))
                 if tx_hash:
                     found[token_id] = tx_hash
-            return found
+            return {"tx_hashes": found, "complete": search_complete}
         if callable_ == "get_token_symbol":
             return {USDC: "USDC", USDT: "USDT"}[kwargs["contract_address"]]
         raise AssertionError(f"unexpected contract call {callable_}")
@@ -243,7 +248,7 @@ def _behaviour(chain: FakeChain, mints: Optional[Dict[int, str]] = None, **param
 
 
 def _incident_chain() -> FakeChain:
-    """The Safe of the report: two Aero NFTs minted, then the agent stopped."""
+    """A Safe holding two Aero NFTs minted in one tx and recorded nowhere."""
     chain = FakeChain()
     chain.nft(AERO_NPM, 57869, 1_000)
     chain.nft(AERO_NPM, 57870, 2_000)
@@ -285,7 +290,7 @@ class TestAdoption:
     """NFTs on chain that current_positions does not hold become open positions."""
 
     def test_entry_lost_after_its_tx_mined_is_adopted_with_its_mint_data(self) -> None:
-        """The report's case: a restart before _post_execute_enter_pool loses nothing."""
+        """An NFT minted before _post_execute_enter_pool ran is adopted with its mint amounts and tx hash."""
         chain = _incident_chain()
         for i in range(11):
             chain.nft(VELO_NPM, 100 + i, 0, pool_tokens=(USDC, USDT, 100))
@@ -338,6 +343,22 @@ class TestAdoption:
         }
         assert all(p["status"] == "closed" for p in obj.current_positions[:11])
         obj._accumulate_transaction_costs.assert_called_once_with(MINT_TX, adopted)
+        (search,) = [
+            c
+            for c in obj.contract_calls
+            if c["contract_callable"] == "get_mint_tx_hashes"
+        ]
+        assert search["contract_address"] == AERO_NPM
+        assert search["data_key"] == "mint_search"
+        assert search["owner"] == SAFE
+        assert sorted(search["token_ids"]) == [57869, 57870]
+        assert search["to_block"] == 143_000_000
+        assert (
+            search["window_blocks"],
+            search["min_window_blocks"],
+            search["lookback_blocks"],
+        ) == (10_000, 500, 302_400)
+        assert search["chain_id"] == CHAIN
         obj._convert_amounts_to_usd.assert_called_once_with(
             7_000_000, 4_060_000, USDC, USDT, CHAIN
         )
@@ -369,6 +390,67 @@ class TestAdoption:
         )
         assert adopted[POOL]["enter_tx_hash"] == aero_tx
         assert (adopted[POOL]["amount0"], adopted[POOL]["amount1"]) == (300, 400)
+
+    def test_adopted_position_is_stored(self) -> None:
+        """The adopted entry is in what reconciliation writes to current_positions."""
+        obj = _behaviour(_incident_chain(), mints={57869: MINT_TX, 57870: MINT_TX})
+        stored: List[List[Dict[str, Any]]] = []
+        obj.store_current_positions = MagicMock(
+            side_effect=lambda: stored.append([dict(p) for p in obj.current_positions])
+        )
+
+        _drive(obj.reconcile_positions())
+
+        assert stored and [p.get("adopted") for p in stored[-1]] == [True]
+
+    def test_base_adoption_is_an_aerodrome_position(self) -> None:
+        """On Base an adopted NFT gets the aerodrome dex type the pool search assigns there."""
+        obj = _behaviour(_incident_chain(), mints={57869: MINT_TX, 57870: MINT_TX})
+        for name in (
+            "target_investment_chains",
+            "safe_contract_addresses",
+            "velodrome_non_fungible_position_manager_contract_addresses",
+            "aero_non_fungible_position_manager_contract_addresses",
+        ):
+            value = getattr(obj.params, name)
+            setattr(
+                obj.params,
+                name,
+                ["base"] if isinstance(value, list) else {"base": value[CHAIN]},
+            )
+
+        _drive(obj.reconcile_positions())
+
+        (adopted,) = obj.current_positions
+        assert adopted["chain"] == "base"
+        assert adopted["dex_type"] == "aerodrome"
+
+    def test_nft_without_a_mint_at_an_off_centre_price_uses_pool_ticks(self) -> None:
+        """Current amounts follow the pool's tick convention: a band above the price is all token0."""
+        chain = FakeChain()
+        chain.nft(AERO_NPM, 57869, 10**12, ticks=(100, 200))
+        chain.owned[AERO_NPM] = [57869]
+        obj = _behaviour(chain)
+
+        _drive(obj.reconcile_positions())
+
+        (band,) = obj.current_positions[0]["positions"]
+        assert band["amount0"] > 0
+        assert band["amount1"] == 0
+
+    def test_failed_mint_search_is_an_error_not_a_miss(self) -> None:
+        """A search the RPC cut short is logged as a failure, not as a mint older than the lookback."""
+        obj = _behaviour(_incident_chain(), search_complete=False)
+
+        _drive(obj.reconcile_positions())
+
+        assert [p["enter_timestamp"] for p in obj.current_positions] == [
+            1_793_500_000
+        ] * 2
+        errors = " ".join(str(c) for c in obj.context.logger.error.call_args_list)
+        warnings = " ".join(str(c) for c in obj.context.logger.warning.call_args_list)
+        assert "mint search on" in errors
+        assert "within the lookback" not in warnings
 
     def test_staked_nft_missing_from_the_file_is_adopted_as_staked(self) -> None:
         """An NFT found in a known pool's gauge is adopted with staked True."""
@@ -457,7 +539,7 @@ class TestAdoption:
         assert {k: v for k, v in adopted.items() if k == "entry_apr"} == expected
 
     def test_cached_opportunity_for_an_adopted_pool_is_cleared(self) -> None:
-        """The stale CL cache that caused the $0 re-entry is dropped."""
+        """A cached CL opportunity for a pool that now has an open position is cleared."""
         obj = _behaviour(_incident_chain(), mints={57869: MINT_TX, 57870: MINT_TX})
         obj._get_cached_cl_pool_data = MagicMock(
             side_effect=_gen_return({"pool_address": POOL})
@@ -466,6 +548,19 @@ class TestAdoption:
         _drive(obj.reconcile_positions())
 
         obj._invalidate_cl_pool_cache.assert_called_once_with(CHAIN)
+
+    def test_failure_to_clear_the_cache_is_logged(self) -> None:
+        """A cache that could not be cleared is reported, since a stale one re-enters the pool."""
+        obj = _behaviour(_incident_chain(), mints={57869: MINT_TX, 57870: MINT_TX})
+        obj._get_cached_cl_pool_data = MagicMock(
+            side_effect=_gen_return({"pool_address": POOL})
+        )
+        obj._invalidate_cl_pool_cache = MagicMock(side_effect=_gen_return(False))
+
+        _drive(obj.reconcile_positions())
+
+        errors = " ".join(str(c) for c in obj.context.logger.error.call_args_list)
+        assert "Could not clear the cached CL opportunity" in errors
 
     def test_cached_opportunity_for_another_pool_is_kept(self) -> None:
         """A cache for a pool with no open position is left alone."""
@@ -662,6 +757,32 @@ class TestReadFailures:
         _drive(obj.reconcile_positions())
 
         assert obj.current_positions == []
+
+    def test_gauge_of_an_unknown_manager_does_not_close_its_staked_entry(self) -> None:
+        """When a gauge's NFTs cannot be attributed, its pool's open entry is left untouched."""
+        chain = FakeChain()
+        chain.gauge_nfts[GAUGE] = to_checksum_address("0x" + "ee" * 20)
+        chain.staked[GAUGE] = [1]
+        obj = _behaviour(chain)
+        obj.current_positions = [_open_entry([1], staked=True)]
+
+        _drive(obj.reconcile_positions())
+
+        entry = obj.current_positions[0]
+        assert entry["status"] == "open"
+        assert "current_liquidity" not in entry["positions"][0]
+
+    def test_unexpected_error_falls_back_to_the_stored_positions(self) -> None:
+        """An exception while reconciling a chain leaves it to the per-position refresh."""
+        obj = _behaviour(_incident_chain())
+        obj._read_cl_holdings = MagicMock(side_effect=RuntimeError("boom"))
+        obj.current_positions = [_open_entry([1])]
+
+        _drive(obj.reconcile_positions())
+
+        assert obj.current_positions[0]["status"] == "open"
+        obj.update_position_amounts.assert_called_once_with(skip_cl_chains=[])
+        obj.context.logger.exception.assert_called_once()
 
     def test_chain_without_a_safe_or_manager_is_not_reconciled(self) -> None:
         """Nothing is read for a chain the agent has no Safe on."""

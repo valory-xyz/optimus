@@ -355,7 +355,9 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         :param window_blocks: the block range of one eth_getLogs call.
         :param min_window_blocks: the smallest range tried after rejections.
         :param lookback_blocks: how many blocks back from to_block to search.
-        :return: the mint tx hash keyed by token id.
+        :return: the mint tx hash keyed by token id, and whether the whole
+            lookback was searched (False when the RPC rejected even the
+            smallest window).
         """
         remaining = set(token_ids)
         tx_hashes: Dict[int, str] = {}
@@ -370,6 +372,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         min_window_blocks = max(min_window_blocks, 1)
         window = max(window_blocks, min_window_blocks)
         high = to_block
+        complete = True
         while remaining and high >= lowest_block:
             low = max(lowest_block, high - window + 1)
             try:
@@ -388,6 +391,7 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
                         f"eth_getLogs failed for blocks {low}-{high} at the "
                         f"smallest window; giving up the mint search: {e}"
                     )
+                    complete = False
                     break
                 window = next_window
                 continue
@@ -397,4 +401,4 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
                     remaining.discard(token_id)
                     tx_hashes[token_id] = "0x" + bytes(log["transactionHash"]).hex()
             high = low - 1
-        return dict(tx_hashes=tx_hashes)
+        return dict(mint_search=dict(tx_hashes=tx_hashes, complete=complete))

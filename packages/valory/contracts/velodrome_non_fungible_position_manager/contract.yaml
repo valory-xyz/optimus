@@ -8,9 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiacy3tt52shhfno4p4r6ts3qfmiktylcsrhcf7t4ltl6q4465ksqa
   build/contract_interface.json: bafybeibsh5efqfgttzkbnvyipffdtn6fjwyv5veg3ihindd3rhslfmovb4
-  contract.py: bafybeicy47c7ryi4dhiyrbl7sgw6zbcqb2lm6oyrkomhjah5yrhdgmxfme
+  contract.py: bafybeib6q4gnxxxh7crhxhgfygksg7drfququumagdf4i54hsgrlgqkoee
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
-  tests/test_contract.py: bafybeigyrse524p3pujoane4lbj5mev22io5hn37dknlvzqwwjzgoaod3u
+  tests/test_contract.py: bafybeieby5nau32azoblmblyc4lur5yjyl5vpqltf2rzcgxexgdyhmzn3a
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeNonFungiblePositionManagerContract

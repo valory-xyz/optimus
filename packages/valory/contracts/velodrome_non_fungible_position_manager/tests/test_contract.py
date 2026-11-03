@@ -574,9 +574,10 @@ class TestGetMintTxHashes:
             lookback_blocks=400,
         )
         kwargs.update(overrides)
-        return VelodromeNonFungiblePositionManagerContract.get_mint_tx_hashes(
+        result = VelodromeNonFungiblePositionManagerContract.get_mint_tx_hashes(
             ledger_api, MOCK_ADDRESS, self.SAFE, token_ids, **kwargs
         )
+        return result["mint_search"]
 
     def test_filters_on_mints_to_owner_of_every_id_in_one_query(self) -> None:
         """One filter covers all ids: Transfer from 0x0 to the owner, ids OR-ed."""
@@ -590,7 +591,8 @@ class TestGetMintTxHashes:
         result = self._search(get_logs, [57870, 57869])
 
         assert result == {
-            "tx_hashes": {57869: "0x" + "2a" * 32, 57870: "0x" + "2a" * 32}
+            "tx_hashes": {57869: "0x" + "2a" * 32, 57870: "0x" + "2a" * 32},
+            "complete": True,
         }
         (call,) = get_logs.call_args_list
         log_filter = call.args[0]
@@ -602,13 +604,23 @@ class TestGetMintTxHashes:
             ["0x" + format(57869, "064x"), "0x" + format(57870, "064x")],
         ]
 
+    def test_first_mint_found_for_an_id_is_kept(self) -> None:
+        """A second log for an id already found does not replace its mint tx."""
+        get_logs = MagicMock(
+            return_value=[self._log(5, b"\x05" * 32), self._log(5, b"\x06" * 32)]
+        )
+
+        result = self._search(get_logs, [5, 6])
+
+        assert result["tx_hashes"] == {5: "0x" + "05" * 32}
+
     def test_walks_back_until_the_lookback_is_exhausted(self) -> None:
         """Windows go back from to_block and stop at the lookback; unfound ids are absent."""
         get_logs = MagicMock(side_effect=[[], [self._log(1, b"\x01" * 32)], [], []])
 
         result = self._search(get_logs, [1, 2])
 
-        assert result == {"tx_hashes": {1: "0x" + "01" * 32}}
+        assert result == {"tx_hashes": {1: "0x" + "01" * 32}, "complete": True}
         ranges = [
             (c.args[0]["fromBlock"], c.args[0]["toBlock"])
             for c in get_logs.call_args_list
@@ -623,7 +635,7 @@ class TestGetMintTxHashes:
 
         result = self._search(get_logs, [3])
 
-        assert result == {"tx_hashes": {3: "0x" + "03" * 32}}
+        assert result == {"tx_hashes": {3: "0x" + "03" * 32}, "complete": True}
         ranges = [
             (c.args[0]["fromBlock"], c.args[0]["toBlock"])
             for c in get_logs.call_args_list
@@ -636,7 +648,7 @@ class TestGetMintTxHashes:
 
         result = self._search(get_logs, [3])
 
-        assert result == {"tx_hashes": {}}
+        assert result == {"tx_hashes": {}, "complete": False}
         windows = [
             c.args[0]["toBlock"] - c.args[0]["fromBlock"] + 1
             for c in get_logs.call_args_list
@@ -655,7 +667,7 @@ class TestGetMintTxHashes:
 
         result = self._search(get_logs, [3], min_window_blocks=30)
 
-        assert result == {"tx_hashes": {3: "0x" + "03" * 32}}
+        assert result == {"tx_hashes": {3: "0x" + "03" * 32}, "complete": True}
         windows = [
             c.args[0]["toBlock"] - c.args[0]["fromBlock"] + 1
             for c in get_logs.call_args_list
@@ -668,7 +680,7 @@ class TestGetMintTxHashes:
 
         result = self._search(get_logs, [3], window_blocks=0, min_window_blocks=0)
 
-        assert result == {"tx_hashes": {}}
+        assert result == {"tx_hashes": {}, "complete": False}
         assert get_logs.call_count == 1
 
     def test_lookback_never_goes_below_block_zero(self) -> None:

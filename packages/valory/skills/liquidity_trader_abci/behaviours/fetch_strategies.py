@@ -24,7 +24,7 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Context, Decimal, InvalidOperation, getcontext
-from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple, Type
+from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, Type
 
 import requests
 from eth_utils import to_checksum_address
@@ -275,9 +275,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Current Positions - {self.current_positions}"
                     )
 
-                # Update the amounts of all open positions
+                # At start-up, rebuild the positions from the chain
                 if self.synchronized_data.period_count == 0:
-                    # Validate Velodrome v2 pool addresses before updating position amounts
                     self.context.logger.info("Validating Velodrome v2 pool addresses")
                     yield from self._validate_velodrome_v2_pool_addresses()
 
@@ -3093,7 +3092,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             cached = yield from self._get_cached_cl_pool_data(chain)
             if cached:
                 cached_pools[chain] = cached
-            reconciled = yield from self._reconcile_cl_positions(chain, cached)
+            try:
+                reconciled = yield from self._reconcile_cl_positions(chain, cached)
+            except Exception:  # pylint: disable=broad-except
+                self.context.logger.exception(
+                    f"Reconciling CL positions on {chain} failed; refreshing "
+                    f"the stored positions instead"
+                )
+                reconciled = False
             if reconciled:
                 reconciled_chains.append(chain)
 
@@ -3106,7 +3112,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Clearing the cached CL opportunity on {chain}: its pool "
                     f"{cached.get('pool_address')} already has an open position"
                 )
-                yield from self._invalidate_cl_pool_cache(chain)
+                cleared = yield from self._invalidate_cl_pool_cache(chain)
+                if not cleared:
+                    self.context.logger.error(
+                        f"Could not clear the cached CL opportunity on {chain}; "
+                        f"its pool {cached.get('pool_address')} already has an open position"
+                    )
 
     def _has_open_cl_position(self, chain: str, pool_address: Optional[str]) -> bool:
         """Return whether an open CL position on ``chain`` is in ``pool_address``."""
@@ -3294,10 +3305,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         for gauge, staked, nft in zip(gauges, staked_results, nft_results):
             manager = to_checksum_address(nft[0])
             if manager not in managers:
+                # Its stake is unknown, so its pool must not count as read.
                 self.context.logger.warning(
                     f"Gauge {gauge} on {chain} stakes NFTs of {manager}, which "
                     f"is not a configured position manager; ignoring them"
                 )
+                del pool_gauges[gauge_pools[gauge]]
                 continue
             held.extend(
                 (manager, token_id, True, gauge_pools[gauge]) for token_id in staked[0]
@@ -3487,6 +3500,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return {}
 
         tx_hashes: Dict[Tuple[str, int], str] = {}
+        failed: Set[Tuple[str, int]] = set()
         by_manager: Dict[str, List[int]] = defaultdict(list)
         for nft in nfts:
             by_manager[nft["manager"]].append(nft["token_id"])
@@ -3496,7 +3510,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 contract_address=manager,
                 contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
                 contract_callable="get_mint_tx_hashes",
-                data_key="tx_hashes",
+                data_key="mint_search",
                 owner=safe_address,
                 token_ids=token_ids,
                 to_block=head["number"],
@@ -3505,7 +3519,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 lookback_blocks=self.params.reconcile_log_lookback_blocks,
                 chain_id=chain,
             )
-            tx_hashes.update({(manager, int(k)): v for k, v in (found or {}).items()})
+            if not found or not found["complete"]:
+                failed.update((manager, token_id) for token_id in token_ids)
+                self.context.logger.error(
+                    f"The mint search on {manager} ({chain}) failed for CL NFTs "
+                    f"{token_ids}; those not found are adopted at current amounts"
+                )
+            tx_hashes.update(
+                {
+                    (manager, int(k)): v
+                    for k, v in (found or {}).get("tx_hashes", {}).items()
+                }
+            )
 
         mint_data: Dict[Tuple[str, int], Dict[str, Any]] = {}
         for manager, tx_hash in sorted({(m, h) for (m, _), h in tx_hashes.items()}):
@@ -3521,12 +3546,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         "timestamp": timestamp,
                     }
         unfound = sorted(
-            {(nft["manager"], nft["token_id"]) for nft in nfts} - set(mint_data)
+            {(nft["manager"], nft["token_id"]) for nft in nfts}
+            - set(mint_data)
+            - failed
         )
         if unfound:
             self.context.logger.warning(
-                f"No mint found on {chain} for CL NFTs {unfound}; adopting them "
-                f"at current amounts"
+                f"No mint found on {chain} within the lookback for CL NFTs "
+                f"{unfound}; adopting them at current amounts"
             )
         return mint_data
 

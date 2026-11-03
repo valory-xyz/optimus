@@ -3545,6 +3545,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         "amount1": amount1,
                         "timestamp": timestamp,
                     }
+        unread = sorted(set(tx_hashes) - set(mint_data))
+        if unread:
+            failed.update(unread)
+            self.context.logger.error(
+                f"Could not read the mint data of CL NFTs {unread} on {chain} "
+                f"from their mint txs {sorted({tx_hashes[key] for key in unread})}; "
+                f"adopting them at current amounts"
+            )
         unfound = sorted(
             {(nft["manager"], nft["token_id"]) for nft in nfts}
             - set(mint_data)

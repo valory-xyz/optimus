@@ -56,6 +56,7 @@ POOL = to_checksum_address("0xba2b011b3de41274946e6ef93337b451fe47d727")
 GAUGE = to_checksum_address("0x" + "9a" * 20)
 OTHER_POOL = to_checksum_address("0x" + "0b" * 20)
 OTHER_GAUGE = to_checksum_address("0x" + "9b" * 20)
+OTHER_NPM = to_checksum_address("0x" + "ee" * 20)
 USDC = to_checksum_address("0x0b2c639c533813f4aa9d7837caf62653d097ff85")
 USDT = to_checksum_address("0x94b008aa00579c1307b0ef2c499ad98a8ce58e58")
 ZERO = "0x" + "0" * 40
@@ -182,10 +183,10 @@ class FakeChain:
 def _behaviour(
     chain: FakeChain,
     mints: Optional[Dict[Any, str]] = None,
-    search_complete: bool = True,
+    search_complete: Optional[bool] = True,
     **params: Any,
 ):
-    """Return a FetchStrategiesBehaviour reading ``chain``."""
+    """Return a FetchStrategiesBehaviour reading ``chain``; a None ``search_complete`` fails the mint search call."""
     obj = _mk()
     obj.params.target_investment_chains = [CHAIN]
     obj.params.safe_contract_addresses = {CHAIN: SAFE}
@@ -211,6 +212,8 @@ def _behaviour(
                 return None
             return chain.aggregate3(kwargs["calls"])
         if callable_ == "get_mint_tx_hashes":
+            if search_complete is None:
+                return None
             manager = kwargs["contract_address"]
             found = {}
             for token_id in kwargs["token_ids"]:
@@ -245,6 +248,14 @@ def _behaviour(
         side_effect=AssertionError("reconciliation must not call HTTP services")
     )
     return obj
+
+
+def _assert_unconfigured_manager_skipped(obj: Any) -> None:
+    """The chain was reconciled, with the gauge of an unconfigured manager ignored."""
+    warnings = " ".join(str(c) for c in obj.context.logger.warning.call_args_list)
+    assert f"stakes NFTs of {OTHER_NPM}" in warnings
+    obj.context.logger.exception.assert_not_called()
+    obj.update_position_amounts.assert_called_once_with(skip_cl_chains=[CHAIN])
 
 
 def _incident_chain() -> FakeChain:
@@ -450,6 +461,63 @@ class TestAdoption:
         errors = " ".join(str(c) for c in obj.context.logger.error.call_args_list)
         warnings = " ".join(str(c) for c in obj.context.logger.warning.call_args_list)
         assert "mint search on" in errors
+        assert "within the lookback" not in warnings
+
+    def test_failed_mint_search_call_is_an_error_not_a_miss(self) -> None:
+        """A search call that returns nothing is logged as a failure and adopts at current amounts."""
+        obj = _behaviour(_incident_chain(), search_complete=None)
+
+        _drive(obj.reconcile_positions())
+
+        assert [p["enter_timestamp"] for p in obj.current_positions] == [
+            1_793_500_000
+        ] * 2
+        errors = " ".join(str(c) for c in obj.context.logger.error.call_args_list)
+        warnings = " ".join(str(c) for c in obj.context.logger.warning.call_args_list)
+        assert "mint search on" in errors
+        assert "within the lookback" not in warnings
+
+    def test_incomplete_mint_search_keeps_the_mints_it_found(self) -> None:
+        """A search cut short still uses the mints it found, and only those."""
+        obj = _behaviour(
+            _incident_chain(), mints={57869: MINT_TX}, search_complete=False
+        )
+
+        _drive(obj.reconcile_positions())
+
+        minted, unminted = obj.current_positions
+        assert minted["enter_tx_hash"] == MINT_TX
+        assert [b["token_id"] for b in minted["positions"]] == [57869]
+        assert (minted["amount0"], minted["amount1"]) == (3_000_000, 2_000_000)
+        assert "enter_tx_hash" not in unminted
+        assert [b["token_id"] for b in unminted["positions"]] == [57870]
+        assert unminted["enter_timestamp"] == 1_793_500_000
+
+    @pytest.mark.parametrize(
+        "receipt", [None, [(57869, 1_000, 3_000_000, 2_000_000, MINT_TIME)]]
+    )
+    def test_unreadable_mint_is_an_error_not_a_miss(
+        self, receipt: Optional[List[Tuple[int, int, int, int, int]]]
+    ) -> None:
+        """A found mint tx whose receipt fails or omits an NFT is logged as a failure for that NFT."""
+        obj = _behaviour(_incident_chain(), mints={57869: MINT_TX, 57870: MINT_TX})
+        obj._get_all_positions_from_tx_receipt = MagicMock(
+            side_effect=_gen_return(receipt)
+        )
+
+        _drive(obj.reconcile_positions())
+
+        by_token = {
+            band["token_id"]: entry
+            for entry in obj.current_positions
+            for band in entry["positions"]
+        }
+        assert "enter_tx_hash" not in by_token[57870]
+        assert by_token[57870]["enter_timestamp"] == 1_793_500_000
+        errors = " ".join(str(c) for c in obj.context.logger.error.call_args_list)
+        warnings = " ".join(str(c) for c in obj.context.logger.warning.call_args_list)
+        assert "Could not read the mint data" in errors
+        assert MINT_TX in errors
         assert "within the lookback" not in warnings
 
     def test_staked_nft_missing_from_the_file_is_adopted_as_staked(self) -> None:
@@ -747,7 +815,8 @@ class TestReadFailures:
     def test_gauge_staking_another_managers_nfts_is_ignored(self) -> None:
         """Staked NFTs of an unconfigured manager are not adopted."""
         chain = FakeChain()
-        chain.gauge_nfts[GAUGE] = to_checksum_address("0x" + "ee" * 20)
+        chain.gauge_nfts[GAUGE] = OTHER_NPM
+        chain.nft(OTHER_NPM, 5, 10)
         chain.staked[GAUGE] = [5]
         obj = _behaviour(chain)
         obj._get_cached_cl_pool_data = MagicMock(
@@ -757,20 +826,23 @@ class TestReadFailures:
         _drive(obj.reconcile_positions())
 
         assert obj.current_positions == []
+        _assert_unconfigured_manager_skipped(obj)
 
     def test_gauge_of_an_unknown_manager_does_not_close_its_staked_entry(self) -> None:
         """When a gauge's NFTs cannot be attributed, its pool's open entry is left untouched."""
         chain = FakeChain()
-        chain.gauge_nfts[GAUGE] = to_checksum_address("0x" + "ee" * 20)
+        chain.gauge_nfts[GAUGE] = OTHER_NPM
+        chain.nft(OTHER_NPM, 1, 10)
         chain.staked[GAUGE] = [1]
         obj = _behaviour(chain)
         obj.current_positions = [_open_entry([1], staked=True)]
 
         _drive(obj.reconcile_positions())
 
-        entry = obj.current_positions[0]
+        (entry,) = obj.current_positions
         assert entry["status"] == "open"
         assert "current_liquidity" not in entry["positions"][0]
+        _assert_unconfigured_manager_skipped(obj)
 
     def test_unexpected_error_falls_back_to_the_stored_positions(self) -> None:
         """An exception while reconciling a chain leaves it to the per-position refresh."""

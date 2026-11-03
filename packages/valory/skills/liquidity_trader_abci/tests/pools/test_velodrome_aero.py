@@ -152,12 +152,14 @@ class TestEnterAeroV2Pool:
         # Aero pools revert on stable(): the legacy is_stable lookup is not made.
         assert not b.contract_interact.called("get_stable")
 
-    def test_entry_below_the_minimum_sends_no_tx(self) -> None:
-        """The floor applies to what the Metarouter would commit, not the max amounts."""
+    @pytest.mark.parametrize("value_usd", [0.000001, 0.0])
+    def test_entry_below_the_minimum_or_unpriceable_sends_no_tx(
+        self, value_usd: float
+    ) -> None:
+        """The floor applies to what the Metarouter would commit; an unpriceable ($0) entry is not sent either."""
         b = _aero_behaviour({"get_reserves": [1000, 1]})
         b.context.params.min_pool_entry_value_usd = 0.5
-        b._get_token_decimals = _mock_gen(6)
-        b._fetch_token_price = _mock_gen(1.0)
+        b._convert_amounts_to_usd = _mock_gen(value_usd)
         result = exhaust_generator(
             b._enter_aero_v2_pool(
                 POOL, SAFE, ["0xA", "0xB"], CHAIN, [5_000_000, 1], FACTORY
@@ -166,6 +168,7 @@ class TestEnterAeroV2Pool:
 
         assert result == (None, None)
         assert not b.contract_interact.called("get_add_liquidity_tx")
+        b._convert_amounts_to_usd.assert_called_once_with(1000, 1, "0xA", "0xB", CHAIN)
 
     def test_missing_factory(self) -> None:
         """Without the creating factory the Metarouter cannot be called."""

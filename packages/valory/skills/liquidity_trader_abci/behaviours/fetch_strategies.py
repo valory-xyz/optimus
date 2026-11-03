@@ -89,6 +89,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.multicall import (
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
+    sqrt_price_x96_at_tick,
 )
 
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
@@ -3551,8 +3552,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 amount0, amount1 = get_amounts_for_liquidity(
                     sqrt_price_x96,
-                    get_sqrt_ratio_at_tick(nft["tick_lower"]),
-                    get_sqrt_ratio_at_tick(nft["tick_upper"]),
+                    sqrt_price_x96_at_tick(nft["tick_lower"]),
+                    sqrt_price_x96_at_tick(nft["tick_upper"]),
                     nft["liquidity"],
                 )
             bands.append(

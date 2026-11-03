@@ -27,6 +27,7 @@ from abc import ABC
 from collections import defaultdict
 from decimal import Decimal
 from enum import Enum
+from fractions import Fraction
 from typing import (
     Any,
     Callable,
@@ -69,6 +70,10 @@ from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterCon
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
+from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
+    get_liquidity_for_amounts,
+    sqrt_price_x96_at_tick,
+)
 
 # Constants for price history functions
 PRICE_VOLATILITY_THRESHOLD = 0.02  # 2% threshold for stablecoin detection
@@ -513,7 +518,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         is_below_minimum = yield from self._is_entry_below_minimum(
             chain, assets, adjusted_amounts
         )
-        if is_below_minimum is not False:
+        if is_below_minimum:
             return None, None
 
         # Query expected amounts and apply slippage protection
@@ -727,30 +732,18 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
     def _is_entry_below_minimum(
         self, chain: str, assets: List[str], amounts: List[int]
-    ) -> Generator[None, None, Optional[bool]]:
-        """Return whether ``amounts`` of ``assets`` are worth less than the entry floor, None if unpriceable."""
+    ) -> Generator[None, None, bool]:
+        """Return whether ``amounts`` of ``assets`` are worth less than the entry floor; unpriceable amounts count as $0."""
         min_value_usd = self.params.min_pool_entry_value_usd
         if min_value_usd <= 0:
             return False
-
-        value_usd = 0.0
-        for asset, amount in zip(assets, amounts):
-            if not amount:
-                continue
-            decimals = yield from self._get_token_decimals(chain, asset)
-            price = yield from self._fetch_token_price(asset, chain)
-            if decimals is None or not price:
-                self.context.logger.error(
-                    f"Could not price {amount} of {asset} on {chain}; "
-                    f"not entering the pool"
-                )
-                return None
-            value_usd += amount / 10**decimals * price
-
+        value_usd = yield from self._convert_amounts_to_usd(
+            amounts[0], amounts[1], assets[0], assets[1], chain
+        )
         if value_usd < min_value_usd:
             self.context.logger.warning(
                 f"Pool entry worth ${value_usd:.6f} is below the "
-                f"${min_value_usd} minimum; not entering the pool"
+                f"${min_value_usd} minimum (or could not be priced); not entering the pool"
             )
             return True
         return False
@@ -801,7 +794,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         is_below_minimum = yield from self._is_entry_below_minimum(
             chain, assets, [expected_a, expected_b]
         )
-        if is_below_minimum is not False:
+        if is_below_minimum:
             return None, None
         slippage_tolerance = self.params.slippage_tolerance
         amount_a_min = int(expected_a * (1 - slippage_tolerance))
@@ -1145,62 +1138,88 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             total_allocated_1 += amount1_desired
 
         # Second pass: adjust if we're over the max
+        needed = [
+            (position["amount0_desired"], position["amount1_desired"])
+            for position in tick_ranges[0]
+        ]
         if (
             total_allocated_0 > max_amounts_in[0]
             or total_allocated_1 > max_amounts_in[1]
         ):
-            # Scale each band only by the tokens it needs that exceed their
-            # max. A band that needs none of a short token keeps its full
-            # amount, so one short token (e.g. 1 wei of token1 left in the
-            # Safe) cannot shrink every other band to dust. Per token, the
-            # scaled bands still sum to at most its max.
+            # Scale each band only by the over-max tokens it needs; a band
+            # that doesn't use a short token isn't scaled by it. Exact
+            # fractions keep each token's scaled total within its max.
             token_scale_factors = [
-                (max_amounts_in[i] / total if total > max_amounts_in[i] else None)
+                (
+                    Fraction(max_amounts_in[i], total)
+                    if total > max_amounts_in[i]
+                    else None
+                )
                 for i, total in enumerate((total_allocated_0, total_allocated_1))
             ]
-
-            # Apply scaling, clamping to max_amounts_in. A factor can round
-            # to 1.0 in float64 when the overshoot is tiny relative to the
-            # amount (e.g. a 227-wei overshoot on a ~1.6e19 balance), so the
-            # clamp guarantees we never request more than the available max.
-            for position in tick_ranges[0]:
-                desired = (position["amount0_desired"], position["amount1_desired"])
+            for position, desired in zip(tick_ranges[0], needed):
                 band_factor = min(
                     [
                         factor
                         for factor, amount in zip(token_scale_factors, desired)
                         if factor is not None and amount > 0
                     ],
-                    default=1.0,
+                    default=Fraction(1),
                 )
-                if band_factor < 1.0:
+                if band_factor < 1:
                     self.context.logger.info(
                         f"Scaling down band [{position.get('tick_lower')}, "
-                        f"{position.get('tick_upper')}] by factor {band_factor:.4f}"
+                        f"{position.get('tick_upper')}] by factor {float(band_factor):.4f}"
                     )
-                position["amount0_desired"] = min(
-                    int(desired[0] * band_factor), max_amounts_in[0]
+                position["amount0_desired"] = int(desired[0] * band_factor)
+                position["amount1_desired"] = int(desired[1] * band_factor)
+
+        # A mint with zero liquidity reverts the whole multisend, so a band
+        # left without a token it needs, or with too little to mint any
+        # liquidity, is dropped.
+        bands = []
+        for position, desired in zip(tick_ranges[0], needed):
+            scaled = (position["amount0_desired"], position["amount1_desired"])
+            mintable = any(scaled) and all(
+                after > 0 for before, after in zip(desired, scaled) if before > 0
+            )
+            if mintable and sqrt_price_x96:
+                mintable = (
+                    get_liquidity_for_amounts(
+                        sqrt_price_x96,
+                        sqrt_price_x96_at_tick(position["tick_lower"]),
+                        sqrt_price_x96_at_tick(position["tick_upper"]),
+                        *scaled,
+                    )
+                    > 0
                 )
-                position["amount1_desired"] = min(
-                    int(desired[1] * band_factor), max_amounts_in[1]
+            if mintable:
+                bands.append(position)
+            else:
+                self.context.logger.info(
+                    f"Dropping band [{position.get('tick_lower')}, "
+                    f"{position.get('tick_upper')}]: amounts {scaled} cannot mint"
                 )
+        if not bands:
+            self.context.logger.warning("No band of the CL entry can be minted")
+            return None, None
 
         is_below_minimum = yield from self._is_entry_below_minimum(
             chain,
             assets,
             [
-                sum(position.get("amount0_desired", 0) for position in tick_ranges[0]),
-                sum(position.get("amount1_desired", 0) for position in tick_ranges[0]),
+                sum(position["amount0_desired"] for position in bands),
+                sum(position["amount1_desired"] for position in bands),
             ],
         )
-        if is_below_minimum is not False:
+        if is_below_minimum:
             return None, None
 
         # Process each position and collect individual transaction hashes
         tx_hashes = []
 
         # Process each position
-        for position in tick_ranges[0]:
+        for position in bands:
             amount0_desired = position.get("amount0_desired", 0)
             amount1_desired = position.get("amount1_desired", 0)
 

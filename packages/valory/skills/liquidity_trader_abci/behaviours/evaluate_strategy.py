@@ -1673,8 +1673,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         try:
             # After a restart the strategies are not loaded yet.
             yield from self.download_strategies()
-            for position, strategy in due:
-                position["last_metrics_update"] = current_timestamp
+        except Exception as e:
+            self.context.logger.error(f"Error downloading the strategies: {e}")
+            return
+
+        for position, strategy in due:
+            pool_address = position.get("pool_address")
+            position["last_metrics_update"] = current_timestamp
+            try:
                 metrics = yield from self.get_returns_metrics_for_opportunity(
                     position, strategy
                 )
@@ -1687,12 +1693,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
                 if "apr" not in read:
                     self.context.logger.warning(
-                        f"No live APR for position {position.get('pool_address')}; "
+                        f"No live APR for position {pool_address}; "
                         f"the TiP exit checks keep APR {position.get('apr')}"
                     )
                 position.update(read)
-        except Exception as e:
-            self.context.logger.error(f"Error updating position metrics: {e}")
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error updating metrics of position {pool_address}: {e}"
+                )
 
         self.store_current_positions()
 
@@ -2163,7 +2171,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "get_metrics": True,
                 "position": position,
                 "apr_threshold": self.params.apr_threshold,
-                "current_positions": self.positions_eligible_for_exit,
+                # Required by the strategies' field check; metrics runs don't read it.
+                "current_positions": [],
             }
         )
 

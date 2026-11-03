@@ -723,7 +723,65 @@ class TestUpdatePositionMetrics:
         assert position["last_metrics_update"] == now
         b.store_current_positions.assert_called_once()
         errors = [c.args[0] for c in b.context.logger.error.call_args_list]
-        assert "Error updating position metrics: boom" in errors
+        assert "Error updating metrics of position 0xpool: boom" in errors
+
+    def test_failed_read_does_not_skip_the_next_position(self):
+        """A read that raises for one position still refreshes and stores the others."""
+        b = _mk()
+        now = int(time.time())
+        b._get_current_timestamp = lambda: now
+        failing, healthy = (
+            {
+                "status": PositionStatus.OPEN.value,
+                "dex_type": "velodrome",
+                "pool_address": pool_address,
+                "apr": 12.5,
+            }
+            for pool_address in ("0xfailing", "0xhealthy")
+        )
+        b.current_positions = [failing, healthy]
+
+        def read(position, _strategy):
+            if position is failing:
+                raise RuntimeError("boom")
+            yield
+            return {"apr": 4.0}
+
+        b.get_returns_metrics_for_opportunity = read
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        assert failing["apr"] == 12.5
+        assert failing["last_metrics_update"] == now
+        assert healthy["apr"] == 4.0
+        assert healthy["last_metrics_update"] == now
+        b.store_current_positions.assert_called_once()
+        errors = [c.args[0] for c in b.context.logger.error.call_args_list]
+        assert errors == ["Error updating metrics of position 0xfailing: boom"]
+
+    def test_failed_download_reads_nothing(self):
+        """A failed download is logged and leaves the positions due for the next period."""
+        b = _mk()
+        position = {
+            "status": PositionStatus.OPEN.value,
+            "dex_type": "velodrome",
+            "pool_address": "0xpool",
+            "apr": 12.5,
+        }
+        b.current_positions = [position]
+
+        def fail():
+            raise RuntimeError("boom")
+            yield  # pylint: disable=unreachable
+
+        b.download_strategies = fail
+        b.get_returns_metrics_for_opportunity = MagicMock()
+        b.store_current_positions = MagicMock()
+        _drive(b.update_position_metrics())
+        b.get_returns_metrics_for_opportunity.assert_not_called()
+        b.store_current_positions.assert_not_called()
+        assert "last_metrics_update" not in position
+        errors = [c.args[0] for c in b.context.logger.error.call_args_list]
+        assert errors == ["Error downloading the strategies: boom"]
 
 
 class TestCheckTipExitConditions:
@@ -5164,8 +5222,9 @@ class TestMetricsRunInputs:
     def test_shares_rpcs_and_price_cache(self):
         """Same RPCs and price cache as the search; the params are untouched.
 
-        The run also gets the position, the APR threshold, and the positions
-        eligible for exit.
+        The run also gets the position, the APR threshold, and an empty
+        current_positions: the strategies require the field, and their metrics
+        path does not read it.
         """
         b = _mk()
         b.context.coingecko.use_x402 = False
@@ -5187,7 +5246,7 @@ class TestMetricsRunInputs:
         assert kwargs["get_metrics"] is True
         assert kwargs["position"] is position
         assert kwargs["apr_threshold"] == 5
-        assert kwargs["current_positions"] is b.positions_eligible_for_exit
+        assert kwargs["current_positions"] == []
         assert "strategy" not in kwargs
         assert kwargs["graphql_endpoint"] == "url"
         assert kwargs["price_cache"] is b.shared_state.strategy_coingecko_price_cache

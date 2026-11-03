@@ -573,34 +573,6 @@ class TestGaugeFactory:
         assert result == {"gauge_factory": MOCK_ADDRESS}
 
 
-class TestStakedValues:
-    """Tests for the staked_values method."""
-
-    def test_returns_the_token_ids_staked_by_the_account(self) -> None:
-        """The account is checksummed and the ids come back as a list."""
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.stakedValues.return_value.call.return_value = (
-            7,
-            9,
-        )
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeCLGaugeContract.staked_values(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
-            )
-
-        mock_contract_instance.functions.stakedValues.assert_called_once_with(
-            MOCK_CHECKSUMMED_ACCOUNT
-        )
-        assert result == {"token_ids": [7, 9]}
-
-
 class TestAbiIntegrity:
     """Verify that every function used in contract.py exists in the ABI."""
 
@@ -614,7 +586,6 @@ class TestAbiIntegrity:
         "gaugeFactory",
         "getReward",
         "stakedContains",
-        "stakedValues",
         "totalSupply",
         "withdraw",
     ]

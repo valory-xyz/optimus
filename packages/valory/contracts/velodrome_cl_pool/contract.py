@@ -148,17 +148,6 @@ class VelodromeCLPoolContract(Contract):
         return dict(data=tick_spacing)
 
     @classmethod
-    def get_gauge(
-        cls,
-        ledger_api: EthereumApi,
-        contract_address: str,
-    ) -> JSONLike:
-        """Get the gauge of the pool; the zero address when it has none."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        gauge = contract_instance.functions.gauge().call()
-        return dict(gauge=gauge)
-
-    @classmethod
     def get_pool_tokens(
         cls,
         ledger_api: EthereumApi,

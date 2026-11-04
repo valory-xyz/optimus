@@ -5286,6 +5286,7 @@ class TestStrategyKwargs:
         assert b._strategy_kwargs("strat_a")[key] == self.SOURCES[key](b)
 
     def test_has_only_the_shared_keys(self):
+        """The kwargs hold only the shared keys."""
         assert self._behaviour()._strategy_kwargs("strat_a").keys() == (
             self.SOURCES.keys()
         )

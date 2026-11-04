@@ -111,10 +111,24 @@ def get_max_values(pools: Any) -> Any:
     }
 
 
+def is_known(value: Any) -> bool:
+    """Return whether a risk metric was read: a finite number, not None or NaN."""
+    return isinstance(value, (int, float)) and math.isfinite(value)
+
+
+def format_metric(value: Any) -> str:
+    """Format a risk metric for the reasoning, as "unknown" when not read."""
+    return f"{value:.2f}" if is_known(value) else "unknown"
+
+
+def exceeds(value: Any, other: Any) -> bool:
+    """Return whether a risk metric exceeds another, False if either is unknown."""
+    return is_known(value) and is_known(other) and value > other
+
+
 def il_risk_descriptor(il_score: Any) -> Any:
     """Map the IL risk score to a qualitative descriptor."""
-    # Handle None values
-    if il_score is None:
+    if not is_known(il_score):
         return "Unknown"
 
     if il_score < -0.5:
@@ -265,12 +279,12 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             # Add user-friendly reasoning with metric comparisons
             if position_to_exit:
                 exit_pool = position_to_exit
-                il_risk_exit = il_risk_descriptor(exit_pool.get("il_risk_score", 0))
+                il_risk_exit = il_risk_descriptor(exit_pool.get("il_risk_score"))
 
                 reasoning.append(
                     f"Currently invested in {exit_pool.get('dex_type', 'unknown')} pool {exit_pool.get('pool_address', 'unknown')} "
-                    f"with metrics: risk-adjusted returns {exit_pool.get('sharpe_ratio', 0):.2f}, "
-                    f"market liquidity {exit_pool.get('depth_score', 0):.2f}, "
+                    f"with metrics: risk-adjusted returns {format_metric(exit_pool.get('sharpe_ratio'))}, "
+                    f"market liquidity {format_metric(exit_pool.get('depth_score'))}, "
                     f"impermanent loss risk is {il_risk_exit}."
                 )
 
@@ -278,39 +292,44 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
             # Determine which metric is getting it over the line
             metrics_improved = []
-            if top_opp.get("sharpe_ratio", 0) > position_to_exit.get("sharpe_ratio", 0):
+            if exceeds(
+                top_opp.get("sharpe_ratio"), position_to_exit.get("sharpe_ratio")
+            ):
                 metrics_improved.append("higher risk-adjusted returns")
-            if top_opp.get("depth_score", 0) > position_to_exit.get("depth_score", 0):
+            if exceeds(top_opp.get("depth_score"), position_to_exit.get("depth_score")):
                 metrics_improved.append("better market liquidity")
 
-            # Safe comparison for il_risk_score that handles None values
-            top_il_risk = top_opp.get("il_risk_score")
-            exit_il_risk = position_to_exit.get("il_risk_score")
-            if (
-                top_il_risk is not None
-                and exit_il_risk is not None
-                and top_il_risk > exit_il_risk
+            # IL risk scores are negative, so a higher score is a lower risk.
+            if exceeds(
+                top_opp.get("il_risk_score"), position_to_exit.get("il_risk_score")
             ):
                 metrics_improved.append("lower impermanent loss risk")
 
-            reasoning.append(
+            found = (
                 f"Found opportunity in {top_opp.get('dex_type', 'unknown')} pool {top_opp.get('pool_address', 'unknown')} "
                 f"with expected APR of {top_opp.get('apr', 0):.2f}%. "
-                f"The new pool offers {', '.join(metrics_improved)}. "
-                f"While not all metrics are improved, the improvement in "
-                f"{' and '.join(metrics_improved)} makes it more desirable."
             )
+            if metrics_improved:
+                reasoning.append(
+                    found + f"The new pool offers {', '.join(metrics_improved)}. "
+                    f"While not all metrics are improved, the improvement in "
+                    f"{' and '.join(metrics_improved)} makes it more desirable."
+                )
+            else:
+                reasoning.append(
+                    found + "The new pool is chosen on its composite score and APR."
+                )
         else:
             logs.append(
                 f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}"
             )
             current_pool = position_to_exit
-            il_risk_current = il_risk_descriptor(current_pool.get("il_risk_score", 0))
+            il_risk_current = il_risk_descriptor(current_pool.get("il_risk_score"))
 
             reasoning.append(
                 "Current position remains optimal. Current metrics: "
-                f"risk-adjusted returns {current_pool.get('sharpe_ratio', 0):.2f}, "
-                f"market liquidity {current_pool.get('depth_score', 0):.2f}, "
+                f"risk-adjusted returns {format_metric(current_pool.get('sharpe_ratio'))}, "
+                f"market liquidity {format_metric(current_pool.get('depth_score'))}, "
                 f"impermanent loss risk is {il_risk_current}. "
                 "No better opportunities found at this time."
             )

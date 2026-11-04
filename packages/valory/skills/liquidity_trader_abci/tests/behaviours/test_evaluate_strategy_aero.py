@@ -31,6 +31,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy i
 )
 from packages.valory.skills.liquidity_trader_abci.tests.behaviours.test_evaluate_strategy import (
     _drive,
+    _gen_none,
     _gen_return,
     _mk,
 )
@@ -385,6 +386,7 @@ class TestAsyncActAeroRestake:
         b._read_investing_paused = _gen_return(False)
         b._prepare_legacy_velodrome_exit_actions = _gen_return(None)
         b._prepare_aero_restake_actions = _gen_return(restake_actions)
+        b.update_position_metrics = _gen_none
         b.check_and_prepare_non_whitelisted_swaps = MagicMock(
             side_effect=_gen_return([])
         )

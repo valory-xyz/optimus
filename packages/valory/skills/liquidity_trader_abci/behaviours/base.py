@@ -343,7 +343,6 @@ WHITELISTED_ASSETS = {
         "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
         "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
         "0x820c137fa70c8691f0e44dc420a5e53c168921dc": "USDS",
-        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
     },
 }
 
@@ -354,8 +353,7 @@ WHITELISTED_ASSETS = {
 # withdraw sweep-to-USDC fallback, and (c) priceable via COIN_ID_MAPPING. Drop
 # an entry here once on-chain balances for it have reached zero.
 LEGACY_HELD_ASSETS: Dict[str, Dict[str, str]] = {
-    # Not investable on Optimism, but existing optimus agents may still hold
-    # them.
+    # Not investable on Optimism.
     "optimism": {
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",

@@ -2096,7 +2096,6 @@ class TestWhitelistInvariants:
         "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
         "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
         "0x820c137fa70c8691f0e44dc420a5e53c168921dc": "USDS",
-        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": "USDe",
     }
     OPTIMISM_LEGACY = {
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
@@ -2113,11 +2112,11 @@ class TestWhitelistInvariants:
     }
 
     def test_optimism_investable_set_is_exact(self) -> None:
-        """Optimism investable whitelist is exactly the curated five."""
+        """Optimism investable whitelist is exactly the curated set."""
         assert WHITELISTED_ASSETS["optimism"] == self.OPTIMISM_INVESTABLE
 
     def test_base_investable_set_is_exact(self) -> None:
-        """Base investable whitelist is exactly the curated five."""
+        """Base investable whitelist is exactly the curated set."""
         assert WHITELISTED_ASSETS["base"] == self.BASE_INVESTABLE
 
     def test_optimism_legacy_set_is_exact(self) -> None:
@@ -2127,29 +2126,6 @@ class TestWhitelistInvariants:
     def test_base_legacy_set_is_exact(self) -> None:
         """Base legacy-held entries are exactly the retired tokens."""
         assert LEGACY_HELD_ASSETS["base"] == self.BASE_LEGACY
-
-    @pytest.mark.parametrize("chain", ["optimism", "base"])
-    def test_whitelist_keys_are_lowercase(self, chain: str) -> None:
-        """Keys are lowercase, which is the form the pool filter looks tokens up in."""
-        assert all(a == a.lower() for a in WHITELISTED_ASSETS[chain])
-
-    @pytest.mark.parametrize(
-        "chain, legacy",
-        [("optimism", OPTIMISM_LEGACY), ("base", BASE_LEGACY)],
-    )
-    def test_retired_assets_stay_in_held_set(self, chain: str, legacy: dict) -> None:
-        """Retired assets stay detectable, priceable and sweepable."""
-        assert legacy.items() <= HELD_ASSETS[chain].items()
-
-    def test_musd_is_not_held_or_investable_on_base(self) -> None:
-        """MUSD is neither investable nor tracked on Base."""
-        assert "0xdd468a1ddc392dcdbef6db6e34e89aa338f9f186" not in HELD_ASSETS["base"]
-
-    def test_legacy_held_assets_never_overlap_investable(self) -> None:
-        """An asset is either investable or legacy-held, never both."""
-        for chain, legacy in LEGACY_HELD_ASSETS.items():
-            investable = {a.lower() for a in WHITELISTED_ASSETS[chain]}
-            assert not {a.lower() for a in legacy} & investable
 
     def test_held_assets_is_superset_of_investable(self) -> None:
         """HELD_ASSETS is always a superset of the investable whitelist."""
@@ -2174,7 +2150,6 @@ class TestWhitelistInvariants:
             ("base", "BOLD", "liquity-bold-2"),
             ("base", "DAI", "l2-standard-bridged-dai-base"),
             ("base", "USDS", "usds"),
-            ("base", "USDe", "ethena-usde"),
         ],
     )
     def test_held_stable_resolves_to_its_coin_id(

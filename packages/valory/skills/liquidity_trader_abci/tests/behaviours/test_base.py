@@ -25,7 +25,7 @@ import json
 import os
 import tempfile
 import time
-from typing import Any, Generator, Optional
+from typing import Any, Dict, Generator, List, Optional
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -4358,7 +4358,20 @@ class TestQueryServiceRewards:
         resp.body = json.dumps({"data": {"service": None}}).encode("utf-8")
         b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.query_service_rewards("optimism"))
+        assert result == {}
+
+    def test_graphql_errors_are_no_answer(self) -> None:
+        """A 200 with a GraphQL errors array is no answer, and the errors are logged."""
+        b = _make_behaviour()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.body = json.dumps(
+            {"errors": [{"message": "auth error: malformed API key"}]}
+        ).encode("utf-8")
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        result = _exhaust(b.query_service_rewards("optimism"))
         assert result is None
+        assert "auth error: malformed API key" in b.context.logger.error.call_args[0][0]
 
     def test_failure(self) -> None:
         """Test failure."""
@@ -4381,6 +4394,38 @@ class TestQueryServiceRewards:
         assert result is None
         b.context.logger.error.assert_called()
 
+    @pytest.mark.parametrize(
+        ("status_code", "body", "log_level", "expected"),
+        [
+            (200, {"message": "Not found"}, "warning", {}),
+            (200, {"errors": [{"message": "auth error"}]}, "error", None),
+            (500, {"message": "Internal error"}, "error", None),
+        ],
+    )
+    def test_logs_endpoint_without_api_key(
+        self,
+        status_code: int,
+        body: Dict[str, Any],
+        log_level: str,
+        expected: Optional[Dict],
+    ) -> None:
+        """Logged endpoints redact the API key."""
+        b = _make_behaviour()
+        b.params.staking_subgraph_endpoints = {
+            "optimism": "https://gateway.thegraph.com/api/s3cr3t/subgraphs/id/2fe1"
+        }
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.body = json.dumps(body).encode("utf-8")
+        b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
+        result = _exhaust(b.query_service_rewards("optimism"))
+        assert result == expected
+        message = getattr(b.context.logger, log_level).call_args[0][0]
+        assert (
+            "https://gateway.thegraph.com/api/<redacted>/subgraphs/id/2fe1" in message
+        )
+        assert "s3cr3t" not in message
+
     def test_data_null_response(self) -> None:
         """Test query_service_rewards when data is null in response."""
         b = _make_behaviour()
@@ -4389,7 +4434,7 @@ class TestQueryServiceRewards:
         resp.body = json.dumps({"data": None}).encode("utf-8")
         b.get_http_response = _make_gen(resp)  # type: ignore[assignment,method-assign]
         result = _exhaust(b.query_service_rewards("optimism"))
-        assert result is None
+        assert result == {}
 
 
 class TestUpdateAccumulatedRewardsForChain:
@@ -4401,28 +4446,103 @@ class TestUpdateAccumulatedRewardsForChain:
         b.should_update_rewards_from_subgraph = _make_gen(False)  # type: ignore[assignment,method-assign]
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
 
-    def test_no_service_data(self) -> None:
-        """Test no service data."""
+    @staticmethod
+    def _capture_writes(
+        b: LiquidityTraderBaseBehaviour, succeed: bool = True
+    ) -> List[Dict[str, str]]:
+        writes: List[Dict[str, str]] = []
+
+        def fake_write_kv(data: Dict[str, str]) -> Generator[None, None, bool]:
+            writes.append(data)
+            yield
+            return succeed
+
+        b._write_kv = fake_write_kv  # type: ignore[assignment,method-assign]
+        b._get_current_timestamp = MagicMock(return_value=1793232000)  # type: ignore[method-assign]
+        return writes
+
+    def test_no_service_data_records_attempt(self) -> None:
+        """An empty answer still stamps the update time."""
+        b = _make_behaviour()
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({})  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b)
+        _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        assert writes == [{"last_reward_update_optimism": "1793232000"}]
+
+    def test_no_answer_retries_next_period(self) -> None:
+        """A failed query records nothing, so the next period queries again."""
         b = _make_behaviour()
         b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
         b.query_service_rewards = _make_gen(None)  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b)
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        assert writes == []
 
     def test_success(self) -> None:
-        """Test success."""
+        """A success stores the accumulated rewards, then stamps the update time."""
         b = _make_behaviour()
         b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
         b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b)
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        rewards_key = (
+            f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        )
+        assert writes == [
+            {rewards_key: "500"},
+            {"last_reward_update_optimism": "1793232000"},
+        ]
+        b.context.logger.error.assert_not_called()
 
     def test_invalid_rewards_value(self) -> None:
-        """Test invalid rewards value."""
+        """An unparseable rewards value is stored as zero."""
         b = _make_behaviour()
         b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
         b.query_service_rewards = _make_gen({"olasRewardsEarned": "not_a_number"})  # type: ignore[assignment,method-assign]
-        b._write_kv = _make_gen(True)  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b)
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        rewards_key = (
+            f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        )
+        assert writes[0] == {rewards_key: "0"}
+
+    def test_failed_rewards_write_is_not_stamped(self) -> None:
+        """A failed rewards write leaves the update unstamped, so it is retried."""
+        b = _make_behaviour()
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b, succeed=False)
+        _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        rewards_key = (
+            f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        )
+        assert writes == [{rewards_key: "500"}]
+        errors = [c[0][0] for c in b.context.logger.error.call_args_list]
+        assert errors == ["KV write failed storing accumulated rewards for optimism"]
+        infos = [c[0][0] for c in b.context.logger.info.call_args_list]
+        assert "Completed reward update for optimism" not in infos
+
+    def test_failed_stamp_is_logged(self) -> None:
+        """A failed stamp write is logged."""
+        b = _make_behaviour()
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({})  # type: ignore[assignment,method-assign]
+        self._capture_writes(b, succeed=False)
+        _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        errors = [c[0][0] for c in b.context.logger.error.call_args_list]
+        assert errors == [
+            "KV write failed recording the reward update time for optimism"
+        ]
+
+    def test_chain_without_olas_address_is_stamped(self) -> None:
+        """A chain with no OLAS address has no rewards to store but is still stamped."""
+        b = _make_behaviour()
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b)
+        _exhaust(b.update_accumulated_rewards_for_chain("no_olas_chain"))
+        assert writes == [{"last_reward_update_no_olas_chain": "1793232000"}]
 
 
 class TestShouldUpdateRewardsFromSubgraph:

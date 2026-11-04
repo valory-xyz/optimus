@@ -21,6 +21,7 @@
 
 # pylint: skip-file
 
+import copy
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -61,12 +62,21 @@ def _mk():
     obj.pools = {}
     obj.service_staking_state = MagicMock()
     obj.store_funding_events = MagicMock()
-    obj.read_funding_events = MagicMock(return_value={})
+    obj.read_funding_events = MagicMock(return_value=None)
     # Default slug map so per-chain dispatch in _calculate_safe_balances_value
     # treats Optimism + Base as Safe-API chains. Tests that need a different
     # configuration override this on the instance.
     obj.params.safe_api_chain_slugs = {"optimism": "oeth", "base": "base"}
     return obj
+
+
+def _funding_events_reader(obj, data):
+    """Mimic read_funding_events: load *data* into obj.funding_events, return None."""
+
+    def _read():
+        obj.funding_events = copy.deepcopy(data)
+
+    return _read
 
 
 def _drive(gen, sends=None):
@@ -5822,7 +5832,7 @@ class TestFetchAllTransfersUntilDateMode:
     def test_success(self):
         """Test success."""
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj._fetch_token_transfers_mode = _gen_return(True)
         obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
@@ -5837,7 +5847,7 @@ class TestFetchAllTransfersUntilDateMode:
         """Test token fetch fails."""
         obj = _mk()
         obj.funding_events = {"mode": {"2025-01-01": []}}
-        obj.read_funding_events = lambda: obj.funding_events
+        obj.read_funding_events = MagicMock(return_value=None)
         obj.store_funding_events = MagicMock()
         obj._fetch_token_transfers_mode = _gen_return(False)
         obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
@@ -5851,7 +5861,9 @@ class TestFetchAllTransfersUntilDateMode:
     def test_backward_compat(self):
         """Test backward compat."""
         obj = _mk()
-        obj.read_funding_events = lambda: {"mode": {"2025-01-01": [{"type": "eth"}]}}
+        obj.read_funding_events = _funding_events_reader(
+            obj, {"mode": {"2025-01-01": [{"type": "eth"}]}}
+        )
         obj.store_funding_events = MagicMock()
         obj._fetch_token_transfers_mode = _gen_return(True)
         obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
@@ -5865,7 +5877,7 @@ class TestFetchAllTransfersUntilDateMode:
     def test_exception(self):
         """Test exception."""
         obj = _mk()
-        obj.read_funding_events = lambda: {"mode": {}}
+        obj.read_funding_events = _funding_events_reader(obj, {"mode": {}})
         obj.store_funding_events = MagicMock()
 
         def bad(*a, **kw):
@@ -5888,7 +5900,7 @@ class TestFetchAllTransfersUntilDateOptimism:
     def test_success(self):
         """Test success."""
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj._fetch_optimism_transfers_safeglobal = _gen_none
         assert isinstance(
@@ -5899,7 +5911,7 @@ class TestFetchAllTransfersUntilDateOptimism:
     def test_exception(self):
         """Test exception."""
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
 
         def boom(*a, **kw):
             """Boom."""
@@ -5925,7 +5937,7 @@ class TestFetchAllTransfersUntilDateBase:
     def test_success(self):
         """Successful fetch returns a dict of date -> transfers."""
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
 
         def fake_safeglobal(
@@ -5953,7 +5965,7 @@ class TestFetchAllTransfersUntilDateBase:
         """
         obj = _mk()
         prior = {"2025-01-01": [{"transfer_id": "x"}]}
-        obj.read_funding_events = lambda: {"base": prior}
+        obj.read_funding_events = _funding_events_reader(obj, {"base": prior})
         obj.store_funding_events = MagicMock()
 
         def failing_safeglobal(
@@ -5975,7 +5987,7 @@ class TestFetchAllTransfersUntilDateBase:
     def test_exception(self):
         """An exception inside the safeglobal call returns an empty dict."""
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
 
         def boom(*a, **kw):
             """Boom."""
@@ -7783,7 +7795,9 @@ class TestFetchAllTransfersDateMerge:
     def test_mode_merge_new_dates(self):
         """Line 3192: new date in existing_mode_data."""
         obj = _mk()
-        obj.read_funding_events = lambda: {"mode": {"2024-01-01": [{"x": 1}]}}
+        obj.read_funding_events = _funding_events_reader(
+            obj, {"mode": {"2024-01-01": [{"x": 1}]}}
+        )
         obj.store_funding_events = MagicMock()
 
         # Token transfers succeed and add a new date
@@ -7803,9 +7817,9 @@ class TestFetchAllTransfersDateMerge:
         obj = _mk()
         # Persisted entry carries transfer_id so it survives the legacy
         # migration on load.
-        obj.read_funding_events = lambda: {
-            "optimism": {"2024-01-01": [{"transfer_id": "tid-old", "y": 1}]}
-        }
+        obj.read_funding_events = _funding_events_reader(
+            obj, {"optimism": {"2024-01-01": [{"transfer_id": "tid-old", "y": 1}]}}
+        )
         obj.store_funding_events = MagicMock()
 
         # _fetch_optimism_transfers_safeglobal adds a new date and signals success
@@ -7824,7 +7838,7 @@ class TestFetchAllTransfersDateMerge:
     def test_optimism_empty_funding_events(self):
         """Empty disk state returns an empty dict without crashing."""
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
 
         def sfg(*a, **kw):
@@ -7841,7 +7855,9 @@ class TestFetchAllTransfersDateMerge:
         obj = _mk()
         # Disk has a legacy entry without transfer_id — exactly the shape
         # the migration would strip.
-        obj.read_funding_events = lambda: {"optimism": {"2024-01-01": [{"y": 1}]}}
+        obj.read_funding_events = _funding_events_reader(
+            obj, {"optimism": {"2024-01-01": [{"y": 1}]}}
+        )
         obj.store_funding_events = MagicMock()
 
         def sfg(*a, **kw):
@@ -8128,6 +8144,91 @@ class TestCollectSeenTransferIdsHelper:
         assert _collect_seen_transfer_ids(data) == {"ok"}
 
 
+class TestFundingEventsFileRoundTrip:
+    """Transfer fetchers keep every key of the real funding_events file."""
+
+    INCOMING = {"2026-06-25": [{"transfer_id": "tid-in-old", "amount": 16.0}]}
+    WITHDRAWALS = {"2026-07-01": [{"transfer_id": "tid-out-old", "amount": 5.0}]}
+
+    @staticmethod
+    def _obj(tmp_path: Any, on_disk: Dict) -> Any:
+        obj = _mk()
+        del obj.read_funding_events
+        del obj.store_funding_events
+        path = tmp_path / "funding_events.json"
+        path.write_text(json.dumps(on_disk))
+        obj.funding_events_filepath = str(path)
+        return obj
+
+    @staticmethod
+    def _on_disk(obj: Any) -> Dict:
+        with open(obj.funding_events_filepath) as file:
+            return json.load(file)
+
+    def test_incoming_fetch_keeps_withdrawals_and_prior_rows(self, tmp_path):
+        """A successful incoming fetch appends to the file instead of replacing it."""
+        obj = self._obj(
+            tmp_path, {"base": self.INCOMING, "base_withdrawals": self.WITHDRAWALS}
+        )
+        new_row = {"transfer_id": "tid-in-new", "amount": 1.0}
+
+        def sfg(address, end_date, all_transfers_by_date, existing_data, chain):
+            all_transfers_by_date["2026-10-28"] = [new_row]
+            yield
+            return True
+
+        obj._fetch_optimism_transfers_safeglobal = sfg
+        _drive(
+            obj._fetch_all_transfers_until_date_optimism(
+                "0xA", "2026-10-28", chain="base"
+            )
+        )
+
+        assert self._on_disk(obj) == {
+            "base": {**self.INCOMING, "2026-10-28": [new_row]},
+            "base_withdrawals": self.WITHDRAWALS,
+        }
+
+    def test_withdrawal_fetch_keeps_incoming(self, tmp_path):
+        """A successful withdrawals fetch keeps the incoming funding history."""
+        obj = self._obj(tmp_path, {"base": self.INCOMING})
+        obj._request_with_retries = _gen_return((True, {"results": [], "next": None}))
+        obj.context.coingecko = MagicMock()
+        obj.params.sleep_time = 1
+
+        _drive(obj._track_erc20_transfers_optimism("0xA", 1793232000, chain="base"))
+
+        assert self._on_disk(obj) == {"base": self.INCOMING, "base_withdrawals": {}}
+
+    def test_mode_fetch_keeps_other_keys(self, tmp_path):
+        """A Mode fetch adds its new date and keeps every other key."""
+        mode_row = {"transfer_id": "tid-mode-old", "type": "token", "amount": 2.0}
+        obj = self._obj(
+            tmp_path,
+            {
+                "mode": {"2026-06-20": [mode_row]},
+                "optimism": self.INCOMING,
+                "optimism_withdrawals": self.WITHDRAWALS,
+            },
+        )
+        new_row = {"transfer_id": "tid-mode-new", "type": "token", "amount": 1.0}
+
+        def token_transfers(address, end_datetime, all_transfers_by_date, fetch_all):
+            all_transfers_by_date["2026-10-28"].append(new_row)
+            yield
+            return True
+
+        obj._fetch_token_transfers_mode = token_transfers
+        obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
+        _drive(obj._fetch_all_transfers_until_date_mode("0xA", "2026-10-28", False))
+
+        assert self._on_disk(obj) == {
+            "mode": {"2026-06-20": [mode_row], "2026-10-28": [new_row]},
+            "optimism": self.INCOMING,
+            "optimism_withdrawals": self.WITHDRAWALS,
+        }
+
+
 class TestErc20OptimismWithdrawalCache:
     """Withdrawal fetcher persistence and early-stop (PR 1.1 + 1.2)."""
 
@@ -8149,7 +8250,7 @@ class TestErc20OptimismWithdrawalCache:
     def test_cold_start_persists_withdrawals_under_new_key(self):
         """First run with empty cache persists under optimism_withdrawals."""
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         store = MagicMock()
         obj.store_funding_events = store
         obj.funding_events = {}
@@ -8174,20 +8275,23 @@ class TestErc20OptimismWithdrawalCache:
     def test_warm_start_early_stops_after_one_page(self):
         """Loop breaks after page 1 when persisted transferIds match API."""
         obj = _mk()
-        obj.read_funding_events = lambda: {
-            "optimism_withdrawals": {
-                "2024-01-01": [
-                    {
-                        "transfer_id": "tid-1",
-                        "from_address": "0xAddr",
-                        "to_address": "0xR",
-                        "amount": 1.0,
-                        "tx_hash": "0xH-tid-1",
-                        "type": "token",
-                    }
-                ]
-            }
-        }
+        obj.read_funding_events = _funding_events_reader(
+            obj,
+            {
+                "optimism_withdrawals": {
+                    "2024-01-01": [
+                        {
+                            "transfer_id": "tid-1",
+                            "from_address": "0xAddr",
+                            "to_address": "0xR",
+                            "amount": 1.0,
+                            "tx_hash": "0xH-tid-1",
+                            "type": "token",
+                        }
+                    ]
+                }
+            },
+        )
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
 
@@ -8216,18 +8320,21 @@ class TestErc20OptimismWithdrawalCache:
     def test_same_day_topup_with_new_transfer_id_lands(self):
         """Same-day top-up with a new transferId is merged, not dropped."""
         obj = _mk()
-        obj.read_funding_events = lambda: {
-            "optimism_withdrawals": {
-                "2024-01-01": [
-                    {
-                        "transfer_id": "tid-morning",
-                        "from_address": "0xAddr",
-                        "amount": 5.0,
-                        "type": "token",
-                    }
-                ]
-            }
-        }
+        obj.read_funding_events = _funding_events_reader(
+            obj,
+            {
+                "optimism_withdrawals": {
+                    "2024-01-01": [
+                        {
+                            "transfer_id": "tid-morning",
+                            "from_address": "0xAddr",
+                            "amount": 5.0,
+                            "type": "token",
+                        }
+                    ]
+                }
+            },
+        )
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
 
@@ -8429,7 +8536,7 @@ class TestErc20OptimismFailureModes:
         Instead the function must return None and skip persistence.
         """
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
 
@@ -8461,13 +8568,16 @@ class TestErc20OptimismFailureModes:
     def test_eligible_only_early_stop_with_mixed_page(self):
         """Mixed-traffic page still trips early-stop when every eligible is seen."""
         obj = _mk()
-        obj.read_funding_events = lambda: {
-            "optimism_withdrawals": {
-                "2024-01-01": [
-                    {"transfer_id": "tid-seen"},
-                ]
-            }
-        }
+        obj.read_funding_events = _funding_events_reader(
+            obj,
+            {
+                "optimism_withdrawals": {
+                    "2024-01-01": [
+                        {"transfer_id": "tid-seen"},
+                    ]
+                }
+            },
+        )
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
 
@@ -8519,13 +8629,16 @@ class TestErc20OptimismFailureModes:
         outgoing tokens.
         """
         obj = _mk()
-        obj.read_funding_events = lambda: {
-            "optimism_withdrawals": {
-                "2024-01-01": [
-                    {"transfer_id": "tid-usdc-seen"},
-                ]
-            }
-        }
+        obj.read_funding_events = _funding_events_reader(
+            obj,
+            {
+                "optimism_withdrawals": {
+                    "2024-01-01": [
+                        {"transfer_id": "tid-usdc-seen"},
+                    ]
+                }
+            },
+        )
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
 
@@ -8641,7 +8754,7 @@ class TestProxySafePagination:
         stays inside the configured proxy URL end-to-end.
         """
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
         obj.params.safe_api_url = "https://safe-proxy.example.com"
@@ -8696,7 +8809,7 @@ class TestProxySafePagination:
         )
 
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
         obj.params.safe_api_url = "https://safe-proxy.example.com"
@@ -8736,7 +8849,7 @@ class TestProxySafePagination:
         URL; asserts the second request stays on the configured proxy URL.
         """
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
         obj.params.safe_api_url = "https://safe-proxy.example.com"
@@ -8793,7 +8906,7 @@ class TestProxySafePagination:
         )
 
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
         obj.params.safe_api_url = "https://safe-proxy.example.com"
@@ -8839,7 +8952,7 @@ class TestProxySafePagination:
         page 2 fetches starting at offset=50, not offset=100.
         """
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
         obj.params.safe_api_url = "https://safe-proxy.example.com"
@@ -8896,7 +9009,7 @@ class TestProxySafePagination:
         is too small to differentiate ``len(transfers)`` from a literal 1).
         """
         obj = _mk()
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.funding_events = {}
         obj.params.safe_api_url = "https://safe-proxy.example.com"
@@ -9805,7 +9918,7 @@ class TestDirectReadWs1EdgeCoverage:
         o = self._obj()
         o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
         o.funding_events = {}
-        o.read_funding_events = lambda: {}
+        o.read_funding_events = _funding_events_reader(o, {})
         o.store_funding_events = MagicMock()
         _drive(o._track_erc20_transfers_optimism("0xS", 1704067200))
         # Persisted with an empty transfer_id (no dedup-set entry).
@@ -10317,7 +10430,7 @@ class TestTrackErc20TransfersBaseRouting:
         """
         obj = _mk()
         obj.funding_events = {}
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         td = {
             "executionDate": "2024-02-01T00:00:00Z",
@@ -10344,7 +10457,7 @@ class TestTrackErc20TransfersBaseRouting:
         """
         obj = _mk()
         obj.funding_events = {}
-        obj.read_funding_events = lambda: {}
+        obj.read_funding_events = _funding_events_reader(obj, {})
         obj.store_funding_events = MagicMock()
         obj.params.safe_api_url = "https://safe.api"
         obj.params.safe_api_chain_slugs = {"optimism": "oeth", "base": "base"}

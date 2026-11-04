@@ -23,6 +23,7 @@ import json
 import logging
 import math
 import random
+import re
 import time
 import types
 from abc import ABC
@@ -2965,8 +2966,10 @@ class LiquidityTraderBaseBehaviour(
     def query_service_rewards(
         self, chain: str
     ) -> Generator[None, None, Optional[Dict]]:
-        """Query subgraph for service rewards using service query"""
+        """Return service data; {} if absent, None if no answer."""
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
+        # Gateway URLs embed an API key; keep it out of the logs.
+        logged_endpoint = re.sub(r"/api/[^/]+/", "/api/<redacted>/", str(endpoint))
         service_id = self.params.on_chain_service_id
 
         query = {"query": f"""
@@ -2998,6 +3001,13 @@ class LiquidityTraderBaseBehaviour(
             except (json.JSONDecodeError, TypeError, ValueError) as e:
                 self.context.logger.error(f"Failed to parse subgraph response: {e}")
                 return None
+            # The Graph gateway reports auth and indexer errors as 200 + errors.
+            errors = data.get("errors")
+            if errors:
+                self.context.logger.error(
+                    f"Subgraph at {logged_endpoint} returned errors: {errors}"
+                )
+                return None
             service_data = (data.get("data") or {}).get("service")
             if service_data:
                 self.context.logger.info(
@@ -3006,14 +3016,27 @@ class LiquidityTraderBaseBehaviour(
                 return service_data
             else:
                 self.context.logger.warning(
-                    f"No service data found for service ID {service_id}"
+                    f"No service data found for service ID {service_id} "
+                    f"at {logged_endpoint}"
                 )
-                return None
+                return {}
 
         self.context.logger.error(
-            f"Failed to query subgraph: {response.status_code} - {response.body}"  # type: ignore[str-bytes-safe]
+            f"Failed to query subgraph at {logged_endpoint}: "
+            f"{response.status_code} - {response.body}"  # type: ignore[str-bytes-safe]
         )
         return None
+
+    def _stamp_reward_update(self, chain: str) -> Generator[None, None, None]:
+        """Record the reward update time, so the next query waits for the interval."""
+        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
+        stamped = yield from self._write_kv(
+            {update_key: str(int(self._get_current_timestamp()))}
+        )
+        if not stamped:
+            self.context.logger.error(
+                f"KV write failed recording the reward update time for {chain}"
+            )
 
     def update_accumulated_rewards_for_chain(
         self, chain: str
@@ -3030,8 +3053,19 @@ class LiquidityTraderBaseBehaviour(
         # Query service data directly using simple GraphQL query
         service_data = yield from self.query_service_rewards(chain)
 
+        if service_data is None:
+            self.context.logger.info(
+                f"No answer from the subgraph for {chain}; retrying next period"
+            )
+            return
+
+        # Stamp empty answers too, or an unindexed service is re-queried every period.
         if not service_data:
-            self.context.logger.info(f"No service data found for {chain}")
+            yield from self._stamp_reward_update(chain)
+            self.context.logger.info(
+                f"No service data found for {chain}; next query in "
+                f"{REWARD_UPDATE_INTERVAL // 3600}h"
+            )
             return
 
         # Get olasRewardsEarned directly from service data
@@ -3050,7 +3084,12 @@ class LiquidityTraderBaseBehaviour(
             rewards_key = f"accumulated_rewards_{chain}_{olas_address.lower()}"
 
             # Store the total rewards directly (not incremental)
-            yield from self._write_kv({rewards_key: str(total_rewards)})
+            stored = yield from self._write_kv({rewards_key: str(total_rewards)})
+            if not stored:
+                self.context.logger.error(
+                    f"KV write failed storing accumulated rewards for {chain}"
+                )
+                return
 
             self.context.logger.info(
                 f"Updated rewards for {chain}: Total accumulated: {total_rewards} OLAS "
@@ -3058,10 +3097,7 @@ class LiquidityTraderBaseBehaviour(
                 f"Timestamp: {service_data.get('blockTimestamp', 'N/A')})"
             )
 
-        # Mark as updated
-        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
-        yield from self._write_kv({update_key: str(int(self._get_current_timestamp()))})
-
+        yield from self._stamp_reward_update(chain)
         self.context.logger.info(f"Completed reward update for {chain}")
 
     def get_accumulated_rewards_for_token(

@@ -21,6 +21,8 @@
 
 # pylint: skip-file
 
+import math
+
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
@@ -35,6 +37,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_liquidity_for_amount1,
     get_liquidity_for_amounts,
     get_sqrt_ratio_at_tick,
+    sqrt_price_x96_at_tick,
 )
 
 
@@ -308,3 +311,10 @@ class TestGetLiquidityForAmounts:
         sqrt_b = get_sqrt_ratio_at_tick(100)
         result = get_liquidity_for_amounts(sqrt_a, sqrt_a, sqrt_b, 10**18, 10**18)
         assert result > 0
+
+
+@pytest.mark.parametrize("tick", [-200_000, -10, 0, 10, 200_000])
+def test_sqrt_price_x96_at_tick_rises_with_the_tick(tick: int) -> None:
+    """sqrtPriceX96 is sqrt(1.0001 ** tick) * 2**96, so it grows with the tick."""
+    expected = math.sqrt(1.0001**tick) * 2**96
+    assert sqrt_price_x96_at_tick(tick) == pytest.approx(expected, rel=1e-9)

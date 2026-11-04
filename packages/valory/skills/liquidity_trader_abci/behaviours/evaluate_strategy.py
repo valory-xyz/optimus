@@ -4222,35 +4222,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def _get_cached_cl_pool_data(
-        self, chain: str
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Retrieve cached CL pool data from KV store."""
-        kv_key = f"velodrome_cl_pool_{chain}"
-
-        db_data = yield from self._read_kv(keys=(kv_key,))
-
-        if db_data and db_data.get(kv_key):
-            try:
-                cached_data = json.loads(db_data[kv_key])
-
-                # Check if cache was invalidated
-                if cached_data.get("invalidated"):
-                    self.context.logger.info(
-                        f"Cache for chain {chain} was invalidated, treating as no cache"
-                    )
-                    return None
-
-                self.context.logger.info(
-                    f"Retrieved cached CL pool data for chain {chain}: pool={cached_data.get('pool_address')}"
-                )
-                return cached_data
-            except (json.JSONDecodeError, TypeError) as e:
-                self.context.logger.error(f"Error parsing cached CL pool data: {e}")
-                return None
-
-        return None
-
     def _should_use_cached_cl_data(self, cached_data: Dict[str, Any]) -> bool:
         """Check if cached CL pool data is still valid."""
         current_timestamp = cast(

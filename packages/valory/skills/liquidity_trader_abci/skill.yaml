@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeihpcaip2rjmczq5arpguqyhjabfwnh4iuus4bet2wctedojd5h73m
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
   behaviours/agent_top_up.py: bafybeia4xeaipnrr2d2xy3rugbzrs4hppsebjd6gfcdy46bbov6po3e4rm
-  behaviours/base.py: bafybeid3smsgedyykmh3bjsa7tjoovvgvvikdgcqvbfl7fm3brfevyikgq
+  behaviours/base.py: bafybeihifttfqow7gupfymju2fuwzcqm7d2ibeg7p42qecque6ztv66r6u
   behaviours/call_checkpoint.py: bafybeibewplociomxxwyghkbnxj6llyg4vmtudcsdw3sgwemo6jlir2qge
   behaviours/check_staking_kpi_met.py: bafybeif5otdf6drh67omqypcypwm6nql34lu5wfclszmmm4x4pvpywp2ja
-  behaviours/decision_making.py: bafybeiepskkabyuyrrmddtfzkwo7bo57zxyolxr3ayldiw75e4h7b4qb2a
-  behaviours/evaluate_strategy.py: bafybeibwsejazf72jcm7tkb27f6gqq7ufaih3vkvmgzrqr7hyoge4c7o6m
-  behaviours/fetch_strategies.py: bafybeigjt7tmo3h7mzvhzom32iwr2ybggwb5td2kjdbwr2tkay7l5wj7ze
+  behaviours/decision_making.py: bafybeiexyn4xud7ctqm7tjk5nbby2vq37epdpt2cek5hydpyoqxhymczsq
+  behaviours/evaluate_strategy.py: bafybeih4m5eepvm4lsfw7ws2p53y72oizvmwnqz6rzieov7tnydohpie5y
+  behaviours/fetch_strategies.py: bafybeibondydvhhjymr7mcagsihoszmdp74f6ckxhhypno7stx5kbiacb4
   behaviours/get_positions.py: bafybeiahv2p2x2pprlmghzypyjp3axfsuuerwspg6jhlpep7sr2tzvje4i
   behaviours/post_tx_settlement.py: bafybeic6bqmuntjk623v5o66jt65hlol5xbcxlkpnv5w7xic7zzwz3zgii
   behaviours/round_behaviour.py: bafybeidyq2pvzsqzunra7tfsmtavapg2xvl4irx73y532zgnbq6rnacwka
@@ -24,13 +24,13 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeibmz4ppz24yq2xpqzyd7yjayfpyptf3p6pk4zqtgjrqe2j56vofvq
+  models.py: bafybeiffa7dtjapclsafe3fsrhbsk3krgvg7bc2vt4x52d3xbt6ttsnozy
   payloads.py: bafybeiaeabfwogbgl4zgad27buiksygixttgzpai236aauctx6wlot7icy
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
   pools/balancer.py: bafybeicmjq7itdf6hnsmbhxktb42ghzbdwmll56o66ex2ids6oiiql56ki
   pools/uniswap.py: bafybeihoegxrjsq6al3coxtrf5ljhewjz5m2py6nwwzefyoo7molc2fdsi
-  pools/velodrome.py: bafybeig44rel5bjmqk45f3ibj4px3ikyq4eedqc6zarade5wh25seucwzi
+  pools/velodrome.py: bafybeibe4bnnoc2u4fcjqwfsq6dmj4g7xlcmaqvgey2warkxwq4emixlcu
   rounds.py: bafybeifiosdc4wnyu2oq4ed37wscanjgkm4qetkgxdqkq36b5td5dtql44
   rounds_info.py: bafybeifbvr3fpzdbdmlfwczcbmonok6kb6l6fr5gwzmyyly2jcntyjgnoy
   states/__init__.py: bafybeie5h3g3ndkq4c7tnv6c25tp64fn3jwyaatsm4buwyz2qiakpecgoy
@@ -57,8 +57,9 @@ fingerprint:
   tests/behaviours/test_decision_making_aero.py: bafybeihygsjroz4kn4keprqlmvu2v4fsphki63pzyg7rit3g5neivbtzrq
   tests/behaviours/test_evaluate_strategy.py: bafybeicbosouuwa5d7hgge2xj3atyzb7jszlqmb7bldweldwdez2m6im2i
   tests/behaviours/test_evaluate_strategy_aero.py: bafybeialvblefueoa3qivt2ubseh3y6jdqs35sf74tlnovwourqtkc6x6a
-  tests/behaviours/test_fetch_strategies.py: bafybeigqpos5mgh3xihto6jmt725njwnfqu6nnox4vtvov7ebvhc5psf6m
+  tests/behaviours/test_fetch_strategies.py: bafybeifhnkiy6643c2jtjuutsbcsiypusnw2nado2fvluu3au5ta7cq33m
   tests/behaviours/test_fetch_strategies_aero.py: bafybeicfe5tphkiqk4f4bc3r3t7vvnasscpqo7ohyfyupwhkx4b2yhaomu
+  tests/behaviours/test_fetch_strategies_reconcile.py: bafybeibwy4sbaqq6r6hejjv4riynm7dr6p7lbfw5qnyewi33krsjhltqga
   tests/behaviours/test_get_positions.py: bafybeiazf6f4lx2ycjxa5zthsufvrnvaqjkvvzfnf5ywuleoctoji5hchu
   tests/behaviours/test_post_tx_settlement.py: bafybeia33zapyb6pxx5g5gwpm5obouqqc7xnoulpvsddiy5wb6auq3d6sy
   tests/behaviours/test_round_behaviour.py: bafybeibktct2ifenyuxetu3nqhsrxg6rdj2enxxapu6x5m5mecpcwxn4je
@@ -68,8 +69,8 @@ fingerprint:
   tests/pools/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/pools/test_balancer.py: bafybeidj3dmmzkjc32dznwdqnuvdsvlwa27jsoazvjvvikbu57bhlze3qq
   tests/pools/test_uniswap.py: bafybeib5rnfzaya4an2t4odvca23ee5id7ejwbsjrfjnuy22jytg76b5qi
-  tests/pools/test_velodrome.py: bafybeifdjr54nfxh5dkd2cbsi2xppgsnjs44ra4c7f4dahiffzqa3oprwy
-  tests/pools/test_velodrome_aero.py: bafybeieb4e3vtu5d4m4fl4o4su7e4qttcups2iugb7q5ankskpentydfue
+  tests/pools/test_velodrome.py: bafybeicoku2o7jnk4tz6clpq6a643fj5p3ghz36kbaelz23tl5ygwhxts4
+  tests/pools/test_velodrome_aero.py: bafybeig6opgnpwmklxkeak7ydewiryoytijhyqptu64ubnsitmjjdo6dae
   tests/states/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/states/test_agent_top_up.py: bafybeigifox4xpeldejkey3tmze7vyzt6fnocz3odhs3nheke42q3i55yi
   tests/states/test_base.py: bafybeicao5gyuph5jniva65gmuezi3uodffwv5qn7a3w7lti6j6tpqznbi
@@ -85,7 +86,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeihjuy3fpp3vf4xp5736yxnp4knfsxa733qfpego3w6v65of5nm4za
+  tests/test_models.py: bafybeibileeuxyjr2i7xr3p3blxivzyptjuel36733q2ywa3gt3tizjv7e
   tests/test_payloads.py: bafybeihcdudmgszyf45ufvo2wimggakqoxpopcaq3ymytp37mvrfdfp5hi
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
   tests/test_rounds.py: bafybeigt3f7t7tjnqgxaquzo3yqym53aq2thoryc4u2wijdkf6cvyyz2uu
@@ -95,15 +96,17 @@ fingerprint:
   tests/utils/test_agent_topup.py: bafybeibsw65zeheud5wzccjvtwjbuhnyj6qixobq2qvuvdps443hvr4cqy
   tests/utils/test_balancer_math.py: bafybeig4aixtnrm3oqewfba7m3v7boc6htpetkcdcpf35y35xzjpwh4drq
   tests/utils/test_feed.py: bafybeih77one3kcghcqkuycdv4idtnmgkeclx6md7qlclae2qro2y6h3nq
+  tests/utils/test_multicall.py: bafybeibotazduw64ls4v6wpohfrzbk2ypfk56qif7b4fwfybjw5uwx3b4q
   tests/utils/test_protocol_validation.py: bafybeibqqzpz3a63zklyxsusren2vgwnyu4jcb34wka24d2szctfciewuy
-  tests/utils/test_tick_math.py: bafybeie6vfua3xi25qhgtwfvuayzbxe3dnwd72jmiyqzcgf2jlxafixj4m
+  tests/utils/test_tick_math.py: bafybeih2ak57rmu34j5d6oraikn2reiujisjogjzm7uvn2acjvpp2cuj2u
   utils/__init__.py: bafybeiefovpcxnqaggn65tcrvbxguk763wo74y4mj2wevpcdv2hvkuskle
   utils/activity_goal.py: bafybeih6ljtcdoc3uec24jjelzqrmg5s4tdpywwjatkfxngdtncp3xqkha
   utils/agent_topup.py: bafybeifi4eu6jif5oe76rkkeosymmnxmc4mxst3valanm7akfjpdmmcpjm
   utils/balancer_math.py: bafybeiftkdxicyxcwbkncwhmnoafjaalratvijqdcj2kvqygtto62dbfhi
   utils/feed.py: bafybeib6mmldhlb4rqtbnf6w3hrceybceeifxq2asmbsgapmk5whe7t5ca
+  utils/multicall.py: bafybeigb7sdcffuysifc7hhjkwlwl27gm6josghg742qznowbk7ktixa2a
   utils/protocol_validation.py: bafybeihzmkyug6cnsjgarutukq5q3biyhtrz2tyb64jva7zvwmle7kyfhq
-  utils/tick_math.py: bafybeiehijphwni4zfu57rhhbgdyxn5evyokvvckiwzmldmrbzg3nd7cmy
+  utils/tick_math.py: bafybeibjhnmg433x3kg6qzgb6vjvoofelyldwuelsndjvw5u3pvqgucr3y
 fingerprint_ignore_patterns: []
 connections:
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
@@ -124,11 +127,12 @@ contracts:
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeibbjzhu6vzrliz5kbf27f76wulcr5ngebvbqtneybolko3myisw4q
 - valory/velodrome_router:0.1.0:bafybeifokp7em6ziibuftu7e77u3x72k7dfidrmmxnfisxuiwnh64px42q
 - valory/velodrome_cl_pool:0.1.0:bafybeidwjgc3oja3itgkl5d35txrcyik337bqaiojsbsr65twuuhvg6vvm
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeibirsub7leghnz43geueisn756r3zdvyluwrsznttoepsjxqj6nha
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeiddfn5f6oxuv6pjg5vm36bxjcpgb6cca37utc2xy23btgbkbsapre
 - valory/velodrome_pool:0.1.0:bafybeigpjgshmzw3b3na76jk7ps4xsdpbbrfekvf5fbdmkepugmekksrke
 - valory/velodrome_gauge:0.1.0:bafybeiehys5w47mznpuocwf5uzpjve6vyyzhachh3lvgina2xuvo4jyupi
 - valory/velodrome_voter:0.1.0:bafybeia4zguqn2dih6kswnlib6ssfvanisauz3clz5iafiz7xwrr6aglea
 - valory/velodrome_cl_gauge:0.1.0:bafybeieraap2rnlxbltxr5wlezw6gndqomwefuwzyqyfrgwh7bvm3qtq5q
+- valory/multicall3:0.1.0:bafybeif6bjsejf4vimvxxehxvhxkbankj733ctaup5cx7bdrs6gisierlq
 - valory/aero_metarouter:0.1.0:bafybeibzlccmbusjtfbma7lutmd5vrmqjqc55jroe2s7mouyubh34c4xre
 - valory/aero_cl_gauge_factory:0.1.0:bafybeiecm2vese2ecuveflclctkn6hfcdy7huzstbparem7o53bfsdpfva
 - valory/velodrome_slipstream_helper:0.1.0:bafybeifsp624jkjurgvyey5z4crmltx5zo6x4vit7b6ll7fjafstalofsq
@@ -274,6 +278,10 @@ models:
       slippage_for_swap: 0.08
       x402_swap_slippage: 0.05
       slippage_tolerance: 0.01
+      min_pool_entry_value_usd: 0.5
+      reconcile_log_window_blocks: 10000
+      reconcile_log_lookback_blocks: 302400
+      reconcile_log_min_window_blocks: 500
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
       balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C","base":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5"}'
       uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'

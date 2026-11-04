@@ -55,7 +55,6 @@ def _mk():
     obj.current_positions = []
     obj.portfolio_data = {}
     obj.assets = {}
-    obj.whitelisted_assets = {}
     obj.funding_events = {}
     obj.agent_performance = {}
     obj.initial_investment_values_per_pool = {}
@@ -128,10 +127,7 @@ class TestFetchStrategiesWithdrawalGate:
             }
         )
         obj._write_kv = _gen_none
-        obj.whitelisted_assets = {"optimism": {"0xT": "TKN"}}
-        obj.read_whitelisted_assets = MagicMock()
         obj._get_current_timestamp = lambda: 100
-        obj._track_whitelisted_assets = _gen_none
         obj.calculate_user_share_values = _gen_none
         obj._update_agent_performance_metrics = MagicMock()
         obj.wait_until_round_end = _gen_none
@@ -870,50 +866,6 @@ class TestFetchHistoricalEthPrice:
         ):
             result = _drive(obj._fetch_historical_eth_price("01-01-2024"))
         assert result == 1.0
-
-
-class TestGetHistoricalPriceForDate:
-    """TestGetHistoricalPriceForDate."""
-
-    def test_zero_address(self):
-        """Test zero address."""
-        obj = _mk()
-        obj._fetch_historical_eth_price = _gen_return(2500.0)
-        gen = obj._get_historical_price_for_date(
-            ZERO_ADDRESS, "ETH", "01-01-2024", "optimism"
-        )
-        result = _drive(gen)
-        assert result == 2500.0
-
-    def test_no_coingecko_id(self):
-        """Test no coingecko id."""
-        obj = _mk()
-        obj.get_coin_id_from_symbol = lambda s, c: None
-        gen = obj._get_historical_price_for_date("0xTOKEN", "FOO", "01-01-2024", "mode")
-        result = _drive(gen)
-        assert result is None
-
-    def test_with_coingecko_id(self):
-        """Test with coingecko id."""
-        obj = _mk()
-        obj.get_coin_id_from_symbol = lambda s, c: "foo-coin"
-        obj._fetch_historical_token_price = _gen_return(42.0)
-        gen = obj._get_historical_price_for_date("0xTOKEN", "FOO", "01-01-2024", "mode")
-        result = _drive(gen)
-        assert result == 42.0
-
-    def test_exception(self):
-        """Test exception."""
-        obj = _mk()
-
-        def boom(s, c):
-            """Boom."""
-            raise RuntimeError("fail")
-
-        obj.get_coin_id_from_symbol = boom
-        gen = obj._get_historical_price_for_date("0xTOKEN", "FOO", "01-01-2024", "mode")
-        result = _drive(gen)
-        assert result is None
 
 
 class TestUpdateAgentPerformanceMetrics:
@@ -4431,128 +4383,6 @@ class TestFetchEthTransfersMode:
         assert result is True
 
 
-class TestTrackWhitelistedAssets:
-    """TestTrackWhitelistedAssets."""
-
-    def test_empty_chains(self):
-        """Test empty chains."""
-        obj = _mk()
-        obj.params.target_investment_chains = []
-        obj.store_whitelisted_assets = MagicMock()
-        gen = obj._track_whitelisted_assets()
-        _drive(gen)
-
-    def test_skip_non_target_chain(self):
-        """Test skip non target chain."""
-        obj = _mk()
-        obj.params.target_investment_chains = ["optimism"]
-        obj.store_whitelisted_assets = MagicMock()
-        obj.sleep = _gen_none
-        # Only iterate over chains that are in target chains
-        gen = obj._track_whitelisted_assets()
-        _drive(gen)
-
-    def test_price_drop(self):
-        """Test price drop."""
-        obj = _mk()
-        obj.params.target_investment_chains = ["mode"]
-        obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
-        obj.store_whitelisted_assets = MagicMock()
-        obj.sleep = _gen_none
-        # Yesterday price 100, today price 90 -> -10% drop
-        call_count = [0]
-
-        def fake_price(*a, **kw):
-            """Fake price."""
-            call_count[0] += 1
-            yield
-            return 100.0 if call_count[0] == 1 else 90.0
-
-        obj._get_historical_price_for_date = fake_price
-        gen = obj._track_whitelisted_assets()
-        _drive(gen)
-
-    def test_no_price(self):
-        """Test no price."""
-        obj = _mk()
-        obj.params.target_investment_chains = ["mode"]
-        obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
-        obj.store_whitelisted_assets = MagicMock()
-        obj.sleep = _gen_none
-        obj._get_historical_price_for_date = _gen_return(None)
-        gen = obj._track_whitelisted_assets()
-        _drive(gen)
-
-    def test_price_exception(self):
-        """Test price exception."""
-        obj = _mk()
-        obj.params.target_investment_chains = ["mode"]
-        obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
-        obj.store_whitelisted_assets = MagicMock()
-        obj.sleep = _gen_none
-
-        def boom(*a, **kw):
-            """Boom."""
-            raise RuntimeError("fail")
-            yield  # noqa
-
-        obj._get_historical_price_for_date = boom
-        gen = obj._track_whitelisted_assets()
-        _drive(gen)
-
-    def test_price_stable(self):
-        """Price stable (> -5%), no removal."""
-        obj = _mk()
-        obj.params.target_investment_chains = ["mode"]
-        obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
-        obj.store_whitelisted_assets = MagicMock()
-        obj.sleep = _gen_none
-        call_count = [0]
-
-        def fake_price(*a, **kw):
-            """Fake price."""
-            call_count[0] += 1
-            yield
-            return 100.0 if call_count[0] == 1 else 98.0  # -2%, above -5%
-
-        obj._get_historical_price_for_date = fake_price
-        fake_wa = {"mode": {"0xT": "TKN"}}
-        with patch(
-            "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS",
-            fake_wa,
-        ):
-            gen = obj._track_whitelisted_assets()
-            _drive(gen)
-        assert "0xT" in obj.whitelisted_assets["mode"]
-
-    def test_address_removal_branch(self):
-        """Cover lines 325->334, 328-329: address in whitelisted_assets removed."""
-        obj = _mk()
-        obj.params.target_investment_chains = ["mode"]
-        obj.whitelisted_assets = {"mode": {"0xT": "TKN"}}
-        obj.store_whitelisted_assets = MagicMock()
-        obj.sleep = _gen_none
-        call_count = [0]
-
-        def fake_price(*a, **kw):
-            """Fake price."""
-            call_count[0] += 1
-            yield
-            return 100.0 if call_count[0] == 1 else 80.0  # -20% drop
-
-        obj._get_historical_price_for_date = fake_price
-        # Patch the WHITELISTED_ASSETS global so the loop finds our token
-        fake_wa = {"mode": {"0xT": "TKN"}}
-        with patch(
-            "packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS",
-            fake_wa,
-        ):
-            gen = obj._track_whitelisted_assets()
-            _drive(gen)
-        assert "0xT" not in obj.whitelisted_assets["mode"]
-        obj.store_whitelisted_assets.assert_called()
-
-
 class TestHavePositionsChangedClosed:
     """TestHavePositionsChangedClosed."""
 
@@ -5532,10 +5362,7 @@ class TestAsyncAct:
                 type(obj), "shared_state", new_callable=PropertyMock
             ) as mock_ss:
                 mock_ss.return_value = MagicMock()
-                obj.whitelisted_assets = {"optimism": {"0xT": "TKN"}}
-                obj.read_whitelisted_assets = MagicMock()
                 obj._get_current_timestamp = lambda: 100
-                obj._track_whitelisted_assets = _gen_none
                 obj.calculate_user_share_values = _gen_none
                 obj.store_portfolio_data = MagicMock()
                 obj._update_agent_performance_metrics = MagicMock()
@@ -5581,10 +5408,7 @@ class TestAsyncAct:
             ) as mock_ss:
                 mock_ss.return_value = MagicMock()
                 obj.assets = {}
-                obj.whitelisted_assets = {}
-                obj.store_whitelisted_assets = MagicMock()
                 obj._get_current_timestamp = lambda: 100000
-                obj._track_whitelisted_assets = _gen_none
                 obj.calculate_user_share_values = _gen_none
                 obj.store_portfolio_data = MagicMock()
                 obj._update_agent_performance_metrics = MagicMock()
@@ -5595,67 +5419,6 @@ class TestAsyncAct:
                 gen = obj.async_act()
                 _drive(gen)
                 obj.set_done.assert_called_once()
-
-    def test_invalid_last_updated_timestamp(self):
-        """Cover the ValueError branch on int(last_updated)."""
-        obj = _mk()
-        bm = MagicMock()
-        bm.local.return_value.__enter__ = MagicMock(return_value=None)
-        bm.local.return_value.__exit__ = MagicMock(return_value=False)
-        bm.consensus.return_value.__enter__ = MagicMock(return_value=None)
-        bm.consensus.return_value.__exit__ = MagicMock(return_value=False)
-        obj.context.benchmark_tool.measure.return_value = bm
-        obj.context.agent_address = "0xAgent"
-        obj.current_positions = []
-
-        with patch.object(
-            type(obj), "synchronized_data", new_callable=PropertyMock
-        ) as mock_sd:
-            mock_sd.return_value = MagicMock(period_count=1)
-
-            obj.params.target_investment_chains = ["optimism"]
-            obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
-            obj.params.available_strategies = {}
-
-            obj._get_native_balance = _gen_return(1.0)
-            obj._detect_and_invalidate_on_inflow = _gen_none
-            obj._read_investing_paused = _gen_return(False)
-
-            read_call = [0]
-
-            def fake_read(*a, **kw):
-                """Fake read."""
-                read_call[0] += 1
-                yield
-                if read_call[0] == 1:
-                    return {
-                        "selected_protocols": json.dumps(["uniswapV3"]),
-                        "trading_type": "balanced",
-                    }
-                elif read_call[0] == 2:
-                    return {"last_whitelisted_updated": "bad-timestamp"}
-                return {}
-
-            obj._read_kv = fake_read
-            obj._write_kv = _gen_none
-
-            with patch.object(
-                type(obj), "shared_state", new_callable=PropertyMock
-            ) as mock_ss:
-                mock_ss.return_value = MagicMock()
-                obj.whitelisted_assets = {"optimism": {}}
-                obj.read_whitelisted_assets = MagicMock()
-                obj._get_current_timestamp = lambda: 100
-                obj._track_whitelisted_assets = _gen_none
-                obj.calculate_user_share_values = _gen_none
-                obj.store_portfolio_data = MagicMock()
-                obj._update_agent_performance_metrics = MagicMock()
-                obj.send_a2a_transaction = _gen_none
-                obj.wait_until_round_end = _gen_none
-                obj.set_done = MagicMock()
-
-                gen = obj.async_act()
-                _drive(gen)
 
     def test_inflow_detector_runs_only_for_safe_api_chains(self):
         """Pin the per-cycle inflow-detect hoist to ``safe_api_chain_slugs``.
@@ -5731,10 +5494,7 @@ class TestAsyncAct:
                 type(obj), "shared_state", new_callable=PropertyMock
             ) as mock_ss:
                 mock_ss.return_value = MagicMock()
-                obj.whitelisted_assets = {"optimism": {"0xT": "TKN"}}
-                obj.read_whitelisted_assets = MagicMock()
                 obj._get_current_timestamp = lambda: 100
-                obj._track_whitelisted_assets = _gen_none
                 obj.calculate_user_share_values = _gen_none
                 obj.store_portfolio_data = MagicMock()
                 obj._update_agent_performance_metrics = MagicMock()

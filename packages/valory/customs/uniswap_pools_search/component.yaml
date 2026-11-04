@@ -10,8 +10,8 @@ fingerprint:
   __init__.py: bafybeihtmxfvz5vio5m3x6w356swgbhzjke3eirjk665bxdg3qvcbtoag4
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/conftest.py: bafybeiefzxmn3hvzjfydpkc4hbvzpggavakz3j4fmydafv57nbjoztwnnq
-  tests/test_uniswap_pools_search.py: bafybeig7verzbifcswlv6ycdxaquafqx6mn4wvmaruzmtrap6ds4wswyli
-  uniswap_pools_search.py: bafybeihhe4a5jvnp2mezsnx5xzslkns4te3yzcf2gfjhdyc2ggfi4phshi
+  tests/test_uniswap_pools_search.py: bafybeiexk56pe6wyodtlmbr52z4fh3wzuin7e5n7af5ng6zfazra6edyya
+  uniswap_pools_search.py: bafybeic7t4ha6d5z677274he7spvcu2d4vredvc3jvmenloedq2qlftc2u
 fingerprint_ignore_patterns: []
 entry_point: uniswap_pools_search.py
 callable: run

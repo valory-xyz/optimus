@@ -784,7 +784,6 @@ def calculate_metrics(
         "depth_score": depth_score,
     }
 
-    # An unreadable APR is left out, so the position keeps its last one
     apr = get_aggregator_apr(position["pool_address"])
     if apr is not None:
         metrics["apr"] = apr

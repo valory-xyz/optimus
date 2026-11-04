@@ -161,8 +161,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.send_actions(actions)
                 return
 
-            # The trailing stop-loss compares each open position's live APR
-            # with its entry APR, so the APRs are refreshed first.
+            # The trailing stop-loss needs each open position's live APR.
             yield from self.update_position_metrics()
 
             (
@@ -958,7 +957,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # 3. After 12 days, check new TiP conditions in order:
             #    a. Trailing stop-loss
             #    b. Position value check
-            #    c. Opportunity cost check (inactive, see 3c)
+            #    c. Opportunity cost check
             #    d. Cost recovery (traditional)
 
             # Get entry APR with backward compatibility
@@ -1345,8 +1344,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get effective yield of the best available opportunity (Vby) with SMA
 
         Applies short look-back SMA to advertised yields to dampen transient spikes.
-        It feeds the opportunity cost check, which is inactive: during the TiP
-        filters, trading_opportunities is still empty.
 
         :return: Effective daily yield as decimal, or None if unavailable.
         :rtype: Optional[float]
@@ -1634,12 +1631,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def update_position_metrics(self) -> Generator[None, None, None]:
         """Refresh the metrics, including the live APR, of the open positions.
-
-        A position is refreshed once per METRICS_UPDATE_INTERVAL, and a failed
-        read counts as a refresh: a source that is down is retried at the next
-        interval, not every period, and the TiP checks keep the stored APR
-        until then. Only finite values of POSITION_METRICS are stored, so a
-        metric that was not read keeps its last value.
 
         :yield: the strategy download and strategy run requests.
         """

@@ -902,7 +902,7 @@ class TestCalculateMetrics:
         return_value=-0.05,
     )
     def test_unlisted_aggregator_leaves_apr_out(self, *_: MagicMock) -> None:
-        """An aggregator the API no longer lists gives no APR rather than a zero."""
+        """An aggregator the API no longer lists gives no APR."""
         position = {"token0_symbol": "WETH", "whitelistedSilos": [], "pool_address": "0x1"}
         with patch.object(al_module, "fetch_aggregators", return_value=[]):
             result = calculate_metrics(position, "key")
@@ -913,7 +913,7 @@ class TestCalculateMetrics:
         "apy", [{}, None, {"total": None}, {"total": "0.04"}], ids=str
     )
     def test_listed_aggregator_without_total_apy_leaves_apr_out(self, apy: Any) -> None:
-        """A listed aggregator without a numeric apy.total gives no APR rather than a zero."""
+        """A listed aggregator without a numeric apy.total gives no APR."""
         position = {"token0_symbol": "WETH", "whitelistedSilos": [], "pool_address": "0x1"}
         listed = {"address": "0x1", "apy": apy}
         with patch.object(

@@ -586,11 +586,7 @@ class TestUpdatePositionMetrics:
         assert position["last_metrics_update"] == (now if refreshed else now - age)
 
     def test_metrics_without_apr_keep_the_last_apr(self):
-        """Metrics with no live APR keep the stored one and say so.
-
-        The attempt still counts as the refresh, so the APR is read again at
-        the next interval, not every period.
-        """
+        """Metrics with no live APR keep the stored one and say so."""
         b = _mk()
         now = int(time.time())
         b._get_current_timestamp = lambda: now
@@ -3185,13 +3181,7 @@ class TestAsyncAct:
 
 
 class TestExitChecksThroughAsyncAct:
-    """The trailing stop-loss fires from async_act with a live strategy run.
-
-    The pool strategy and the real max_apr_selection hyper strategy are
-    exec'd from source as in production, and the pool strategy runs off the
-    FSM thread. Only consensus, the KV store, token decimals, SMA prices and
-    the transaction builder are stubbed.
-    """
+    """The trailing stop-loss fires from async_act with a live strategy run."""
 
     # Like a live read of a held pool too quiet for risk metrics: the APR is
     # read, the risk metrics are not.
@@ -5220,12 +5210,7 @@ class TestMetricsRunInputs:
         return f
 
     def test_shares_rpcs_and_price_cache(self):
-        """Same RPCs and price cache as the search; the params are untouched.
-
-        The run also gets the position, the APR threshold, and an empty
-        current_positions: the strategies require the field, and their metrics
-        path does not read it.
-        """
+        """Same RPCs and price cache as the search; the params are untouched."""
         b = _mk()
         b.context.coingecko.use_x402 = False
         b.params.strategies_kwargs = {"strategy_a": {"graphql_endpoint": "url"}}
@@ -5301,7 +5286,6 @@ class TestStrategyKwargs:
         assert b._strategy_kwargs("strat_a")[key] == self.SOURCES[key](b)
 
     def test_has_only_the_shared_keys(self):
-        """The cases above cover every shared key."""
         assert self._behaviour()._strategy_kwargs("strat_a").keys() == (
             self.SOURCES.keys()
         )

@@ -2790,7 +2790,7 @@ class TestCalculateMetricsLiveApr:
         assert variables == {"id": self.POSITION["pool_id"], "chain": "OPTIMISM"}
 
     def test_query_error_leaves_apr_out(self) -> None:
-        """A pool the API cannot return gives no APR rather than a zero."""
+        """A pool the API cannot return gives no APR."""
         result, _ = self._metrics({"error": "GraphQL Errors: Pool with id does not exist"})
         assert "apr" not in result
         assert result["sharpe_ratio"] == 1.5
@@ -2804,7 +2804,7 @@ class TestCalculateMetricsLiveApr:
         "dynamic_data", [{"aprItems": []}, {"aprItems": None}, {}, None]
     )
     def test_no_apr_items_leaves_apr_out(self, dynamic_data: Any) -> None:
-        """A pool without APR items gives no APR rather than a zero."""
+        """A pool without APR items gives no APR."""
         result, _ = self._metrics({"poolGetPool": {"dynamicData": dynamic_data}})
         assert "apr" not in result
 

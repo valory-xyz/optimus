@@ -1672,7 +1672,6 @@ def calculate_metrics(
         "max_position_size": max_position_size,
     }
 
-    # An unreadable APR is left out, so the position keeps its last one
     if graphql_endpoint:
         apr = get_balancer_pool_apr(
             position["pool_id"], position["chain"], graphql_endpoint

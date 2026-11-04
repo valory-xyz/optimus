@@ -917,7 +917,6 @@ def calculate_metrics(
         "max_position_size": max_position_size,
     }
 
-    # An unreadable APR is left out, so the position keeps its last one
     if pool_data is not None:
         metrics["apr"] = get_pool_apr(pool_data)
 

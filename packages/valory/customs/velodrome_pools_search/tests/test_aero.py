@@ -406,12 +406,12 @@ class TestV2Metrics:
         assert metrics["apr"] == pytest.approx(0.5e-4 * 365 * 100 * share, rel=1e-6)
 
     def test_empty_pool(self) -> None:
-        """A pool without supply cannot be priced, so it has no APR rather than 0."""
+        """A pool without supply cannot be priced, so it has no APR."""
         metrics = aero_v2_pool_metrics(_v2_pool(total_supply=0), aero_price=0.5)
         assert metrics["apr"] is None
 
     def test_no_gauge_tape(self) -> None:
-        """A gauge tape with no observations gives no APR rather than 0."""
+        """A gauge tape with no observations gives no APR."""
         metrics = aero_v2_pool_metrics(_v2_pool(gauge_observations=[]), 0.5)
         assert metrics["apr"] is None
 
@@ -488,7 +488,7 @@ class TestClMetrics:
         assert metrics["apr"] == pytest.approx(10 * 365 / 1000 * 100 / 2)
 
     def test_out_of_range_bands(self) -> None:
-        """Bands away from the price cannot be priced, so they give no APR rather than 0."""
+        """Bands away from the price cannot be priced, so they give no APR."""
         bands = [{"tick_lower": 5, "tick_upper": 10, "allocation": 1.0}]
         assert aero_cl_pool_metrics(_cl_pool(), 1.0, bands)["apr"] is None
 
@@ -979,7 +979,7 @@ class TestCalculateAeroMetrics:
         assert cl.call_args.args[2] == bands
 
     def test_cl_without_tick_bands_has_no_apr(self) -> None:
-        """Unpriced tick bands give no live APR rather than an APR of 0."""
+        """Unpriced tick bands give no live APR."""
         result, _, cl = self._metrics(
             self._position(is_cl_pool=True), live_state=_cl_pool()
         )
@@ -988,7 +988,7 @@ class TestCalculateAeroMetrics:
         assert result["il_risk_score"] == 0.02
 
     def test_cl_with_out_of_range_tick_bands_has_no_apr(self) -> None:
-        """Tick bands the price is outside of give no live APR rather than an APR of 0."""
+        """Tick bands the price is outside of give no live APR."""
         bands = [{"tick_lower": 5, "tick_upper": 10, "allocation": 1.0}]
         result, _, cl = self._metrics(
             self._position(is_cl_pool=True), tick_bands=bands, live_state=_cl_pool()

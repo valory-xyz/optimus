@@ -3689,10 +3689,7 @@ def _emission_metrics(
     value_index: int,
     time_index: int,
 ) -> Dict[str, Any]:
-    """Return APR, TVL and daily returns of gauge emissions, given the return per reward.
-
-    The APR is None, not 0, when the position or the emission rate cannot be priced.
-    """
+    """Return APR, TVL and daily returns of gauge emissions, given the return per reward."""
     if return_per_reward is None:
         return {"apr": None, "tvl": tvl, "daily_returns": []}
 
@@ -4249,7 +4246,6 @@ def calculate_aero_metrics(
     )
     readable = read_aero_pool_state(w3, chain_id, [pool])
     if pool["gauge_activated"] is False:
-        # A deactivated gauge pays no emissions, so the position earns none.
         logger.warning(f"The gauge of held Aero pool {pool['id']} is deactivated")
         return {"apr": 0.0}
     aero_price = get_aero_price_usd(

@@ -1255,7 +1255,7 @@ class TestCalculateMetricsLiveApr:
         assert result["depth_score"] > 0
 
     def test_unreadable_pool_leaves_apr_out(self) -> None:
-        """A pool the subgraph cannot return gives no APR rather than a zero."""
+        """A pool the subgraph cannot return gives no APR."""
         result = self._metrics(None)
         assert "apr" not in result
         assert np.isnan(result["depth_score"])

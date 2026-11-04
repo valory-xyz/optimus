@@ -8121,16 +8121,14 @@ class TestCollectSeenTransferIdsHelper:
 
 
 class TestFundingEventsFileRoundTrip:
-    """Both transfer fetchers keep every key of the real funding_events file."""
+    """Transfer fetchers keep every key of the real funding_events file."""
 
     INCOMING = {"2026-06-25": [{"transfer_id": "tid-in-old", "amount": 16.0}]}
     WITHDRAWALS = {"2026-07-01": [{"transfer_id": "tid-out-old", "amount": 5.0}]}
 
     @staticmethod
     def _obj(tmp_path: Any, on_disk: Dict) -> Any:
-        """Build a behaviour that reads and stores funding_events on disk."""
         obj = _mk()
-        # Use the real reader and writer instead of the _mk stubs.
         del obj.read_funding_events
         del obj.store_funding_events
         path = tmp_path / "funding_events.json"
@@ -8140,7 +8138,6 @@ class TestFundingEventsFileRoundTrip:
 
     @staticmethod
     def _on_disk(obj: Any) -> Dict:
-        """Read the funding_events file back."""
         with open(obj.funding_events_filepath) as file:
             return json.load(file)
 
@@ -8152,7 +8149,6 @@ class TestFundingEventsFileRoundTrip:
         new_row = {"transfer_id": "tid-in-new", "amount": 1.0}
 
         def sfg(address, end_date, all_transfers_by_date, existing_data, chain):
-            """Stub fetcher that adds one new incoming row and succeeds."""
             all_transfers_by_date["2026-10-28"] = [new_row]
             yield
             return True
@@ -8194,7 +8190,6 @@ class TestFundingEventsFileRoundTrip:
         new_row = {"transfer_id": "tid-mode-new", "type": "token", "amount": 1.0}
 
         def token_transfers(address, end_datetime, all_transfers_by_date, fetch_all):
-            """Stub token fetcher that adds one new date and succeeds."""
             all_transfers_by_date["2026-10-28"].append(new_row)
             yield
             return True

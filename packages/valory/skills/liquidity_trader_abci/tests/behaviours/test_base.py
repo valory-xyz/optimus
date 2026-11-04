@@ -4376,7 +4376,7 @@ class TestQueryServiceRewards:
         log_level: str,
         expected: Optional[Dict],
     ) -> None:
-        """A failed query is logged with its endpoint, minus the API key."""
+        """Logged endpoints redact the API key."""
         b = _make_behaviour()
         b.params.staking_subgraph_endpoints = {
             "optimism": "https://gateway.thegraph.com/api/s3cr3t/subgraphs/id/2fe1"
@@ -4417,11 +4417,9 @@ class TestUpdateAccumulatedRewardsForChain:
     def _capture_writes(
         b: LiquidityTraderBaseBehaviour, succeed: bool = True
     ) -> List[Dict[str, str]]:
-        """Replace _write_kv with a fake that records each write."""
         writes: List[Dict[str, str]] = []
 
         def fake_write_kv(data: Dict[str, str]) -> Generator[None, None, bool]:
-            """Record the write."""
             writes.append(data)
             yield
             return succeed
@@ -4431,7 +4429,7 @@ class TestUpdateAccumulatedRewardsForChain:
         return writes
 
     def test_no_service_data_records_attempt(self) -> None:
-        """A subgraph that answers without the service is not queried again until the interval passes."""
+        """An empty answer still stamps the update time."""
         b = _make_behaviour()
         b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
         b.query_service_rewards = _make_gen({})  # type: ignore[assignment,method-assign]
@@ -4449,7 +4447,7 @@ class TestUpdateAccumulatedRewardsForChain:
         assert writes == []
 
     def test_success(self) -> None:
-        """A success records the attempt, then the accumulated rewards."""
+        """A success stores the accumulated rewards, then stamps the update time."""
         b = _make_behaviour()
         b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
         b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
@@ -4459,8 +4457,8 @@ class TestUpdateAccumulatedRewardsForChain:
             f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
         )
         assert writes == [
-            {"last_reward_update_optimism": "1793232000"},
             {rewards_key: "500"},
+            {"last_reward_update_optimism": "1793232000"},
         ]
         b.context.logger.error.assert_not_called()
 
@@ -4474,22 +4472,44 @@ class TestUpdateAccumulatedRewardsForChain:
         rewards_key = (
             f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
         )
-        assert writes[-1] == {rewards_key: "0"}
+        assert writes[0] == {rewards_key: "0"}
 
-    def test_failed_writes_are_logged(self) -> None:
-        """A failed KV write is logged and the update is not reported as complete."""
+    def test_failed_rewards_write_is_not_stamped(self) -> None:
+        """A failed rewards write leaves the update unstamped, so it is retried."""
         b = _make_behaviour()
         b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
         b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b, succeed=False)
+        _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
+        rewards_key = (
+            f"accumulated_rewards_optimism_{OLAS_ADDRESSES['optimism'].lower()}"
+        )
+        assert writes == [{rewards_key: "500"}]
+        errors = [c[0][0] for c in b.context.logger.error.call_args_list]
+        assert errors == ["KV write failed storing accumulated rewards for optimism"]
+        infos = [c[0][0] for c in b.context.logger.info.call_args_list]
+        assert "Completed reward update for optimism" not in infos
+
+    def test_failed_stamp_is_logged(self) -> None:
+        """A failed stamp write is logged."""
+        b = _make_behaviour()
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({})  # type: ignore[assignment,method-assign]
         self._capture_writes(b, succeed=False)
         _exhaust(b.update_accumulated_rewards_for_chain("optimism"))
         errors = [c[0][0] for c in b.context.logger.error.call_args_list]
         assert errors == [
-            "KV write failed recording the reward update time for optimism",
-            "KV write failed storing accumulated rewards for optimism",
+            "KV write failed recording the reward update time for optimism"
         ]
-        infos = [c[0][0] for c in b.context.logger.info.call_args_list]
-        assert "Completed reward update for optimism" not in infos
+
+    def test_chain_without_olas_address_is_stamped(self) -> None:
+        """A chain with no OLAS address has no rewards to store but is still stamped."""
+        b = _make_behaviour()
+        b.should_update_rewards_from_subgraph = _make_gen(True)  # type: ignore[assignment,method-assign]
+        b.query_service_rewards = _make_gen({"olasRewardsEarned": "500"})  # type: ignore[assignment,method-assign]
+        writes = self._capture_writes(b)
+        _exhaust(b.update_accumulated_rewards_for_chain("no_olas_chain"))
+        assert writes == [{"last_reward_update_no_olas_chain": "1793232000"}]
 
 
 class TestShouldUpdateRewardsFromSubgraph:

@@ -2902,13 +2902,7 @@ class LiquidityTraderBaseBehaviour(
     def query_service_rewards(
         self, chain: str
     ) -> Generator[None, None, Optional[Dict]]:
-        """Query subgraph for service rewards using service query.
-
-        :param chain: the chain whose staking subgraph to query.
-        :yield: None
-        :return: the service data, ``{}`` if the subgraph answered without the
-            service, or ``None`` if it gave no answer (an error or a bad response).
-        """
+        """Return service data; {} if absent, None if no answer."""
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
         # Gateway URLs embed an API key; keep it out of the logs.
         logged_endpoint = re.sub(r"/api/[^/]+/", "/api/<redacted>/", str(endpoint))
@@ -2969,6 +2963,17 @@ class LiquidityTraderBaseBehaviour(
         )
         return None
 
+    def _stamp_reward_update(self, chain: str) -> Generator[None, None, None]:
+        """Record the reward update time, so the next query waits for the interval."""
+        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
+        stamped = yield from self._write_kv(
+            {update_key: str(int(self._get_current_timestamp()))}
+        )
+        if not stamped:
+            self.context.logger.error(
+                f"KV write failed recording the reward update time for {chain}"
+            )
+
     def update_accumulated_rewards_for_chain(
         self, chain: str
     ) -> Generator[None, None, None]:
@@ -2990,18 +2995,9 @@ class LiquidityTraderBaseBehaviour(
             )
             return
 
-        # Record every answer, not only a success, so a subgraph that doesn't
-        # index the service is queried once per interval instead of every period.
-        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
-        stamped = yield from self._write_kv(
-            {update_key: str(int(self._get_current_timestamp()))}
-        )
-        if not stamped:
-            self.context.logger.error(
-                f"KV write failed recording the reward update time for {chain}"
-            )
-
+        # Stamp empty answers too, or an unindexed service is re-queried every period.
         if not service_data:
+            yield from self._stamp_reward_update(chain)
             self.context.logger.info(
                 f"No service data found for {chain}; next query in "
                 f"{REWARD_UPDATE_INTERVAL // 3600}h"
@@ -3037,6 +3033,7 @@ class LiquidityTraderBaseBehaviour(
                 f"Timestamp: {service_data.get('blockTimestamp', 'N/A')})"
             )
 
+        yield from self._stamp_reward_update(chain)
         self.context.logger.info(f"Completed reward update for {chain}")
 
     def get_accumulated_rewards_for_token(

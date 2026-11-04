@@ -97,6 +97,11 @@ def get_sqrt_ratio_at_tick(tick: int) -> int:
     return sqrt_price_x96
 
 
+def sqrt_price_x96_at_tick(tick: int) -> int:
+    """Return the pool's sqrtPriceX96 at ``tick``; get_sqrt_ratio_at_tick returns it for ``-tick``."""
+    return get_sqrt_ratio_at_tick(-tick)
+
+
 def get_amounts_for_liquidity(
     sqrtRatioX96: int, sqrtRatioAX96: int, sqrtRatioBX96: int, liquidity: int
 ) -> Tuple[int, int]:

@@ -29,12 +29,13 @@ contracts:
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeibbjzhu6vzrliz5kbf27f76wulcr5ngebvbqtneybolko3myisw4q
 - valory/velodrome_router:0.1.0:bafybeifokp7em6ziibuftu7e77u3x72k7dfidrmmxnfisxuiwnh64px42q
 - valory/velodrome_cl_pool:0.1.0:bafybeidwjgc3oja3itgkl5d35txrcyik337bqaiojsbsr65twuuhvg6vvm
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeibirsub7leghnz43geueisn756r3zdvyluwrsznttoepsjxqj6nha
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeiddfn5f6oxuv6pjg5vm36bxjcpgb6cca37utc2xy23btgbkbsapre
 - valory/velodrome_pool:0.1.0:bafybeigpjgshmzw3b3na76jk7ps4xsdpbbrfekvf5fbdmkepugmekksrke
 - valory/velodrome_sugar:0.1.0:bafybeiexfcqxwqdfaa73flnqni5jixoewllzu3limr3bqltqq5rqxapn6q
 - valory/velodrome_gauge:0.1.0:bafybeiehys5w47mznpuocwf5uzpjve6vyyzhachh3lvgina2xuvo4jyupi
 - valory/velodrome_voter:0.1.0:bafybeia4zguqn2dih6kswnlib6ssfvanisauz3clz5iafiz7xwrr6aglea
 - valory/velodrome_cl_gauge:0.1.0:bafybeieraap2rnlxbltxr5wlezw6gndqomwefuwzyqyfrgwh7bvm3qtq5q
+- valory/multicall3:0.1.0:bafybeif6bjsejf4vimvxxehxvhxkbankj733ctaup5cx7bdrs6gisierlq
 - valory/aero_metarouter:0.1.0:bafybeibzlccmbusjtfbma7lutmd5vrmqjqc55jroe2s7mouyubh34c4xre
 - valory/aero_cl_gauge_factory:0.1.0:bafybeiecm2vese2ecuveflclctkn6hfcdy7huzstbparem7o53bfsdpfva
 - valory/balancer_queries:0.1.0:bafybeihbexpjj6ho3ij7rxk4tzz3sowpa5ztawlf63y5fdmmom7xifpan4
@@ -71,8 +72,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeiakhryfscssc474efrnpqevn7icn22f72jok65gkwxsercik4pthu
-- valory/liquidity_trader_abci:0.1.0:bafybeidk3nnnz23tar3iunxquo46tnb7a7ouukdl5ffe2xrfbny45sxj6u
-- valory/optimus_abci:0.1.0:bafybeie6lfhk6vwy6hkpmketezuwszf2rrirbgia2cdkwws64ft5jwf2fe
+- valory/liquidity_trader_abci:0.1.0:bafybeidkgdnzrewosbx6sn7knmk5oyb2zmkdfb4p3lwt75df5deyooac6y
+- valory/optimus_abci:0.1.0:bafybeia44brp2q7kptele4ruasqxbmssklxbclh4nlzvg5k2vqebzf3ila
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
@@ -369,6 +370,10 @@ models:
       genai_api_key: ${str:""}
       genai_model: ${str:gemini-2.5-flash}
       slippage_tolerance: ${float:0.01}
+      min_pool_entry_value_usd: ${float:0.5}
+      reconcile_log_window_blocks: ${int:10000}
+      reconcile_log_lookback_blocks: ${int:302400}
+      reconcile_log_min_window_blocks: ${int:500}
       airdrop_started: ${bool:false}
       airdrop_contract_address: ${str:""}
       use_x402: ${bool:true}

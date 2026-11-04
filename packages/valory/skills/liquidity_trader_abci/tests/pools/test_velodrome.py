@@ -39,6 +39,9 @@ from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     VelodromePoolBehaviour,
     ZERO_ADDRESS,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
+    sqrt_price_x96_at_tick,
+)
 
 
 class _ConcreteVelodrome(VelodromePoolBehaviour):
@@ -57,6 +60,8 @@ def make_behaviour(**overrides: Any) -> VelodromePoolBehaviour:
     ctx.params.slippage_tolerance = 0.05  # 5%
     ctx.params.velodrome_router_contract_addresses = {}
     ctx.params.multisend_contract_addresses = {}
+    # Entry floor off by default; the guard has its own tests.
+    ctx.params.min_pool_entry_value_usd = 0.0
     b.__dict__["_context"] = ctx
     b.__dict__.update(overrides)
     return b
@@ -994,6 +999,31 @@ class TestEnterStableVolatilePool:
         gen = b._enter_stable_volatile_pool(**self._base_kwargs())
         result = exhaust_generator(gen)
         assert result == ("0xtxhash", "0xrouter")
+
+    @pytest.mark.parametrize("value_usd", [0.49, 0.0])
+    def test_entry_below_the_minimum_or_unpriceable_sends_no_tx(
+        self, value_usd: float
+    ) -> None:
+        """A stable/volatile entry below the floor, or that cannot be priced ($0), builds no tx."""
+        b = make_behaviour()
+        b.params.velodrome_router_contract_addresses = {"optimism": "0xrouter"}
+        b.params.min_pool_entry_value_usd = 0.5
+        b._convert_amounts_to_usd = _mock_gen(value_usd)
+        b._query_add_liquidity_velodrome = MagicMock()
+        b.contract_interact = MagicMock()
+
+        result = exhaust_generator(
+            b._enter_stable_volatile_pool(
+                **{**self._base_kwargs(), "max_amounts_in": [100, 200]}
+            )
+        )
+
+        assert result == (None, None)
+        b._convert_amounts_to_usd.assert_called_once_with(
+            100, 200, "0xtokenA", "0xtokenB", "optimism"
+        )
+        b._query_add_liquidity_velodrome.assert_not_called()
+        b.contract_interact.assert_not_called()
 
     def test_slippage_capped_by_adjusted_amounts(self) -> None:
         """Minimum amounts are capped by adjusted_amounts (max_amounts_in)."""
@@ -2395,7 +2425,10 @@ class TestEnterClPool:
         ]
         b._get_cached_price_at_selection = MagicMock(return_value=_gen_return(1.0))
         b._check_price_movement = MagicMock(return_value=_gen_return(False))
-        b._get_sqrt_price_x96 = MagicMock(return_value=_gen_return(2**96))
+        # Price above the band, so the band is all token1.
+        b._get_sqrt_price_x96 = MagicMock(
+            return_value=_gen_return(sqrt_price_x96_at_tick(276_400))
+        )
         b._get_token_decimals = _mock_gen(18)
         b._calculate_band_investment_with_pool_price = MagicMock(return_value=1100)
         # All token1, slightly over max1 so the over-max scaling path runs.
@@ -2555,6 +2588,208 @@ class TestEnterClPool:
             c.args[1:3] for c in b._calculate_individual_token_amounts.call_args_list
         ]
         assert ratios == [(0.52, 0.48), (0.52, 0.48)]
+
+
+class TestEnterClPoolEntryGuards:
+    """Tests for the per-band scaling, band dropping and entry floor of _enter_cl_pool."""
+
+    # At tick 0: the first band spans the price, the second sits above it
+    # (token0 only) and the third below it (token1 only).
+    IN_RANGE = {"tick_lower": -10, "tick_upper": 10, "allocation": 0.5}
+    TOKEN0_ONLY = {"tick_lower": 10, "tick_upper": 20, "allocation": 0.5}
+    TOKEN1_ONLY = {"tick_lower": -20, "tick_upper": -10, "allocation": 0.5}
+
+    _make_b = TestEnterClPool._make_b
+
+    def _mint_calls(
+        self,
+        b: Any,
+        bands: List[dict],
+        band_amounts: List[tuple],
+        max_amounts_in: List[int],
+        sqrt_price_x96: int = 2**96,
+    ) -> tuple:
+        """Enter ``bands`` with the given desired amounts; return the result and the mint calls."""
+        b._get_cached_price_at_selection = _mock_gen(1.0)
+        b._check_price_movement = _mock_gen(False)
+        b._get_sqrt_price_x96 = _mock_gen(sqrt_price_x96)
+        b._get_token_decimals = _mock_gen(6)
+        b._calculate_band_investment_with_pool_price = MagicMock(return_value=1)
+        b._calculate_individual_token_amounts = MagicMock(side_effect=band_amounts)
+        mint_calls: list = []
+
+        def rec_contract_interact(**kwargs):
+            """Record mint calls."""
+            mint_calls.append(kwargs)
+            yield
+            return "0xMint"
+
+        b.contract_interact = rec_contract_interact
+        result = exhaust(
+            b._enter_cl_pool(
+                "0xPool",
+                "0xSafe",
+                ["0xT0", "0xT1"],
+                "optimism",
+                max_amounts_in,
+                False,
+                tick_ranges=[[dict(band) for band in bands]],
+                tick_spacing=1,
+            )
+        )
+        return result, mint_calls
+
+    @staticmethod
+    def _amounts(mint_calls: list) -> List[tuple]:
+        return [(c["amount0_desired"], c["amount1_desired"]) for c in mint_calls]
+
+    def test_band_without_the_short_token_keeps_its_full_amount(self) -> None:
+        """Only the band needing the short token1 is scaled down."""
+        b = self._make_b()
+        _, mint_calls = self._mint_calls(
+            b,
+            [self.TOKEN0_ONLY, self.IN_RANGE],
+            [(3_000_000, 0), (2_000_000, 500)],
+            [5_687_067, 1],
+        )
+
+        assert self._amounts(mint_calls) == [(3_000_000, 0), (4_000, 1)]
+
+    def test_each_band_takes_the_smallest_factor_of_its_short_tokens(self) -> None:
+        """A band needing both short tokens takes the tighter factor; totals stay within max."""
+        b = self._make_b()
+        _, mint_calls = self._mint_calls(
+            b,
+            [self.TOKEN0_ONLY, self.IN_RANGE],
+            [(600, 0), (600, 1000)],
+            [900, 500],
+        )
+
+        assert self._amounts(mint_calls) == [(450, 0), (300, 500)]
+
+    def test_band_scaled_to_zero_of_a_needed_token_is_not_minted(self) -> None:
+        """Only the other band is minted."""
+        b = self._make_b()
+        result, mint_calls = self._mint_calls(
+            b,
+            [self.TOKEN0_ONLY, self.IN_RANGE],
+            [(3_000_000, 0), (2_000_000, 3_000_000)],
+            [5_000_000, 1],
+        )
+
+        assert self._amounts(mint_calls) == [(3_000_000, 0)]
+        assert result == (["0xMint"], "0xPosMgr")
+
+    def test_no_mintable_band_sends_no_mint(self) -> None:
+        """When every band is dropped the entry is abandoned."""
+        b = self._make_b()
+        result, mint_calls = self._mint_calls(
+            b, [self.IN_RANGE, self.IN_RANGE], [(10, 500), (10, 700)], [20, 1]
+        )
+
+        assert result == (None, None)
+        assert mint_calls == []
+
+    def test_band_too_small_to_mint_liquidity_is_dropped(self) -> None:
+        """A band whose amounts round to zero liquidity is dropped like an empty one."""
+        b = self._make_b()
+        cheap_token0_band = {
+            "tick_lower": -200_000,
+            "tick_upper": -100_000,
+            "allocation": 1.0,
+        }
+        result, mint_calls = self._mint_calls(
+            b,
+            [cheap_token0_band, self.TOKEN0_ONLY],
+            [(1, 0), (0, 0)],
+            [1, 0],
+            sqrt_price_x96=sqrt_price_x96_at_tick(-300_000),
+        )
+
+        assert result == (None, None)
+        assert mint_calls == []
+
+    def test_scaled_totals_never_exceed_the_max(self) -> None:
+        """Integer scaling keeps each token's total within its max."""
+        b = self._make_b()
+        max0 = 8_391_646_586_825_371_460
+        first = 3_501_332_431_411_006_492
+        _, mint_calls = self._mint_calls(
+            b,
+            [self.TOKEN0_ONLY, self.TOKEN0_ONLY],
+            [(first, 0), (max0 + 3_869 - first, 0)],
+            [max0, 0],
+        )
+
+        assert sum(a0 for a0, _ in self._amounts(mint_calls)) <= max0
+
+    @pytest.mark.parametrize("value_usd", [0.000593, 0.0])
+    def test_entry_below_the_minimum_or_unpriceable_sends_no_mint(
+        self, value_usd: float
+    ) -> None:
+        """A $0.000593 entry, or one that cannot be priced ($0), is not minted."""
+        b = self._make_b()
+        b.context.params.min_pool_entry_value_usd = 0.5
+        b._convert_amounts_to_usd = _mock_gen(value_usd)
+        result, mint_calls = self._mint_calls(
+            b, [self.TOKEN0_ONLY, self.TOKEN0_ONLY], [(593, 0), (0, 0)], [593, 0]
+        )
+
+        assert result == (None, None)
+        assert mint_calls == []
+        b._convert_amounts_to_usd.assert_called_once_with(
+            593, 0, "0xT0", "0xT1", "optimism"
+        )
+
+    def test_entry_at_the_minimum_is_minted(self) -> None:
+        """An entry worth exactly the minimum goes through, priced on the bands that are minted."""
+        b = self._make_b()
+        b.context.params.min_pool_entry_value_usd = 0.5
+        b._convert_amounts_to_usd = _mock_gen(0.5)
+        result, mint_calls = self._mint_calls(
+            b,
+            [self.TOKEN0_ONLY, self.TOKEN1_ONLY],
+            [(250_000, 0), (0, 250_000)],
+            [250_000, 250_000],
+        )
+
+        assert result == (["0xMint", "0xMint"], "0xPosMgr")
+        b._convert_amounts_to_usd.assert_called_once_with(
+            250_000, 250_000, "0xT0", "0xT1", "optimism"
+        )
+
+
+class TestIsEntryBelowMinimum:
+    """Tests for _is_entry_below_minimum."""
+
+    @pytest.mark.parametrize(
+        "value_usd, expected", [(0.49, True), (0.5, False), (0.0, True)]
+    )
+    def test_compares_the_usd_value_with_the_minimum(
+        self, value_usd: float, expected: bool
+    ) -> None:
+        """The priced amounts are compared with the floor; $0 (unpriceable) is below it."""
+        b = make_behaviour()
+        b.context.params.min_pool_entry_value_usd = 0.5
+        b._convert_amounts_to_usd = _mock_gen(value_usd)
+
+        assert (
+            exhaust(b._is_entry_below_minimum("optimism", ["0xA", "0xB"], [1, 2]))
+            is expected
+        )
+        b._convert_amounts_to_usd.assert_called_once_with(
+            1, 2, "0xA", "0xB", "optimism"
+        )
+
+    def test_zero_minimum_skips_pricing(self) -> None:
+        """A floor of 0 disables the guard without any price read."""
+        b = make_behaviour()
+        b._convert_amounts_to_usd = _mock_gen(0.0)
+        assert (
+            exhaust(b._is_entry_below_minimum("optimism", ["0xA", "0xB"], [1, 0]))
+            is False
+        )
+        b._convert_amounts_to_usd.assert_not_called()
 
 
 class TestGetLiveBandTokenRatios:

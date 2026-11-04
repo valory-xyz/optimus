@@ -64,6 +64,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     VELODROME_FAMILY_DEX_TYPES,
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
+    _increase_liquidity_data_types,
     round_down_swap_amount,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import (
@@ -103,27 +104,6 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 # Aero gauges call their tape through a relay that fails open under a gas cap,
 # so a bare estimate can land below what the gauge call needs.
 AERO_GAUGE_GAS_MULTIPLIER = 1.3
-
-# Aero's position manager appends tickLower and tickUpper to IncreaseLiquidity;
-# both layouts start with (liquidity, amount0, amount1).
-INCREASE_LIQUIDITY_DATA_TYPES = {
-    to_hex(keccak(text="IncreaseLiquidity(uint256,uint128,uint256,uint256)"))[2:]: [
-        "uint128",
-        "uint256",
-        "uint256",
-    ],
-    to_hex(
-        keccak(text="IncreaseLiquidity(uint256,uint128,uint256,uint256,int24,int24)")
-    )[2:]: ["uint128", "uint256", "uint256", "int24", "int24"],
-}
-
-
-def _increase_liquidity_data_types(log: Dict[str, Any]) -> Optional[List[str]]:
-    """Return the data layout of an IncreaseLiquidity log, or None for any other log."""
-    topics = log.get("topics", [])
-    if not topics:
-        return None
-    return INCREASE_LIQUIDITY_DATA_TYPES.get(topics[0][2:])
 
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
@@ -3104,100 +3084,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    def _get_all_positions_from_tx_receipt(
-        self, tx_hash: str, chain: str
-    ) -> Generator[None, None, Optional[List[Tuple[int, int, int, int, int]]]]:
-        """Extract data for all positions from a transaction receipt."""
-        response = yield from self.get_transaction_receipt(
-            tx_digest=tx_hash,
-            chain_id=chain,
-        )
-        if not response:
-            self.context.logger.error(
-                f"Error fetching tx receipt! Response: {response}"
-            )
-            return None
-
-        # Find all logs that match the IncreaseLiquidity event
-        matching_logs = [
-            log
-            for log in response.get("logs", [])
-            if _increase_liquidity_data_types(log)
-        ]
-
-        if not matching_logs:
-            self.context.logger.error("No logs found for IncreaseLiquidity event")
-            return None
-
-        positions_data = []
-
-        # Get the timestamp from the block (same for all positions in this tx)
-        block_number = response.get("blockNumber")
-        if block_number is None:
-            self.context.logger.error("Block number not found in transaction receipt.")
-            return None
-
-        block = yield from self.get_block(
-            block_number=block_number,
-            chain_id=chain,
-        )
-
-        if block is None:
-            self.context.logger.error(f"Failed to fetch block {block_number}")
-            return None
-
-        timestamp = block.get("timestamp")
-        if timestamp is None:
-            self.context.logger.error("Timestamp not found in block data.")
-            return None
-
-        # Process each matching log
-        for log in matching_logs:
-            try:
-                # Decode indexed parameter (tokenId)
-                token_id_topic = log.get("topics", [])[1]
-                if not token_id_topic:
-                    self.context.logger.error(
-                        f"Token ID topic is missing from log {log}"
-                    )
-                    continue
-
-                # Convert hex to bytes and decode
-                token_id_bytes = bytes.fromhex(token_id_topic[2:])
-                token_id = decode(["uint256"], token_id_bytes)[0]
-
-                # Decode non-indexed parameters (liquidity, amount0, amount1) from the data field
-                data_hex = log.get("data")
-                if not data_hex:
-                    self.context.logger.error(f"Data field is empty in log {log}")
-                    continue
-
-                data_bytes = bytes.fromhex(data_hex[2:])
-                decoded_data = decode(_increase_liquidity_data_types(log), data_bytes)
-                liquidity = decoded_data[0]
-                amount0 = decoded_data[1]
-                amount1 = decoded_data[2]
-
-                # Add this position's data to the list
-                positions_data.append(
-                    (token_id, liquidity, amount0, amount1, timestamp)
-                )
-
-                self.context.logger.info(
-                    f"Found position: token_id={token_id}, liquidity={liquidity}, "
-                    f"amount0={amount0}, amount1={amount1}"
-                )
-
-            except Exception as e:
-                self.context.logger.error(f"Error decoding data from mint event: {e}")
-                continue
-
-        if not positions_data:
-            self.context.logger.error("Failed to extract any position data from logs")
-            return None
-
-        return positions_data
-
     def _get_data_from_mint_tx_receipt(self, tx_hash: str, chain: str) -> Generator[
         None,
         None,
@@ -3568,28 +3454,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.error("Deposit event not found in transaction receipt")
         return None, None, None
 
-    def _accumulate_transaction_costs(
-        self, tx_hash: str, position: Optional[Dict]
-    ) -> Generator[None, None, None]:
-        """Add gas costs from this transaction to running total using KV store"""
-        try:
-            chain = position.get("chain")
-            pool_address = position.get("pool_address")
-            gas_cost_usd = yield from self._get_gas_cost_usd(tx_hash, chain)
-
-            # Update entry costs in KV store
-            updated_costs = yield from self._update_entry_costs(
-                chain, pool_address, gas_cost_usd
-            )
-
-            self.context.logger.info(
-                f"Added gas cost: ${gas_cost_usd:.6f}, total_costs=${updated_costs:.6f} for position {pool_address}"
-            )
-
-        except Exception as e:
-            self.context.logger.error(f"Error accumulating transaction costs: {e}")
-            return
-
     def _add_slippage_costs(self, tx_hash: str) -> Generator[None, None, None]:
         """Add slippage costs after swap completion using KV store"""
         try:
@@ -3627,47 +3491,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error adding slippage costs: {e}")
             return
-
-    def _get_gas_cost_usd(
-        self, tx_hash: str, chain: str
-    ) -> Generator[None, None, float]:
-        """Extract gas cost in USD from transaction receipt"""
-        try:
-            receipt = yield from self.get_transaction_receipt(
-                tx_digest=tx_hash, chain_id=chain
-            )
-
-            if receipt:
-                gas_used = receipt.get("gasUsed", 0)
-                gas_price = receipt.get("effectiveGasPrice", 0)
-
-                # Use existing _fetch_zero_address_price() for ETH price
-                eth_price_usd = yield from self._fetch_zero_address_price()
-                if not eth_price_usd:
-                    return 0.0
-
-                # L2 cost calculation
-                l2_cost = (gas_used * gas_price) / 1e18
-
-                # L1 cost calculation
-                l1_fee = (
-                    int(receipt.get("l1Fee", "0x0"), 16) / 1e18
-                )  # Convert hex to decimal
-
-                # Total cost should be
-                total_cost_eth = l2_cost + l1_fee
-                total_cost_usd = total_cost_eth * eth_price_usd
-
-                self.context.logger.info(
-                    f"Total cost: {total_cost_eth}, Total cost usd: {total_cost_usd} for transaction {tx_hash}"
-                )
-
-                return total_cost_usd
-
-            return 0.0
-        except Exception as e:
-            self.context.logger.error(f"Error calculating gas cost: {e}")
-            return 0.0
 
     def _calculate_actual_slippage_cost(
         self, tx_hash: str
@@ -3795,53 +3618,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     "cost_recovered": False,
                 }
             )
-
-    def _convert_amounts_to_usd(
-        self, amount0, amount1, token0_addr, token1_addr, chain
-    ) -> Generator[None, None, float]:
-        """Convert token amounts to USD using existing price patterns"""
-        try:
-            total_usd = 0.0
-
-            if amount0 and token0_addr:
-                # Get token0 decimals and price
-                token0_decimals = yield from self._get_token_decimals(
-                    chain, token0_addr
-                )
-                if token0_decimals:
-                    adjusted_amount0 = amount0 / (10**token0_decimals)
-                    if token0_addr == ZERO_ADDRESS:
-                        token0_price = yield from self._fetch_zero_address_price()
-                    else:
-                        token0_price = yield from self._fetch_token_price(
-                            token0_addr, chain
-                        )
-
-                    if token0_price:
-                        total_usd += adjusted_amount0 * token0_price
-
-            if amount1 and token1_addr:
-                # Get token1 decimals and price
-                token1_decimals = yield from self._get_token_decimals(
-                    chain, token1_addr
-                )
-                if token1_decimals:
-                    adjusted_amount1 = amount1 / (10**token1_decimals)
-                    if token1_addr == ZERO_ADDRESS:
-                        token1_price = yield from self._fetch_zero_address_price()
-                    else:
-                        token1_price = yield from self._fetch_token_price(
-                            token1_addr, chain
-                        )
-
-                    if token1_price:
-                        total_usd += adjusted_amount1 * token1_price
-
-            return total_usd
-
-        except Exception as e:
-            self.context.logger.error(f"Error converting amounts to USD: {e}")
-            return 0.0
 
     def _calculate_min_hold_days(
         self,
@@ -3992,107 +3768,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def _get_entry_costs_key(self, chain: str, position_id: str) -> str:
         """Generate unique key for entry costs storage"""
         return f"entry_costs_{chain}_{position_id}"
-
-    def _get_updated_entry_costs_key(
-        self, chain: str, position_id: str, entry_timestamp: str
-    ) -> str:
-        """Generate unique key for entry costs storage"""
-        return f"entry_costs_{chain}_{position_id}_{entry_timestamp}"
-
-    def _get_entry_costs(
-        self, chain: str, position_id: str
-    ) -> Generator[None, None, float]:
-        """Retrieve entry costs from KV store"""
-        try:
-            key = self._get_entry_costs_key(chain, position_id)
-            entry_costs_dict = yield from self._get_all_entry_costs()
-
-            costs = entry_costs_dict.get(key, 0.0)
-            self.context.logger.debug(f"Retrieved entry costs: {key} = ${costs:.6f}")
-            return costs
-        except Exception as e:
-            self.context.logger.error(f"Error retrieving entry costs: {e}")
-            return 0.0
-
-    def _get_updated_entry_costs(
-        self, chain: str, position_id: str, entry_timestamp: str
-    ) -> Generator[None, None, float]:
-        """Retrieve entry costs from KV store"""
-        try:
-            key = self._get_updated_entry_costs_key(chain, position_id, entry_timestamp)
-            entry_costs_dict = yield from self._get_all_entry_costs()
-
-            costs = entry_costs_dict.get(key, 0.0)
-            self.context.logger.debug(f"Retrieved entry costs: {key} = ${costs:.6f}")
-            return costs
-        except Exception as e:
-            self.context.logger.error(f"Error retrieving entry costs: {e}")
-            return 0.0
-
-    def _update_entry_costs(
-        self, chain: str, position_id: str, additional_cost: float
-    ) -> Generator[None, None, float]:
-        """Update entry costs by adding additional cost"""
-        try:
-            current_costs = yield from self._get_entry_costs(chain, position_id)
-            new_costs = current_costs + additional_cost
-
-            yield from self._store_entry_costs(chain, position_id, new_costs)
-
-            self.context.logger.info(
-                f"Updated entry costs: ${current_costs:.6f} + ${additional_cost:.6f} = ${new_costs:.6f}"
-            )
-            return new_costs
-        except Exception as e:
-            self.context.logger.error(f"Error updating entry costs: {e}")
-            return 0.0
-
-    def _rename_entry_costs_key(
-        self, current_position: Optional[dict]
-    ) -> Generator[None, None, None]:
-        """Rename an entry costs key in the KV store"""
-        try:
-            chain = current_position.get("chain")
-            pool_address = current_position.get("pool_address")
-            entry_timestamp = current_position.get("enter_timestamp")
-            old_key = self._get_entry_costs_key(chain, pool_address)
-            new_key = self._get_updated_entry_costs_key(
-                chain, pool_address, entry_timestamp
-            )
-
-            # Get all entry costs from KV store
-            entry_costs_dict = yield from self._get_all_entry_costs()
-
-            # Check if old key exists
-            if old_key not in entry_costs_dict:
-                self.context.logger.warning(
-                    f"Old key {old_key} not found in entry costs"
-                )
-
-            # Check if new key already exists (avoid overwriting)
-            if new_key in entry_costs_dict:
-                self.context.logger.warning(
-                    f"New key {new_key} already exists in entry costs"
-                )
-
-            # Get the value from old key
-            cost_value = entry_costs_dict[old_key]
-
-            # Add value to new key and remove old key
-            entry_costs_dict[new_key] = cost_value
-            del entry_costs_dict[old_key]
-
-            # Store updated dictionary back to KV store
-            yield from self._write_kv(
-                {"entry_costs_dict": json.dumps(entry_costs_dict, ensure_ascii=True)}
-            )
-
-            self.context.logger.info(
-                f"Successfully renamed entry costs key: {old_key} -> {new_key} (value: ${cost_value:.6f})"
-            )
-
-        except Exception as e:
-            self.context.logger.error(f"Error renaming entry costs key: {e}")
 
     def _get_gauge_gas_limit(
         self,

@@ -543,6 +543,18 @@ class Params(BaseParams):
         # Own slippage: the tiny top-up swap is refused at the trading slippage.
         self.x402_swap_slippage = self._ensure("x402_swap_slippage", kwargs, float)
         self.slippage_tolerance = self._ensure("slippage_tolerance", kwargs, float)
+        self.min_pool_entry_value_usd = self._ensure(
+            "min_pool_entry_value_usd", kwargs, float
+        )
+        self.reconcile_log_window_blocks = self._ensure(
+            "reconcile_log_window_blocks", kwargs, int
+        )
+        self.reconcile_log_lookback_blocks = self._ensure(
+            "reconcile_log_lookback_blocks", kwargs, int
+        )
+        self.reconcile_log_min_window_blocks = self._ensure(
+            "reconcile_log_min_window_blocks", kwargs, int
+        )
         self.allowed_dexs: List[str] = self._ensure("allowed_dexs", kwargs, List[str])
         self.balancer_vault_contract_addresses = json.loads(
             self._ensure("balancer_vault_contract_addresses", kwargs, str)

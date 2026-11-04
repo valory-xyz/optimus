@@ -18,12 +18,24 @@
 # ------------------------------------------------------------------------------
 """Wrapper for Velodrome CL Pool Manager contract interface."""
 
+import logging
+from typing import Dict, List
+
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
 
 PUBLIC_ID = PublicId.from_str("valory/velodrome_non_fungible_position_manager:0.1.0")
+
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+_logger = logging.getLogger(__name__)
+
+
+def _to_topic(value: int) -> str:
+    """Return ``value`` as a 32-byte log topic."""
+    return "0x" + format(value, "064x")
 
 
 class VelodromeNonFungiblePositionManagerContract(Contract):
@@ -317,3 +329,76 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
                 continue
 
         return dict(token_ids=token_ids, count=len(token_ids))
+
+    @classmethod
+    def get_mint_tx_hashes(  # pylint: disable=too-many-arguments
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        owner: str,
+        token_ids: List[int],
+        to_block: int,
+        window_blocks: int,
+        min_window_blocks: int,
+        lookback_blocks: int,
+    ) -> JSONLike:
+        """Find the tx that minted each of ``token_ids`` to ``owner``, walking back from ``to_block``.
+
+        A window the RPC rejects is halved and retried down to ``min_window_blocks``.
+        Ids whose mint is not found within ``lookback_blocks`` are left out.
+
+        :param ledger_api: the ledger API.
+        :param contract_address: the position manager address.
+        :param owner: the address the NFTs were minted to.
+        :param token_ids: the NFT ids to look for.
+        :param to_block: the block the search starts from.
+        :param window_blocks: the block range of one eth_getLogs call.
+        :param min_window_blocks: the smallest range tried after rejections.
+        :param lookback_blocks: how many blocks back from to_block to search.
+        :return: the mint tx hash keyed by token id, and whether the whole
+            lookback was searched (False when the RPC rejected even the
+            smallest window).
+        """
+        remaining = set(token_ids)
+        tx_hashes: Dict[int, str] = {}
+        topics = [
+            TRANSFER_TOPIC,
+            _to_topic(0),
+            _to_topic(int(owner, 16)),
+            [_to_topic(token_id) for token_id in sorted(remaining)],
+        ]
+        address = ledger_api.api.to_checksum_address(contract_address)
+        lowest_block = max(0, to_block - lookback_blocks + 1)
+        min_window_blocks = max(min_window_blocks, 1)
+        window = max(window_blocks, min_window_blocks)
+        high = to_block
+        complete = True
+        while remaining and high >= lowest_block:
+            low = max(lowest_block, high - window + 1)
+            try:
+                logs = ledger_api.api.eth.get_logs(
+                    {
+                        "address": address,
+                        "fromBlock": low,
+                        "toBlock": high,
+                        "topics": topics,
+                    }
+                )
+            except Exception as e:  # pylint: disable=broad-except
+                next_window = max(window // 2, min_window_blocks)
+                if next_window == window:
+                    _logger.warning(
+                        f"eth_getLogs failed for blocks {low}-{high} at the "
+                        f"smallest window; giving up the mint search: {e}"
+                    )
+                    complete = False
+                    break
+                window = next_window
+                continue
+            for log in logs:
+                token_id = int.from_bytes(bytes(log["topics"][3]), "big")
+                if token_id in remaining:
+                    remaining.discard(token_id)
+                    tx_hashes[token_id] = "0x" + bytes(log["transactionHash"]).hex()
+            high = low - 1
+        return dict(mint_search=dict(tx_hashes=tx_hashes, complete=complete))

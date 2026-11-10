@@ -209,7 +209,7 @@ class TestCallCheckpointBehaviour:
         obj.set_done.assert_called_once()
 
     def test_async_act_reads_schedule_once_for_both_uses(self) -> None:
-        """tsCheckpoint and livenessPeriod are read once and shared."""
+        """The tsCheckpoint and livenessPeriod reads happen once and are shared."""
         obj = _make_behaviour()
         params_mock = MagicMock()
         params_mock.staking_chain = "optimism"

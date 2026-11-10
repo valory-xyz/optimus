@@ -355,11 +355,7 @@ class TestCheckIfCheckpointReached:
         available_rewards=10**18,
         latest_ts_checkpoint=_UNCHANGED,
     ):
-        """Run _check_if_checkpoint_reached against faked contract reads.
-
-        ``latest_ts_checkpoint`` is what a re-read of tsCheckpoint returns;
-        by default it equals ``ts_checkpoint``.
-        """
+        """Run _check_if_checkpoint_reached against faked contract reads."""
         obj = _make_behaviour()
         obj._get_next_checkpoint = _gen_return(next_checkpoint)
         obj._get_ts_checkpoint = MagicMock(

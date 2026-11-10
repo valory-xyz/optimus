@@ -165,14 +165,23 @@ class CallCheckpointBehaviour(
             )
             return next_checkpoint <= synced_timestamp
 
+        if is_rebaseline_signal(next_checkpoint, ts_checkpoint, liveness_period):
+            # tsCheckpoint was read before next_checkpoint, so a checkpoint by
+            # another service in between looks like a rebaseline. Re-read it.
+            latest_ts_checkpoint = yield from self._get_ts_checkpoint(chain)
+            if latest_ts_checkpoint is not None:
+                ts_checkpoint = latest_ts_checkpoint
+
         due = is_checkpoint_due(
             next_checkpoint, ts_checkpoint, liveness_period, synced_timestamp
         )
         rebaseline_signal = is_rebaseline_signal(
             next_checkpoint, ts_checkpoint, liveness_period
         )
-        if not due or rebaseline_signal:
-            return due
+        if not due:
+            return False
+        if rebaseline_signal:
+            return True
 
         available_rewards = yield from self._get_available_rewards(chain)
         if available_rewards is None:

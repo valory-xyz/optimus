@@ -40,6 +40,7 @@ def _gen_return_false(*args, **kwargs):
 TS_CHECKPOINT = 1700000000
 LIVENESS_PERIOD = 86400
 SCHEDULED_NEXT = TS_CHECKPOINT + LIVENESS_PERIOD
+_UNCHANGED = object()
 
 
 def _gen_return(value):
@@ -352,10 +353,22 @@ class TestCheckIfCheckpointReached:
         ts_checkpoint=TS_CHECKPOINT,
         liveness_period=LIVENESS_PERIOD,
         available_rewards=10**18,
+        latest_ts_checkpoint=_UNCHANGED,
     ):
-        """Run _check_if_checkpoint_reached against faked contract reads."""
+        """Run _check_if_checkpoint_reached against faked contract reads.
+
+        ``latest_ts_checkpoint`` is what a re-read of tsCheckpoint returns;
+        by default it equals ``ts_checkpoint``.
+        """
         obj = _make_behaviour()
         obj._get_next_checkpoint = _gen_return(next_checkpoint)
+        obj._get_ts_checkpoint = MagicMock(
+            side_effect=_gen_return(
+                ts_checkpoint
+                if latest_ts_checkpoint is _UNCHANGED
+                else latest_ts_checkpoint
+            )
+        )
         obj._get_available_rewards = MagicMock(
             side_effect=_gen_return(available_rewards)
         )
@@ -378,8 +391,9 @@ class TestCheckIfCheckpointReached:
 
     def test_next_checkpoint_zero(self) -> None:
         """Test returns True when next_checkpoint is 0."""
-        _, result = self._check(0, available_rewards=0)
+        obj, result = self._check(0, available_rewards=0)
         assert result is True
+        obj._get_available_rewards.assert_not_called()
 
     def test_next_checkpoint_in_future(self) -> None:
         """Test returns False when next_checkpoint is on schedule and in the future."""
@@ -399,6 +413,35 @@ class TestCheckIfCheckpointReached:
         )
         assert result is True
         obj._get_available_rewards.assert_not_called()
+
+    def test_concurrent_checkpoint_is_not_a_rebaseline(self) -> None:
+        """A tsCheckpoint moved by another service between reads is not a rebaseline."""
+        moved = TS_CHECKPOINT + 100
+        obj, result = self._check(
+            moved + LIVENESS_PERIOD,
+            synced_ts=TS_CHECKPOINT + 5,
+            available_rewards=0,
+            latest_ts_checkpoint=moved,
+        )
+        assert result is False
+        obj._get_ts_checkpoint.assert_called_once_with("optimism")
+        obj._get_available_rewards.assert_not_called()
+
+    def test_rebaseline_reread_failure_keeps_signal(self) -> None:
+        """If the tsCheckpoint re-read fails, the first read still decides."""
+        obj, result = self._check(
+            TS_CHECKPOINT + 10,
+            synced_ts=TS_CHECKPOINT + 5,
+            available_rewards=0,
+            latest_ts_checkpoint=None,
+        )
+        assert result is True
+        obj._get_ts_checkpoint.assert_called_once_with("optimism")
+
+    def test_on_schedule_does_not_reread_ts_checkpoint(self) -> None:
+        """No extra read happens when the getter is on schedule."""
+        obj, _ = self._check(SCHEDULED_NEXT, synced_ts=SCHEDULED_NEXT - 1)
+        obj._get_ts_checkpoint.assert_not_called()
 
     def test_due_by_time_without_rewards_is_skipped(self) -> None:
         """A checkpoint due only by time is not sent with no available rewards."""

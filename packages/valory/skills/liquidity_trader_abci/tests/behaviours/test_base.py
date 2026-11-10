@@ -30,6 +30,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
+from packages.valory.contracts.staking_token.contract import StakingTokenContract
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     AIRDROP_TOTAL_KEY,
     Action,
@@ -43,6 +44,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     NEW_STAKING_CHECKER_VERSION,
     OLAS_ADDRESSES,
     PRICE_CACHE_KEY_PREFIX,
+    REQUIRED_REQUESTS_SAFETY_MARGIN,
     REWARD_UPDATE_INTERVAL,
     REWARD_UPDATE_KEY_PREFIX,
     WHITELISTED_ASSETS,
@@ -3057,8 +3059,7 @@ class TestCalculateMinSafeTx:
                     "optimism", 1700000000 - 2 * 86400, 86400
                 )
             )
-        # ceil(max(86400, 2 * 86400) * 10**18 / 10**18) + safety margin of 1
-        assert result == 172801
+        assert result == 2 * 86400 + REQUIRED_REQUESTS_SAFETY_MARGIN
 
 
 class TestInvalidateClPoolCache:
@@ -3398,6 +3399,8 @@ class TestGetAvailableRewards:
         assert calls[0]["contract_callable"] == "available_rewards"
         assert calls[0]["contract_address"] == "0x" + "11" * 20
         assert calls[0]["chain_id"] == "optimism"
+        assert calls[0]["data_key"] == "data"
+        assert calls[0]["contract_public_id"] == StakingTokenContract.contract_id
 
 
 class TestGetLivenessRatio:

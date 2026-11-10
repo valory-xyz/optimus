@@ -427,6 +427,14 @@ class TestCheckIfCheckpointReached:
         assert result is True
         obj._get_available_rewards.assert_not_called()
 
+    def test_zero_liveness_period_falls_back_to_timestamp(self) -> None:
+        """A zero livenessPeriod is treated as unreadable, not as a rebaseline."""
+        obj, result = self._check(
+            TS_CHECKPOINT + 10, synced_ts=TS_CHECKPOINT + 5, liveness_period=0
+        )
+        assert result is False
+        obj._get_available_rewards.assert_not_called()
+
     def test_schedule_unreadable_not_due(self) -> None:
         """Without livenessPeriod, a future timestamp is not due."""
         _, result = self._check(

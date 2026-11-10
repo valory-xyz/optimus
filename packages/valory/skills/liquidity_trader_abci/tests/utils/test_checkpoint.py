@@ -56,8 +56,7 @@ def test_is_rebaseline_signal(next_ts: int, expected: bool) -> None:
         # on schedule, period just over
         (SCHEDULED_NEXT, SCHEDULED_NEXT, True),
         (SCHEDULED_NEXT, SCHEDULED_NEXT + 1, True),
-        # v0.4 rebaseline pending: getter returns block.timestamp, which is
-        # ahead of the round's synced timestamp
+        # rebaseline pending, getter ahead of synced_ts
         (TS_CHECKPOINT + 10, TS_CHECKPOINT + 5, True),
         # off schedule and already in the past
         (TS_CHECKPOINT + 10, TS_CHECKPOINT + 20, True),

@@ -157,7 +157,8 @@ class CallCheckpointBehaviour(
             self.round_sequence.last_round_transition_timestamp.timestamp()
         )
         if ts_checkpoint is None or not liveness_period:
-            # A pending rebaseline cannot be told apart, so never skip here.
+            # Without the schedule a pending rebaseline is invisible, so the
+            # zero-rewards skip is not applied.
             self.context.logger.warning(
                 "Could not read tsCheckpoint or livenessPeriod; "
                 "checking the checkpoint by timestamp only."

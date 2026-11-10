@@ -37,6 +37,22 @@ def _gen_return_false(*args, **kwargs):
     return False
 
 
+TS_CHECKPOINT = 1700000000
+LIVENESS_PERIOD = 86400
+SCHEDULED_NEXT = TS_CHECKPOINT + LIVENESS_PERIOD
+
+
+def _gen_return(value):
+    """Build a generator function that yields once and returns ``value``."""
+
+    def method(*args, **kwargs):
+        """Yield once and return ``value``."""
+        yield
+        return value
+
+    return method
+
+
 def _make_behaviour():
     """Create a CallCheckpointBehaviour without __init__."""
     obj = object.__new__(CallCheckpointBehaviour)
@@ -107,17 +123,19 @@ class TestCallCheckpointBehaviour:
             obj.service_staking_state = StakingState.STAKED
             yield
 
-        def fake_calc_min_tx(chain):
+        def fake_calc_min_tx(chain, ts_checkpoint, liveness_period):
             """Fake calc min tx."""
             yield
             return None
 
-        def fake_check_checkpoint(chain):
+        def fake_check_checkpoint(chain, ts_checkpoint, liveness_period):
             """Fake check checkpoint."""
             yield
             return False
 
         obj._get_service_staking_state = fake_get_staking_state
+        obj._get_ts_checkpoint = _gen_return(TS_CHECKPOINT)
+        obj._get_liveness_period = _gen_return(LIVENESS_PERIOD)
         obj._calculate_min_num_of_safe_tx_required = fake_calc_min_tx
         obj._check_if_checkpoint_reached = fake_check_checkpoint
         self._run_async_act(obj, params_mock)
@@ -136,12 +154,12 @@ class TestCallCheckpointBehaviour:
             obj.service_staking_state = StakingState.STAKED
             yield
 
-        def fake_calc_min_tx(chain):
+        def fake_calc_min_tx(chain, ts_checkpoint, liveness_period):
             """Fake calc min tx."""
             yield
             return 5
 
-        def fake_check_checkpoint(chain):
+        def fake_check_checkpoint(chain, ts_checkpoint, liveness_period):
             """Fake check checkpoint."""
             yield
             return True
@@ -152,6 +170,8 @@ class TestCallCheckpointBehaviour:
             return "0xcheckpoint_tx"
 
         obj._get_service_staking_state = fake_get_staking_state
+        obj._get_ts_checkpoint = _gen_return(TS_CHECKPOINT)
+        obj._get_liveness_period = _gen_return(LIVENESS_PERIOD)
         obj._calculate_min_num_of_safe_tx_required = fake_calc_min_tx
         obj._check_if_checkpoint_reached = fake_check_checkpoint
         obj._prepare_checkpoint_tx = fake_prepare_checkpoint_tx
@@ -170,21 +190,58 @@ class TestCallCheckpointBehaviour:
             obj.service_staking_state = StakingState.STAKED
             yield
 
-        def fake_calc_min_tx(chain):
+        def fake_calc_min_tx(chain, ts_checkpoint, liveness_period):
             """Fake calc min tx."""
             yield
             return 5
 
-        def fake_check_checkpoint(chain):
+        def fake_check_checkpoint(chain, ts_checkpoint, liveness_period):
             """Fake check checkpoint."""
             yield
             return False
 
         obj._get_service_staking_state = fake_get_staking_state
+        obj._get_ts_checkpoint = _gen_return(TS_CHECKPOINT)
+        obj._get_liveness_period = _gen_return(LIVENESS_PERIOD)
         obj._calculate_min_num_of_safe_tx_required = fake_calc_min_tx
         obj._check_if_checkpoint_reached = fake_check_checkpoint
         self._run_async_act(obj, params_mock)
         obj.set_done.assert_called_once()
+
+    def test_async_act_reads_schedule_once_for_both_uses(self) -> None:
+        """tsCheckpoint and livenessPeriod are read once and shared."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+        received = []
+
+        def fake_get_staking_state(chain):
+            """Fake get staking state."""
+            obj.service_staking_state = StakingState.STAKED
+            yield
+
+        def fake_calc_min_tx(chain, ts_checkpoint, liveness_period):
+            """Fake calc min tx."""
+            received.append((ts_checkpoint, liveness_period))
+            yield
+            return 5
+
+        def fake_check_checkpoint(chain, ts_checkpoint, liveness_period):
+            """Fake check checkpoint."""
+            received.append((ts_checkpoint, liveness_period))
+            yield
+            return False
+
+        obj._get_service_staking_state = fake_get_staking_state
+        obj._get_ts_checkpoint = MagicMock(side_effect=_gen_return(TS_CHECKPOINT))
+        obj._get_liveness_period = MagicMock(side_effect=_gen_return(LIVENESS_PERIOD))
+        obj._calculate_min_num_of_safe_tx_required = fake_calc_min_tx
+        obj._check_if_checkpoint_reached = fake_check_checkpoint
+        self._run_async_act(obj, params_mock)
+        obj._get_ts_checkpoint.assert_called_once_with("optimism")
+        obj._get_liveness_period.assert_called_once_with("optimism")
+        assert received == [(TS_CHECKPOINT, LIVENESS_PERIOD)] * 2
 
     def test_async_act_evicted(self) -> None:
         """Test async_act when service is evicted."""
@@ -288,73 +345,94 @@ class TestCallCheckpointWithdrawalGate:
 class TestCheckIfCheckpointReached:
     """Tests for _check_if_checkpoint_reached."""
 
+    def _check(
+        self,
+        next_checkpoint,
+        synced_ts=SCHEDULED_NEXT,
+        ts_checkpoint=TS_CHECKPOINT,
+        liveness_period=LIVENESS_PERIOD,
+        available_rewards=10**18,
+    ):
+        """Run _check_if_checkpoint_reached against faked contract reads."""
+        obj = _make_behaviour()
+        obj._get_next_checkpoint = _gen_return(next_checkpoint)
+        obj._get_available_rewards = MagicMock(
+            side_effect=_gen_return(available_rewards)
+        )
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = float(synced_ts)
+        with patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
+            result = _drive(
+                obj._check_if_checkpoint_reached(
+                    "optimism", ts_checkpoint, liveness_period
+                )
+            )
+        return obj, result
+
     def test_next_checkpoint_none(self) -> None:
         """Test returns False when next_checkpoint is None."""
-        obj = _make_behaviour()
-
-        def fake_get_next_checkpoint(chain):
-            """Fake get next checkpoint."""
-            yield
-            return None
-
-        obj._get_next_checkpoint = fake_get_next_checkpoint
-        gen = obj._check_if_checkpoint_reached("optimism")
-        result = _drive(gen)
+        _, result = self._check(None)
         assert result is False
 
     def test_next_checkpoint_zero(self) -> None:
         """Test returns True when next_checkpoint is 0."""
-        obj = _make_behaviour()
-
-        def fake_get_next_checkpoint(chain):
-            """Fake get next checkpoint."""
-            yield
-            return 0
-
-        obj._get_next_checkpoint = fake_get_next_checkpoint
-        gen = obj._check_if_checkpoint_reached("optimism")
-        result = _drive(gen)
+        _, result = self._check(0, available_rewards=0)
         assert result is True
 
     def test_next_checkpoint_in_future(self) -> None:
-        """Test returns False when next_checkpoint is in the future."""
-        obj = _make_behaviour()
-
-        def fake_get_next_checkpoint(chain):
-            """Fake get next checkpoint."""
-            yield
-            return 9999999999
-
-        obj._get_next_checkpoint = fake_get_next_checkpoint
-
-        rs = MagicMock()
-        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
-        with patch.object(
-            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
-        ):
-            gen = obj._check_if_checkpoint_reached("optimism")
-            result = _drive(gen)
-            assert result is False
+        """Test returns False when next_checkpoint is on schedule and in the future."""
+        _, result = self._check(SCHEDULED_NEXT, synced_ts=SCHEDULED_NEXT - 1)
+        assert result is False
 
     def test_next_checkpoint_in_past(self) -> None:
         """Test returns True when next_checkpoint is in the past."""
-        obj = _make_behaviour()
+        obj, result = self._check(SCHEDULED_NEXT, synced_ts=SCHEDULED_NEXT + 1)
+        assert result is True
+        obj._get_available_rewards.assert_called_once_with("optimism")
 
-        def fake_get_next_checkpoint(chain):
-            """Fake get next checkpoint."""
-            yield
-            return 1600000000
+    def test_pending_rebaseline_ahead_of_synced_ts(self) -> None:
+        """A v0.4 pending rebaseline is due even when its timestamp is ahead."""
+        obj, result = self._check(
+            TS_CHECKPOINT + 10, synced_ts=TS_CHECKPOINT + 5, available_rewards=0
+        )
+        assert result is True
+        obj._get_available_rewards.assert_not_called()
 
-        obj._get_next_checkpoint = fake_get_next_checkpoint
+    def test_due_by_time_without_rewards_is_skipped(self) -> None:
+        """A checkpoint due only by time is not sent with no available rewards."""
+        obj, result = self._check(
+            SCHEDULED_NEXT, synced_ts=SCHEDULED_NEXT, available_rewards=0
+        )
+        assert result is False
+        obj.context.logger.info.assert_called()
 
-        rs = MagicMock()
-        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
-        with patch.object(
-            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
-        ):
-            gen = obj._check_if_checkpoint_reached("optimism")
-            result = _drive(gen)
-            assert result is True
+    def test_due_by_time_rewards_unreadable_is_sent(self) -> None:
+        """An unreadable availableRewards does not suppress the checkpoint."""
+        obj, result = self._check(
+            SCHEDULED_NEXT, synced_ts=SCHEDULED_NEXT, available_rewards=None
+        )
+        assert result is True
+        obj.context.logger.warning.assert_called()
+
+    def test_schedule_unreadable_falls_back_to_timestamp(self) -> None:
+        """Without tsCheckpoint, only the timestamp rule applies and nothing is skipped."""
+        obj, result = self._check(
+            SCHEDULED_NEXT,
+            synced_ts=SCHEDULED_NEXT,
+            ts_checkpoint=None,
+            available_rewards=0,
+        )
+        assert result is True
+        obj._get_available_rewards.assert_not_called()
+
+    def test_schedule_unreadable_not_due(self) -> None:
+        """Without livenessPeriod, a future timestamp is not due."""
+        _, result = self._check(
+            TS_CHECKPOINT + 10, synced_ts=TS_CHECKPOINT + 5, liveness_period=None
+        )
+        assert result is False
 
 
 class TestPrepareCheckpointTx:

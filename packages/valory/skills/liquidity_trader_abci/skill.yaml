@@ -10,7 +10,7 @@ fingerprint:
   behaviours/__init__.py: bafybeiaomv5fjuaabfbz6a4zfplxyqgnqghl6ztdq3ald5retam44lo6ye
   behaviours/agent_top_up.py: bafybeia4xeaipnrr2d2xy3rugbzrs4hppsebjd6gfcdy46bbov6po3e4rm
   behaviours/base.py: bafybeie7fytc22vaxjpxmzltmpefndf5nzyirjo4ti2qcrwfssukqxzhri
-  behaviours/call_checkpoint.py: bafybeib4da2pikcmmcygbu4bux5w5peql6t6saiay3ymsvuj3zvhasl56e
+  behaviours/call_checkpoint.py: bafybeighi76mtabpglt4klrgghm53i4fowztjgwgzyii47czcycxdb6wsi
   behaviours/check_staking_kpi_met.py: bafybeif5otdf6drh67omqypcypwm6nql34lu5wfclszmmm4x4pvpywp2ja
   behaviours/decision_making.py: bafybeiexyn4xud7ctqm7tjk5nbby2vq37epdpt2cek5hydpyoqxhymczsq
   behaviours/evaluate_strategy.py: bafybeigcwtayyp7mgd57jdkatr5yxxysr7gz3lws2xw5x4iqctiylogh54
@@ -51,7 +51,7 @@ fingerprint:
   tests/behaviours/test_agent_top_up.py: bafybeicdlcuoa32ufxe2uozb6ifmh7ga35gm476oc6qlxdmwerxnigjasm
   tests/behaviours/test_base.py: bafybeib4ma2p4zxbgdi3gighoyfymghuxnkvprjijpxlfljt2bizyfi5ha
   tests/behaviours/test_base_aero.py: bafybeig7iwdq4cgivj6rikkic7snmxpom6vxjz5g62mojcgdesxwjmi3ty
-  tests/behaviours/test_call_checkpoint.py: bafybeigvhioyna7nf73z4ja2ua3yjynsvkdxjynugoc5ksr5bly2rkvkhi
+  tests/behaviours/test_call_checkpoint.py: bafybeifvx32y6oa6s4gaqfwwpq7oaq443zbzgh6qufzcar4fsfh43itgwu
   tests/behaviours/test_check_staking_kpi_met.py: bafybeihac3lv5pe7y4wafnnru64i7mxaenowdhjk4ibpvukeh4rdpfq75u
   tests/behaviours/test_decision_making.py: bafybeiap7xca5wycdcjtuaiik74iel7gf4xbfwyxakz7b7pbbycd7blwey
   tests/behaviours/test_decision_making_aero.py: bafybeihygsjroz4kn4keprqlmvu2v4fsphki63pzyg7rit3g5neivbtzrq

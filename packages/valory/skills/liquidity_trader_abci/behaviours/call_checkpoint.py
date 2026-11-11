@@ -187,6 +187,13 @@ class CallCheckpointBehaviour(
         due = is_checkpoint_due(
             next_checkpoint, ts_checkpoint, liveness_period, synced_timestamp
         )
+        if rebaseline_signal:
+            self.context.logger.info(
+                f"Staking contract {self.params.staking_token_contract_address} "
+                f"signals a pending rebaseline: next checkpoint {next_checkpoint} "
+                f"!= tsCheckpoint {ts_checkpoint} + livenessPeriod {liveness_period}; "
+                "sending the checkpoint without the availableRewards check."
+            )
         # availableRewards only matters when the checkpoint is due by time
         # alone, so it is read only then; otherwise 0 does not change the rule.
         available_rewards = 0

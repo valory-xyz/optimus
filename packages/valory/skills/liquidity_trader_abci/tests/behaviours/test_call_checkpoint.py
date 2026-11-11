@@ -451,6 +451,11 @@ class TestCheckIfCheckpointReached:
         )
         assert result is True
         obj._get_available_rewards.assert_not_called()
+        (message,), _ = obj.context.logger.info.call_args
+        assert "pending rebaseline" in message
+        assert str(TS_CHECKPOINT + 10) in message
+        assert str(TS_CHECKPOINT) in message
+        assert str(LIVENESS_PERIOD) in message
 
     def test_concurrent_checkpoint_is_not_a_rebaseline(self) -> None:
         """A tsCheckpoint moved by another service between reads is not a rebaseline."""

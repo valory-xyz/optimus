@@ -124,8 +124,8 @@ contracts:
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeic5yhq4you56t6palb7ex3nuqg7wos75alvhzea6rybq2imoeovta
 - valory/uniswap_v3_pool:0.1.0:bafybeifnspjvrqtuphmg6jjosn3j5jsy4hwd66taeslqdfx7xgydvmkvhe
 - valory/merkl_distributor:0.1.0:bafybeifgyxdhaay63ord4lkd767utf6vok2four7v7uakuugndsskehhae
-- valory/staking_token:0.1.0:bafybeihqnd5ot5w56i37pvzucsfoljhl5oi36ridluvtikzzbczqjztffi
-- valory/staking_activity_checker:0.1.0:bafybeicfvf4f25eon2iqjezztiistcifyfltbezz2ilc55lxtpjwkybf74
+- valory/staking_token:0.1.0:bafybeibrhyljtgxdee5g3ancmsdi2t72djwd47nn7pzp5ru3bf7glhg44i
+- valory/staking_activity_checker:0.1.0:bafybeia6p2tjyzbdghbfvldqr265yih5watqhekodx36ncydxaxq3nrtbi
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeifn5ipq6riypnc7hjigtgmx34dpvxdbrjwjthc7awimcrp5ofkvqq
 - valory/velodrome_router:0.1.0:bafybeiaijzhw4tlqd7akklkukd7j6wqzecjicvqtvyeok25inokw73juna
 - valory/velodrome_cl_pool:0.1.0:bafybeifbcazltzngcxey74hhgd6moselrqpmcyucd6gcxdj4h2aughf6xm
@@ -146,7 +146,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/funds_manager:0.1.0:bafybeiakhryfscssc474efrnpqevn7icn22f72jok65gkwxsercik4pthu
-- valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
+- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
   main:
     args: {}

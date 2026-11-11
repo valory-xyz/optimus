@@ -165,33 +165,42 @@ class CallCheckpointBehaviour(
             )
             return next_checkpoint <= synced_timestamp
 
-        if is_rebaseline_signal(next_checkpoint, ts_checkpoint, liveness_period):
+        rebaseline_signal = is_rebaseline_signal(
+            next_checkpoint, ts_checkpoint, liveness_period
+        )
+        if rebaseline_signal:
             # tsCheckpoint was read before next_checkpoint, so a checkpoint by
             # another service in between looks like a rebaseline. Re-read it.
             latest_ts_checkpoint = yield from self._get_ts_checkpoint(chain)
-            if latest_ts_checkpoint is not None:
+            if latest_ts_checkpoint is None:
+                self.context.logger.warning(
+                    "Could not re-read tsCheckpoint; treating the mismatch as a "
+                    "pending rebaseline and sending the checkpoint without the "
+                    "availableRewards check."
+                )
+            else:
                 ts_checkpoint = latest_ts_checkpoint
+                rebaseline_signal = is_rebaseline_signal(
+                    next_checkpoint, ts_checkpoint, liveness_period
+                )
 
         due = is_checkpoint_due(
             next_checkpoint, ts_checkpoint, liveness_period, synced_timestamp
         )
-        rebaseline_signal = is_rebaseline_signal(
-            next_checkpoint, ts_checkpoint, liveness_period
-        )
-        if not due:
-            return False
-        if rebaseline_signal:
-            return True
-
-        available_rewards = yield from self._get_available_rewards(chain)
-        if available_rewards is None:
-            self.context.logger.warning(
-                "Could not read availableRewards; sending the checkpoint anyway."
-            )
-            return True
+        # availableRewards only matters when the checkpoint is due by time
+        # alone, so it is read only then; otherwise 0 does not change the rule.
+        available_rewards = 0
+        if due and not rebaseline_signal:
+            read_rewards = yield from self._get_available_rewards(chain)
+            if read_rewards is None:
+                self.context.logger.warning(
+                    "Could not read availableRewards; sending the checkpoint anyway."
+                )
+                return True
+            available_rewards = read_rewards
 
         send = should_send_checkpoint(due, rebaseline_signal, available_rewards)
-        if not send:
+        if due and not send:
             self.context.logger.info(
                 "Checkpoint due but the staking contract has no available rewards "
                 "and no rebaseline is pending; skipping the checkpoint tx."

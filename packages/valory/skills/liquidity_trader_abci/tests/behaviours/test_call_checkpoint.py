@@ -85,8 +85,11 @@ class TestCallCheckpointBehaviour:
             obj.context.benchmark_tool.measure.return_value = benchmark_mock
             obj.context.agent_address = "0xagent"
 
-            def fake_send(*args, **kwargs):
-                """Fake send."""
+            captured = {}
+
+            def fake_send(payload):
+                """Fake send that captures the payload."""
+                captured["payload"] = payload
                 yield
 
             def fake_wait(*args, **kwargs):
@@ -99,7 +102,7 @@ class TestCallCheckpointBehaviour:
 
             gen = obj.async_act()
             _drive(gen)
-            return obj
+            return captured["payload"]
 
     def test_async_act_no_staking_chain(self) -> None:
         """Test async_act when staking_chain is not set."""
@@ -107,8 +110,9 @@ class TestCallCheckpointBehaviour:
         params_mock = MagicMock()
         params_mock.staking_chain = None
         params_mock.safe_contract_addresses = {}
-        self._run_async_act(obj, params_mock)
+        payload = self._run_async_act(obj, params_mock)
         assert obj.service_staking_state == StakingState.UNSTAKED
+        assert payload.tx_hash is None
         obj.set_done.assert_called_once()
 
     def test_async_act_staked_min_tx_none(self) -> None:
@@ -139,7 +143,11 @@ class TestCallCheckpointBehaviour:
         obj._get_liveness_period = _gen_return(LIVENESS_PERIOD)
         obj._calculate_min_num_of_safe_tx_required = fake_calc_min_tx
         obj._check_if_checkpoint_reached = fake_check_checkpoint
-        self._run_async_act(obj, params_mock)
+        obj._prepare_checkpoint_tx = MagicMock()
+        payload = self._run_async_act(obj, params_mock)
+        assert payload.tx_hash is None
+        assert payload.min_num_of_safe_tx_required is None
+        obj._prepare_checkpoint_tx.assert_not_called()
         obj.set_done.assert_called_once()
 
     def test_async_act_staked_checkpoint_reached(self) -> None:
@@ -165,18 +173,17 @@ class TestCallCheckpointBehaviour:
             yield
             return True
 
-        def fake_prepare_checkpoint_tx(chain):
-            """Fake prepare checkpoint tx."""
-            yield
-            return "0xcheckpoint_tx"
-
         obj._get_service_staking_state = fake_get_staking_state
         obj._get_ts_checkpoint = _gen_return(TS_CHECKPOINT)
         obj._get_liveness_period = _gen_return(LIVENESS_PERIOD)
         obj._calculate_min_num_of_safe_tx_required = fake_calc_min_tx
         obj._check_if_checkpoint_reached = fake_check_checkpoint
-        obj._prepare_checkpoint_tx = fake_prepare_checkpoint_tx
-        self._run_async_act(obj, params_mock)
+        obj._prepare_checkpoint_tx = MagicMock(
+            side_effect=_gen_return("0xcheckpoint_tx")
+        )
+        payload = self._run_async_act(obj, params_mock)
+        assert payload.tx_hash == "0xcheckpoint_tx"
+        obj._prepare_checkpoint_tx.assert_called_once_with(chain="optimism")
         obj.set_done.assert_called_once()
 
     def test_async_act_staked_checkpoint_not_reached(self) -> None:
@@ -206,8 +213,41 @@ class TestCallCheckpointBehaviour:
         obj._get_liveness_period = _gen_return(LIVENESS_PERIOD)
         obj._calculate_min_num_of_safe_tx_required = fake_calc_min_tx
         obj._check_if_checkpoint_reached = fake_check_checkpoint
-        self._run_async_act(obj, params_mock)
+        obj._prepare_checkpoint_tx = MagicMock()
+        payload = self._run_async_act(obj, params_mock)
+        assert payload.tx_hash is None
+        obj._prepare_checkpoint_tx.assert_not_called()
         obj.set_done.assert_called_once()
+
+    def test_async_act_due_without_rewards_sends_no_tx(self) -> None:
+        """A checkpoint due only by time with no rewards yields no checkpoint tx."""
+        obj = _make_behaviour()
+        params_mock = MagicMock()
+        params_mock.staking_chain = "optimism"
+        params_mock.safe_contract_addresses = {"optimism": "0xsafe"}
+
+        def fake_get_staking_state(chain):
+            """Fake get staking state."""
+            obj.service_staking_state = StakingState.STAKED
+            yield
+
+        obj._get_service_staking_state = fake_get_staking_state
+        obj._get_ts_checkpoint = _gen_return(TS_CHECKPOINT)
+        obj._get_liveness_period = _gen_return(LIVENESS_PERIOD)
+        obj._calculate_min_num_of_safe_tx_required = _gen_return(5)
+        obj._get_next_checkpoint = _gen_return(SCHEDULED_NEXT)
+        obj._get_available_rewards = _gen_return(0)
+        obj._prepare_checkpoint_tx = MagicMock()
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = float(
+            SCHEDULED_NEXT
+        )
+        with patch.object(
+            type(obj), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
+            payload = self._run_async_act(obj, params_mock)
+        assert payload.tx_hash is None
+        obj._prepare_checkpoint_tx.assert_not_called()
 
     def test_async_act_reads_schedule_once_for_both_uses(self) -> None:
         """The tsCheckpoint and livenessPeriod reads happen once and are shared."""
@@ -257,7 +297,8 @@ class TestCallCheckpointBehaviour:
             yield
 
         obj._get_service_staking_state = fake_get_staking_state
-        self._run_async_act(obj, params_mock)
+        payload = self._run_async_act(obj, params_mock)
+        assert payload.tx_hash is None
         obj.set_done.assert_called_once()
 
     def test_async_act_unstaked_with_chain(self) -> None:
@@ -273,7 +314,8 @@ class TestCallCheckpointBehaviour:
             yield
 
         obj._get_service_staking_state = fake_get_staking_state
-        self._run_async_act(obj, params_mock)
+        payload = self._run_async_act(obj, params_mock)
+        assert payload.tx_hash is None
         obj.set_done.assert_called_once()
 
 
@@ -433,6 +475,8 @@ class TestCheckIfCheckpointReached:
         )
         assert result is True
         obj._get_ts_checkpoint.assert_called_once_with("optimism")
+        obj._get_available_rewards.assert_not_called()
+        obj.context.logger.warning.assert_called_once()
 
     def test_on_schedule_does_not_reread_ts_checkpoint(self) -> None:
         """No extra read happens when the getter is on schedule."""

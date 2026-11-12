@@ -30,6 +30,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
+from packages.valory.contracts.staking_token.contract import StakingTokenContract
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     AIRDROP_TOTAL_KEY,
     Action,
@@ -43,6 +44,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     NEW_STAKING_CHECKER_VERSION,
     OLAS_ADDRESSES,
     PRICE_CACHE_KEY_PREFIX,
+    REQUIRED_REQUESTS_SAFETY_MARGIN,
     REWARD_UPDATE_INTERVAL,
     REWARD_UPDATE_KEY_PREFIX,
     WHITELISTED_ASSETS,
@@ -3017,36 +3019,47 @@ class TestCalculateMinSafeTx:
         """Test no liveness ratio."""
         b = _make_behaviour()
         b._get_liveness_ratio = _make_gen(None)  # type: ignore[assignment,method-assign]
-        b._get_liveness_period = _make_gen(86400)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
+        result = _exhaust(
+            b._calculate_min_num_of_safe_tx_required("optimism", 1700000000, 86400)
+        )
         assert result is None
 
     def test_no_liveness_period(self) -> None:
         """Test no liveness period."""
         b = _make_behaviour()
         b._get_liveness_ratio = _make_gen(1000)  # type: ignore[assignment,method-assign]
-        b._get_liveness_period = _make_gen(None)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
+        result = _exhaust(
+            b._calculate_min_num_of_safe_tx_required("optimism", 1700000000, None)
+        )
         assert result is None
 
     def test_no_checkpoint(self) -> None:
         """Test no checkpoint."""
         b = _make_behaviour()
         b._get_liveness_ratio = _make_gen(10**18)  # type: ignore[assignment,method-assign]
-        b._get_liveness_period = _make_gen(86400)  # type: ignore[assignment,method-assign]
-        b._get_ts_checkpoint = _make_gen(None)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
+        result = _exhaust(
+            b._calculate_min_num_of_safe_tx_required("optimism", None, 86400)
+        )
         assert result is None
 
     def test_success(self) -> None:
         """Test success."""
         b = _make_behaviour()
         b._get_liveness_ratio = _make_gen(10**18)  # type: ignore[assignment,method-assign]
-        b._get_liveness_period = _make_gen(86400)  # type: ignore[assignment,method-assign]
-        b._get_ts_checkpoint = _make_gen(1700000000 - 86400)  # type: ignore[assignment,method-assign]
-        result = _exhaust(b._calculate_min_num_of_safe_tx_required("optimism"))
-        assert isinstance(result, int)
-        assert result > 0
+        b.contract_interact = MagicMock(  # type: ignore[method-assign]
+            side_effect=AssertionError("must reuse the values passed in")
+        )
+        rs = MagicMock()
+        rs.last_round_transition_timestamp.timestamp.return_value = 1700000000.0
+        with patch.object(
+            type(b), "round_sequence", new_callable=PropertyMock, return_value=rs
+        ):
+            result = _exhaust(
+                b._calculate_min_num_of_safe_tx_required(
+                    "optimism", 1700000000 - 2 * 86400, 86400
+                )
+            )
+        assert result == 2 * 86400 + REQUIRED_REQUESTS_SAFETY_MARGIN
 
 
 class TestInvalidateClPoolCache:
@@ -3364,6 +3377,30 @@ class TestGetTsCheckpoint:
         b.contract_interact = _make_gen(1700000050)  # type: ignore[assignment,method-assign]
         result = _exhaust(b._get_ts_checkpoint("optimism"))
         assert result == 1700000050
+
+
+class TestGetAvailableRewards:
+    """Test _get_available_rewards."""
+
+    def test_returns_available_rewards(self) -> None:
+        """Test it reads the staking contract's available rewards."""
+        b = _make_behaviour()
+        calls = []
+
+        def fake_contract_interact(**kwargs: Any) -> Generator[Any, Any, Any]:
+            """Fake contract interact."""
+            calls.append(kwargs)
+            yield
+            return 123
+
+        b.contract_interact = fake_contract_interact  # type: ignore[assignment,method-assign]
+        result = _exhaust(b._get_available_rewards("optimism"))
+        assert result == 123
+        assert calls[0]["contract_callable"] == "available_rewards"
+        assert calls[0]["contract_address"] == "0x" + "11" * 20
+        assert calls[0]["chain_id"] == "optimism"
+        assert calls[0]["data_key"] == "data"
+        assert calls[0]["contract_public_id"] == StakingTokenContract.contract_id
 
 
 class TestGetLivenessRatio:

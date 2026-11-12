@@ -35,6 +35,11 @@ from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import 
     Event,
     StakingState,
 )
+from packages.valory.skills.liquidity_trader_abci.utils.checkpoint import (
+    is_checkpoint_due,
+    is_rebaseline_signal,
+    should_send_checkpoint,
+)
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -81,9 +86,15 @@ class CallCheckpointBehaviour(
                     chain=self.params.staking_chain
                 )
                 if self.service_staking_state == StakingState.STAKED:
+                    ts_checkpoint = yield from self._get_ts_checkpoint(
+                        self.params.staking_chain
+                    )
+                    liveness_period = yield from self._get_liveness_period(
+                        self.params.staking_chain
+                    )
                     min_num_of_safe_tx_required = (
                         yield from self._calculate_min_num_of_safe_tx_required(
-                            chain=self.params.staking_chain
+                            self.params.staking_chain, ts_checkpoint, liveness_period
                         )
                     )
                     if min_num_of_safe_tx_required is None:
@@ -96,7 +107,7 @@ class CallCheckpointBehaviour(
                         )
                     is_checkpoint_reached = (
                         yield from self._check_if_checkpoint_reached(
-                            chain=self.params.staking_chain
+                            self.params.staking_chain, ts_checkpoint, liveness_period
                         )
                     )
                     if is_checkpoint_reached:
@@ -129,8 +140,12 @@ class CallCheckpointBehaviour(
             self.set_done()
 
     def _check_if_checkpoint_reached(
-        self, chain: str
-    ) -> Generator[None, None, Optional[bool]]:
+        self,
+        chain: str,
+        ts_checkpoint: Optional[int],
+        liveness_period: Optional[int],
+    ) -> Generator[None, None, bool]:
+        """Return whether a checkpoint is due and worth sending."""
         next_checkpoint = yield from self._get_next_checkpoint(chain)
         if next_checkpoint is None:
             return False
@@ -141,7 +156,63 @@ class CallCheckpointBehaviour(
         synced_timestamp = int(
             self.round_sequence.last_round_transition_timestamp.timestamp()
         )
-        return next_checkpoint <= synced_timestamp
+        if ts_checkpoint is None or not liveness_period:
+            # Without the schedule a pending rebaseline is invisible, so the
+            # zero-rewards skip is not applied.
+            self.context.logger.warning(
+                "Could not read tsCheckpoint or livenessPeriod; "
+                "checking the checkpoint by timestamp only."
+            )
+            return next_checkpoint <= synced_timestamp
+
+        rebaseline_signal = is_rebaseline_signal(
+            next_checkpoint, ts_checkpoint, liveness_period
+        )
+        if rebaseline_signal:
+            # tsCheckpoint was read before next_checkpoint, so a checkpoint by
+            # another service in between looks like a rebaseline. Re-read it.
+            latest_ts_checkpoint = yield from self._get_ts_checkpoint(chain)
+            if latest_ts_checkpoint is None:
+                self.context.logger.warning(
+                    "Could not re-read tsCheckpoint; treating the mismatch as a "
+                    "pending rebaseline and sending the checkpoint without the "
+                    "availableRewards check."
+                )
+            else:
+                ts_checkpoint = latest_ts_checkpoint
+                rebaseline_signal = is_rebaseline_signal(
+                    next_checkpoint, ts_checkpoint, liveness_period
+                )
+
+        due = is_checkpoint_due(
+            next_checkpoint, ts_checkpoint, liveness_period, synced_timestamp
+        )
+        if rebaseline_signal:
+            self.context.logger.info(
+                f"Staking contract {self.params.staking_token_contract_address} "
+                f"signals a pending rebaseline: next checkpoint {next_checkpoint} "
+                f"!= tsCheckpoint {ts_checkpoint} + livenessPeriod {liveness_period}; "
+                "sending the checkpoint without the availableRewards check."
+            )
+        # availableRewards only matters when the checkpoint is due by time
+        # alone, so it is read only then; otherwise 0 does not change the rule.
+        available_rewards = 0
+        if due and not rebaseline_signal:
+            read_rewards = yield from self._get_available_rewards(chain)
+            if read_rewards is None:
+                self.context.logger.warning(
+                    "Could not read availableRewards; sending the checkpoint anyway."
+                )
+                return True
+            available_rewards = read_rewards
+
+        send = should_send_checkpoint(due, rebaseline_signal, available_rewards)
+        if due and not send:
+            self.context.logger.info(
+                "Checkpoint due but the staking contract has no available rewards "
+                "and no rebaseline is pending; skipping the checkpoint tx."
+            )
+        return send
 
     def _prepare_checkpoint_tx(
         self, chain: str

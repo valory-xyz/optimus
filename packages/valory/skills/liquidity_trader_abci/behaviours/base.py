@@ -1638,23 +1638,19 @@ class LiquidityTraderBaseBehaviour(
         return balance
 
     def _calculate_min_num_of_safe_tx_required(
-        self, chain: str
+        self,
+        chain: str,
+        last_ts_checkpoint: Optional[int],
+        liveness_period: Optional[int],
     ) -> Generator[None, None, Optional[int]]:
         """Calculates the minimun number of tx to hit to unlock the staking rewards"""
         liveness_ratio = yield from self._get_liveness_ratio(chain)
-        liveness_period = yield from self._get_liveness_period(chain)
-        if not liveness_ratio or not liveness_period:
+        if not liveness_ratio or not liveness_period or last_ts_checkpoint is None:
             return None
 
         current_timestamp = int(
             self.round_sequence.last_round_transition_timestamp.timestamp()
         )
-
-        last_ts_checkpoint = yield from self._get_ts_checkpoint(
-            chain=self.params.staking_chain  # type: ignore[arg-type]
-        )
-        if last_ts_checkpoint is None:
-            return None
 
         min_num_of_safe_tx_required = (
             math.ceil(
@@ -1690,6 +1686,20 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
         )
         return ts_checkpoint
+
+    def _get_available_rewards(
+        self, chain: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get the staking contract's available rewards."""
+        available_rewards = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.staking_token_contract_address,
+            contract_public_id=StakingTokenContract.contract_id,
+            contract_callable="available_rewards",
+            data_key="data",
+            chain_id=chain,
+        )
+        return available_rewards
 
     def _get_liveness_ratio(self, chain: str) -> Generator[None, None, Optional[int]]:
         liveness_ratio = yield from self.contract_interact(

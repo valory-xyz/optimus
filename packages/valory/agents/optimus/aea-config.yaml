@@ -118,7 +118,7 @@ logging_config:
 skill_exception_policy: stop_and_exit
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.2.9
+    version: ==2.2.10
 default_connection: null
 ---
 public_id: valory/kv_store:0.1.0

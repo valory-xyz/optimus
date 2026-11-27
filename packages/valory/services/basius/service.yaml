@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/basius:0.1.0:bafybeihuzhz7c4fbpmffo6nghhqobilw7krsk3rpq4ovtmwbng2m7cq3xi
+agent: valory/basius:0.1.0:bafybeibbe5fzm2k2quhs7uj2lqy2qck5xut4gpfysjkxj6o3lgmw55mwsq
 number_of_agents: 1
 deployment:
   agent:
@@ -229,7 +229,7 @@ config:
   mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
   mech_standard_route: ${MECH_STANDARD_ROUTE:bool:true}
   mech_facilitator_mech_addresses: ${MECH_FACILITATOR_MECH_ADDRESSES:dict:{"optimism":"0xcB55661502c8AB004Ab79C58974f1284d803b3Bf","base":"0x131876A3542D0945f57886C59BE3dF55D651c8d6"}}
-  mech_delivery_rate_limit: ${MECH_CHAT_DELIVERY_RATE_LIMIT:int:30000}
+  mech_delivery_rate_limits: ${MECH_CHAT_DELIVERY_RATE_LIMITS:dict:{"optimism":30000,"base":30000}}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

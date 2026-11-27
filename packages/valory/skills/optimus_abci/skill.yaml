@@ -57,7 +57,7 @@ fingerprint:
   composition.py: bafybeib5va5o4opqtbn5acx5ruj7e3rmim5sbuvql2ypurdo6vhbqeqe5i
   dialogues.py: bafybeicqqxvsqffqeo6cnp4rok45c74yb2a3m5a7twuzinc7ruk3o2635y
   fsm_specification.yaml: bafybeie7rrrmdeadlvfgvz5trfijgqxh535ikigyjlebninnn4goce4h7y
-  handlers.py: bafybeicgtvsmwk5xedogdw6vtjqt7knqz56e63dhxm2bcmitoemskaleru
+  handlers.py: bafybeiceh45c5mddhaq7oojlzukxrschcknzcssztma34l2m4dwdc5zm2q
   models.py: bafybeicywu2sc6pjqxghh32iq67du4yn6iiqrhp7xazcklvuaf5zlnolle
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -156,13 +156,13 @@ fingerprint:
   tests/test_composition.py: bafybeibdcool6op45ukjsc3lh6wrbbo6wpsvcanqqyogpx6orbtwdx3yrq
   tests/test_dialogues.py: bafybeihkh7wf7ul3c7r5ky3o2fsweiolbn3dlnkpbfln5kvf3fwz7yexwm
   tests/test_fund_requirements.py: bafybeih2x2yxjvh54kpzsrimdoaa6xlym4e5qjg5vphderxaowavvyx7vq
-  tests/test_handlers.py: bafybeicc6eauzbbfl2mgfonhkl7r5aaojcxxvbc7kj22pca5mxdggusiie
+  tests/test_handlers.py: bafybeih4dcmwmw7egxx4pt6a5mp5mbhsngkxwwdry66e3jux7ux6ak4mgy
   tests/test_models.py: bafybeiashcolhjijpi7deibstjm35dgv3cajqwet577yl2vovvvgfzja7y
   tests/test_prompts.py: bafybeifmcxnaoxjz62yqdie45xmqtjlysufglyucpmdvluwayppsyo27ay
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
-- valory/genai:0.1.0:bafybeibu5zmkjhtesernme7fow7m4kokfxjhykm6a3huskmuagbf2jkrku
+- valory/genai:0.1.0:bafybeic5jpt2szu7alvotkk4hkw4e4xb23psdppvo4auvddpok7axicz6e
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
 contracts: []
 protocols:
@@ -174,7 +174,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/termination_abci:0.1.0:bafybeihkzdgk6bj6hsq7cc3i22e2bsmf2dthxu7nhw75s3rm5einhdhyfa
-- valory/liquidity_trader_abci:0.1.0:bafybeidero3ulxalkolfgakf75u52awjsselcjae4ygviz67s5pvp7l56e
+- valory/liquidity_trader_abci:0.1.0:bafybeicbbytsedz6nevm4kcjvxsvgoqx466dxupcitvqgiu6ula5lsdkri
 - valory/transaction_settlement_abci:0.1.0:bafybeif3h5tz3kivvqfchb3xdfpnxwcr5zto5h62ffjr5hrrhpap7y75qi
 - valory/funds_manager:0.1.0:bafybeiakhryfscssc474efrnpqevn7icn22f72jok65gkwxsercik4pthu
 behaviours:
@@ -428,6 +428,9 @@ models:
       use_mech_facilitator: false
       mech_facilitator_base_url: https://x402.olas.autonolas.tech
       mech_max_delivery_rate: 100000
+      mech_standard_route: true
+      mech_facilitator_mech_addresses: '{"optimism":"0xcB55661502c8AB004Ab79C58974f1284d803b3Bf","base":"0x131876A3542D0945f57886C59BE3dF55D651c8d6"}'
+      mech_delivery_rate_limit: null
       mech_marketplace_addresses: '{"optimism":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"}'
       mech_pre_deposit_floor: 150000
       mech_pre_deposit_target: 500000

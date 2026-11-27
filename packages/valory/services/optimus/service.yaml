@@ -6,7 +6,7 @@ aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidzyn2u2sgxowoodtzcucwsai2oa6ynsodplquvkcojoi2ppyo2le
+agent: valory/optimus:0.1.0:bafybeifarn2alj6o67taixsa2234v5xowwu5vvaoc67wsay6vgkq33jj44
 number_of_agents: 1
 deployment:
   agent:
@@ -159,6 +159,9 @@ models:
       use_mech_facilitator: ${USE_MECH_FACILITATOR:bool:false}
       mech_facilitator_base_url: ${MECH_FACILITATOR_BASE_URL:str:https://x402.olas.autonolas.tech}
       mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
+      mech_standard_route: ${MECH_STANDARD_ROUTE:bool:true}
+      mech_facilitator_mech_addresses: ${MECH_FACILITATOR_MECH_ADDRESSES:str:{"optimism":"0xcB55661502c8AB004Ab79C58974f1284d803b3Bf","base":"0x131876A3542D0945f57886C59BE3dF55D651c8d6"}}
+      mech_delivery_rate_limit: ${MECH_COINGECKO_DELIVERY_RATE_LIMIT:int:2000}
       mech_marketplace_addresses: ${MECH_MARKETPLACE_ADDRESSES:str:{"optimism":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"}}
       mech_pre_deposit_floor: ${MECH_PRE_DEPOSIT_FLOOR:int:150000}
       mech_pre_deposit_target: ${MECH_PRE_DEPOSIT_TARGET:int:500000}
@@ -225,6 +228,9 @@ config:
   mech_chain: ${MECH_CHAIN:str:optimism}
   mech_safe_addresses: ${SAFE_CONTRACT_ADDRESSES:dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
   mech_max_delivery_rate: ${MECH_MAX_DELIVERY_RATE:int:100000}
+  mech_standard_route: ${MECH_STANDARD_ROUTE:bool:true}
+  mech_facilitator_mech_addresses: ${MECH_FACILITATOR_MECH_ADDRESSES:dict:{"optimism":"0xcB55661502c8AB004Ab79C58974f1284d803b3Bf","base":"0x131876A3542D0945f57886C59BE3dF55D651c8d6"}}
+  mech_delivery_rate_limits: ${MECH_CHAT_DELIVERY_RATE_LIMITS:dict:{"optimism":30000,"base":30000}}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

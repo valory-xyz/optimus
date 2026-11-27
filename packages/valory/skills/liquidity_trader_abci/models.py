@@ -33,6 +33,9 @@ from aea.skills.base import Model, SkillContext
 from eth_account import Account
 
 from packages.valory.connections.x402.clients.mech import mech_requests
+from packages.valory.connections.x402.clients.mech_standard import (
+    mech_standard_requests,
+)
 from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.skills.abstract_round_abci.models import (
     BaseParams,
@@ -407,6 +410,20 @@ class Coingecko(Model, TypeCheckMixin):
         self.mech_max_delivery_rate: Optional[int] = kwargs.pop(
             "mech_max_delivery_rate", None
         )
+        # The standard off-chain mech request; off, the facilitator's own
+        # /mech/coingecko route, which it will retire.
+        self.mech_standard_route: bool = bool(kwargs.pop("mech_standard_route", True))
+        # The facilitator mech per chain: paid calls are addressed to it, and
+        # its on-chain payment type picks the pre-deposit pot.
+        self.mech_facilitator_mech_addresses: Dict[str, str] = json.loads(
+            str(kwargs.pop("mech_facilitator_mech_addresses", "{}"))
+        )
+        # The most one standard request may be charged, in the payment
+        # asset's base units; ``None`` signs twice the expected price.
+        limit = kwargs.pop("mech_delivery_rate_limit", None)
+        self.mech_delivery_rate_limit: Optional[int] = (
+            None if limit is None else int(limit)
+        )
         # A call the facilitator served is charged whether or not we waited.
         self.mech_request_timeout: float = float(
             kwargs.pop("mech_request_timeout", 180.0)
@@ -460,6 +477,18 @@ class Coingecko(Model, TypeCheckMixin):
         safe_address = self.context.params.safe_contract_addresses.get(chain)
         if not safe_address:
             raise ValueError(f"no Safe address configured for chain {chain!r}")
+        if self.mech_standard_route:
+            self._mech_session = mech_standard_requests(
+                signer,
+                safe_address=safe_address,
+                chain=chain,
+                api="coingecko",
+                facilitator_base_url=self.mech_facilitator_base_url,
+                delivery_rate_limit=self.mech_delivery_rate_limit,
+                mech_address=self.mech_facilitator_mech_addresses.get(chain),
+                total_deadline_secs=self.mech_request_timeout,
+            )
+            return self._mech_session
         self._mech_session = mech_requests(
             signer,
             safe_address=safe_address,

@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeigxkxtlzq53eedt3ig27gmyarv7gd63p2dgzi3oqdnyuyjhiffzqi
   io_/__init__.py: bafybeiemrhqu7ii7n7c63x26jxiwer7a545eanfcqgasbqe7wb7b3ynvmi
   io_/loader.py: bafybeictieroff4sy6qgc6zm2vfnzhoeqwfz4k5cb4ccfsaajxzlnqkoae
-  models.py: bafybeiffa7dtjapclsafe3fsrhbsk3krgvg7bc2vt4x52d3xbt6ttsnozy
+  models.py: bafybeigisg6rlvcexxkfodl5aoyqw6dwl7uv6pglqdt32cs3bhnulld7ym
   payloads.py: bafybeiaeabfwogbgl4zgad27buiksygixttgzpai236aauctx6wlot7icy
   pool_behaviour.py: bafybeidpz4kqbl5fpt2rtlmmdamnujbqu7rpdx726ntgsqsgeivwz3ylsu
   pools/__init__.py: bafybeigfi5svtn2csdf2nna6cfonjx7abkkwvfyt3sqmmtbcxvrv5vykpy
@@ -86,7 +86,7 @@ fingerprint:
   tests/test___init__.py: bafybeicv7zly4wifncnlfzbdjebvdacb5ovogo677elvamntrb23ea3hl4
   tests/test_dialogues.py: bafybeigxvkwchtbxlelauxdqug2eayeiafxcyrxxpzfwzqztcytf3l4zk4
   tests/test_handlers.py: bafybeieytuiapfnjeu5t2xrz6n6rvijuml3buyxvm4snqluooymtvuuj5i
-  tests/test_models.py: bafybeibileeuxyjr2i7xr3p3blxivzyptjuel36733q2ywa3gt3tizjv7e
+  tests/test_models.py: bafybeiagavrnfv6ivtzbexhue62hsx23rysvxdc3pyk7s2kipqrboom4ia
   tests/test_payloads.py: bafybeihcdudmgszyf45ufvo2wimggakqoxpopcaq3ymytp37mvrfdfp5hi
   tests/test_pool_behaviour.py: bafybeifjmzgidcgv33kph6dspm5stlunwxb3qbmczhppcxq52v4rorurlu
   tests/test_rounds.py: bafybeigt3f7t7tjnqgxaquzo3yqym53aq2thoryc4u2wijdkf6cvyyz2uu
@@ -112,7 +112,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/x402:0.1.0:bafybeifhxkt7kaxfotnqnr6w4hxfjnjxf3uumr6psz3felj6pe5astyily
+- valory/x402:0.1.0:bafybeihpxloxyzgsgbazqkuu6ehhbdph2iyb4rcjecsshrekb7wzffxeym
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/balancer_weighted_pool:0.1.0:bafybeigmfzch747wwo3ahtea2g52qqraig2ixlofsnncs6spz2aemc7aju
@@ -393,6 +393,9 @@ models:
       use_mech_facilitator: false
       mech_facilitator_base_url: https://x402.olas.autonolas.tech
       mech_max_delivery_rate: 100000
+      mech_standard_route: true
+      mech_facilitator_mech_addresses: '{"optimism":"0xcB55661502c8AB004Ab79C58974f1284d803b3Bf","base":"0x131876A3542D0945f57886C59BE3dF55D651c8d6"}'
+      mech_delivery_rate_limit: null
       mech_marketplace_addresses: '{"optimism":"0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"}'
       mech_pre_deposit_floor: 150000
       mech_pre_deposit_target: 500000

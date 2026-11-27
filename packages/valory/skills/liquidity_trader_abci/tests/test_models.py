@@ -26,9 +26,13 @@ import tempfile
 import time as time_module
 from datetime import datetime
 from time import time
+from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qsl, urlsplit
 
 import pytest
+import requests
+from eth_account import Account
 
 from packages.valory.skills.liquidity_trader_abci.models import (
     CircuitBreakerState,
@@ -431,6 +435,47 @@ class TestSharedStateCircuitBreakers:
         assert breaker_a is not breaker_b
 
 
+_STD_SAFE = "0x" + "11" * 20
+_STD_KEY = "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+
+
+class _StandardFacilitator:
+    """Answers the standard mech route; records every posted form.
+
+    :param result: the delivered result, or ``None`` for a client-fault failure.
+    """
+
+    def __init__(self, result: Any) -> None:
+        self.result = result
+        self.forms: List[Dict[str, str]] = []
+
+    def send(self, request: requests.PreparedRequest) -> requests.Response:
+        parts = urlsplit(str(request.url))
+        response = requests.Response()
+        response.status_code = 200
+        if parts.path.endswith("/send_signed_requests"):
+            body = request.body
+            text = body.decode() if isinstance(body, bytes) else str(body)
+            form = dict(parse_qsl(text))
+            self.forms.append(form)
+            payload: Dict[str, Any] = {"request_id": form["request_id"]}
+        elif self.result is None:
+            payload = {
+                "status": "failed",
+                "fault": "client",
+                "error": "upstream answered HTTP 404: coin not found",
+                "delivery_rate": 2000,
+            }
+        else:
+            payload = {
+                "status": "ok",
+                "response": {"result": self.result},
+                "delivery_rate": 1000,
+            }
+        response._content = json.dumps(payload).encode("utf-8")
+        return response
+
+
 class TestCoingecko:
     """Test Coingecko class."""
 
@@ -455,6 +500,11 @@ class TestCoingecko:
             "use_mech_facilitator": False,
             "mech_facilitator_base_url": "https://facilitator.example",
             "mech_max_delivery_rate": None,
+            # The facilitator's own /mech/coingecko route; the standard route
+            # has its own tests.
+            "mech_standard_route": False,
+            "mech_facilitator_mech_addresses": "{}",
+            "mech_delivery_rate_limit": None,
             "mech_marketplace_addresses": '{"optimism": "0xmarketplace"}',
             "mech_pre_deposit_floor": 150000,
             "mech_pre_deposit_target": 500000,
@@ -719,6 +769,77 @@ class TestCoingecko:
         mock_mech.assert_called_once()
         assert mock_session.get.call_count == 2
         mock_session.close.assert_not_called()
+
+    def _standard_coingecko(self, **overrides: Any) -> Coingecko:
+        """Build a Coingecko model on the standard mech route."""
+        mock_context = MagicMock()
+        mock_context.params.safe_contract_addresses = {"optimism": _STD_SAFE}
+        kwargs = {
+            **self._make_kwargs(),
+            "use_x402": True,
+            "use_mech_facilitator": True,
+            "mech_standard_route": True,
+            **overrides,
+        }
+        return Coingecko(name="coingecko", skill_context=mock_context, **kwargs)
+
+    def test_standard_route_sends_a_coingecko_tool_request(self) -> None:
+        """A paid GET is signed as the coingecko tool's path-and-query prompt."""
+        cg = self._standard_coingecko()
+        fake = _StandardFacilitator('{"bitcoin": {"usd": 1}}')
+
+        with patch.object(
+            requests.adapters.HTTPAdapter,
+            "send",
+            lambda _adapter, request, **_kw: fake.send(request),
+        ):
+            success, data = cg.request(
+                "/api/v3/simple/price?ids=bitcoin", {}, Account.from_key(_STD_KEY)
+            )
+
+        assert (success, data) == (True, {"bitcoin": {"usd": 1}})
+        (form,) = fake.forms
+        metadata = json.loads(form["ipfs_data"])
+        assert metadata["tool"] == "coingecko"
+        assert json.loads(metadata["prompt"]) == {
+            "path": "api/v3/simple/price",
+            "query": {"ids": "bitcoin"},
+        }
+        # Twice the 0.001 USDC price, unless configured otherwise.
+        assert form["delivery_rate"] == "2000"
+        assert form["sender"] == _STD_SAFE
+
+    def test_standard_route_signs_the_configured_limit_and_mech(self) -> None:
+        """The configured limit and facilitator mech reach the adapter."""
+        mech = "0xcB55661502c8AB004Ab79C58974f1284d803b3Bf"
+        cg = self._standard_coingecko(
+            mech_delivery_rate_limit="3000",
+            mech_facilitator_mech_addresses=json.dumps({"optimism": mech}),
+        )
+
+        session = cg.paid_session(Account.from_key(_STD_KEY))
+
+        adapter = session.adapters["https://"]
+        assert adapter.delivery_rate_limit == 3000
+        assert adapter.mech_address == mech
+        assert adapter.total_deadline_secs == cg.mech_request_timeout
+
+    def test_standard_route_reports_a_failed_delivery(self) -> None:
+        """A delivered failure is a failed call, not a price."""
+        cg = self._standard_coingecko()
+        fake = _StandardFacilitator(None)
+
+        with patch.object(
+            requests.adapters.HTTPAdapter,
+            "send",
+            lambda _adapter, request, **_kw: fake.send(request),
+        ):
+            success, data = cg.request(
+                "/api/v3/coins/nope", {}, Account.from_key(_STD_KEY)
+            )
+
+        assert success is False
+        assert "client fault" in data["exception"]
 
     def test_x402_session_is_closed_after_each_request(self) -> None:
         """Only the mech session is long-lived; an x402 session is per call."""

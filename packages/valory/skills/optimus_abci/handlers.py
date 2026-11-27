@@ -243,10 +243,6 @@ X402_INSUFFICIENT_FUNDS_ERRORS = (
     "insufficient funds",
 )
 
-# A paid call the facilitator served is charged whether or not the deposit
-# check waited for its answer, so this read is kept short.
-FACILITATOR_REQUEST_TIMEOUT = 10
-
 # Deposit gas limits are estimated rather than fixed, with headroom for the
 # state the estimate did not see.
 GAS_ESTIMATE_HEADROOM = 1.3
@@ -1186,6 +1182,15 @@ class HttpHandler(BaseHttpHandler):
             "type": "function",
         },
     ]
+    _MECH_ABI: List[Dict] = [
+        {
+            "inputs": [],
+            "name": "paymentType",
+            "outputs": [{"type": "bytes32"}],
+            "stateMutability": "view",
+            "type": "function",
+        }
+    ]
     _ERC20_APPROVE_ABI: List[Dict] = [
         {
             "inputs": [
@@ -1217,61 +1222,39 @@ class HttpHandler(BaseHttpHandler):
             return None
         return w3.eth.contract(address=Web3.to_checksum_address(address), abi=abi)
 
-    def _read_facilitator_payment_type(
-        self, chain: str, safe_address: str
-    ) -> Optional[bytes]:
-        """Read which payment asset the facilitator charges this Safe in.
+    def _read_facilitator_payment_type(self, chain: str) -> Optional[bytes]:
+        """Read the payment type of the facilitator mech on ``chain``.
 
         :param chain: chain name.
-        :param safe_address: the Safe the marketplace debits.
         :return: the 32-byte payment type, or ``None`` when unreadable.
 
-        The facilitator selects a mech per request, so no single mech on chain
-        answers this. The payment type is the only thing taken from the
-        response; every address the deposit touches is resolved from
-        configuration.
+        Read on chain from the configured facilitator mech, the mech every
+        paid call on this chain is addressed to, so nothing the facilitator
+        answers decides which pot is funded. Every address the deposit
+        touches is resolved from configuration.
         """
-        base = str(self.coingecko.mech_facilitator_base_url).rstrip("/")
-        if not base:
+        mech_address = self.coingecko.mech_facilitator_mech_addresses.get(chain)
+        if not mech_address:
             self.context.logger.warning(
-                "No mech facilitator base URL configured; cannot tell which "
+                f"No facilitator mech configured for {chain}; cannot tell which "
                 "balance tracker holds the pre-deposit."
             )
             return None
-
-        url = f"{base}/mech/{chain}/requester/{Web3.to_checksum_address(safe_address)}"
+        mech = self._contract(chain, mech_address, self._MECH_ABI)
+        if mech is None:
+            return None
         try:
-            response = requests.get(url, timeout=FACILITATOR_REQUEST_TIMEOUT)
-            if response.status_code != 200:
-                self.context.logger.warning(
-                    f"Facilitator requester info returned {response.status_code}; "
-                    "skipping the pre-deposit check this period."
-                )
-                return None
-            payment_type = dict(response.json()).get("payment_type")
+            raw = bytes(mech.functions.paymentType().call())
         except Exception as exc:  # pylint: disable=broad-except
             self.context.logger.warning(
-                f"Could not read the facilitator's requester info ({exc}); "
-                "skipping the pre-deposit check this period."
-            )
-            return None
-
-        if not isinstance(payment_type, str):
-            self.context.logger.warning(
-                f"Facilitator reported no usable payment type ({payment_type!r})."
-            )
-            return None
-        try:
-            raw = bytes.fromhex(payment_type.removeprefix("0x"))
-        except ValueError:
-            self.context.logger.warning(
-                f"Facilitator payment type {payment_type!r} is not hex."
+                f"Could not read the payment type of facilitator mech "
+                f"{mech_address} ({exc}); skipping the pre-deposit check this period."
             )
             return None
         if len(raw) != 32:
             self.context.logger.warning(
-                f"Facilitator payment type {payment_type!r} is "
-                f"{len(raw)} bytes, not 32."
+                f"Facilitator mech {mech_address} reported a {len(raw)}-byte "
+                "payment type, not 32."
             )
             return None
         return raw
@@ -1653,7 +1636,7 @@ class HttpHandler(BaseHttpHandler):
                 self.context.logger.error("Failed to get EOA account")
                 return MechDepositOutcome.UNAVAILABLE
 
-            payment_type = self._read_facilitator_payment_type(chain, safe_address)
+            payment_type = self._read_facilitator_payment_type(chain)
             if payment_type is None:
                 return MechDepositOutcome.UNAVAILABLE
 

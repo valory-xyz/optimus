@@ -4660,6 +4660,7 @@ _PD_MARKETPLACE = "0xdeadbeefcafebabedeadbeefcafebabedeadbeef"
 _PD_TRACKER = "0xfacefeedfacefeedfacefeedfacefeedfacefeed"
 _PD_TOKEN = "0x0b2c639c533813f4aa9d7837caf62653d097ff85"
 _PD_ZERO = "0x0000000000000000000000000000000000000000"
+_PD_MECH = "0x6666666666666666666666666666666666666666"
 # FixedPriceTokenUSDC, padded to the 32 bytes the marketplace keys trackers by.
 _PD_PAYMENT_TYPE_HEX = "0x" + "6406bb5f".ljust(64, "0")
 _PD_PAYMENT_TYPE = bytes.fromhex(_PD_PAYMENT_TYPE_HEX[2:])
@@ -4678,8 +4679,8 @@ def _make_predeposit_handler(**overrides: Any) -> Any:
     handler, ctx = _make_http_handler()
     ctx.coingecko.mech_chain = overrides.get("mech_chain", _PD_CHAIN)
     ctx.coingecko.use_mech_facilitator = overrides.get("use_mech_facilitator", True)
-    ctx.coingecko.mech_facilitator_base_url = overrides.get(
-        "base_url", "https://facilitator.example/"
+    ctx.coingecko.mech_facilitator_mech_addresses = overrides.get(
+        "mechs", {_PD_CHAIN: _PD_MECH}
     )
     ctx.coingecko.mech_marketplace_addresses = overrides.get(
         "marketplaces", {_PD_CHAIN: _PD_MARKETPLACE}
@@ -4750,18 +4751,6 @@ def _install_rpc(
     return w3
 
 
-def _make_response(status_code: int = 200, payload: Any = None) -> Any:
-    """Return a facilitator response stand-in.
-
-    :param status_code: the HTTP status to report.
-    :param payload: what ``json()`` returns.
-    :return: the response stand-in.
-    """
-    return SimpleNamespace(
-        status_code=status_code, json=MagicMock(return_value=payload)
-    )
-
-
 class TestContractBinding:
     """Cover binding a web3 contract for the pre-deposit reads."""
 
@@ -4788,94 +4777,56 @@ class TestContractBinding:
 
 
 class TestFacilitatorPaymentType:
-    """Cover reading which asset the facilitator charges in."""
+    """Cover reading the facilitator mech's payment type on chain."""
 
-    def test_no_base_url_configured(self) -> None:
-        """Without a facilitator URL there is no payment type to read."""
-        handler, _ = _make_predeposit_handler(base_url="")
-        assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
+    @pytest.mark.parametrize("mechs", [{}, {_PD_CHAIN: ""}, {"base": _PD_MECH}])
+    def test_no_mech_configured_for_the_chain(self, mechs: Any) -> None:
+        """Without the mech to read there is no payment type."""
+        handler, _ = _make_predeposit_handler(mechs=mechs)
+        _install_rpc(
+            handler, {_PD_MECH: _make_fake_contract(paymentType=_PD_PAYMENT_TYPE)}
+        )
+        assert handler._read_facilitator_payment_type(_PD_CHAIN) is None
 
-    def test_the_safe_is_checksummed_into_the_url(self) -> None:
-        """The requester path carries the checksummed Safe."""
+    def test_no_rpc_for_the_chain(self) -> None:
+        """Without an RPC the mech cannot be read."""
         handler, _ = _make_predeposit_handler()
-        response = _make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX})
+        handler._get_web3_instance = MagicMock(return_value=None)
+        assert handler._read_facilitator_payment_type(_PD_CHAIN) is None
+
+    def test_the_payment_type_is_read_from_the_configured_mech(self) -> None:
+        """The mech's own ``paymentType()`` is the answer, never an HTTP reply."""
+        handler, _ = _make_predeposit_handler()
+        w3 = _install_rpc(
+            handler, {_PD_MECH: _make_fake_contract(paymentType=_PD_PAYMENT_TYPE)}
+        )
         with patch.object(
-            handlers_module.requests, "get", return_value=response
-        ) as get:
-            handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE)
-        url = get.call_args[0][0]
-        assert url == (
-            f"https://facilitator.example/mech/{_PD_CHAIN}/requester/"
-            f"{Web3.to_checksum_address(_PD_SAFE)}"
+            handlers_module.requests,
+            "get",
+            side_effect=AssertionError("the facilitator must not be asked"),
+        ):
+            result = handler._read_facilitator_payment_type(_PD_CHAIN)
+        assert result == _PD_PAYMENT_TYPE
+        assert w3.eth.contract.call_args.kwargs["address"] == Web3.to_checksum_address(
+            _PD_MECH
         )
 
-    def test_a_hex_payment_type_is_decoded(self) -> None:
-        """A 32-byte hex payment type comes back as raw bytes."""
+    @pytest.mark.parametrize("answer", [b"", b"\x01\x02", b"\xab" * 33])
+    def test_a_payment_type_that_is_not_32_bytes_is_refused(
+        self, answer: bytes
+    ) -> None:
+        """Anything but 32 bytes is not used to pick a tracker."""
         handler, _ = _make_predeposit_handler()
-        response = _make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX})
-        with patch.object(handlers_module.requests, "get", return_value=response):
-            result = handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE)
-        assert result == _PD_PAYMENT_TYPE
+        _install_rpc(handler, {_PD_MECH: _make_fake_contract(paymentType=answer)})
+        assert handler._read_facilitator_payment_type(_PD_CHAIN) is None
 
-    def test_a_payment_type_without_the_0x_prefix_is_accepted(self) -> None:
-        """The prefix is optional; the 32 bytes are what matter."""
+    def test_a_reverting_mech_is_refused(self) -> None:
+        """A mech that cannot answer skips the check rather than guessing."""
         handler, _ = _make_predeposit_handler()
-        response = _make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX[2:]})
-        with patch.object(handlers_module.requests, "get", return_value=response):
-            result = handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE)
-        assert result == _PD_PAYMENT_TYPE
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {},
-            {"payment_type": None},
-            {"payment_type": 42},
-            {"payment_type": "0xnothex"},
-            {"payment_type": "0x1234"},
-            {"payment_type": "0x" + "ab" * 33},
-            {"payment_type": ""},
-        ],
-    )
-    def test_an_unusable_payment_type_is_refused(self, payload: Any) -> None:
-        """Anything that is not 32 bytes of hex yields no payment type."""
-        handler, _ = _make_predeposit_handler()
-        with patch.object(
-            handlers_module.requests,
-            "get",
-            return_value=_make_response(payload=payload),
-        ):
-            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
-
-    @pytest.mark.parametrize("status_code", [400, 404, 429, 500, 503])
-    def test_a_non_200_response_is_refused(self, status_code: int) -> None:
-        """A facilitator error skips the check rather than guessing."""
-        handler, _ = _make_predeposit_handler()
-        with patch.object(
-            handlers_module.requests,
-            "get",
-            return_value=_make_response(status_code=status_code),
-        ):
-            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
-
-    def test_a_transport_failure_is_refused(self) -> None:
-        """An unreachable facilitator skips the check."""
-        handler, _ = _make_predeposit_handler()
-        with patch.object(
-            handlers_module.requests,
-            "get",
-            side_effect=requests.exceptions.ConnectionError("down"),
-        ):
-            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
-
-    def test_an_unparseable_body_is_refused(self) -> None:
-        """A response that is not JSON skips the check."""
-        handler, _ = _make_predeposit_handler()
-        response = SimpleNamespace(
-            status_code=200, json=MagicMock(side_effect=ValueError("not json"))
+        _install_rpc(
+            handler, {_PD_MECH: _make_fake_contract(paymentType=ValueError("reverted"))}
         )
-        with patch.object(handlers_module.requests, "get", return_value=response):
-            assert handler._read_facilitator_payment_type(_PD_CHAIN, _PD_SAFE) is None
+        assert handler._read_facilitator_payment_type(_PD_CHAIN) is None
 
 
 class TestBalanceTrackerResolution:
@@ -5578,7 +5529,11 @@ class TestEnsureMechPreDeposit:
         """
         marketplace = _make_fake_contract(mapPaymentTypeBalanceTrackers=_PD_TRACKER)
         tracker = _make_fake_contract(mapRequesterBalances=_PD_TARGET, token=_PD_TOKEN)
-        _install_rpc(handler, {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker})
+        mech = _make_fake_contract(paymentType=_PD_PAYMENT_TYPE)
+        _install_rpc(
+            handler,
+            {_PD_MARKETPLACE: marketplace, _PD_TRACKER: tracker, _PD_MECH: mech},
+        )
         handler._get_eoa_account = MagicMock(
             return_value=SimpleNamespace(address=_PD_EOA)
         )
@@ -5587,15 +5542,10 @@ class TestEnsureMechPreDeposit:
         """Nothing to do is still a success."""
         handler, _ = _make_predeposit_handler()
         self._wire(handler)
-        with patch.object(
-            handlers_module.requests,
-            "get",
-            return_value=_make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX}),
-        ):
-            assert (
-                handlers_module.MechDepositOutcome.SUFFICIENT
-                is handler._ensure_mech_pre_deposit()
-            )
+        assert (
+            handlers_module.MechDepositOutcome.SUFFICIENT
+            is handler._ensure_mech_pre_deposit()
+        )
 
     def test_the_mech_chain_decides_which_safe_pays(self) -> None:
         """The Safe is the one on the chain the marketplace charges."""
@@ -5603,13 +5553,37 @@ class TestEnsureMechPreDeposit:
             safes={_PD_CHAIN: _PD_SAFE, "base": _PD_EOA}
         )
         self._wire(handler)
-        with patch.object(
-            handlers_module.requests,
-            "get",
-            return_value=_make_response(payload={"payment_type": _PD_PAYMENT_TYPE_HEX}),
-        ) as get:
-            handler._ensure_mech_pre_deposit()
-        assert Web3.to_checksum_address(_PD_SAFE) in get.call_args[0][0]
+        tracker = _make_fake_contract(mapRequesterBalances=_PD_TARGET, token=_PD_TOKEN)
+        seen: list = []
+
+        def _reads(safe: str) -> Any:
+            seen.append(safe)
+            return SimpleNamespace(call=MagicMock(return_value=_PD_TARGET))
+
+        tracker.functions.mapRequesterBalances = _reads
+        _install_rpc(
+            handler,
+            {
+                _PD_MARKETPLACE: _make_fake_contract(
+                    mapPaymentTypeBalanceTrackers=_PD_TRACKER
+                ),
+                _PD_TRACKER: tracker,
+                _PD_MECH: _make_fake_contract(paymentType=_PD_PAYMENT_TYPE),
+            },
+        )
+        handler._ensure_mech_pre_deposit()
+        assert seen == [Web3.to_checksum_address(_PD_SAFE)]
+
+    def test_an_unreadable_mech_deposits_nothing(self) -> None:
+        """A facilitator mech that cannot be read leaves the pot alone."""
+        handler, _ = _make_predeposit_handler(mechs={})
+        self._wire(handler)
+        handler._send_from_eoa = MagicMock()
+        assert (
+            handlers_module.MechDepositOutcome.UNAVAILABLE
+            is handler._ensure_mech_pre_deposit()
+        )
+        handler._send_from_eoa.assert_not_called()
 
     @pytest.mark.parametrize(
         "overrides",
@@ -5647,16 +5621,20 @@ class TestEnsureMechPreDeposit:
         """Without a payment type no tracker can be resolved."""
         handler, _ = _make_predeposit_handler()
         self._wire(handler)
+        _install_rpc(
+            handler,
+            {
+                _PD_MARKETPLACE: _make_fake_contract(
+                    mapPaymentTypeBalanceTrackers=_PD_TRACKER
+                ),
+                _PD_MECH: _make_fake_contract(paymentType=ValueError("reverted")),
+            },
+        )
         handler._send_from_eoa = MagicMock()
-        with patch.object(
-            handlers_module.requests,
-            "get",
-            return_value=_make_response(status_code=503),
-        ):
-            assert (
-                handlers_module.MechDepositOutcome.UNAVAILABLE
-                is handler._ensure_mech_pre_deposit()
-            )
+        assert (
+            handlers_module.MechDepositOutcome.UNAVAILABLE
+            is handler._ensure_mech_pre_deposit()
+        )
         handler._send_from_eoa.assert_not_called()
 
     def test_an_unexpected_error_is_contained(self) -> None:
